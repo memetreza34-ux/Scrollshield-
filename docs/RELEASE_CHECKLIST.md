@@ -5,58 +5,75 @@ Diese Checkliste dient der systematischen Prüfung aller kritischen App-Bereiche
 ---
 
 ## 1. Allgemeine Release-Freigabe
-- [ ] **Versionsnummern:** Version und Build-Nummer sind im Code (`src/screens/SupportScreen.tsx`), in der `package.json` und in den nativen Projekten (iOS/Android) synchronisiert.
-- [ ] **Keine Platzhalter:** Alle "Lorem Ipsum"-Texte, Test-Daten und Platzhalter-Bilder sind aus der sichtbaren UI entfernt.
+
+- [x] **Versionsnummern:** `npm run check:version` synchronisiert `package.json`, Lockfile und `__APP_VERSION__`; sobald native Projekte existieren, prüft es zusätzlich Android `versionName` und iOS `MARKETING_VERSION`.
+- [x] **Keine Platzhalter:** Außer den separat geführten Impressumsangaben enthält die Release-UI keine unfertigen Texte oder Testdaten; der Release-Check scannt alle sichtbaren Screens.
 - [ ] **Impressum & Kontakt:** Die Platzhalter im `ImprintScreen` (Musterstraße, Max Mustermann) wurden durch die echten Unternehmensdaten ersetzt.
 - [ ] **E-Mail-Routing:** Die Support-E-Mail (`support@scrollshield.app`) ist eingerichtet und empfängt Nachrichten.
-- [ ] **Offline-Fähigkeit:** Die App startet und funktioniert fehlerfrei im Flugmodus (kein Hängenbleiben in Ladebildschirmen).
+- [x] **Kein veralteter ODR-Link:** Der frühere Link zur EU-Plattform für Online-Streitbeilegung ist nicht mehr in der Release-UI enthalten.
+- [x] **Offline-Fähigkeit:** Der Produktions-Build wurde nach vollständigem Stoppen des lokalen Servers erfolgreich neu geladen; Startscreen und Assets erschienen ohne Browserfehler aus dem Service-Worker-Cache.
 
 ## 2. Apple App Store Submission (iOS)
+
 - [ ] **Screen Time API Entitlement:** Das "Family Controls" (Screen Time) Entitlement wurde bei Apple offiziell beantragt und für das Developer-Konto freigeschaltet.
-- [ ] **Wording-Check iOS:** In den iOS-Metadaten und Screenshots wird nicht von "Overlays" oder "Android-Blockern" gesprochen.
+- [x] **Wording-Check iOS:** Die vorbereiteten Apple-Review-Texte sind von Google-Play-Hinweisen getrennt; der Release-Check verbietet dort Android- und Overlay-Begriffe.
 - [ ] **Altersfreigabe:** Das Rating ist auf 4+ gesetzt (keine anstößigen Inhalte).
 - [ ] **Privacy Nutrition Labels:** Im App Store Connect ist korrekt hinterlegt, dass keine Daten mit der Identität des Nutzers verknüpft werden ("Data Not Linked to You").
 - [ ] **Review-Notizen:** Dem Apple-Review-Team wurde ein Test-Account (falls Login aktiv) und ein Video zur Verfügung gestellt, das zeigt, wie die Screen Time API in der App genutzt wird.
 
 ## 3. Google Play Submission (Android)
+
+- [x] **Android-Projekt:** Ein Capacitor-Android-Wrapper existiert unter `android/`; Version, Backup- und Cleartext-Flags werden automatisch geprüft.
+- [x] **Release-Härtung:** Android-Release-Builds nutzen R8-Minifizierung und Resource-Shrinking; der Release-Check schützt diese Flags.
+- [x] **Signing-Schutz:** Android-Keystores und lokale `signing.properties` sind ignoriert; `android/signing.properties.example` dokumentiert den lokalen Signing-Pfad.
+- [x] **Berechtigungs-Minimum:** Das aktuelle Android-Manifest fordert nur Internet an; sensible Enforcement-Berechtigungen sind bis zur nativen Implementierung blockiert.
 - [ ] **Berechtigungs-Deklaration:** `PACKAGE_USAGE_STATS` (Nutzungsdaten) und `SYSTEM_ALERT_WINDOW` (Overlay) sind im Play Console Formular für sensible Berechtigungen deklariert und mit einem Video-Beweis des Use-Cases (Digital Wellbeing) begründet.
-- [ ] **Keine Accessibility API:** Es ist sichergestellt, dass `BIND_ACCESSIBILITY_SERVICE` restlos aus dem Android-Manifest entfernt wurde, um eine sofortige Sperrung zu vermeiden.
+- [x] **Keine Accessibility API:** Die Release-UI enthält keinen Accessibility-API-Pfad; der Release-Check lehnt `BIND_ACCESSIBILITY_SERVICE` in einem künftigen Android-Manifest ab.
 - [ ] **Altersfreigabe:** USK 0 / PEGI 3 Fragebogen in der Play Console korrekt ausgefüllt.
 - [ ] **Data Safety Section:** Im Formular zur Datensicherheit ist angegeben, dass App-Aktivitäten lokal verarbeitet und nicht an Entwickler-Server gesendet werden.
 
 ## 4. Datenschutz- und Rechtstext-Prüfung
-- [ ] **Datenschutzerklärung (Privacy Policy):** Eine gültige Datenschutzerklärung ist auf einer externen Website gehostet und in den App Stores sowie in der App verlinkt.
-- [ ] **DSGVO/GDPR-Prozesse:** Die Buttons für "Datenschutzanfrage" und "Datenlöschanfrage" im Support-Screen öffnen korrekt den E-Mail-Client mit dem passenden Betreff.
-- [ ] **Youth Safety:** Die App erzwingt den "Strict Privacy Mode" für Nutzer unter 16 Jahren (falls das Alter abgefragt wird) oder wendet ihn standardmäßig an.
-- [ ] **Kein Tracking:** Es sind keine versteckten Tracker (z.B. Facebook SDK) verbaut. Analytics (falls vorhanden) sind strikt Opt-in.
+
+- [ ] **Datenschutzerklärung (Privacy Policy):** `public/privacy.html` ist auf der finalen Domain veröffentlicht und die URL ist in den App Stores sowie in der App verlinkt.
+- [x] **DSGVO/GDPR-Prozesse:** Die Buttons für "Datenschutzanfrage" und "Datenlöschanfrage" im Support-Screen öffnen korrekt den E-Mail-Client mit dem passenden Betreff und einer Vorlage.
+- [x] **Youth Safety:** Bei unbekanntem Alter und für Nutzer unter 16 Jahren erzwingt die Zustandsnormalisierung `strictPrivacyMode: true`; Version 1.0 erzwingt außerdem immer `localOnly: true`.
+- [x] **Kein Tracking:** `npm run check:privacy` prüft Laufzeit-Abhängigkeiten, Netzwerk-APIs im Quellcode und bekannte Tracker-Marker im Produktionsbundle.
 
 ## 5. Barrierefreiheits-Prüfung (Accessibility)
-- [ ] **Kontraste:** Alle Texte (besonders graue Texte auf dunklem Grund) erfüllen die WCAG AA Kontrastvorgaben.
-- [ ] **Touch Targets:** Alle Buttons, Toggles und klickbaren Icons sind mindestens 44x44 Pixel groß (z.B. durch Padding), auch wenn das sichtbare Icon kleiner ist.
-- [ ] **Screenreader:** Wichtige interaktive Elemente ohne Text (z.B. Icon-Buttons, Toggles) haben aussagekräftige `aria-label` Attribute.
-- [ ] **Textskalierung:** Das UI bricht nicht komplett zusammen, wenn der Nutzer in den Systemeinstellungen eine sehr große Schriftart wählt.
+
+- [x] **Kontraste:** Sekundärtexte verwenden mindestens Zinc 400; auf den Zinc-900/950-Flächen liegt der gemessene Kontrast bei mindestens 6,91:1 und damit über WCAG AA.
+- [x] **Touch Targets:** Eine globale CSS-Regel erzwingt mindestens 44x44 Pixel für Bedienelemente; `npm run check:a11y` schützt die Regel vor Regressionen.
+- [x] **Screenreader:** Icon-Buttons, Navigation, Zeitwähler und alle Schalter haben kontextbezogene Namen; zentrale Screens werden mit `axe-core` geprüft.
+- [x] **Textskalierung:** Überschriften und Lauftexte dürfen umbrechen, feste Einzeiler sind aus der Release-UI entfernt und der Quellcode-Guard schützt diese Regeln.
 
 ## 6. Berechtigungs-Prüfung
-- [ ] **Transparenz:** Der `PermissionsScreen` erklärt den Zweck jeder Berechtigung verständlich und ohne Fachjargon.
-- [ ] **Graceful Degradation (Fallback):** Lehnt der Nutzer Berechtigungen ab, stürzt die App nicht ab, sondern bietet Fallbacks (z.B. nur Benachrichtigungen statt hartem Blocker).
-- [ ] **Kein Zwang:** Nutzer können das Onboarding abschließen, auch wenn nicht alle Berechtigungen erteilt wurden.
+
+- [x] **Transparenz:** Der `PermissionsScreen` erklärt Zweck und Einschränkungen in Alltagssprache; technische Begriffe stehen nur in den zusätzlichen Erklärungen.
+- [x] **Graceful Degradation (Fallback):** Abgelehnte oder übersprungene Berechtigungen bleiben deaktiviert; die App zeigt den eingeschränkten Schutzstatus und bleibt bedienbar.
+- [x] **Kein Zwang:** Ein Komponententest stellt sicher, dass Nutzer das Onboarding auch ohne erteilte Berechtigungen abschließen können.
 
 ## 7. Store-Text- und Screenshot-Prüfung
-- [ ] **Keine falschen Versprechen:** Die Store-Beschreibung behauptet nicht, Apps "zu 100% unumgehbar zu blockieren". Es wird als "Werkzeug zur Selbstkontrolle" positioniert.
-- [ ] **Best-Effort-Kommunikation:** Funktionen wie der "Reels/Shorts-Blocker" sind ehrlich als "Best-Effort" oder "Unterbrecher" beschrieben.
-- [ ] **Screenshots:** Die Screenshots zeigen das echte UI (Dark Mode, Neon-Akzente) und keine simulierten, nicht existenten Features.
-- [ ] **Keywords:** Relevante Suchbegriffe (ADHS, Fokus, Bildschirmzeit, Digital Wellbeing, Prokrastination) sind natürlich im Text verbaut.
+
+- [x] **Keine falschen Versprechen:** Die Store-Beschreibung positioniert ScrollShield als "Werkzeug zur Selbstkontrolle" und wird vom Release-Check auf riskante Garantien geprüft.
+- [x] **Best-Effort-Kommunikation:** Der Kurzvideo-Schutz ist ausdrücklich als Best-Effort-Unterbrecher beschrieben, der keine vollständige Feed-Erkennung oder Sperre garantiert.
+- [x] **Screenshots:** Sechs echte Produktions-PWA-Screenshots liegen unter `docs/store-assets`; sie zeigen nur vorhandene Funktionen und wurden visuell auf Überlagerungen geprüft.
+- [x] **Keywords:** ADHS, Fokus, Bildschirmzeit, Digital Wellbeing und Prokrastination sind enthalten und werden vom Release-Check abgesichert.
 
 ## 8. Stabilitäts- und Crash-Prüfung
-- [ ] **Storage Fallback:** Der `StorageService` wurde getestet, indem absichtlich korrupte Daten in den LocalStorage geschrieben wurden. Die App muss dies abfangen und auf Standardwerte zurückfallen, statt weiß zu bleiben.
-- [ ] **Error Boundary:** Ein absichtlich herbeigeführter React-Fehler zeigt den sauberen Fallback-Screen der `ErrorBoundary` und nicht den "White Screen of Death".
-- [ ] **Hintergrund-Stabilität:** Die App-Logik (Timer, Limits) funktioniert auch dann korrekt weiter, wenn die App aus dem Arbeitsspeicher geworfen und neu gestartet wird.
+
+- [x] **Storage Fallback:** Tests mit korrupten Einstellungs- und Statistikdaten bestätigen, dass gültige Daten weiter geladen und beschädigte Chunks verworfen werden.
+- [x] **Error Boundary:** Ein Komponententest löst absichtlich einen React-Fehler aus und bestätigt den Wiederherstellungsbildschirm.
+- [x] **Hintergrund-Stabilität:** Fokus- und App-Sitzungen werden lokal gespeichert; Fokus-Restzeiten werden nach Hintergrundpause oder Neustart aus absoluten Zeitstempeln rekonstruiert und durch einen App-Neustarttest abgesichert.
 
 ## 9. Datenlösch-/Reset-Prüfung
-- [ ] **Lokaler Reset:** Der Button "App auf Werkseinstellungen zurücksetzen" löscht den `localStorage` (`scrollshield_*` Keys) restlos und setzt den Zustand auf `DEFAULT_STATE` zurück.
-- [ ] **Cloud-Löschung (falls aktiv):** Wenn Firebase Auth genutzt wird, löscht die Account-Lösch-Funktion den Nutzer aus Firebase Authentication und entfernt das zugehörige Firestore-Dokument.
+
+- [x] **Datenexport:** Der Privacy-Screen kann lokale Regeln, Verlauf und Statistiken als JSON-Datei exportieren.
+- [x] **Datenimport:** Unterstützte ScrollShield-JSON-Exporte werden validiert und importiert; echte Systemberechtigungen werden dabei nicht überschrieben.
+- [x] **Lokaler Reset:** Der Button "App auf Werkseinstellungen zurücksetzen" löscht den `localStorage` (`scrollshield_*` Keys) restlos, setzt den Zustand auf `DEFAULT_STATE` zurück und führt zurück zum Onboarding.
+- [x] **Cloud-Löschung (nicht anwendbar in v1.0):** Version 1.0 enthält weder Account noch Firebase/Auth-/Cloud-SDK; lokale Daten werden über den geprüften App-Reset gelöscht.
 
 ## 10. Spätere Premium-Fähigkeit (ohne aktive Paywall)
-- [ ] **Versteckte Premium-Features:** Alle Premium-Features (z.B. Partner-Control, Cloud-Sync) sind im Code vorhanden, aber über Feature-Flags (`enablePartnerControl: false`) im UI unsichtbar geschaltet.
-- [ ] **Keine toten Buttons:** Es gibt im aktuellen Release keine "Upgrade auf Pro"-Buttons, die ins Leere führen oder eine unfertige Paywall öffnen.
-- [ ] **Architektur-Ready:** Die `SubscriptionScreen`-Komponente und die `SubscriptionPlan`-Typen sind im Code sauber vorbereitet, sodass sie in einem späteren Update per Flag aktiviert werden können, ohne die Basis-Logik umbauen zu müssen.
+
+- [x] **Versteckte Premium-Features:** Zentrale `FEATURE_FLAGS` halten Cloud-Sync, Partner-/Familienmodus, Abos, KI und erweiterte Statistiken in Version 1.0 auf `false`; ein Test prüft dies.
+- [x] **Keine toten Buttons:** Der Produktions-Versionshinweis ist nicht interaktiv; die Dashboard-Schnellaktion öffnet den Schutzablauf; es gibt keine sichtbaren Upgrade-/Paywall-Buttons.
+- [x] **Architektur-Ready:** `SubscriptionScreen` und `SubscriptionPlan` sind getestet vorbereitet, aber nicht in die Release-Navigation importiert oder gebündelt.

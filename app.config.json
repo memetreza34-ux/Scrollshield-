@@ -1,0 +1,13 @@
+{
+  "id": "scrollshield",
+  "name": "Scrollshield",
+  "inheritsFromStudio": true,
+  "sharedModules": [],
+  "appSpecificModules": ["android", "capacitor", "privacy-checks", "release-checks"],
+  "appSpecificSkills": [],
+  "appSpecificAgents": [],
+  "appSpecificIntegrations": ["Capacitor", "Android", "PWA"],
+  "status": "existing",
+  "migrationStatus": "not-started",
+  "packagePath": "apps/Scrollshield-"
+}

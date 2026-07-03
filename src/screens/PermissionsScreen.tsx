@@ -1,10 +1,20 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShieldCheck, Eye, Layers, Bell, Activity, CheckCircle2, Settings, AlertTriangle, Info, PlusCircle, Clock, Search, StopCircle, Accessibility } from 'lucide-react';
+import { ShieldCheck, Eye, Layers, Bell, Activity, CheckCircle2, Settings, AlertTriangle, Info } from 'lucide-react';
 import { AppState, Screen, AppPermissions } from '../types';
 import { Header } from '../components/ui';
 
-export function PermissionsScreen({ state, updateState, navigate, isOnboarding = false }: { state: AppState, updateState: (u: Partial<AppState>) => void, navigate: (s: Screen) => void, isOnboarding?: boolean }) {
+export function PermissionsScreen({
+  state,
+  updateState,
+  navigate,
+  isOnboarding = false,
+}: {
+  state: AppState;
+  updateState: (u: Partial<AppState>) => void;
+  navigate: (s: Screen) => void;
+  isOnboarding?: boolean;
+}) {
   const { permissions, operatingSystem } = state;
   const [expandedInfo, setExpandedInfo] = useState<keyof AppPermissions | null>(null);
 
@@ -12,8 +22,8 @@ export function PermissionsScreen({ state, updateState, navigate, isOnboarding =
     updateState({
       permissions: {
         ...permissions,
-        [key]: forceState !== undefined ? forceState : !permissions[key]
-      }
+        [key]: forceState !== undefined ? forceState : !permissions[key],
+      },
     });
   };
 
@@ -38,7 +48,7 @@ export function PermissionsScreen({ state, updateState, navigate, isOnboarding =
     isOptional = false,
     isIosOnly = false,
     isAndroidOnly = false,
-    detailedExplanation?: string
+    detailedExplanation?: string,
   ) => {
     if (isIosOnly && operatingSystem !== 'ios') return null;
     if (isAndroidOnly && operatingSystem !== 'android') return null;
@@ -47,23 +57,32 @@ export function PermissionsScreen({ state, updateState, navigate, isOnboarding =
     const isExpanded = expandedInfo === key;
 
     return (
-      <div className={`bg-zinc-900/80 backdrop-blur-md border ${isActive ? 'border-emerald-500/30' : 'border-zinc-800/50'} rounded-[2rem] overflow-hidden transition-all shadow-lg`}>
+      <section
+        aria-labelledby={`permission-${key}-title`}
+        className={`bg-zinc-900/80 backdrop-blur-md border ${isActive ? 'border-emerald-500/30' : 'border-zinc-800/50'} rounded-[2rem] overflow-hidden transition-all shadow-lg`}
+      >
         <div className="p-5 border-b border-zinc-800/50">
           <div className="flex gap-4 items-start">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 mt-1 ${isActive ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-zinc-800 border border-zinc-700 text-zinc-400'}`}>
+            <div
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 mt-1 ${isActive ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-zinc-800 border border-zinc-700 text-zinc-400'}`}
+            >
               {icon}
             </div>
             <div className="flex-1">
               <div className="flex justify-between items-center mb-1">
-                <h3 className="font-bold text-lg text-zinc-100">{title}</h3>
-                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider border ${getStatusColor(isActive, isOptional)}`}>
+                <h2 id={`permission-${key}-title`} className="font-bold text-lg text-zinc-100">
+                  {title}
+                </h2>
+                <span
+                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider border ${getStatusColor(isActive, isOptional)}`}
+                >
                   {getStatusText(isActive, isOptional)}
                 </span>
               </div>
-              
+
               <div className="mb-4 mt-3 space-y-3">
                 <div>
-                  <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">Zweck</h4>
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">Zweck</h3>
                   <ul className="space-y-1.5 text-sm text-zinc-300">
                     {purpose.map((p, i) => (
                       <li key={i} className="flex gap-2 items-start">
@@ -73,12 +92,12 @@ export function PermissionsScreen({ state, updateState, navigate, isOnboarding =
                     ))}
                   </ul>
                 </div>
-                
+
                 {!isActive && (
                   <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3">
-                    <h4 className="text-xs font-bold text-amber-500/70 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                    <h3 className="text-xs font-bold text-amber-500/70 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
                       <AlertTriangle size={12} /> Ohne diese Berechtigung
-                    </h4>
+                    </h3>
                     <p className="text-sm text-zinc-400 leading-snug">{limitations}</p>
                   </div>
                 )}
@@ -89,17 +108,15 @@ export function PermissionsScreen({ state, updateState, navigate, isOnboarding =
 
         <AnimatePresence>
           {isExpanded && detailedExplanation && (
-            <motion.div 
-              initial={{ height: 0, opacity: 0 }} 
-              animate={{ height: 'auto', opacity: 1 }} 
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               className="bg-zinc-950 px-5 py-4 border-b border-zinc-800/50"
             >
               <div className="flex gap-3 text-sm text-zinc-300">
                 <Info size={16} className="text-blue-400 flex-shrink-0 mt-0.5" />
-                <div className="space-y-2 leading-relaxed whitespace-pre-line">
-                  {detailedExplanation}
-                </div>
+                <div className="space-y-2 leading-relaxed whitespace-pre-line">{detailedExplanation}</div>
               </div>
             </motion.div>
           )}
@@ -108,14 +125,16 @@ export function PermissionsScreen({ state, updateState, navigate, isOnboarding =
         <div className="p-4 bg-zinc-900/50 flex flex-wrap gap-2 sm:gap-3">
           <button
             onClick={() => togglePermission(key)}
+            aria-label={`${isActive ? 'Deaktivieren' : 'Aktivieren'}: ${title}`}
             className={`flex-1 py-3 px-4 rounded-[1.25rem] text-sm font-bold transition-all ${isActive ? 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700' : 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.2)]'}`}
           >
             {isActive ? 'Deaktivieren' : 'Aktivieren'}
           </button>
-          
+
           {!isActive && (
             <button
               onClick={() => togglePermission(key, false)}
+              aria-label={`Später: ${title}`}
               className="px-4 py-3 rounded-[1.25rem] text-sm font-semibold bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
             >
               Später
@@ -125,37 +144,41 @@ export function PermissionsScreen({ state, updateState, navigate, isOnboarding =
           {detailedExplanation && (
             <button
               onClick={() => setExpandedInfo(isExpanded ? null : key)}
+              aria-label={`${isExpanded ? 'Weniger Infos' : 'Mehr erfahren'}: ${title}`}
+              aria-expanded={isExpanded}
               className={`px-4 py-3 rounded-[1.25rem] text-sm font-semibold border transition-colors ${isExpanded ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-transparent border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300'}`}
             >
               {isExpanded ? 'Weniger Infos' : 'Mehr erfahren'}
             </button>
           )}
         </div>
-      </div>
+      </section>
     );
   };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6 pb-32">
-      <Header 
-        title={isOnboarding ? "Setup" : "Berechtigungen"} 
-        onBack={() => navigate(isOnboarding ? 'onboarding' : 'settings')} 
+      <Header
+        title={isOnboarding ? 'Setup' : 'Berechtigungen'}
+        onBack={() => navigate(isOnboarding ? 'onboarding' : 'settings')}
       />
 
       <div className="space-y-6">
         <div className="text-center mb-8 -mt-2">
           {!isOnboarding ? (
             <p className="text-zinc-400 text-sm max-w-sm mx-auto">
-              Verwalte genau, auf welche Systemfunktionen ScrollShield zugreifen darf. Du behältst jederzeit die volle Kontrolle.
+              Verwalte, welche Funktionen deines Geräts ScrollShield verwenden darf. Du behältst jederzeit die volle
+              Kontrolle.
             </p>
           ) : (
             <>
               <div className="w-16 h-16 bg-blue-500/20 rounded-[2rem] flex items-center justify-center mx-auto mb-4 border border-blue-500/30">
                 <ShieldCheck size={32} className="text-blue-400" />
               </div>
-              <h1 className="text-2xl font-bold tracking-tight mb-2">Schutzschild konfigurieren</h1>
+              <h2 className="text-2xl font-bold tracking-tight mb-2">Schutzschild konfigurieren</h2>
               <p className="text-zinc-400 text-sm max-w-xs mx-auto">
-                ScrollShield benötigt ausgewählte Zugriffe, um dich schützen zu können. Bitte lies genau durch, warum wir welche Berechtigung brauchen.
+                ScrollShield benötigt ausgewählte Zugriffe, um dich schützen zu können. Bitte lies genau durch, warum
+                wir welche Berechtigung brauchen.
               </p>
             </>
           )}
@@ -169,13 +192,13 @@ export function PermissionsScreen({ state, updateState, navigate, isOnboarding =
             [
               'Erkennen, welche geschützte App geöffnet wurde',
               'Timer und App-Limits ermöglichen',
-              'Statistiken für dich berechnen'
+              'Statistiken für dich berechnen',
             ],
             'Die App kann nicht feststellen, wann du z.B. Instagram öffnest, und der Schutz kann nicht ausgelöst werden.',
             false,
             false,
             true,
-            "Warum wird das gebraucht?\nUm dich vor ablenkenden Apps zu schützen, muss ScrollShield erst erkennen, DASS diese geöffnet wurden. Dies geht technisch nur über den Nutzungsdaten-Zugriff.\n\nWas wir NICHT tun:\nWir lesen keine Bildschirminhalte. Wir protokollieren nicht, was du in den Apps machst. Wir senden keinerlei Daten von deinem Gerät an unsere Server."
+            'Warum wird das gebraucht?\nScrollShield muss erkennen, wann eine geschützte App geöffnet wird. Android stellt dafür den Nutzungszugriff bereit.\n\nWas wir nicht tun:\nWir lesen keine Bildschirminhalte. Wir protokollieren nicht, was du in den Apps machst. Wir senden keine Nutzungsdaten an Entwickler-Server.',
           )}
 
           {renderPermissionCard(
@@ -185,75 +208,55 @@ export function PermissionsScreen({ state, updateState, navigate, isOnboarding =
             [
               'Fokus-Erinnerungen senden',
               'Tageszusammenfassungen anzeigen',
-              'Warnungen bei kritischen Rückfallmustern'
+              'Warnungen bei kritischen Rückfallmustern',
             ],
-            'Du verpasst wichtige Warnungen vor dem Sperren einer App und erhältst keine Motivation.',
+            'Du erhältst keine Erinnerungen, Warnhinweise als Mitteilung oder Zusammenfassungen. Die übrigen Schutzregeln bleiben erhalten.',
+            true,
             false,
             false,
-            false
           )}
 
           {renderPermissionCard(
             'overlay',
             <Layers size={24} />,
-            'Overlay / Bildschirmhinweis',
+            'Hinweis über anderen Apps',
             [
-              'Stop-Screen über problematische Nutzung legen',
+              'Unterbrechungsbildschirm über einer geschützten App anzeigen',
               'Zeitlimit erreicht anzeigen',
-              'Sicherstellen, dass der Warnhinweis immer sichtbar ist'
+              'Sicherstellen, dass der Warnhinweis immer sichtbar ist',
             ],
-            'Wir können keinen Unterbrechungs-Screen über ablenkende Apps legen. Der Schutz blockiert nicht physisch.',
+            'ScrollShield kann weiterhin erinnern und Aktivitäten lokal erfassen, aber keinen Hinweis über einer anderen App anzeigen.',
             false,
-            false,
-            true
-          )}
-
-          {renderPermissionCard(
-            'accessibility',
-            <Accessibility size={24} />,
-            'Bedienungshilfen (Accessibility)',
-            [
-              'Kurzvideo-/Swipe-Nutzung (wie Reels oder Shorts) besser erkennen',
-              'Erkennung von endlosem vertikalem Swipen',
-              'Präzisere Auslösung der Schutzlogik'
-            ],
-            'ScrollShield kann normales Scrollen schwerer von Kurzvideo-Feeds (Reels, TikToks) unterscheiden. Swipe-Verzögerungen reagieren möglicherweise langsamer.',
-            true, // optional
             false,
             true,
-            "⚠️ Wichtige Datenschutz-Information\n\nBedienungshilfen (Accessibility Services) sind eine sehr weitreichende Android-Berechtigung.\n\nWarum wir sie brauchen:\nWenn du die Funktion \"Reels/Shorts-Schutz\" optimal nutzen willst, muss ScrollShield erkennen können, wann du ununterbrochen vertikal durch kurze Videos swipst, obwohl du eigentlich nur die App nutzen wolltest. Ohne diese Berechtigung müssen wir auf ungenauere Fallbacks zurückgreifen.\n\nWas wir NICHT tun (Versprechen):\n- Wir lesen NIEMALS Tastatureingaben (keine Passwörter, keine Chats).\n- Wir lesen keine Bildschirminhalte aus.\n- Wir verändern keine Systemeinstellungen.\n- Die gesamte Logik läuft 100% lokal auf deinem Gerät."
           )}
 
           {renderPermissionCard(
             'screenTime',
             <Settings size={24} />,
-            'Screen Time (Managed Settings)',
-            [
-              'App-Auswahl',
-              'Shielding & App-Regeln anwenden',
-              'Fokus-/Blocklogik auf iOS Ebene'
-            ],
-            'ScrollShield kann auf iOS Apps nicht zuverlässig einschränken oder Bildschirmzeiten messen.',
+            'Bildschirmzeit-Zugriff (iPhone/iPad)',
+            ['Geschützte Apps auswählen', 'App-Limits anwenden', 'Apps während einer Fokuszeit einschränken'],
+            'ScrollShield kann Apps auf dem iPhone oder iPad nicht über die Bildschirmzeit-Funktion einschränken.',
             false,
             true, // iOS only
             false,
-            "Die Screen Time API ist Apples offizieller, privatsphäre-freundlicher Weg, um Bildschirmzeiten zu messen und App-Limits durchzusetzen."
+            'Apple stellt dafür die Bildschirmzeit-Schnittstelle bereit. ScrollShield erhält nur die für Auswahl und Limits nötigen Informationen, nicht den Inhalt anderer Apps.',
           )}
 
           {renderPermissionCard(
             'backgroundActivity',
             <Activity size={24} />,
-            'Hintergrundaktivität',
+            'Zuverlässiger Schutz im Hintergrund',
             [
               'Timer für App-Nutzung stabil weiterführen',
               'Limits sauber überwachen, auch wenn das Display zwischendurch aus (oder im Hintergrund) war',
-              'Verhindert, dass das Handy die App "schlafen" legt'
+              'Verhindert, dass das Handy die App "schlafen" legt',
             ],
-            'Timer können asynchron werden oder der Schutz friert ein, wenn Samsung/Xiaomi die App im Hintergrund beendet.',
+            'Timer können ungenau werden oder pausieren, wenn das Gerät ScrollShield im Hintergrund beendet.',
             true, // optional
             false,
             true,
-            "Geräte einiger asiatischer Hersteller (Samsung, Xiaomi, Oppo etc.) beenden Apps sehr aggressiv im Hintergrund, um Akku zu sparen. Um zu verhindern, dass dein Schutz unerwartet ausklinkt, muss diese Energie-Optimierung für ScrollShield deaktiviert werden."
+            'Einige Geräte beenden Apps im Hintergrund besonders schnell, um Akku zu sparen. Eine Ausnahme in den Akku-Einstellungen sorgt dafür, dass Timer und Schutzregeln zuverlässig weiterlaufen.',
           )}
         </div>
 
@@ -277,4 +280,3 @@ export function PermissionsScreen({ state, updateState, navigate, isOnboarding =
     </motion.div>
   );
 }
-

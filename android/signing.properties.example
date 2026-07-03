@@ -1,0 +1,6 @@
+# Copy this file to signing.properties for local release signing.
+# Never commit signing.properties or keystore files.
+storeFile=release-key.jks
+storePassword=change-me
+keyAlias=scrollshield
+keyPassword=change-me

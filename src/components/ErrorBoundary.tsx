@@ -13,7 +13,7 @@ interface State {
 export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
-    error: null
+    error: null,
   };
 
   public static getDerivedStateFromError(error: Error): State {
@@ -25,6 +25,8 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public render() {
+    const showErrorDetails = !import.meta.env.PROD;
+
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6">
@@ -33,14 +35,13 @@ export class ErrorBoundary extends Component<Props, State> {
           </div>
           <h1 className="text-2xl font-bold tracking-tight mb-2 text-center">Etwas ist schiefgelaufen</h1>
           <p className="text-zinc-400 text-sm max-w-xs text-center mb-8">
-            Ein unerwarteter Fehler ist aufgetreten. ScrollShield hat den Fehler protokolliert und versucht, sich wiederherzustellen.
+            Ein unerwarteter Fehler ist aufgetreten. ScrollShield hat den Fehler protokolliert und versucht, sich
+            wiederherzustellen.
           </p>
-          
-          {this.state.error && (
+
+          {showErrorDetails && this.state.error && (
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 w-full max-w-md mb-8 overflow-auto">
-              <p className="text-xs text-zinc-500 font-mono break-all">
-                {this.state.error.toString()}
-              </p>
+              <p className="text-xs text-zinc-500 font-mono break-all">{this.state.error.toString()}</p>
             </div>
           )}
 

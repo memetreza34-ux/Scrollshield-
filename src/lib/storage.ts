@@ -1,8 +1,8 @@
-import { AppState, DEFAULT_STATE } from '../types';
+import { AppState } from '../types';
 
 /**
  * Local Storage Service for ScrollShield
- * 
+ *
  * Features:
  * - Separation of concerns (Settings, Stats, History, Profiles)
  * - Obfuscation of sensitive configuration data
@@ -29,7 +29,7 @@ const obfuscate = (data: string): string => {
   }
 };
 
-const deobfuscate = (data: string): string => {
+const deobfuscate = (data: string): string | null => {
   try {
     const decoded = atob(data);
     let deobfuscated = '';
@@ -39,8 +39,28 @@ const deobfuscate = (data: string): string => {
     return decodeURIComponent(deobfuscated);
   } catch (e) {
     console.error('Deobfuscation failed', e);
-    return decodeURIComponent(atob(data)); // Fallback
+    try {
+      return decodeURIComponent(atob(data)); // Fallback for older non-XOR payloads
+    } catch (fallbackError) {
+      console.error('Fallback deobfuscation failed', fallbackError);
+      return null;
+    }
   }
+};
+
+const parseJson = <T>(raw: string | null): T | null => {
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+};
+
+const parseStoredChunk = <T>(raw: string | null, encoded = false): T | null => {
+  if (!raw) return null;
+  return parseJson<T>(encoded ? deobfuscate(raw) : raw);
 };
 
 interface StorageKeys {
@@ -72,6 +92,9 @@ export const StorageService = {
         permissions: state.permissions,
         hasCompletedOnboarding: state.hasCompletedOnboarding,
         activeProtectionLevel: state.activeProtectionLevel,
+        isFocusModeActive: state.isFocusModeActive,
+        focusTimeRemaining: state.focusTimeRemaining,
+        activeSession: state.activeSession,
       };
       localStorage.setItem(KEYS.SETTINGS, obfuscate(JSON.stringify(settingsData)));
 
@@ -83,14 +106,14 @@ export const StorageService = {
       };
       localStorage.setItem(KEYS.PROFILES, obfuscate(JSON.stringify(profilesData)));
 
-      // 3. Stats (Non-sensitive - Plaintext for easy debugging/export)
+      // 3. Stats (Local-only, plaintext for local export/debugging)
       const statsData = {
         stats: state.stats,
         dailyStats: state.dailyStats,
       };
       localStorage.setItem(KEYS.STATS, JSON.stringify(statsData));
 
-      // 4. History (Non-sensitive - Plaintext, but limited to save space)
+      // 4. History (Local-only, plaintext, but limited to save space)
       // Only save the last 100 events locally to prevent storage bloat
       const historyData = {
         history: state.history.slice(0, 100),
@@ -100,7 +123,6 @@ export const StorageService = {
 
       // 5. Meta (Version tracking for migrations)
       localStorage.setItem(KEYS.META, JSON.stringify({ version: VERSION, lastSaved: Date.now() }));
-
     } catch (error) {
       console.error('Failed to save state to local storage', error);
     }
@@ -124,49 +146,48 @@ export const StorageService = {
       // Load Settings
       const settingsRaw = localStorage.getItem(KEYS.SETTINGS);
       if (settingsRaw) {
-        try {
-          const settingsParsed = JSON.parse(deobfuscate(settingsRaw));
+        const settingsParsed = parseStoredChunk<Partial<AppState>>(settingsRaw, true);
+        if (settingsParsed) {
           reconstructedState = { ...reconstructedState, ...settingsParsed };
-        } catch (e) {
-          console.error('Corrupted settings data, falling back to defaults', e);
+        } else {
+          console.error('Corrupted settings data, falling back to defaults');
         }
       }
 
       // Load Profiles
       const profilesRaw = localStorage.getItem(KEYS.PROFILES);
       if (profilesRaw) {
-        try {
-          const profilesParsed = JSON.parse(deobfuscate(profilesRaw));
+        const profilesParsed = parseStoredChunk<Partial<AppState>>(profilesRaw, true);
+        if (profilesParsed) {
           reconstructedState = { ...reconstructedState, ...profilesParsed };
-        } catch (e) {
-          console.error('Corrupted profiles data, falling back to defaults', e);
+        } else {
+          console.error('Corrupted profiles data, falling back to defaults');
         }
       }
 
       // Load Stats
       const statsRaw = localStorage.getItem(KEYS.STATS);
       if (statsRaw) {
-        try {
-          const statsParsed = JSON.parse(statsRaw);
+        const statsParsed = parseStoredChunk<Partial<AppState>>(statsRaw);
+        if (statsParsed) {
           reconstructedState = { ...reconstructedState, ...statsParsed };
-        } catch (e) {
-          console.error('Corrupted stats data, falling back to defaults', e);
+        } else {
+          console.error('Corrupted stats data, falling back to defaults');
         }
       }
 
       // Load History
       const historyRaw = localStorage.getItem(KEYS.HISTORY);
       if (historyRaw) {
-        try {
-          const historyParsed = JSON.parse(historyRaw);
+        const historyParsed = parseStoredChunk<Partial<AppState>>(historyRaw);
+        if (historyParsed) {
           reconstructedState = { ...reconstructedState, ...historyParsed };
-        } catch (e) {
-          console.error('Corrupted history data, falling back to defaults', e);
+        } else {
+          console.error('Corrupted history data, falling back to defaults');
         }
       }
 
       return Object.keys(reconstructedState).length > 0 ? reconstructedState : null;
-
     } catch (error) {
       console.error('Fatal error loading state from local storage', error);
       return null;
@@ -178,9 +199,11 @@ export const StorageService = {
    */
   clearState: () => {
     try {
-      // Remove all known keys for current version
-      Object.values(KEYS).forEach(key => localStorage.removeItem(key));
-      
+      // Remove all ScrollShield-owned keys across versions.
+      Object.keys(localStorage)
+        .filter((key) => key.startsWith(STORAGE_PREFIX))
+        .forEach((key) => localStorage.removeItem(key));
+
       // Also clean up legacy keys just in case
       localStorage.removeItem('scrollshield_state_v2');
       localStorage.removeItem('scrollshield_state');
@@ -197,19 +220,18 @@ export const StorageService = {
       const oldStateRaw = localStorage.getItem('scrollshield_state_v2');
       if (!oldStateRaw) return null;
 
-      console.log('Migrating local storage from v2 to v3...');
       const oldState = JSON.parse(oldStateRaw);
-      
+
       // Save in new format immediately
       StorageService.saveState(oldState as AppState);
-      
+
       // Clean up old state
       localStorage.removeItem('scrollshield_state_v2');
-      
+
       return oldState;
     } catch (error) {
       console.error('Migration from v2 failed', error);
       return null;
     }
-  }
+  },
 };

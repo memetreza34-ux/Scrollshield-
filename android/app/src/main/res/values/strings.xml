@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ScrollShield</string>
+    <string name="title_activity_main">ScrollShield</string>
+    <string name="package_name">app.scrollshield.mobile</string>
+    <string name="custom_url_scheme">app.scrollshield.mobile</string>
+</resources>
