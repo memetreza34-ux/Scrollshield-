@@ -82,7 +82,7 @@ if (!existsSync(privacyPolicyPath)) {
     file: 'public/privacy.html',
     line: 1,
     label: 'Missing public privacy policy',
-    text: 'Create a static privacy policy page for App Store / Play Store review.',
+    text: 'Create a static privacy policy page before public web launch or later store review.',
   });
 }
 
@@ -203,7 +203,7 @@ if (findings.length === 0) {
   process.exit(0);
 }
 
-console.log('Release readiness: manual blockers still need attention before store submission.\n');
+console.log('Release readiness: manual blockers still need attention before public launch or store submission.\n');
 
 for (const finding of findings) {
   console.log(`- ${finding.label}: ${finding.file}:${finding.line}`);
@@ -213,7 +213,7 @@ for (const finding of findings) {
 console.log(
   strict
     ? '\nStrict mode failed because release blockers are still present.'
-    : '\nNon-strict mode reports blockers only. Run npm run check:release:strict before an actual store submission.',
+    : '\nNon-strict mode reports blockers only. Run npm run check:release:strict before an actual public launch.',
 );
 
 if (strict) {

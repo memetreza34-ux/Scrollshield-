@@ -1,57 +1,80 @@
-# ScrollShield - Soft-Launch & Beta-Rollout Plan
+# ScrollShield - Web/PWA-First Rollout Plan
 
-Dieser Plan definiert die Phasen für die Markteinführung von ScrollShield. Die oberste Maxime lautet: **Die erste öffentliche Version (v1.0) muss klein, extrem stabil und in ihrer Kommunikation glasklar sein.** Features wie Cloud-Sync, Partner-Control oder komplexe Abos bleiben vorerst deaktiviert, bis das Kernprodukt fehlerfrei läuft.
+Dieser Plan definiert die Markteinfuehrung von ScrollShield mit einem ersten Webapp/PWA-Launch. Die native Android-/iOS-App bleibt vorbereitet, kommt aber erst nach dem oeffentlichen Webtest.
+
+Die oberste Maxime bleibt: **Die erste oeffentliche Version muss klein, stabil und ehrlich kommuniziert sein.** Version 1.0 verspricht keine systemweite App-Sperre, sondern Selbstkontrolle, bewusste Pausen, lokale Regeln, Fokus-Sessions und transparente Grenzen.
 
 ---
 
-## Phase 1: Interne Alpha-Version (Dogfooding)
+## Phase 1: Interne Web-Alpha
 
-**Ziel:** Grundlegende technische Stabilität und "Happy Path"-Prüfung.
-**Tester:** Kernteam, Entwickler, Designer und enge Freunde (ca. 5-10 Personen).
+**Ziel:** Grundlegende technische Stabilitaet und Happy-Path-Pruefung im Browser.
+**Tester:** Kernteam und enge Freunde, ca. 5-10 Personen.
 
-- **Fokus:** Lässt sich die App installieren, starten und das Onboarding abschließen?
-- **Test von leeren Zuständen (Empty States):** Wie sieht das Dashboard am ersten Tag aus, wenn noch keine Statistiken oder Verläufe existieren? Sind die Platzhalter motivierend und verständlich?
-- **Test von Reset- und Löschfunktionen:** Funktioniert der "App auf Werkseinstellungen zurücksetzen"-Button zuverlässig? Werden wirklich alle lokalen `localStorage`-Daten gelöscht, ohne dass die App abstürzt?
+- Onboarding abschliessen und App als PWA installieren.
+- Regeln, Oeffnungsverzoegerung, Notfallfreigabe und Fokusmodus testen.
+- Empty States am ersten Tag pruefen.
+- Reset, Datenexport und Datenimport pruefen.
+- Offline-Neuladen nach gestopptem Dev-/Hosting-Server testen.
 
-## Phase 2: Geschlossene Beta (Technical Beta)
+## Phase 2: Geschlossene Web-Beta
 
-**Ziel:** Plattformspezifische Eigenheiten und Edge-Cases unter realen Bedingungen testen.
-**Tester:** 20-50 ausgewählte Nutzer (z.B. via TestFlight für iOS und Google Play Internal Testing für Android).
+**Ziel:** Echte Nutzung auf verschiedenen Geraeten, Browsern und Bildschirmgroessen pruefen.
+**Tester:** 20-50 ausgewaehlte Nutzer mit Chrome, Edge, Safari und mobilen Browsern.
 
-- **Test von Android und iOS getrennt:**
-  - _iOS:_ Funktioniert die Screen Time API zuverlässig? Werden die kritischen Benachrichtigungen zugestellt?
-  - _Android:_ Funktioniert das Overlay zuverlässig über anderen Apps? Wird der Nutzungsdatenzugriff korrekt ausgewertet?
-- **Test von Berechtigungsflüssen:** Verstehen die Tester, _warum_ sie bestimmte Berechtigungen erteilen müssen? Brechen sie das Onboarding ab? Funktioniert die App (mit Einschränkungen) weiter, wenn Berechtigungen verweigert werden?
-- **Sammeln von Feedback (Technisch):** Fokus auf Abstürze, UI-Glitches und Akkuverbrauch.
+- PWA-Installation auf Android, iOS und Desktop testen.
+- Verhalten ohne native Berechtigungen pruefen: keine Sackgassen, klare Hinweise, App bleibt nutzbar.
+- Datenschutz- und Support-Flows testen.
+- Fokus auf UI-Glitches, lokale Datenhaltung, Service-Worker-Cache und Verstaendlichkeit.
+- Feedback ueber den Support-Screen sammeln.
 
-## Phase 3: Soft-Launch (Test mit wenigen echten Nutzern)
+## Phase 3: Oeffentlicher Web-Soft-Launch
 
-**Ziel:** Prüfung der User Retention (Bleiben die Nutzer?) und des echten Mehrwerts.
-**Tester:** 100-500 echte Nutzer aus einer spezifischen Zielgruppe (z.B. ein Reddit-Forum für Produktivität/ADHS) oder einem kleinen Testmarkt (z.B. nur Österreich/Schweiz).
+**Ziel:** Mit wenigen echten Nutzern pruefen, ob ScrollShield als Webapp Mehrwert liefert.
+**Tester:** 100-500 echte Nutzer aus einer klaren Zielgruppe, z. B. Produktivitaet, Fokus, ADHS oder Digital Wellbeing.
 
-- **Test von Fokusmodus, Regeln, Verlauf und Statistiken:**
-  - Ergeben die Statistiken nach 3-7 Tagen Nutzung Sinn?
-  - Ist der Fokusmodus zu streng oder zu leicht zu umgehen?
-  - Wird der Verlauf (History) korrekt aufgezeichnet (Blockierungen, Notfallfreigaben)?
-- **Sammeln von Feedback (Qualitativ):**
-  - Aktive Nutzung der "Feedback senden"- und "Problem melden"-Buttons im neuen Support-Screen.
-  - Versand einer kurzen Umfrage nach 7 Tagen Nutzung: "Hilft dir ScrollShield, deine Bildschirmzeit bewusster zu gestalten?"
+- Nutzung nach 3-7 Tagen auswerten: Sind Statistiken, Verlauf und Fokusmodus hilfreich?
+- Pruefen, ob die Nutzer die Web/PWA-Grenzen verstehen.
+- Support-Anfragen aktiv beobachten.
+- Texte verbessern, wenn Nutzer systemweites Blocking erwarten.
+- Erst kleine organische Kanaele nutzen; noch keine grosse bezahlte Kampagne.
 
-## Phase 4: Release Candidate (RC) & Öffentlicher Launch
+## Phase 4: Web Release Candidate und oeffentlicher Launch
 
-**Ziel:** Finaler Feinschliff und Freigabe für den globalen App Store / Play Store.
+**Ziel:** Finaler Feinschliff und stabile Veroeffentlichung auf der finalen Domain.
 
-### Kriterien für den Release Candidate (Go/No-Go):
+### Go/No-Go-Kriterien
 
-1.  **Stabilität:** Crash-free Rate von > 99% in der Soft-Launch-Phase.
-2.  **Berechtigungen:** Keine "Dead Ends" (Sackgassen) im Berechtigungsfluss auf beiden Plattformen.
-3.  **Kernversprechen erfüllt:** Die Verzögerungs- und Einschränkungsmechanismen funktionieren zuverlässig (Best-Effort bei Reels/Shorts ist transparent kommuniziert).
-4.  **Rechtliches & Store:** Impressum, Datenschutzerklärung und Store-Texte sind final geprüft und entsprechen der Realität (keine falschen Versprechen).
-5.  **Support-Readiness:** Das Postfach `support@scrollshield.app` wird aktiv überwacht.
+1. **Stabilitaet:** Keine bekannten Crash- oder Datenverlustfehler.
+2. **Rechtliches:** Impressum, Datenschutzerklaerung, Support-Adresse und Domain sind final.
+3. **Kommunikation:** Die Webapp verspricht keine native/systemweite Sperre.
+4. **Datenschutz:** Keine Accounts, kein Cloud-Sync, keine Werbung, kein Tracking.
+5. **Support-Readiness:** Das finale Support-Postfach wird aktiv ueberwacht.
+6. **Technik:** `npm run verify` ist gruen und der Produktions-Build laeuft auf der Hosting-URL.
 
 **Launch-Strategie:**
-Sobald der RC die Kriterien erfüllt, wird die App öffentlich geschaltet. Marketing-Maßnahmen werden erst 1-2 Wochen _nach_ dem öffentlichen Launch hochgefahren, um sicherzustellen, dass die Server (falls genutzt) und die App-Logik der Last standhalten.
+Nach dem Web-RC wird ScrollShield oeffentlich als Webapp/PWA geschaltet. Marketing wird schrittweise erhoeht, sobald Support, Feedback und Stabilitaet im echten Betrieb passen.
+
+## Phase 5: Native Android-App
+
+Diese Phase startet erst nach dem Web-Launch.
+
+- Android SDK/JDK lokal einrichten.
+- Paketname final bestaetigen.
+- Native Berechtigungen und echte Unterbrechung implementieren.
+- Play Console Formulare, Data Safety, Altersfreigabe und Review-Video vorbereiten.
+- Interne Play-Tests starten, bevor die App oeffentlich wird.
+
+## Phase 6: Native iOS-App
+
+Diese Phase startet nach oder parallel zur Android-Native-Phase.
+
+- Apple Developer Account und Entitlements klaeren.
+- Screen Time / Family Controls beantragen.
+- Native iOS-Unterbrechung implementieren.
+- App Store Connect Privacy Labels, Review Notes und Review-Video vorbereiten.
+- TestFlight-Beta starten.
 
 ---
 
-_Hinweis: Premium-Features (Paywall) werden erst in Phase 5 (Post-Launch, v1.1 oder v1.2) aktiviert, sobald eine solide, zufriedene Nutzerbasis aufgebaut wurde._
+Premium-Features wie Cloud-Sync, Partner-/Familienmodus, KI oder Paywall bleiben bis nach dem Weblaunch deaktiviert.

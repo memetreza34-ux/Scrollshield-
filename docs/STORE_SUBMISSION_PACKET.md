@@ -1,7 +1,22 @@
-# ScrollShield Store Submission Packet
+# ScrollShield Web Launch and Native Store Packet
 
-This packet is prepared for version 1.0.0. Replace bracketed fields and verify every answer against the final native
-binary before submission.
+This packet separates the first public web/PWA launch from the later native App Store / Play Store submission. Version
+1.0 should launch as a web app first. The native store answers below are retained as prepared drafts for the later
+Android/iOS phase and must be verified against the final native binary before submission.
+
+## Web/PWA Launch Packet
+
+- Public app URL: `https://[FINAL-DOMAIN]/`
+- Public privacy URL: `https://[FINAL-DOMAIN]/privacy.html`
+- Support address pending verification: `support@scrollshield.app`
+- Legal name/entity: `[REQUIRED]`
+- Address: `[REQUIRED]`
+- Responsible person: `[REQUIRED]`
+- Hosting provider: `[REQUIRED]`
+- No account, login, cloud sync, advertising, analytics, tracking, or developer backend
+- App rules, history, and statistics remain in local browser storage
+- Local data can be exported, imported, or deleted with the in-app reset
+- Web/PWA limitation: the browser version cannot physically block other installed apps
 
 ## Shared Facts
 
@@ -11,6 +26,10 @@ binary before submission.
 - Public privacy page in the build: `/privacy.html`
 - Support address pending verification: `support@scrollshield.app`
 - Store screenshots: `docs/store-assets/`
+
+## Later Native Store Submission
+
+The following sections are not required for the first web/PWA launch. Use them when Android/iOS binaries are ready.
 
 ## Apple App Store Connect
 
