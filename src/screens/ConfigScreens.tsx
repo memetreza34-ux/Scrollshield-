@@ -1055,6 +1055,27 @@ export function Settings({
         </section>
 
         {/* 4. Daten & 5. Datenschutz */}
+        <section aria-labelledby="settings-account-sync">
+          <SectionHeader id="settings-account-sync" title="Konto & Sync" />
+          <div className="overflow-hidden rounded-[2rem] border border-emerald-500/25 bg-emerald-500/10 shadow-lg">
+            <div className="p-5">
+              <div className="mb-2 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-400/10 text-emerald-300">
+                  <Cloud size={18} aria-hidden="true" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-emerald-100">Kein Account in Version 1</h3>
+                  <p className="text-xs text-emerald-200/75">Kein Login, kein Cloud-Sync, keine Social-Verbindung.</p>
+                </div>
+              </div>
+              <p className="text-sm leading-relaxed text-emerald-100/80">
+                Du musst dich nicht mit Instagram, TikTok, YouTube oder einem ScrollShield-Konto verbinden. Alles, was
+                du einstellst, bleibt lokal auf diesem Geraet.
+              </p>
+            </div>
+          </div>
+        </section>
+
         <section aria-labelledby="settings-privacy">
           <SectionHeader id="settings-privacy" title="Daten & Datenschutz" />
           <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[2rem] overflow-hidden shadow-lg">

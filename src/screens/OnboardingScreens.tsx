@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Shield, Smartphone, Target, Lock, Check } from 'lucide-react';
-import { AppState, Screen, SUPPORTED_APPS, DEFAULT_APP_CONFIG } from '../types';
+import { Check, CloudOff, Lock, ScanLine, Shield, Smartphone, Sparkles, Target, UserRound } from 'lucide-react';
+import { AppState, DEFAULT_APP_CONFIG, Screen, SUPPORTED_APPS } from '../types';
 
 export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
   return (
@@ -9,45 +9,68 @@ export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex flex-col h-full p-8 justify-center items-center text-center"
+      className="relative flex h-full flex-col items-center justify-center overflow-hidden p-7 text-center"
     >
-      <div className="flex-1 flex flex-col items-center justify-center pt-8">
-        <div className="w-28 h-28 bg-zinc-900/80 backdrop-blur-xl rounded-[2.5rem] flex items-center justify-center mb-8 shadow-2xl shadow-black/50 border border-zinc-800/50">
-          <Shield size={56} className="text-zinc-100 drop-shadow-md" />
+      <div className="pointer-events-none absolute inset-x-8 top-12 h-56 rounded-full bg-emerald-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -right-20 top-40 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl" />
+
+      <div className="flex flex-1 flex-col items-center justify-center pt-8">
+        <div className="relative mb-8 h-36 w-36" aria-hidden="true">
+          <div className="signal-ring absolute inset-0 rounded-[2.2rem] border border-emerald-400/20" />
+          <div className="signal-ring absolute inset-2 rounded-[2rem] border border-blue-400/20" />
+          <div className="signal-ring absolute inset-4 rounded-[1.8rem] border border-rose-400/20" />
+          <div className="shield-aura absolute inset-5 rounded-[2.2rem] shadow-2xl shadow-emerald-950/60" />
+          <div className="absolute inset-5 z-10 flex items-center justify-center">
+            <Shield size={58} className="text-zinc-50 drop-shadow-lg" />
+          </div>
+          <div className="scanline absolute left-7 right-7 top-1/2 z-20 h-10 rounded-full border-y border-emerald-300/20 bg-emerald-300/10 blur-[1px]" />
         </div>
-        <h1 className="text-4xl font-bold mb-4 tracking-tight">ScrollShield</h1>
-        <p className="text-zinc-300 leading-relaxed text-lg max-w-sm font-medium mb-6">
-          Du willst Social Media nutzen, aber nicht in Reels, Shorts und Endlos-Scroll verschwinden.
+
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-200">
+          <Sparkles size={14} aria-hidden="true" />
+          Private Webapp, kein Login-Stress
+        </div>
+        <h1 className="mb-4 text-5xl font-black leading-none text-zinc-50">ScrollShield</h1>
+        <p className="mb-6 max-w-sm text-lg font-medium leading-relaxed text-zinc-300">
+          Ein ruhiger Schutzschirm gegen Autopilot-Scrolling. Erst Webapp, spaeter echte native App.
         </p>
 
-        <div className="bg-zinc-950/60 p-5 rounded-2xl border border-zinc-800/50 text-left w-full max-w-xs space-y-3 shadow-inner">
-          <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest">Die 2 Schutzebenen:</p>
+        <div className="w-full max-w-xs space-y-3 rounded-2xl border border-zinc-800/50 bg-zinc-950/60 p-5 text-left shadow-inner">
+          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">So startest du:</p>
           <div className="flex items-start gap-3">
-            <Smartphone size={18} className="text-emerald-400 mt-0.5" />
+            <UserRound size={18} className="mt-0.5 text-emerald-400" aria-hidden="true" />
             <div>
-              <span className="text-sm font-semibold text-emerald-100 block">App-Zugang begrenzen</span>
-              <span className="text-xs text-zinc-500">Pausen erzwingen & App-Limits</span>
+              <span className="block text-sm font-semibold text-emerald-100">Kein Konto verbinden</span>
+              <span className="text-xs text-zinc-500">Alles bleibt lokal in dieser Webapp</span>
             </div>
           </div>
           <div className="flex items-start gap-3">
-            <Target size={18} className="text-blue-400 mt-0.5" />
+            <Smartphone size={18} className="mt-0.5 text-blue-400" aria-hidden="true" />
             <div>
-              <span className="text-sm font-semibold text-blue-100 block">Kurzvideo-Sog stoppen</span>
-              <span className="text-xs text-zinc-500">Endlos-Feeds explizit blockieren</span>
+              <span className="block text-sm font-semibold text-blue-100">App-Zugang begrenzen</span>
+              <span className="text-xs text-zinc-500">Pausen erzwingen und App-Limits setzen</span>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <Target size={18} className="mt-0.5 text-rose-400" aria-hidden="true" />
+            <div>
+              <span className="block text-sm font-semibold text-rose-100">Kurzvideo-Sog stoppen</span>
+              <span className="text-xs text-zinc-500">Bewusste Stopps statt Endlos-Feed</span>
             </div>
           </div>
         </div>
       </div>
-      <div className="w-full space-y-4 pb-8 mt-8">
+
+      <div className="mt-8 w-full space-y-4 pb-8">
         <button
           onClick={() => navigate('onboarding')}
-          className="w-full bg-zinc-100 text-zinc-950 font-bold py-4 rounded-[1.5rem] active:scale-[0.98] transition-transform shadow-lg shadow-zinc-100/10"
+          className="w-full rounded-[1.5rem] bg-zinc-100 py-4 font-bold text-zinc-950 shadow-lg shadow-zinc-100/10 transition-transform active:scale-[0.98]"
         >
           Loslegen
         </button>
         <button
           onClick={() => navigate('help')}
-          className="w-full bg-zinc-900/80 backdrop-blur-md text-zinc-300 font-semibold py-4 rounded-[1.5rem] active:scale-[0.98] transition-transform border border-zinc-800/50"
+          className="w-full rounded-[1.5rem] border border-zinc-800/50 bg-zinc-900/80 py-4 font-semibold text-zinc-300 backdrop-blur-md transition-transform active:scale-[0.98]"
         >
           Mehr erfahren
         </button>
@@ -71,7 +94,6 @@ export function Onboarding({
 
   const nextStep = () => {
     if (step === 2) {
-      // Apply the selected profile's config to the selected apps
       const appsConfig = { ...state.appsConfig };
       const selectedProfile = state.profiles?.find((p) => p.id === selectedProfileId);
 
@@ -86,9 +108,7 @@ export function Onboarding({
     }
 
     if (step < 3) setStep(step + 1);
-    else {
-      navigate('permissions');
-    }
+    else navigate('permissions');
   };
 
   return (
@@ -96,104 +116,125 @@ export function Onboarding({
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="flex flex-col h-full p-6 justify-between"
+      className="flex h-full flex-col justify-between p-6"
     >
-      <div className="flex-1 overflow-y-auto scrollbar-hide pt-8 pb-4">
+      <div className="flex-1 overflow-y-auto pb-4 pt-8 scrollbar-hide">
         {step === 1 && (
           <div>
-            <div className="w-20 h-20 bg-zinc-900/80 backdrop-blur-md rounded-[1.5rem] flex items-center justify-center mb-6 shadow-lg border border-zinc-800/50 mx-auto">
-              <Target size={32} className="text-red-400" />
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-[1.5rem] border border-rose-400/30 bg-rose-500/10 shadow-lg shadow-rose-950/30">
+              <Target size={32} className="text-rose-300" aria-hidden="true" />
             </div>
-            <h2 className="text-3xl font-bold mb-3 text-center tracking-tight">Ziele auswählen</h2>
-            <p className="text-zinc-400 text-center mb-8 text-base">
-              Welche Apps ziehen dich am häufigsten in Endlos-Feeds oder rauben dir Zeit?
+            <h2 className="mb-3 text-center text-3xl font-bold tracking-tight">Ziele auswaehlen</h2>
+            <p className="mb-8 text-center text-base text-zinc-400">
+              Welche Apps ziehen dich am haeufigsten in Endlos-Feeds oder rauben dir Zeit?
             </p>
             <div className="space-y-3">
-              {SUPPORTED_APPS.map((app) => (
-                <button
-                  key={app.id}
-                  onClick={() =>
-                    setSelectedApps((prev) =>
-                      prev.includes(app.id) ? prev.filter((id) => id !== app.id) : [...prev, app.id],
-                    )
-                  }
-                  className={`w-full flex items-center justify-between p-4 rounded-[1.5rem] border transition-all ${selectedApps.includes(app.id) ? 'bg-zinc-900/80 border-zinc-700 shadow-md' : 'bg-zinc-950/50 border-zinc-800/50 opacity-80 hover:opacity-100'}`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-inner ${app.color}`}
-                    >
-                      {app.icon}
-                    </div>
-                    <span className="font-semibold px-2">{app.name}</span>
-                  </div>
-                  <div
-                    className={`w-6 h-6 rounded-full border flex items-center justify-center ${selectedApps.includes(app.id) ? 'bg-zinc-100 border-zinc-100 text-zinc-950' : 'border-zinc-700'}`}
+              {SUPPORTED_APPS.map((app) => {
+                const selected = selectedApps.includes(app.id);
+                return (
+                  <button
+                    key={app.id}
+                    onClick={() =>
+                      setSelectedApps((prev) => (selected ? prev.filter((id) => id !== app.id) : [...prev, app.id]))
+                    }
+                    className={`w-full rounded-[1.5rem] border p-4 transition-all ${
+                      selected
+                        ? 'border-emerald-400/40 bg-emerald-500/10 shadow-md shadow-emerald-950/30'
+                        : 'border-zinc-800/50 bg-zinc-950/50 opacity-85 hover:opacity-100'
+                    }`}
                   >
-                    {selectedApps.includes(app.id) && <Check size={14} strokeWidth={3} />}
-                  </div>
-                </button>
-              ))}
+                    <span className="flex items-center justify-between">
+                      <span className="flex items-center gap-4">
+                        <span
+                          className={`flex h-12 w-12 items-center justify-center rounded-2xl text-xl shadow-inner ${app.color}`}
+                          aria-hidden="true"
+                        >
+                          {app.icon}
+                        </span>
+                        <span className="px-2 font-semibold">{app.name}</span>
+                      </span>
+                      <span
+                        className={`flex h-6 w-6 items-center justify-center rounded-full border ${
+                          selected ? 'border-zinc-100 bg-zinc-100 text-zinc-950' : 'border-zinc-700'
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {selected && <Check size={14} strokeWidth={3} />}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
 
         {step === 2 && (
           <div>
-            <div className="w-20 h-20 bg-zinc-900/80 backdrop-blur-md rounded-[1.5rem] flex items-center justify-center mb-6 shadow-lg border border-zinc-800/50 mx-auto">
-              <Shield size={32} className="text-emerald-400" />
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-[1.5rem] border border-emerald-400/30 bg-emerald-500/10 shadow-lg shadow-emerald-950/30">
+              <Shield size={32} className="text-emerald-300" aria-hidden="true" />
             </div>
-            <h2 className="text-3xl font-bold mb-3 text-center tracking-tight">Start-Profil wählen</h2>
-            <p className="text-zinc-400 text-center mb-6 text-sm">
-              Dies ist nur der Startpunkt. Du kannst für jede App und jeden Reels-Feed die Regeln später individuell
-              anpassen.
+            <h2 className="mb-3 text-center text-3xl font-bold tracking-tight">Start-Profil waehlen</h2>
+            <p className="mb-6 text-center text-sm text-zinc-400">
+              Das ist nur dein Startpunkt. Du kannst spaeter jede App und jeden Feed einzeln anpassen.
             </p>
             <div className="space-y-4">
-              {state.profiles?.map((profile) => (
-                <button
-                  key={profile.id}
-                  onClick={() => setSelectedProfileId(profile.id)}
-                  className={`w-full text-left p-5 rounded-[1.5rem] border transition-all ${selectedProfileId === profile.id ? 'bg-zinc-900/90 border-zinc-600 shadow-lg' : 'bg-zinc-950/50 border-zinc-800/50 hover:bg-zinc-900/50'}`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-bold text-zinc-100 text-lg">{profile.name}</h3>
-                    </div>
-                    {selectedProfileId === profile.id && <Check size={16} className={profile.color} />}
-                  </div>
-                  <p className="text-sm text-zinc-400 leading-relaxed mb-3">{profile.description}</p>
-                </button>
-              ))}
+              {state.profiles?.map((profile) => {
+                const selected = selectedProfileId === profile.id;
+                return (
+                  <button
+                    key={profile.id}
+                    onClick={() => setSelectedProfileId(profile.id)}
+                    className={`w-full rounded-[1.5rem] border p-5 text-left transition-all ${
+                      selected
+                        ? 'border-emerald-400/40 bg-zinc-900/90 shadow-lg'
+                        : 'border-zinc-800/50 bg-zinc-950/50 hover:bg-zinc-900/50'
+                    }`}
+                  >
+                    <span className="mb-2 flex items-center justify-between">
+                      <span className="text-lg font-bold text-zinc-100">{profile.name}</span>
+                      {selected && <Check size={16} className={profile.color} aria-hidden="true" />}
+                    </span>
+                    <span className="block text-sm leading-relaxed text-zinc-400">{profile.description}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
 
         {step === 3 && (
-          <div className="flex flex-col items-center text-center mt-6">
-            <div className="w-24 h-24 bg-zinc-900/80 backdrop-blur-md rounded-[2rem] flex items-center justify-center mb-8 shadow-lg border border-zinc-800/50">
-              <Lock size={40} className="text-zinc-100" />
+          <div className="mt-6 flex flex-col items-center text-center">
+            <div className="mb-8 flex h-24 w-24 items-center justify-center rounded-[2rem] border border-zinc-800/50 bg-zinc-900/80 shadow-lg backdrop-blur-md">
+              <Lock size={40} className="text-zinc-100" aria-hidden="true" />
             </div>
-            <h2 className="text-3xl font-bold mb-5 tracking-tight">Privatsphäre & Schutz</h2>
-            <p className="text-zinc-400 leading-relaxed text-sm mb-6">
-              Damit die 2-Ebenen-Abwehr (App-Sperren + Kurzvideo-Erkennung) funktioniert, muss ScrollShield dein
-              Verhalten auf dem Smartphone analysieren.
+            <h2 className="mb-5 text-3xl font-bold tracking-tight">Privatsphaere & Schutz</h2>
+            <p className="mb-6 text-sm leading-relaxed text-zinc-400">
+              Du musst dich nicht mit Instagram, TikTok, YouTube oder einem ScrollShield-Konto verbinden. Version 1
+              startet bewusst lokal und ohne Login.
             </p>
-            <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[1.5rem] p-5 text-sm text-zinc-400 text-left w-full shadow-inner mb-4">
-              <strong className="text-zinc-200 block mb-1">Offline-First in Version 1.0:</strong>
-              Regeln, Verlauf und Statistiken bleiben in dieser Version auf deinem Gerät. ScrollShield liest keine Chats
-              oder Passwörter und überträgt keine Nutzungsdaten an Entwickler-Server.
+            <div className="mb-4 w-full rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 p-5 text-left text-sm text-emerald-100 shadow-inner">
+              <div className="mb-2 flex items-center gap-2 font-bold text-emerald-300">
+                <CloudOff size={16} aria-hidden="true" />
+                Offline-First in Version 1.0
+              </div>
+              Regeln, Verlauf und Statistiken bleiben auf deinem Geraet. ScrollShield liest keine Chats oder Passwoerter
+              und uebertraegt keine Nutzungsdaten an Entwickler-Server.
             </div>
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-[1.5rem] p-5 text-sm text-blue-300/80 text-left w-full shadow-inner">
-              <strong className="text-blue-400 block mb-1">Transparente Schutzregeln:</strong>
-              Vor der Aktivierung siehst du, welche Limits gelten und ob dein gewähltes Profil eine Notfallfreigabe
-              erlaubt.
+            <div className="w-full rounded-[1.5rem] border border-blue-500/30 bg-blue-500/10 p-5 text-left text-sm text-blue-200 shadow-inner">
+              <div className="mb-2 flex items-center gap-2 font-bold text-blue-300">
+                <ScanLine size={16} aria-hidden="true" />
+                Webapp-Grenze ist ehrlich
+              </div>
+              Die Webversion kann andere Apps nicht direkt sperren. Sie hilft dir mit bewussten Pausen, Regeln,
+              Fokuszeiten und klaren Unterbrechungen. Echte System-Sperren kommen spaeter in der nativen App.
             </div>
           </div>
         )}
       </div>
 
-      <div className="pt-4 bg-zinc-950">
-        <div className="flex justify-center gap-2 mb-6">
+      <div className="bg-zinc-950 pt-4">
+        <div className="mb-6 flex justify-center gap-2">
           {[1, 2, 3].map((i) => (
             <div
               key={i}
@@ -204,8 +245,8 @@ export function Onboarding({
         <div className="flex gap-3">
           <button
             onClick={() => (step > 1 ? setStep(step - 1) : navigate('welcome'))}
-            className="w-16 flex items-center justify-center bg-zinc-900 text-zinc-400 py-4 rounded-[1.5rem] active:scale-[0.98] transition-transform shadow-lg border border-zinc-800"
-            aria-label="Zurück"
+            className="flex w-16 items-center justify-center rounded-[1.5rem] border border-zinc-800 bg-zinc-900 py-4 text-zinc-400 shadow-lg transition-transform active:scale-[0.98]"
+            aria-label="Zurueck"
           >
             <svg
               viewBox="0 0 24 24"
@@ -214,16 +255,17 @@ export function Onboarding({
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="w-5 h-5"
+              className="h-5 w-5"
+              aria-hidden="true"
             >
               <path d="m15 18-6-6 6-6" />
             </svg>
           </button>
           <button
             onClick={nextStep}
-            className="flex-1 bg-zinc-100 text-zinc-950 font-bold py-4 rounded-[1.5rem] active:scale-[0.98] transition-transform shadow-lg shadow-zinc-100/10"
+            className="flex-1 rounded-[1.5rem] bg-zinc-100 py-4 font-bold text-zinc-950 shadow-lg shadow-zinc-100/10 transition-transform active:scale-[0.98]"
           >
-            {step < 3 ? 'Weiter' : 'Berechtigungen erteilen'}
+            {step < 3 ? 'Weiter' : 'Setup pruefen'}
           </button>
         </div>
       </div>

@@ -28,7 +28,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Loslegen' }));
 
-    expect(await screen.findByRole('heading', { name: 'Ziele auswählen' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Ziele auswaehlen' })).toBeInTheDocument();
     await waitFor(() => expect(scrollArea.scrollTop).toBe(0));
   });
 
@@ -82,6 +82,7 @@ describe('App', () => {
         name: 'Datenschutz & Transparenz Lokale Daten, Berechtigungen & App-Reset',
       }),
     );
+    expect(await screen.findByRole('heading', { name: 'Datenschutz & Transparenz' })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: /App zurücksetzen/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Ja, Reset' }));
 

@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   XCircle,
   Target,
+  CloudOff,
 } from 'lucide-react';
 import { AppState, Screen, SUPPORTED_APPS } from '../types';
 import { Header } from '../components/ui';
@@ -150,6 +151,28 @@ export function Dashboard({
             : `${blockedToday} unbewusste Impulse heute gestoppt.`}
         </p>
       </header>
+
+      <motion.section
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08, duration: 0.35 }}
+        aria-label="Account- und Datenschutzstatus"
+        className="relative overflow-hidden rounded-[1.5rem] border border-emerald-500/25 bg-emerald-500/10 p-4"
+      >
+        <div className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full bg-emerald-400/20 blur-2xl" />
+        <div className="relative flex items-start gap-3">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-400/10">
+            <CloudOff size={18} className="text-emerald-300" aria-hidden="true" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-emerald-100">Kein Account noetig</h2>
+            <p className="mt-1 text-xs leading-relaxed text-emerald-200/80">
+              Du verbindest hier keine Social-Media-Konten. ScrollShield laeuft lokal in dieser Webapp; echte
+              System-Sperren kommen spaeter in der nativen App.
+            </p>
+          </div>
+        </div>
+      </motion.section>
 
       {renderSystemHealthBanner()}
 
