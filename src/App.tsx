@@ -10,10 +10,13 @@ import { FocusGarden } from './components/FocusGarden';
 import { BreathingExerciseModal } from './components/BreathingExerciseModal';
 import { ChallengeUnlockModal } from './components/ChallengeUnlockModal';
 import { SecurityShieldPanel } from './components/SecurityShieldPanel';
-import { Brain, Sparkles, Timer, Sliders, Activity, Trees, Wind, ShieldCheck, KeyRound } from 'lucide-react';
+import { AudioSoundscapePanel } from './components/AudioSoundscapePanel';
+import { CircadianEnergyBoard } from './components/CircadianEnergyBoard';
+import { DataSovereigntyPanel } from './components/DataSovereigntyPanel';
+import { Brain, Sparkles, Timer, Sliders, Activity, Trees, Wind, ShieldCheck, KeyRound, Music, Zap, Database } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'garden' | 'rules' | 'focus' | 'profiles' | 'security'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'garden' | 'soundscapes' | 'biorhythm' | 'rules' | 'focus' | 'profiles' | 'security' | 'sovereignty'>('dashboard');
   const [brainState, setBrainState] = useState<BrainState>(brainEngine.calculateBrainState());
   const [events, setEvents] = useState<ImpulseEvent[]>(brainEngine.getEvents());
   const [rules, setRules] = useState<AIRule[]>(brainEngine.getRules());
@@ -57,13 +60,13 @@ export const App: React.FC = () => {
             <div>
               <span className="font-extrabold text-white tracking-tight text-lg">ScrollShield</span>
               <span className="ml-2 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                PRO v1.0
+                PRO 2040
               </span>
             </div>
           </div>
 
           {/* Navigation Pills */}
-          <nav className="hidden md:flex items-center gap-1 p-1 bg-slate-900/80 rounded-xl border border-slate-800">
+          <nav className="hidden lg:flex items-center gap-1 p-1 bg-slate-900/80 rounded-xl border border-slate-800">
             <button
               onClick={() => setActiveTab('dashboard')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
@@ -79,7 +82,25 @@ export const App: React.FC = () => {
                 activeTab === 'garden' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Trees className="w-3.5 h-3.5" /> Garten (Forest)
+              <Trees className="w-3.5 h-3.5" /> Garten
+            </button>
+
+            <button
+              onClick={() => setActiveTab('soundscapes')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                activeTab === 'soundscapes' ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Music className="w-3.5 h-3.5" /> Audio (Endel)
+            </button>
+
+            <button
+              onClick={() => setActiveTab('biorhythm')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                activeTab === 'biorhythm' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5" /> Energie
             </button>
 
             <button
@@ -101,21 +122,21 @@ export const App: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('profiles')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
-                activeTab === 'profiles' ? 'bg-slate-800 text-slate-200' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Sliders className="w-3.5 h-3.5" /> Profile
-            </button>
-
-            <button
               onClick={() => setActiveTab('security')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                 activeTab === 'security' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'text-slate-400 hover:text-white'
               }`}
             >
               <ShieldCheck className="w-3.5 h-3.5" /> Sicherheit
+            </button>
+
+            <button
+              onClick={() => setActiveTab('sovereignty')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                activeTab === 'sovereignty' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Database className="w-3.5 h-3.5" /> Backup
             </button>
           </nav>
 
@@ -152,6 +173,14 @@ export const App: React.FC = () => {
           <FocusGarden />
         )}
 
+        {activeTab === 'soundscapes' && (
+          <AudioSoundscapePanel />
+        )}
+
+        {activeTab === 'biorhythm' && (
+          <CircadianEnergyBoard />
+        )}
+
         {activeTab === 'rules' && (
           <SmartRuleGenerator
             rules={rules}
@@ -172,6 +201,10 @@ export const App: React.FC = () => {
 
         {activeTab === 'security' && (
           <SecurityShieldPanel />
+        )}
+
+        {activeTab === 'sovereignty' && (
+          <DataSovereigntyPanel />
         )}
 
       </main>
