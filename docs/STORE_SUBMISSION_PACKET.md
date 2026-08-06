@@ -35,17 +35,16 @@ binary before submission.
 
 ### Review Notes
 
-> Version 1.0 requires no account or test credentials. Complete onboarding, select one or more apps, and open the
-> permission screen to review the Screen Time explanation. The dashboard remains usable when permission is declined and
-> clearly reports reduced protection. Rules, history, and statistics are processed locally. Short-video protection is a
-> best-effort interruption and is not presented as a guaranteed system block.
+> Do not submit the iOS build until the Family Controls entitlement and native Screen Time enforcement are present in the
+> reviewed binary. The future iOS build will require no account or test credentials. Rules, history, and statistics will
+> remain local, and the review notes must describe only capabilities demonstrated in that exact binary.
 
 ### Review Video Shot List
 
 1. Launch and complete onboarding without granting permission.
 2. Show the reduced-protection dashboard warning.
 3. Return to Permissions and grant Screen Time access in the native build.
-4. Select Instagram and configure an opening delay.
+4. Select one supported app and configure an opening delay.
 5. Trigger the native shield/interruption.
 6. Show local history, data export, and app reset.
 
@@ -53,10 +52,13 @@ binary before submission.
 
 ### Data Safety
 
+- Data collected: **No**
+- Data shared: **No**
+- Tracking: **No**
+- Account creation: **No**
 - Data collected by the developer or transmitted off-device: **No**
 - Data shared with third parties: **No**
 - Tracking or advertising: **No**
-- Account creation: **No**
 - Deletion mechanism: local app reset and uninstall
 - Reconfirm these answers after inspecting the final signed AAB and dependency report.
 
@@ -88,7 +90,7 @@ Reviewer demonstration:
 3. Show a supported but uninstalled app as unavailable with disabled controls.
 4. Install or uninstall one supported test app and use the refresh action to update the local status.
 
-### Foreground Service `specialUse` Declaration
+### `FOREGROUND_SERVICE_SPECIAL_USE` Declaration
 
 Manifest subtype description:
 
