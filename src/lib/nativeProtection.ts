@@ -50,6 +50,7 @@ interface NativeProtectionConfig {
     sessionMinutes: number;
     blockHours: string;
     focusModeBehavior: AppConfig['focusModeBehavior'];
+    timeWindows: AppConfig['timeWindows'];
     antiBinge: {
       enabled: boolean;
       warningThreshold: number;
@@ -97,6 +98,14 @@ const APP_NAMES: Record<string, string> = {
   twitch: 'Twitch',
   netflix: 'Netflix',
   discord: 'Discord',
+};
+
+const DEFAULT_TIME_WINDOWS: AppConfig['timeWindows'] = {
+  morningRules: 'normal',
+  workRules: 'normal',
+  eveningRules: 'normal',
+  nightRules: 'normal',
+  weekendRules: 'normal',
 };
 
 const EVENT_TYPES = new Set<NativeProtectionEvent['type']>(['open', 'block', 'warning', 'emergency']);
@@ -165,6 +174,10 @@ const buildConfig = (appsConfig: Record<string, AppConfig>, focusMode: boolean):
       sessionMinutes: Math.max(1, appConfig?.sessionLimit ?? 5),
       blockHours: appConfig?.blockHours?.trim() ?? '',
       focusModeBehavior: appConfig?.focusModeBehavior ?? 'warn',
+      timeWindows: {
+        ...DEFAULT_TIME_WINDOWS,
+        ...appConfig?.timeWindows,
+      },
       antiBinge: {
         enabled: appConfig?.antiBinge.enabled ?? false,
         warningThreshold: Math.max(1, appConfig?.antiBinge.warningThreshold ?? 3),
