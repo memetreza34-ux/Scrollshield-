@@ -274,12 +274,11 @@ const archiveRemainingLegacySources = () => {
     if (archiveLegacyEntries(key, { [key]: raw })) archivedSources.add(key);
   }
 
-  const v07Entries = Object.fromEntries(
-    LEGACY_V07_KEYS.flatMap((key) => {
-      const raw = localStorage.getItem(key);
-      return raw === null ? [] : [[key, raw]];
-    }),
-  );
+  const v07Entries: Record<string, string> = {};
+  for (const key of LEGACY_V07_KEYS) {
+    const raw = localStorage.getItem(key);
+    if (raw !== null) v07Entries[key] = raw;
+  }
   if (Object.keys(v07Entries).length > 0 && !archivedSources.has('legacy_v07_pro')) {
     archiveLegacyEntries('legacy_v07_pro', v07Entries);
   }
