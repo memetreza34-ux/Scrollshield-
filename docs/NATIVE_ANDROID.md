@@ -195,6 +195,8 @@ The reviewer flow must show the exact candidate build, trigger at least one safe
 13. Inspect the final signed binary against privacy, permission, SDK, and store declarations.
 14. Complete every field in `config/release-approval.json`, then record the responsible approver and approval time.
 
+The lifecycle source block is frozen. It remains unverified until the same branch head passes `npm run verify`, Android JUnit, `assembleDebug`, and the required physical-device scenarios.
+
 ## Reels-only Protection
 
 Whole-app protection is the stable first-release target. Usage Access identifies the foreground app but not the exact Reels, Shorts, or feed screen inside that app.
