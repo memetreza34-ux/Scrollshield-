@@ -21,6 +21,10 @@ ScrollShield uses Capacitor with the Android package id `app.scrollshield.mobile
 - Foreground protection service with a persistent notification and stop action
 - Foreground-app detection through `UsageStatsManager`
 - Local synchronization of selected app rules from TypeScript into Android `SharedPreferences`
+- Scoped Android package-visibility declarations instead of broad installed-app access
+- Native validation of known package names before an app can be activated as protected
+- App-list status for installed and unavailable apps, including disabled controls for unavailable apps
+- Local warnings when an already active configuration points to an unavailable app
 - Package mappings for the currently supported major social and entertainment apps
 - Full-screen protection overlay with:
   - opening delay
@@ -59,11 +63,10 @@ npm run android:bundle
 2. Test foreground detection, overlays, daily limits, session expiry, and counters on Samsung, Google Pixel, Xiaomi, OnePlus, Motorola, and at least one Android tablet.
 3. Verify recovery after process termination, device restart, app update, battery saver, manufacturer task killers, and permission revocation.
 4. Replace the single `blockHours` range with a complete recurring weekly schedule engine.
-5. Verify every Android package mapping and handle unavailable, cloned, work-profile, and region-specific app packages.
-6. Prevent unsupported apps from being presented as fully enforceable until their installed package is confirmed.
-7. Replace legal placeholders and prepare Play Console declarations, reviewer instructions, and permission demonstration videos.
-8. Add automated Android tests for permission loss, service restarts, overlays, countdowns, usage import, Anti-Binge rules, limits, and emergency access.
-9. Measure battery consumption over long sessions and tune the foreground-app polling interval before production rollout.
+5. Validate cloned apps, work-profile packages, manufacturer variants, and region-specific package names.
+6. Replace legal placeholders and prepare Play Console declarations, reviewer instructions, and permission demonstration videos.
+7. Add automated Android tests for permission loss, service restarts, overlays, countdowns, usage import, Anti-Binge rules, limits, package availability, and emergency access.
+8. Measure battery consumption over long sessions and tune the foreground-app polling interval before production rollout.
 
 ## Reels-only Protection
 
