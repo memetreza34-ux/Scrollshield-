@@ -182,4 +182,6 @@ All external GitHub Actions are pinned to immutable 40-character commit SHAs. De
 
 The workflow is configured but the repository account currently prevents GitHub-hosted runners from starting because of a billing or spending-limit restriction. Until a runner or local Android environment executes the commands above, compilation and test success remain unverified.
 
+The new lifecycle source checker, JUnit policy test, TypeScript bridge test, App integration test, Debug component test, full TypeScript check, formatting check, and Android compilation have not executed successfully yet.
+
 A job with no runner and `steps: []` is an infrastructure block, not evidence that application code passed or failed.
