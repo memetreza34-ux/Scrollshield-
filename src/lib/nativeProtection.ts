@@ -1,11 +1,19 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import type { AppConfig } from '../types';
 
+export interface NativeProtectionEvent {
+  timestamp: number;
+  type: 'open' | 'block' | 'warning' | 'emergency';
+  appId: string;
+  desc: string;
+}
+
 interface NativeProtectionPlugin {
   syncProtectionConfig(options: { configJson: string }): Promise<void>;
   startProtectionService(): Promise<void>;
   stopProtectionService(): Promise<void>;
   getProtectionServiceStatus(): Promise<{ running: boolean }>;
+  drainProtectionEvents(): Promise<{ eventsJson: string }>;
 }
 
 interface NativeProtectionConfig {
@@ -56,6 +64,21 @@ const APP_NAMES: Record<string, string> = {
   discord: 'Discord',
 };
 
+const EVENT_TYPES = new Set<NativeProtectionEvent['type']>(['open', 'block', 'warning', 'emergency']);
+
+const isNativeProtectionEvent = (value: unknown): value is NativeProtectionEvent => {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<NativeProtectionEvent>;
+  return (
+    typeof candidate.timestamp === 'number' &&
+    typeof candidate.type === 'string' &&
+    EVENT_TYPES.has(candidate.type as NativeProtectionEvent['type']) &&
+    typeof candidate.appId === 'string' &&
+    candidate.appId.length > 0 &&
+    typeof candidate.desc === 'string'
+  );
+};
+
 export const NativeProtection = {
   isAvailable(): boolean {
     return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
@@ -97,5 +120,16 @@ export const NativeProtection = {
   async getStatus(): Promise<{ running: boolean }> {
     if (!this.isAvailable()) return { running: false };
     return AndroidProtection.getProtectionServiceStatus();
+  },
+
+  async drainEvents(): Promise<NativeProtectionEvent[]> {
+    if (!this.isAvailable()) return [];
+    const result = await AndroidProtection.drainProtectionEvents();
+    try {
+      const parsed: unknown = JSON.parse(result.eventsJson);
+      return Array.isArray(parsed) ? parsed.filter(isNativeProtectionEvent) : [];
+    } catch {
+      return [];
+    }
   },
 };
