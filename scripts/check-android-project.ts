@@ -103,6 +103,12 @@ requireMatch(
   /android\.intent\.action\.BOOT_COMPLETED/,
   'Android boot recovery receiver must listen for BOOT_COMPLETED.',
 );
+requireMatch(
+  manifestPath,
+  manifest,
+  /<queries>[\s\S]*com\.instagram\.android[\s\S]*com\.google\.android\.youtube[\s\S]*<\/queries>/,
+  'Android package visibility queries must include supported protected apps.',
+);
 
 const allowedPermissions = new Set([
   'android.permission.INTERNET',
