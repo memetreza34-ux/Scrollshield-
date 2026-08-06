@@ -15,6 +15,7 @@ The verification chain covers:
 - ESLint
 - Prettier formatting
 - package/app/store version consistency
+- release-approval schema and candidate-version consistency
 - SDK registry and third-party notices
 - committed-secret detection
 - store copy, privacy declarations, and screenshot metadata
@@ -47,6 +48,20 @@ The verification chain covers:
 - Java rule-policy tests and Android compile commands
 - debug APK and unit-test report artifacts
 
+## Android Device-Matrix Check
+
+`npm run check:device-matrix` protects the diagnostic and manual-test contract:
+
+- installed Android version name and version code are exposed in the native diagnostic snapshot
+- app-wide notification status and protection-channel status remain separately visible
+- the debug screen displays build identity, channel creation, channel enabled state, and combined notification readiness
+- the diagnostic component test covers a disabled-channel failure case
+- required coverage includes Pixel, Samsung, Xiaomi/Redmi, OnePlus, Motorola, a tablet, Android 7, Android 8, and Android 13+
+- mandatory scenarios include migration, runtime notification permission, channel revocation, permission loss, app uninstall, final-rule removal, rule boundaries, reboot, long-run battery behavior, time-zone and daylight-saving changes, font scaling, tablet layout, and TalkBack
+- every real-device result requires build identity, copied diagnostic JSON, screen evidence, logs for failures, and `PASS`, `FAIL`, or `BLOCKED` status
+
+The executable source contract is in `scripts/check-android-device-matrix.ts`. The manual test plan is in `docs/ANDROID_DEVICE_TEST_MATRIX.md`.
+
 ## Protection Transparency Check
 
 `npm run check:transparency` verifies the complete Android notification path:
@@ -70,6 +85,33 @@ The verification chain covers:
 - browser preview calls remain no-ops
 - component tests cover successful permission grant and denied-prompt fallback
 
+## Release Approval Gate
+
+`npm run check:release-approval` validates:
+
+- approval-manifest schema version
+- candidate version against `package.json`
+- candidate version against Android `versionName`
+- candidate build against Android `versionCode`
+
+This non-strict check is included in `npm run verify` and reports the number of incomplete evidence items without pretending the release is approved.
+
+`npm run release:gate` is strict. It blocks until all of the following are explicitly complete for the same candidate:
+
+- complete web verification
+- Android JUnit tests
+- debug APK compilation and inspection
+- physical-device matrix
+- battery and process reliability
+- V0.7 and previous-candidate migration
+- final Play declarations
+- final legal and support fields
+- reviewer videos
+- signed-binary inspection
+- named approver and valid approval date
+
+Both `npm run android:release` and `npm run android:bundle` execute this gate before Gradle. The current `config/release-approval.json` intentionally blocks release output.
+
 ## Android CI Stage
 
 After the web verification passes, the GitHub workflow runs:
@@ -89,3 +131,5 @@ All external GitHub Actions are pinned to immutable 40-character commit SHAs. De
 ## Current Execution Limitation
 
 The workflow is configured but the repository account currently prevents GitHub-hosted runners from starting because of a billing or spending-limit restriction. Until a runner or local Android environment executes the commands above, compilation and test success remain unverified.
+
+A job with no runner and `steps: []` is an infrastructure block, not evidence that application code passed or failed.
