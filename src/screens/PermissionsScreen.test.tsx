@@ -8,13 +8,17 @@ const {
   getAndroidStatusMock,
   getProtectionStatusMock,
   isAndroidNativeMock,
+  openAndroidSettingsMock,
   protectionAvailableMock,
+  requestAndroidNotificationsMock,
   startProtectionMock,
 } = vi.hoisted(() => ({
   getAndroidStatusMock: vi.fn(),
   getProtectionStatusMock: vi.fn(),
   isAndroidNativeMock: vi.fn(),
+  openAndroidSettingsMock: vi.fn(),
   protectionAvailableMock: vi.fn(),
+  requestAndroidNotificationsMock: vi.fn(),
   startProtectionMock: vi.fn(),
 }));
 
@@ -22,7 +26,8 @@ vi.mock('../lib/nativePermissions', () => ({
   NativePermissions: {
     isAndroidNative: () => isAndroidNativeMock(),
     getAndroidStatus: () => getAndroidStatusMock(),
-    openAndroidSettings: vi.fn(),
+    requestAndroidNotifications: () => requestAndroidNotificationsMock(),
+    openAndroidSettings: (...args: unknown[]) => openAndroidSettingsMock(...args),
   },
 }));
 
@@ -35,18 +40,52 @@ vi.mock('../lib/nativeProtection', () => ({
   },
 }));
 
+const androidState = {
+  ...DEFAULT_STATE,
+  operatingSystem: 'android' as const,
+  permissions: {
+    ...DEFAULT_STATE.permissions,
+    usageAccess: true,
+    overlay: true,
+    notifications: false,
+  },
+  appsConfig: {
+    instagram: {
+      ...DEFAULT_STATE.profiles![0].appsConfig.instagram,
+      active: true,
+    },
+  },
+};
+
+const deniedAndroidStatus = {
+  usageAccess: true,
+  overlay: true,
+  notifications: false,
+  ignoreBatteryOptimization: false,
+  backgroundActivity: false,
+};
+
+const grantedAndroidStatus = {
+  ...deniedAndroidStatus,
+  notifications: true,
+};
+
 describe('PermissionsScreen', () => {
   beforeEach(() => {
     isAndroidNativeMock.mockReset();
     protectionAvailableMock.mockReset();
     getAndroidStatusMock.mockReset();
     getProtectionStatusMock.mockReset();
+    openAndroidSettingsMock.mockReset();
+    requestAndroidNotificationsMock.mockReset();
     startProtectionMock.mockReset();
 
     isAndroidNativeMock.mockReturnValue(false);
     protectionAvailableMock.mockReturnValue(false);
     getAndroidStatusMock.mockResolvedValue(null);
     getProtectionStatusMock.mockResolvedValue({ running: false });
+    requestAndroidNotificationsMock.mockResolvedValue(false);
+    openAndroidSettingsMock.mockResolvedValue(undefined);
   });
 
   it('labels permission actions with their context for screen readers', async () => {
@@ -92,30 +131,7 @@ describe('PermissionsScreen', () => {
   it('marks notifications as required and blocks Android protection without them', async () => {
     isAndroidNativeMock.mockReturnValue(true);
     protectionAvailableMock.mockReturnValue(true);
-    getAndroidStatusMock.mockResolvedValue({
-      usageAccess: true,
-      overlay: true,
-      notifications: false,
-      ignoreBatteryOptimization: false,
-      backgroundActivity: false,
-    });
-
-    const androidState = {
-      ...DEFAULT_STATE,
-      operatingSystem: 'android' as const,
-      permissions: {
-        ...DEFAULT_STATE.permissions,
-        usageAccess: true,
-        overlay: true,
-        notifications: false,
-      },
-      appsConfig: {
-        instagram: {
-          ...DEFAULT_STATE.profiles![0].appsConfig.instagram,
-          active: true,
-        },
-      },
-    };
+    getAndroidStatusMock.mockResolvedValue(deniedAndroidStatus);
 
     render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} />);
 
@@ -130,5 +146,48 @@ describe('PermissionsScreen', () => {
       expect(screen.getByText(/Aktiviere zuerst App-Nutzungszugriff/)).toBeInTheDocument();
     });
     expect(startProtectionMock).not.toHaveBeenCalled();
+  });
+
+  it('uses the native Android notification prompt before opening settings', async () => {
+    isAndroidNativeMock.mockReturnValue(true);
+    protectionAvailableMock.mockReturnValue(true);
+    requestAndroidNotificationsMock.mockResolvedValue(true);
+    getAndroidStatusMock
+      .mockResolvedValueOnce(deniedAndroidStatus)
+      .mockResolvedValue(grantedAndroidStatus);
+
+    const updateState = vi.fn();
+    render(<PermissionsScreen state={androidState} updateState={updateState} navigate={vi.fn()} />);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Benachrichtigungen erlauben: Benachrichtigungen',
+      }),
+    );
+
+    await waitFor(() => expect(requestAndroidNotificationsMock).toHaveBeenCalledTimes(1));
+    expect(openAndroidSettingsMock).not.toHaveBeenCalled();
+    expect(await screen.findByText(/sichtbare Stop-Aktion sind aktiviert/)).toBeInTheDocument();
+    expect(updateState).toHaveBeenCalledWith({
+      permissions: expect.objectContaining({ notifications: true }),
+    });
+  });
+
+  it('opens Android settings after the notification prompt is denied', async () => {
+    isAndroidNativeMock.mockReturnValue(true);
+    protectionAvailableMock.mockReturnValue(true);
+    requestAndroidNotificationsMock.mockResolvedValue(false);
+    getAndroidStatusMock.mockResolvedValue(deniedAndroidStatus);
+
+    render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Benachrichtigungen erlauben: Benachrichtigungen',
+      }),
+    );
+
+    await waitFor(() => expect(openAndroidSettingsMock).toHaveBeenCalledWith('notifications'));
+    expect(await screen.findByText(/Schutzkanal ist deaktiviert/)).toBeInTheDocument();
   });
 });
