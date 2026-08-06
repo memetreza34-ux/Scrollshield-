@@ -185,4 +185,6 @@ The workflow is configured but the repository account currently prevents GitHub-
 
 The new lifecycle source checker, JUnit policy test, TypeScript bridge test, App integration test, Debug component test, full TypeScript check, formatting check, and Android compilation have not executed successfully yet.
 
+The lifecycle source and documentation block is frozen pending execution. Further source claims must not be treated as verified until the exact branch head completes the full verification chain and physical-device evidence.
+
 A job with no runner and `steps: []` is an infrastructure block, not evidence that application code passed or failed.
