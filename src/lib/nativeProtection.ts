@@ -152,32 +152,33 @@ const parseStringArray = (raw: string): string[] => {
 
 const buildConfig = (appsConfig: Record<string, AppConfig>, focusMode: boolean): NativeProtectionConfig => ({
   focusMode,
-  apps: Object.entries(appsConfig)
-    .filter(([appId, appConfig]) => appConfig.active && ANDROID_PACKAGES[appId]?.length)
-    .map(([appId, appConfig]) => ({
+  apps: Object.entries(ANDROID_PACKAGES).map(([appId, packages]) => {
+    const appConfig = appsConfig[appId];
+    return {
       id: appId,
       name: APP_NAMES[appId] ?? appId,
-      packages: ANDROID_PACKAGES[appId],
-      active: appConfig.active,
-      mode: appConfig.mode,
-      delaySeconds: Math.max(0, appConfig.openDelay),
-      dailyLimitMinutes: Math.max(0, appConfig.dailyLimit),
-      sessionMinutes: Math.max(1, appConfig.sessionLimit ?? 5),
-      blockHours: appConfig.blockHours?.trim() ?? '',
-      focusModeBehavior: appConfig.focusModeBehavior,
+      packages,
+      active: appConfig?.active ?? false,
+      mode: appConfig?.mode ?? 'standard',
+      delaySeconds: Math.max(0, appConfig?.openDelay ?? 10),
+      dailyLimitMinutes: Math.max(0, appConfig?.dailyLimit ?? 0),
+      sessionMinutes: Math.max(1, appConfig?.sessionLimit ?? 5),
+      blockHours: appConfig?.blockHours?.trim() ?? '',
+      focusModeBehavior: appConfig?.focusModeBehavior ?? 'warn',
       antiBinge: {
-        enabled: appConfig.antiBinge.enabled,
-        warningThreshold: Math.max(1, appConfig.antiBinge.warningThreshold),
-        warningWindowMinutes: Math.max(1, appConfig.antiBinge.warningTimeframe),
-        blockThreshold: Math.max(1, appConfig.antiBinge.blockThreshold),
-        blockWindowMinutes: Math.max(1, appConfig.antiBinge.blockTimeframe),
+        enabled: appConfig?.antiBinge.enabled ?? false,
+        warningThreshold: Math.max(1, appConfig?.antiBinge.warningThreshold ?? 3),
+        warningWindowMinutes: Math.max(1, appConfig?.antiBinge.warningTimeframe ?? 10),
+        blockThreshold: Math.max(1, appConfig?.antiBinge.blockThreshold ?? 5),
+        blockWindowMinutes: Math.max(1, appConfig?.antiBinge.blockTimeframe ?? 20),
       },
       emergencyUnlock: {
-        enabled: appConfig.emergencyUnlock.enabled,
-        durationMinutes: Math.max(1, appConfig.emergencyUnlock.durationMinutes),
-        maxPerDay: Math.max(0, appConfig.emergencyUnlock.maxPerDay),
+        enabled: appConfig?.emergencyUnlock.enabled ?? false,
+        durationMinutes: Math.max(1, appConfig?.emergencyUnlock.durationMinutes ?? 5),
+        maxPerDay: Math.max(0, appConfig?.emergencyUnlock.maxPerDay ?? 0),
       },
-    })),
+    };
+  }),
 });
 
 export const NativeProtection = {
