@@ -5,16 +5,18 @@ import { MigrationRecoveryScreen } from './MigrationRecoveryScreen';
 
 const createObjectUrlMock = vi.fn(() => 'blob:legacy-recovery');
 const revokeObjectUrlMock = vi.fn();
+const BrowserURL = URL;
+
+class RecoveryTestURL extends BrowserURL {
+  static createObjectURL = createObjectUrlMock;
+  static revokeObjectURL = revokeObjectUrlMock;
+}
 
 beforeEach(() => {
   localStorage.clear();
   createObjectUrlMock.mockClear();
   revokeObjectUrlMock.mockClear();
-  vi.stubGlobal('URL', {
-    ...URL,
-    createObjectURL: createObjectUrlMock,
-    revokeObjectURL: revokeObjectUrlMock,
-  });
+  vi.stubGlobal('URL', RecoveryTestURL);
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
 });
 
