@@ -109,14 +109,36 @@ export default function App() {
     if (!isLoaded || !NativeProtection.isAvailable()) return;
 
     let cancelled = false;
-    const drainNativeEvents = async () => {
+    const drainNativeData = async () => {
       try {
-        const nativeEvents = await NativeProtection.drainEvents();
-        if (cancelled || nativeEvents.length === 0) return;
+        const nativeDrain = await NativeProtection.drain();
+        if (cancelled || (nativeDrain.events.length === 0 && nativeDrain.usage.length === 0)) return;
 
         setAppState((previousState) => {
           let dailyStats = previousState.dailyStats;
-          const historyEvents: HistoryEvent[] = nativeEvents.map((event) => {
+
+          for (const sample of nativeDrain.usage) {
+            const existing = dailyStats[sample.date] || {
+              date: sample.date,
+              usageMinutes: {},
+              blockedOpens: 0,
+              savedTimeMinutes: 0,
+              emergencyUnlocks: 0,
+              focusMinutes: 0,
+            };
+            dailyStats = {
+              ...dailyStats,
+              [sample.date]: {
+                ...existing,
+                usageMinutes: {
+                  ...existing.usageMinutes,
+                  [sample.appId]: (existing.usageMinutes[sample.appId] || 0) + sample.durationMs / 60_000,
+                },
+              },
+            };
+          }
+
+          const historyEvents: HistoryEvent[] = nativeDrain.events.map((event) => {
             dailyStats = recordProtectionEventStats(dailyStats, event.type, event.timestamp);
             return {
               id: createEventId(),
@@ -136,12 +158,12 @@ export default function App() {
           };
         });
       } catch (error) {
-        console.error('Failed to import native protection events', error);
+        console.error('Failed to import native protection data', error);
       }
     };
 
-    void drainNativeEvents();
-    const interval = window.setInterval(() => void drainNativeEvents(), 2_000);
+    void drainNativeData();
+    const interval = window.setInterval(() => void drainNativeData(), 2_000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
