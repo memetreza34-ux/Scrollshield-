@@ -4,20 +4,30 @@ ScrollShield uses Capacitor with the Android package id `app.scrollshield.mobile
 
 ## Implemented
 
-- Capacitor Android project and release signing configuration
-- Cleartext HTTP and Android backup disabled
+- Capacitor Android project and local release-signing configuration
+- Cleartext HTTP and Android app backup disabled
 - R8 minification and resource shrinking for release builds
 - Native `ScrollShieldNative` Capacitor plugin
-- Real status checks for:
+- Real status checks and system-setting links for:
   - Usage Access
   - Display over other apps
   - Notifications
   - Battery optimization exemption
-- Direct links to the relevant Android system settings
-- Prominent in-app disclosure explaining what usage data is accessed and what is not read
-- Manifest declarations for Usage Access, overlays, and notifications
+- Prominent in-app disclosure explaining which usage information is read and which content is never accessed
+- Explicit user-controlled start and stop controls for the protection service
+- Foreground protection service with a persistent notification and stop action
+- Foreground-app detection through `UsageStatsManager`
+- Local synchronization of selected app rules from TypeScript into Android `SharedPreferences`
+- Package mappings for the currently supported major social and entertainment apps
+- Full-screen protection overlay with:
+  - opening delay
+  - strict blocking
+  - return-to-home action
+  - intentional temporary access
+  - limited emergency access
+- Native focus-mode blocking behavior for selected apps
 
-The web/PWA preview still uses local preview state. Only the installed Android build can return real permission status.
+The browser/PWA build remains a preview and cannot block other installed apps. Only the installed Android build can use the native protection service.
 
 ## Commands
 
@@ -31,28 +41,29 @@ npm run android:release
 npm run android:bundle
 ```
 
-## Required Before App Blocking Works
+## Release Blockers
 
-1. Implement a foreground-app detector based on Usage Access.
-2. Add a background protection service with reboot and battery-reliability handling.
-3. Trigger the existing TypeScript protection rules from native app-open events.
-4. Display the ScrollShield interruption activity/overlay when a rule blocks or delays an app.
-5. Add exact package mappings for every supported Android app.
-6. Test on Samsung, Google Pixel, Xiaomi, OnePlus, and Motorola devices.
-7. Prepare Play Console declarations and a reviewer video for every sensitive permission.
+1. Compile the Android project and run the complete JavaScript verification suite in a working CI or local environment.
+2. Test foreground detection and overlays on Samsung, Google Pixel, Xiaomi, OnePlus, Motorola, and at least one Android tablet.
+3. Add boot/restart handling and verify behavior after process termination, device restart, battery saver, and permission revocation.
+4. Send native protection events back to the React state so history and statistics reflect real blocks and intentional opens.
+5. Port daily limits, schedules, anti-binge thresholds, and emergency-unlock counters into the native enforcement layer.
+6. Verify every Android package mapping and handle unavailable or region-specific app packages.
+7. Replace legal placeholders and prepare Play Console declarations, reviewer instructions, and permission demonstration videos.
+8. Add automated Android tests for permission loss, service restarts, overlays, countdowns, and emergency access.
 
 ## Reels-only Protection
 
-Whole-app protection is the stable first release target. Detecting only Reels, Shorts, or similar sections inside third-party apps may require an Accessibility Service because Usage Access only identifies the foreground app, not the current screen inside it.
+Whole-app protection is the stable first-release target. Usage Access identifies the foreground app but not the exact Reels, Shorts, or feed screen inside that app.
 
-Do not add an Accessibility Service until all of these are ready together:
+A future Reels-only Android beta may require an Accessibility Service. Do not add one until all of these are ready together:
 
 - deterministic, user-defined rules only
 - separate prominent disclosure and affirmative consent
-- no message, password, keyboard, or media collection
-- Play Console Accessibility declaration
-- reviewer demonstration video
-- resilient selectors and a remote kill switch for broken app versions
+- no collection of messages, passwords, keyboard input, media, or unrelated screen content
+- Play Console Accessibility declaration and reviewer demonstration video
+- resilient selectors for different languages and app experiments
+- a remote kill switch for broken third-party app versions
 
 ## Local Tooling
 
