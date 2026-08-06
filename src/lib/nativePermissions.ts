@@ -48,6 +48,10 @@ export const NativePermissions = {
 
   async openAndroidSettings(permission: AndroidPermissionKey): Promise<void> {
     if (!this.isAndroidNative()) return;
+    if (permission === 'notifications') {
+      await this.openAndroidNotificationSettings();
+      return;
+    }
     await ScrollShieldNative.openPermissionSettings({ permission });
   },
 };
