@@ -12,7 +12,7 @@ import {
   Terminal,
   XCircle,
 } from 'lucide-react';
-import { AppState, Screen, HistoryEvent } from '../types';
+import type { AppState, HistoryEvent, Screen } from '../types';
 import { Header } from '../components/ui';
 import { createEventId, getLocalDateKey } from '../lib/appUtils';
 import { NativeDiagnostics } from '../lib/nativeDiagnostics';
@@ -24,8 +24,8 @@ export function DebugScreen({
   navigate,
 }: {
   state: AppState;
-  updateState: (u: Partial<AppState>) => void;
-  navigate: (s: Screen) => void;
+  updateState: (updates: Partial<AppState>) => void;
+  navigate: (screen: Screen) => void;
 }) {
   const [nativeSnapshot, setNativeSnapshot] = useState<NativeDiagnosticsSnapshot | null>(null);
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
@@ -175,12 +175,25 @@ export function DebugScreen({
             <div className="bg-zinc-900 border border-zinc-800 rounded-[1.5rem] p-4 space-y-3 font-mono text-xs">
               {diagnosticsError && <p className="text-red-400">{diagnosticsError}</p>}
               {!nativeSnapshot && !diagnosticsError && (
-                <p className="text-zinc-500">{diagnosticsBusy ? 'Diagnose wird gelesen…' : 'Noch kein Snapshot.'}</p>
+                <p className="text-zinc-500">
+                  {diagnosticsBusy ? 'Diagnose wird gelesen…' : 'Noch kein Snapshot.'}
+                </p>
               )}
               {diagnosticRows.map(([label, value, positive]) => (
-                <div key={label} className="flex justify-between gap-4 border-b border-zinc-800/50 pb-2 last:border-0 last:pb-0">
+                <div
+                  key={label}
+                  className="flex justify-between gap-4 border-b border-zinc-800/50 pb-2 last:border-0 last:pb-0"
+                >
                   <span className="text-zinc-500">{label}:</span>
-                  <span className={positive === undefined ? 'text-zinc-300 text-right' : positive ? 'text-emerald-400' : 'text-amber-400'}>
+                  <span
+                    className={
+                      positive === undefined
+                        ? 'text-zinc-300 text-right'
+                        : positive
+                          ? 'text-emerald-400'
+                          : 'text-amber-400'
+                    }
+                  >
                     {value}
                   </span>
                 </div>
@@ -195,7 +208,11 @@ export function DebugScreen({
                   <Copy size={14} /> Diagnose als JSON kopieren
                 </button>
               )}
-              {copyStatus && <p role="status" className="text-center text-zinc-400">{copyStatus}</p>}
+              {copyStatus && (
+                <p role="status" className="text-center text-zinc-400">
+                  {copyStatus}
+                </p>
+              )}
             </div>
           </section>
         )}
