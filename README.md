@@ -20,12 +20,15 @@ ScrollShield is an offline-first digital wellbeing app for reducing impulsive so
 - The running service uses the same pure Java rule policy covered by JUnit boundary tests
 - Scoped installed-app validation for supported Android packages
 - Import of measured native usage and protection decisions into local React statistics and history
-- Native Android device and permission diagnostics with copyable JSON output
-- React and TypeScript tests for critical setup, permission-prompt, channel-routing, and browser-fallback behavior
+- Native Android diagnostics with device, OS, version name, build number, permission, protection-channel, service, and installed-target status
+- Copyable diagnostic JSON for reproducible real-device reports
+- React and TypeScript tests for critical setup, permission-prompt, channel-routing, diagnostic, and browser-fallback behavior
+- Mandatory Android device matrix with manufacturer, Android-version, migration, lifecycle, battery, time-boundary, tablet, and accessibility coverage
+- Explicit release approval manifest and strict gate before release APK or AAB generation
 - CI prepared to run web verification, Android JUnit tests, debug APK compilation, and artifact upload
 - External GitHub Actions pinned to immutable commit SHAs
 
-The browser/PWA version cannot physically block other installed apps. Native whole-app protection is available only in the installed Android build and still requires successful compilation, real-device validation, battery testing, schedule edge-case testing, and Play Console review preparation before release.
+The browser/PWA version cannot physically block other installed apps. Native whole-app protection is available only in the installed Android build and still requires successful compilation, real-device validation, battery testing, schedule edge-case testing, migration validation, legal completion, and Play Console review preparation before release.
 
 Reels-only protection remains an Android beta target because Usage Access identifies the foreground app but not the exact short-video screen inside a third-party app.
 
@@ -51,6 +54,8 @@ npm run lint
 npm run test
 npm run build
 npm run verify
+npm run check:device-matrix
+npm run check:release-approval
 npm run readiness
 ```
 
@@ -64,18 +69,22 @@ npm run android:doctor
 npm run android:sync
 npm run android:open
 npm run android:build
+npm run release:gate
 npm run android:release
 npm run android:bundle
 ```
 
-`android:sync` rebuilds the web app and copies it into the Capacitor Android project. `android:build` creates a debug APK. `android:bundle` creates the signed release AAB after local signing is configured.
+`android:sync` rebuilds the web app and copies it into the Capacitor Android project. `android:build` creates a debug APK and does not require production approval. `android:release` and `android:bundle` first execute the strict release gate. They remain blocked while `config/release-approval.json` contains incomplete evidence.
 
 ## Product and Release References
 
 - `docs/COMPETITOR_PRODUCT_BLUEPRINT.md`
 - `docs/NATIVE_ANDROID.md`
+- `docs/ANDROID_DEVICE_TEST_MATRIX.md`
 - `docs/RELEASE_CHECKLIST.md`
 - `docs/ROLLOUT_PLAN.md`
 - `docs/STORE_SUBMISSION_PACKET.md`
+- `docs/ENGINEERING_CHECKS.md`
+- `config/release-approval.json`
 
-Before release, replace legal placeholders, run `npm run verify`, compile the Android project, validate the complete native rule and service-lifecycle matrix on real devices, and execute the store-review checklist.
+Before release, replace legal placeholders, run `npm run verify`, compile and inspect the Android debug build, complete the physical-device matrix with current-build diagnostic evidence, finalize store declarations and videos, inspect the signed binary, and complete the release approval manifest.
