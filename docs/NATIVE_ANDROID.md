@@ -26,6 +26,8 @@ ScrollShield uses Capacitor with the Android package id `app.scrollshield.mobile
   - intentional temporary access
   - limited emergency access
 - Native focus-mode blocking behavior for selected apps
+- Local native event queue for blocks, warnings, intentional opens, and emergency unlocks
+- Import of native events into React history and daily statistics
 
 The browser/PWA build remains a preview and cannot block other installed apps. Only the installed Android build can use the native protection service.
 
@@ -46,11 +48,11 @@ npm run android:bundle
 1. Compile the Android project and run the complete JavaScript verification suite in a working CI or local environment.
 2. Test foreground detection and overlays on Samsung, Google Pixel, Xiaomi, OnePlus, Motorola, and at least one Android tablet.
 3. Add boot/restart handling and verify behavior after process termination, device restart, battery saver, and permission revocation.
-4. Send native protection events back to the React state so history and statistics reflect real blocks and intentional opens.
-5. Port daily limits, schedules, anti-binge thresholds, and emergency-unlock counters into the native enforcement layer.
+4. Port daily limits, schedules, anti-binge thresholds, and emergency-unlock counters into the native enforcement layer.
+5. Measure real session duration and feed it into usage statistics rather than recording only protection decisions.
 6. Verify every Android package mapping and handle unavailable or region-specific app packages.
 7. Replace legal placeholders and prepare Play Console declarations, reviewer instructions, and permission demonstration videos.
-8. Add automated Android tests for permission loss, service restarts, overlays, countdowns, and emergency access.
+8. Add automated Android tests for permission loss, service restarts, overlays, countdowns, event import, and emergency access.
 
 ## Reels-only Protection
 
