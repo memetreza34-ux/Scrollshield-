@@ -23,6 +23,10 @@ export interface NativeDiagnosticsSnapshot {
   protectionEnabled: boolean;
   serviceRunning: boolean;
   configuredInstalledApps: boolean;
+  lastProtectionStartAt: number;
+  lastProtectionStopAt: number;
+  lastProtectionStopCode: string;
+  lastProtectionStopMessage: string;
 }
 
 interface NativeDiagnosticsPlugin {
