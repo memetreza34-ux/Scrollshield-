@@ -258,15 +258,23 @@ const parseLegacyTimestamp = (value: unknown, fallback: number): number => {
   return date.getTime();
 };
 
+const getLocalDateKey = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const mapLegacyAppId = (appName: unknown): string | undefined => {
   if (typeof appName !== 'string') return undefined;
-  const normalized = appName.toLowerCase();
+  const normalized = appName.trim().toLowerCase();
   if (normalized.includes('instagram')) return 'instagram';
   if (normalized.includes('tiktok')) return 'tiktok';
   if (normalized.includes('youtube')) return 'youtube';
   if (normalized.includes('facebook')) return 'facebook';
   if (normalized.includes('snapchat')) return 'snapchat';
-  if (normalized.includes('x') || normalized.includes('twitter')) return 'x';
+  if (normalized === 'x' || normalized.includes('twitter')) return 'x';
   return undefined;
 };
 
@@ -338,8 +346,12 @@ const migrateV07State = (): Partial<AppState> | null => {
 
   const migratedAt = Date.now();
   const brainState = parseJson<Record<string, unknown>>(rawEntries.scrollshield_brainState ?? null);
-  const legacyEvents = parseJson<LegacyImpulseEvent[]>(rawEntries.scrollshield_events ?? null) ?? [];
-  const legacyRules = parseJson<unknown[]>(rawEntries.scrollshield_rules ?? null) ?? [];
+  const parsedEvents = parseJson<unknown>(rawEntries.scrollshield_events ?? null);
+  const parsedRules = parseJson<unknown>(rawEntries.scrollshield_rules ?? null);
+  const legacyEvents: LegacyImpulseEvent[] = Array.isArray(parsedEvents)
+    ? parsedEvents.filter(isRecord).map((event) => event as LegacyImpulseEvent)
+    : [];
+  const legacyRules = Array.isArray(parsedRules) ? parsedRules : [];
   const history = legacyEvents.slice(0, 99).map((event, index) => mapLegacyEvent(event, index, migratedAt));
   history.unshift({
     id: `legacy-v07-migration-${migratedAt}`,
@@ -350,14 +362,13 @@ const migrateV07State = (): Partial<AppState> | null => {
     metadata: { source: 'legacy_v07_migration' },
   });
 
+  const savedTimeValue = brainState?.savedTimeMinutesToday;
   const savedTime =
-    typeof brainState?.savedTimeMinutesToday === 'number' && Number.isFinite(brainState.savedTimeMinutesToday)
-      ? Math.max(0, brainState.savedTimeMinutesToday)
-      : 0;
+    typeof savedTimeValue === 'number' && Number.isFinite(savedTimeValue) ? Math.max(0, savedTimeValue) : 0;
   const blockedOpens = legacyEvents.filter(
     (event) => event.outcome === 'blocked' || event.outcome === 'reflection_canceled',
   ).length;
-  const dateKey = new Date(migratedAt).toLocaleDateString('en-CA');
+  const dateKey = getLocalDateKey(migratedAt);
   const normalized = normalizeAppState({
     hasCompletedOnboarding: true,
     history,
