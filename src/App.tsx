@@ -18,6 +18,7 @@ import { ProtectionFlow } from './screens/ProtectionFlow';
 import { PermissionsScreen } from './screens/PermissionsScreen';
 import { DebugScreen } from './screens/DebugScreen';
 import { ActiveSessionScreen } from './screens/ActiveSessionScreen';
+import { MigrationRecoveryScreen } from './screens/MigrationRecoveryScreen';
 import { SupportScreen, ImprintScreen } from './screens/SupportScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -25,31 +26,43 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
   const [appState, setAppState] = useState<AppState>(DEFAULT_STATE);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [migrationBlocked, setMigrationBlocked] = useState(false);
   const skipNextSaveRef = useRef(false);
   const screenScrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const saved = StorageService.loadState();
-    if (saved) {
-      try {
-        const normalizedState = normalizeAppState(saved);
-        const focusUpdate = reconcileFocusRuntime(normalizedState);
-        const restoredState = focusUpdate ? { ...normalizedState, ...focusUpdate } : normalizedState;
-        setAppState(restoredState);
-        if (saved.hasCompletedOnboarding) {
-          setCurrentScreen(restoredState.activeSession ? 'active_session' : 'dashboard');
-        } else {
-          setCurrentScreen('welcome');
-        }
-      } catch (e) {
-        console.error('Failed to parse saved state', e);
-      }
+  const applyLoadedState = React.useCallback((saved: Partial<AppState>): boolean => {
+    try {
+      const normalizedState = normalizeAppState(saved);
+      const focusUpdate = reconcileFocusRuntime(normalizedState);
+      const restoredState = focusUpdate ? { ...normalizedState, ...focusUpdate } : normalizedState;
+      setAppState(restoredState);
+      setCurrentScreen(
+        restoredState.hasCompletedOnboarding
+          ? restoredState.activeSession
+            ? 'active_session'
+            : 'dashboard'
+          : 'welcome',
+      );
+      return true;
+    } catch (error) {
+      console.error('Failed to parse saved state', error);
+      return false;
     }
-    setIsLoaded(true);
   }, []);
 
   useEffect(() => {
-    if (!isLoaded || !appState.isFocusModeActive) return;
+    const saved = StorageService.loadState();
+    const legacyPending = StorageService.hasPendingLegacyMigration();
+    if (saved && !legacyPending) {
+      applyLoadedState(saved);
+    } else if (legacyPending) {
+      setMigrationBlocked(true);
+    }
+    setIsLoaded(true);
+  }, [applyLoadedState]);
+
+  useEffect(() => {
+    if (!isLoaded || migrationBlocked || !appState.isFocusModeActive) return;
 
     const syncFocusRuntime = () => {
       setAppState((previousState) => {
@@ -61,7 +74,7 @@ export default function App() {
     syncFocusRuntime();
     const interval = window.setInterval(syncFocusRuntime, 15_000);
     return () => window.clearInterval(interval);
-  }, [isLoaded, appState.isFocusModeActive]);
+  }, [isLoaded, migrationBlocked, appState.isFocusModeActive]);
 
   useEffect(() => {
     if (screenScrollRef.current) {
@@ -70,7 +83,7 @@ export default function App() {
   }, [currentScreen]);
 
   useEffect(() => {
-    if (isLoaded) {
+    if (isLoaded && !migrationBlocked) {
       if (import.meta.env.PROD && currentScreen === 'debug') {
         setCurrentScreen('dashboard');
       } else if (
@@ -82,20 +95,20 @@ export default function App() {
         setCurrentScreen('dashboard');
       }
     }
-  }, [isLoaded, currentScreen, appState.hasCompletedOnboarding]);
+  }, [isLoaded, migrationBlocked, currentScreen, appState.hasCompletedOnboarding]);
 
   useEffect(() => {
-    if (isLoaded) {
+    if (isLoaded && !migrationBlocked) {
       if (skipNextSaveRef.current) {
         skipNextSaveRef.current = false;
         return;
       }
       StorageService.saveState(appState);
     }
-  }, [appState, isLoaded]);
+  }, [appState, isLoaded, migrationBlocked]);
 
   useEffect(() => {
-    if (!isLoaded || !NativeProtection.isAvailable()) return;
+    if (!isLoaded || migrationBlocked || !NativeProtection.isAvailable()) return;
 
     const syncTimer = window.setTimeout(() => {
       void NativeProtection.sync(appState.appsConfig, appState.isFocusModeActive).catch((error) => {
@@ -104,10 +117,10 @@ export default function App() {
     }, 250);
 
     return () => window.clearTimeout(syncTimer);
-  }, [appState.appsConfig, appState.isFocusModeActive, isLoaded]);
+  }, [appState.appsConfig, appState.isFocusModeActive, isLoaded, migrationBlocked]);
 
   useEffect(() => {
-    if (!isLoaded || !NativeProtection.isAvailable()) return;
+    if (!isLoaded || migrationBlocked || !NativeProtection.isAvailable()) return;
 
     let cancelled = false;
     const drainNativeData = async () => {
@@ -169,10 +182,30 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [isLoaded]);
+  }, [isLoaded, migrationBlocked]);
 
   if (!isLoaded)
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">Laden...</div>;
+
+  const retryLegacyMigration = (): boolean => {
+    const saved = StorageService.loadState();
+    const legacyPending = StorageService.hasPendingLegacyMigration();
+    if (!saved || legacyPending) {
+      setMigrationBlocked(legacyPending);
+      return false;
+    }
+    const restored = applyLoadedState(saved);
+    if (restored) setMigrationBlocked(false);
+    return restored;
+  };
+
+  if (migrationBlocked) {
+    return (
+      <ErrorBoundary>
+        <MigrationRecoveryScreen onRetry={retryLegacyMigration} />
+      </ErrorBoundary>
+    );
+  }
 
   const updateState = (updates: Partial<AppState>) => {
     setAppState((prev) => ({ ...prev, ...updates }));
