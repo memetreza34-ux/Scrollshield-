@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(ScrollShieldNativePlugin.class);
+        registerPlugin(ScrollShieldDiagnosticsPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
