@@ -16,9 +16,11 @@ ScrollShield uses Capacitor with the Android package id `app.scrollshield.mobile
 - Prominent in-app disclosure explaining which usage information is read and which content is never accessed
 - Explicit user-controlled start and stop controls for the protection service
 - Persisted user intent for protection-service recovery
-- Recovery after device reboot and app-package replacement when permissions are still granted
+- Recovery after device reboot and app-package replacement when all required permissions remain granted
 - Automatic safe shutdown when Usage Access or overlay permission is revoked
-- Foreground protection service with a persistent notification and stop action
+- Required notification visibility before initial startup or boot recovery
+- Android permission UI that marks notifications as required for visible foreground protection
+- Foreground protection service with a persistent notification and direct stop action
 - Foreground-app detection through `UsageStatsManager`
 - Local synchronization of selected app rules from TypeScript into Android `SharedPreferences`
 - Scoped Android package-visibility declarations instead of broad installed-app access
@@ -45,6 +47,13 @@ ScrollShield uses Capacitor with the Android package id `app.scrollshield.mobile
 - Batched native usage measurement while temporary access is active
 - Local native event queue for blocks, warnings, intentional opens, permission loss, and emergency unlocks
 - Import of native events and measured usage into React history and date-correct daily statistics
+- Native Android device diagnostics for:
+  - manufacturer and model
+  - Android release and SDK level
+  - package id, locale, and time zone
+  - Usage Access, overlay, notifications, and battery exemption
+  - persisted activation, running service, and installed configured apps
+- Copyable JSON diagnostic snapshot in the development screen
 - Pure Java protection-rule policy with local JUnit coverage for:
   - weekday schedule boundaries
   - weekend precedence
@@ -53,7 +62,15 @@ ScrollShield uses Capacitor with the Android package id `app.scrollshield.mobile
   - exact daily-limit boundaries
   - Anti-Binge thresholds
   - daily emergency-unlock limits
-- Verify workflow prepared to run `testDebugUnitTest` and compile `assembleDebug` after the GitHub runner is available
+- React coverage for unavailable apps, weekly schedule presets, Android diagnostics, and required notification startup
+- Verify workflow prepared to:
+  - run all JavaScript release checks and tests
+  - run `testDebugUnitTest`
+  - compile `assembleDebug`
+  - upload the debug APK and Android test report
+- External GitHub Actions pinned to immutable commit SHAs
+- Weekly Dependabot coverage for npm, Capacitor, React, Gradle, and GitHub Actions
+- Dedicated transparency check guarding visible service status and the direct stop action
 
 The browser/PWA build remains a preview and cannot block other installed apps. Only the installed Android build can use the native protection service.
 
