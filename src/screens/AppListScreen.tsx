@@ -1,10 +1,77 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ChevronRight, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CalendarDays, ChevronRight, RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Header, Switch } from '../components/ui';
 import { NativeProtection } from '../lib/nativeProtection';
 import { DEFAULT_APP_CONFIG, SUPPORTED_APPS } from '../types';
-import type { AppState, Screen } from '../types';
+import type { AppConfig, AppState, Screen } from '../types';
+
+type WeeklyPresetId = 'off' | 'balanced' | 'work' | 'sleep' | 'strict';
+
+const WEEKLY_PRESETS: Record<WeeklyPresetId, { label: string; description: string; windows: AppConfig['timeWindows'] }> = {
+  off: {
+    label: 'Kein Wochenplan',
+    description: 'Nur die normalen App-Regeln und Limits gelten.',
+    windows: {
+      morningRules: 'normal',
+      workRules: 'normal',
+      eveningRules: 'normal',
+      nightRules: 'normal',
+      weekendRules: 'normal',
+    },
+  },
+  balanced: {
+    label: 'Ausgeglichen',
+    description: 'Streng bei Arbeit oder Schule, nachts blockiert, Wochenende normal.',
+    windows: {
+      morningRules: 'normal',
+      workRules: 'strict',
+      eveningRules: 'normal',
+      nightRules: 'block',
+      weekendRules: 'normal',
+    },
+  },
+  work: {
+    label: 'Arbeit & Lernen',
+    description: 'Unter der Woche tagsüber blockiert, nachts strenger Schutz.',
+    windows: {
+      morningRules: 'normal',
+      workRules: 'block',
+      eveningRules: 'normal',
+      nightRules: 'strict',
+      weekendRules: 'normal',
+    },
+  },
+  sleep: {
+    label: 'Abend & Schlaf',
+    description: 'Abends streng und zwischen 22:00 und 06:00 Uhr blockiert.',
+    windows: {
+      morningRules: 'normal',
+      workRules: 'normal',
+      eveningRules: 'strict',
+      nightRules: 'block',
+      weekendRules: 'normal',
+    },
+  },
+  strict: {
+    label: 'Sehr streng',
+    description: 'Alle wiederkehrenden Zeitfenster blockieren geschützte Apps.',
+    windows: {
+      morningRules: 'block',
+      workRules: 'block',
+      eveningRules: 'block',
+      nightRules: 'block',
+      weekendRules: 'block',
+    },
+  },
+};
+
+const matchesWindows = (left: AppConfig['timeWindows'], right: AppConfig['timeWindows']) =>
+  left.morningRules === right.morningRules &&
+  left.workRules === right.workRules &&
+  left.eveningRules === right.eveningRules &&
+  left.nightRules === right.nightRules &&
+  left.weekendRules === right.weekendRules;
 
 export function AppList({
   state,
@@ -15,11 +82,24 @@ export function AppList({
   updateState: (updates: Partial<AppState>) => void;
   navigate: (screen: Screen) => void;
 }) {
-  const [unavailableAppIds, setUnavailableAppIds] = useState<string[]>([]);
-  const [checkingApps, setCheckingApps] = useState(false);
-  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const nativeAndroid = NativeProtection.isAvailable();
+  const [unavailableAppIds, setUnavailableAppIds] = useState<string[]>([]);
+  const [checkingApps, setCheckingApps] = useState(nativeAndroid);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const unavailableSet = useMemo(() => new Set(unavailableAppIds), [unavailableAppIds]);
+  const activeAppConfigs = Object.values(state.appsConfig).filter((config) => config.active);
+
+  const activePreset = useMemo(() => {
+    if (activeAppConfigs.length === 0) return 'off';
+    const firstWindows = activeAppConfigs[0].timeWindows;
+    const allEqual = activeAppConfigs.every((config) => matchesWindows(config.timeWindows, firstWindows));
+    if (!allEqual) return 'custom';
+
+    const match = (Object.entries(WEEKLY_PRESETS) as Array<[WeeklyPresetId, (typeof WEEKLY_PRESETS)[WeeklyPresetId]]>).find(
+      ([, preset]) => matchesWindows(firstWindows, preset.windows),
+    );
+    return match?.[0] ?? 'custom';
+  }, [activeAppConfigs]);
 
   const refreshAvailability = async () => {
     if (!nativeAndroid) return;
@@ -43,7 +123,7 @@ export function AppList({
   }, [nativeAndroid]);
 
   const toggleApp = (id: string) => {
-    if (nativeAndroid && unavailableSet.has(id)) return;
+    if (checkingApps || (nativeAndroid && unavailableSet.has(id))) return;
 
     const appsConfig = { ...state.appsConfig };
     if (appsConfig[id]) {
@@ -58,7 +138,7 @@ export function AppList({
   };
 
   const openDetail = (id: string) => {
-    if (nativeAndroid && unavailableSet.has(id)) return;
+    if (checkingApps || (nativeAndroid && unavailableSet.has(id))) return;
 
     const appsConfig = { ...state.appsConfig };
     if (!appsConfig[id]) {
@@ -67,6 +147,22 @@ export function AppList({
     }
     updateState({ selectedAppId: id });
     navigate('app_detail');
+  };
+
+  const applyWeeklyPreset = (presetId: WeeklyPresetId) => {
+    const preset = WEEKLY_PRESETS[presetId];
+    const appsConfig = Object.fromEntries(
+      Object.entries(state.appsConfig).map(([appId, config]) => [
+        appId,
+        config.active
+          ? {
+              ...config,
+              timeWindows: { ...preset.windows },
+            }
+          : config,
+      ]),
+    );
+    updateState({ appsConfig });
   };
 
   const sortedApps = [...SUPPORTED_APPS].sort((a, b) => {
@@ -104,13 +200,14 @@ export function AppList({
         }
       />
       <p className="text-zinc-400 text-sm mb-4 leading-relaxed">
-        Wähle die Apps aus, bei denen du endloses Scrollen einschränken möchtest. Tippe auf eine App für Details.
+        Wähle die Apps aus, bei denen du impulsives Öffnen und lange Sitzungen einschränken möchtest.
       </p>
 
       {nativeAndroid && (
         <div className="mb-5 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 text-xs text-zinc-400 leading-relaxed">
-          ScrollShield aktiviert den Android-Schutz nur für Apps, die auf diesem Gerät installiert und für Android
-          sichtbar sind. Nicht verfügbare Apps bleiben deaktiviert.
+          {checkingApps
+            ? 'Installierte Apps werden geprüft. Die Schutzschalter bleiben bis zum Abschluss gesperrt.'
+            : 'ScrollShield aktiviert den Android-Schutz nur für Apps, die auf diesem Gerät installiert und für Android sichtbar sind. Nicht verfügbare Apps bleiben deaktiviert.'}
         </div>
       )}
 
@@ -120,24 +217,71 @@ export function AppList({
         </p>
       )}
 
+      <section className="mb-6 rounded-[1.75rem] border border-zinc-800 bg-zinc-900/70 p-5" aria-labelledby="weekly-plan-title">
+        <div className="flex gap-3 items-start mb-4">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-300 flex items-center justify-center flex-shrink-0">
+            <CalendarDays size={20} />
+          </div>
+          <div>
+            <h2 id="weekly-plan-title" className="font-bold text-zinc-100">
+              Wiederkehrender Wochenplan
+            </h2>
+            <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+              Gilt für alle aktuell geschützten Apps: Morgen 06–09 Uhr, Arbeit/Schule 09–17 Uhr, Abend 17–22 Uhr,
+              Nacht 22–06 Uhr und Wochenende ganztägig.
+            </p>
+          </div>
+        </div>
+
+        <label htmlFor="weekly-preset" className="text-xs font-bold uppercase tracking-widest text-zinc-500 block mb-2">
+          Plan auswählen
+        </label>
+        <select
+          id="weekly-preset"
+          value={activePreset}
+          disabled={activeAppConfigs.length === 0}
+          onChange={(event) => applyWeeklyPreset(event.target.value as WeeklyPresetId)}
+          className="w-full min-h-[44px] rounded-xl border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-50"
+        >
+          {activePreset === 'custom' && <option value="custom">Individuelle Kombination</option>}
+          {(Object.entries(WEEKLY_PRESETS) as Array<[WeeklyPresetId, (typeof WEEKLY_PRESETS)[WeeklyPresetId]]>).map(
+            ([presetId, preset]) => (
+              <option key={presetId} value={presetId}>
+                {preset.label}
+              </option>
+            ),
+          )}
+        </select>
+        <p className="text-xs text-zinc-500 mt-3 leading-relaxed">
+          {activeAppConfigs.length === 0
+            ? 'Aktiviere zuerst mindestens eine installierte App.'
+            : activePreset === 'custom'
+              ? 'Die geschützten Apps verwenden unterschiedliche Zeitfenster.'
+              : WEEKLY_PRESETS[activePreset].description}
+        </p>
+      </section>
+
       <ul className="space-y-3 flex-1 overflow-y-auto scrollbar-hide" aria-label="Liste der unterstützten Apps">
         {sortedApps.map((app) => {
           const config = state.appsConfig[app.id];
           const isActive = config?.active || false;
           const isUnavailable = nativeAndroid && unavailableSet.has(app.id);
-          const statusText = isUnavailable
-            ? isActive
-              ? 'Konfiguriert, aber nicht installiert'
-              : 'Nicht installiert'
-            : isActive
-              ? `Modus: ${config.mode}`
-              : 'Inaktiv';
+          const controlsDisabled = checkingApps || isUnavailable;
+          const statusText = checkingApps
+            ? 'Installationsstatus wird geprüft'
+            : isUnavailable
+              ? isActive
+                ? 'Konfiguriert, aber nicht installiert'
+                : 'Nicht installiert'
+              : isActive
+                ? `Modus: ${config.mode}`
+                : 'Inaktiv';
 
           return (
             <li key={app.id}>
               <div
                 className={`w-full flex items-center gap-3 p-4 rounded-[1.5rem] border transition-all min-h-[48px] ${
-                  isUnavailable
+                  controlsDisabled
                     ? 'bg-zinc-950/40 border-zinc-800/50 opacity-60'
                     : isActive
                       ? 'bg-zinc-900/80 border-zinc-700 shadow-lg'
@@ -147,7 +291,7 @@ export function AppList({
                 <button
                   type="button"
                   onClick={() => openDetail(app.id)}
-                  disabled={isUnavailable}
+                  disabled={controlsDisabled}
                   className="min-w-0 flex flex-1 items-center gap-4 text-left rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[48px] disabled:cursor-not-allowed"
                   aria-label={`${app.name} Details. Status: ${statusText}`}
                 >
@@ -162,20 +306,24 @@ export function AppList({
                       <span className="truncate">{app.name}</span>
                       {isUnavailable && <AlertTriangle size={14} className="flex-shrink-0 text-amber-500" />}
                     </div>
-                    <div className={`text-xs mt-0.5 font-medium ${isUnavailable ? 'text-amber-500/80' : 'text-zinc-500'}`}>
+                    <div
+                      className={`text-xs mt-0.5 font-medium ${isUnavailable ? 'text-amber-500/80' : 'text-zinc-500'}`}
+                    >
                       {statusText}
                     </div>
                   </div>
-                  {!isUnavailable && <ChevronRight size={18} className="text-zinc-600" aria-hidden="true" />}
+                  {!controlsDisabled && <ChevronRight size={18} className="text-zinc-600" aria-hidden="true" />}
                 </button>
                 <Switch
                   checked={isActive}
-                  disabled={isUnavailable}
+                  disabled={controlsDisabled}
                   onChange={() => toggleApp(app.id)}
                   ariaLabel={
-                    isUnavailable
-                      ? `${app.name} ist nicht installiert und kann nicht geschützt werden`
-                      : `${app.name} Schutz umschalten`
+                    checkingApps
+                      ? `${app.name} wird noch geprüft`
+                      : isUnavailable
+                        ? `${app.name} ist nicht installiert und kann nicht geschützt werden`
+                        : `${app.name} Schutz umschalten`
                   }
                 />
               </div>
