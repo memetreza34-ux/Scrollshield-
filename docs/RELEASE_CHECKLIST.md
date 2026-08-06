@@ -142,7 +142,7 @@ Die genaue Spezifikation steht in `docs/DATA_MIGRATION.md`. `migrationValidation
 - [ ] Foreground-Service-Special-Use-Deklaration wurde final eingereicht.
 - [ ] USK-/PEGI-Fragebogen wurde final ausgefüllt.
 - [ ] Reviewer-Video zeigt Runtime-Prompt, Schutzkanal, sichtbaren Dienst, direkte Stop-Aktion, Overlay und sicheren Entzug.
-- [ ] Reviewer-Video zeigt den kopierten Diagnosebericht mit passendem Stoppcode nach einem sicheren Entzug.
+- [ ] Reviewer-Video zeigt im Debug-Bericht und kopierten Diagnose-JSON den zum Entzug passenden Stoppcode.
 - [ ] Reviewer-Video verwendet exakt denselben Build wie der hochgeladene AAB.
 - [ ] Interner oder geschlossener Testtrack wurde vor Produktion erfolgreich abgeschlossen.
 
