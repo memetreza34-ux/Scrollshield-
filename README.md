@@ -9,16 +9,19 @@ ScrollShield is an offline-first digital wellbeing app for reducing impulsive so
 - Focus sessions and local history/statistics
 - Local-only storage with migration and export support
 - PWA build, automated tests, CI and release-readiness checks
-- Android native permission bridge with real Usage Access, overlay, notification, and battery-status checks
+- Android native permission bridges with real Usage Access, overlay, notification, and battery-status checks
+- Android 13+ runtime notification permission request and direct Android 8+ protection-channel settings
 - Android whole-app protection using foreground-app detection, a foreground service, and a full-screen interruption overlay
 - Explicit protection-service start/stop controls and a persistent stop action in the Android notification
-- Required visible notifications before Android protection can start or recover after reboot
-- Recovery of explicitly enabled protection after reboot or app update
+- Required app-wide and protection-channel notification visibility before Android protection can start or recover after reboot
+- Safe runtime shutdown after permission or notification-channel revocation, removal of all active rules, or loss of the final installed protected app
+- Recovery of explicitly enabled protection after reboot or app update only while all required conditions remain valid
 - Native session duration, daily limits, recurring weekly schedules, Anti-Binge thresholds, and emergency-unlock counters
+- The running service uses the same pure Java rule policy covered by JUnit boundary tests
 - Scoped installed-app validation for supported Android packages
 - Import of measured native usage and protection decisions into local React statistics and history
 - Native Android device and permission diagnostics with copyable JSON output
-- Pure Java rule-boundary tests and React component coverage for critical setup behavior
+- React and TypeScript tests for critical setup, permission-prompt, channel-routing, and browser-fallback behavior
 - CI prepared to run web verification, Android JUnit tests, debug APK compilation, and artifact upload
 - External GitHub Actions pinned to immutable commit SHAs
 
@@ -75,4 +78,4 @@ npm run android:bundle
 - `docs/ROLLOUT_PLAN.md`
 - `docs/STORE_SUBMISSION_PACKET.md`
 
-Before release, replace legal placeholders, run `npm run verify`, compile the Android project, validate the complete native rule matrix on real devices, and execute the store-review checklist.
+Before release, replace legal placeholders, run `npm run verify`, compile the Android project, validate the complete native rule and service-lifecycle matrix on real devices, and execute the store-review checklist.
