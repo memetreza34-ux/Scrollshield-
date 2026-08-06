@@ -36,9 +36,12 @@ ScrollShield uses Capacitor with the Android package id `app.scrollshield.mobile
   - focus-mode blocking
   - per-app session duration
   - daily usage limits
-  - simple blocked-hour ranges, including overnight ranges
+  - legacy blocked-hour ranges, including overnight ranges
+  - recurring weekly morning, work/school, evening, night, and weekend windows
+  - normal, strict, or block behavior per recurring window
   - Anti-Binge warning and blocking thresholds
   - per-app daily emergency-unlock limits
+- App-list presets for no schedule, balanced use, work/learning, evening/sleep, and very strict protection
 - Batched native usage measurement while temporary access is active
 - Local native event queue for blocks, warnings, intentional opens, permission loss, and emergency unlocks
 - Import of native events and measured usage into React history and date-correct daily statistics
@@ -60,13 +63,14 @@ npm run android:bundle
 ## Release Blockers
 
 1. Compile the Android project and run the complete JavaScript verification suite in a working CI or local environment.
-2. Test foreground detection, overlays, daily limits, session expiry, and counters on Samsung, Google Pixel, Xiaomi, OnePlus, Motorola, and at least one Android tablet.
+2. Test foreground detection, overlays, schedules, daily limits, session expiry, and counters on Samsung, Google Pixel, Xiaomi, OnePlus, Motorola, and at least one Android tablet.
 3. Verify recovery after process termination, device restart, app update, battery saver, manufacturer task killers, and permission revocation.
-4. Replace the single `blockHours` range with a complete recurring weekly schedule engine.
-5. Validate cloned apps, work-profile packages, manufacturer variants, and region-specific package names.
-6. Replace legal placeholders and prepare Play Console declarations, reviewer instructions, and permission demonstration videos.
-7. Add automated Android tests for permission loss, service restarts, overlays, countdowns, usage import, Anti-Binge rules, limits, package availability, and emergency access.
-8. Measure battery consumption over long sessions and tune the foreground-app polling interval before production rollout.
+4. Test weekly schedules across device time-zone changes, daylight-saving transitions, midnight boundaries, and manual clock changes.
+5. Add a custom per-day/per-app schedule editor if preset schedules are insufficient for the first public release.
+6. Validate cloned apps, work-profile packages, manufacturer variants, and region-specific package names.
+7. Replace legal placeholders and prepare Play Console declarations, reviewer instructions, and permission demonstration videos.
+8. Add automated Android tests for permission loss, service restarts, overlays, countdowns, usage import, schedules, Anti-Binge rules, limits, package availability, and emergency access.
+9. Measure battery consumption over long sessions and tune the foreground-app polling interval before production rollout.
 
 ## Reels-only Protection
 
