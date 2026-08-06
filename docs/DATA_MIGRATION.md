@@ -36,6 +36,10 @@ At startup, ScrollShield checks pending keys before reading live state:
 
 `saveState` returns an explicit Boolean success result. Migration code must never assume that a caught storage exception means the write succeeded.
 
+If any legacy source remains unresolved, the public application save path returns `false`. Only the internal migration transaction may write current chunks while legacy data exists. This prevents the React default state from creating a valid V3 metadata marker after a failed migration.
+
+Partially written current chunks are never sent through generic orphan-state normalization while a legacy source exists. A complete pending transaction must recover first, or the migration remains blocked.
+
 ## V0.7 conversion rules
 
 Values that have a safe current equivalent are converted:
@@ -75,6 +79,8 @@ Legacy source keys are removed only when both conditions are true:
 
 If either operation fails, the original legacy source remains untouched for a later retry or manual recovery. Corrupted monolithic JSON is never deleted automatically.
 
+After a recovered pending commit, source cleanup compares the current legacy value with the archived value again. A changed or mismatched source is never deleted. If the current state exists but an earlier archive attempt failed, ScrollShield retries the missing archive before cleanup.
+
 The normal ScrollShield JSON export includes this archive when present. Import validates its complete structure and restores it only after validation succeeds.
 
 ## Former backup-file import
@@ -94,6 +100,23 @@ The complete original file string is stored under the archive entry `scrollshiel
 
 Malformed former backup packages are rejected before any local archive is written.
 
+## Blocked migration recovery UI
+
+If startup still finds unresolved legacy data after the safe migration attempt, ScrollShield does not enter the normal application:
+
+- automatic current-state saves remain paused;
+- focus runtime updates remain paused;
+- native configuration synchronization and native event draining remain paused;
+- an existing Android protection service is stopped;
+- the dedicated recovery screen explains that original data remains present;
+- the screen does not offer reset or uninstall as a recovery action;
+- the user can retry the migration;
+- the user can download a local recovery package before taking any external support action.
+
+The recovery package contains every local-storage entry whose key starts with `scrollshield_`, including original legacy sources, the exact archive, current chunks, and pending transaction chunks. Unrelated website or application keys are excluded.
+
+The package is a recovery artifact, not a supported normal-state import. It exists to preserve evidence and enable manual reconstruction if automated migration cannot complete.
+
 ## Release-candidate validation
 
 For each release candidate, use the exact candidate version and build number and verify:
@@ -105,11 +128,12 @@ For each release candidate, use the exact candidate version and build number and
 5. Confirm old generated rules remain inactive in both installed-upgrade and file-import flows.
 6. Compare every archived raw value byte-for-byte with its source value.
 7. Compare the archived former backup file string byte-for-byte with the selected file.
-8. Simulate a storage write failure and confirm the source key remains.
-9. Simulate a complete pending transaction with a damaged live chunk and confirm startup recovery.
-10. Simulate an incomplete pending set and confirm it does not replace the last complete state.
-11. Export the migrated installation, clear local data, import the export, and compare the restored archive.
-12. Upgrade a physical Android installation containing representative V0.7 WebView data and capture the copied diagnostic JSON plus screenshots of retained history/statistics.
+8. Simulate a storage staging failure and a partial live-commit failure; confirm the source remains and no default V3 save can run.
+9. Confirm the blocked migration screen appears, stops native protection, pauses save/sync/drain, and creates a complete recovery package.
+10. Simulate a complete pending transaction with a damaged live chunk and confirm startup recovery.
+11. Simulate an incomplete pending set and confirm it does not replace the last complete state.
+12. Export the migrated installation, clear local data, import the export, and compare the restored archive.
+13. Upgrade a physical Android installation containing representative V0.7 WebView data and capture the copied diagnostic JSON plus screenshots of retained history/statistics.
 
 `config/release-approval.json` must keep `migrationValidationPassed` set to `false` until these checks have passed on the exact signed release candidate.
 
