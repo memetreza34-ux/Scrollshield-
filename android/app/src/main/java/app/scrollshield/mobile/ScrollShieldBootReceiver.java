@@ -18,6 +18,7 @@ public class ScrollShieldBootReceiver extends BroadcastReceiver {
         if (!ScrollShieldNativePlugin.isProtectionEnabled(context)) return;
         if (!ScrollShieldNativePlugin.hasConfiguredApps(context)) return;
         if (!ScrollShieldNativePlugin.hasUsageAccess(context)) return;
+        if (!ScrollShieldNativePlugin.hasNotificationsEnabled(context)) return;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) return;
 
         Intent serviceIntent = new Intent(context, ScrollShieldProtectionService.class);
