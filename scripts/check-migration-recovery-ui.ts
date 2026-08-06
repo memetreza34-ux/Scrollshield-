@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
+const packagePath = 'package.json';
 const appPath = 'src/App.tsx';
 const appTestPath = 'src/App.migration.test.tsx';
 const recoveryPath = 'src/lib/legacyRecovery.ts';
@@ -8,7 +9,8 @@ const screenPath = 'src/screens/MigrationRecoveryScreen.tsx';
 const screenTestPath = 'src/screens/MigrationRecoveryScreen.test.tsx';
 const migrationDocPath = 'docs/DATA_MIGRATION.md';
 
-const [app, appTest, recovery, recoveryTest, screen, screenTest, migrationDoc] = await Promise.all([
+const [packageJson, app, appTest, recovery, recoveryTest, screen, screenTest, migrationDoc] = await Promise.all([
+  readFile(packagePath, 'utf8'),
   readFile(appPath, 'utf8'),
   readFile(appTestPath, 'utf8'),
   readFile(recoveryPath, 'utf8'),
@@ -24,6 +26,19 @@ function requirePattern(file: string, content: string, pattern: RegExp, message:
   if (pattern.test(content)) return;
   findings.push(`${file}: ${message}`);
 }
+
+requirePattern(
+  packagePath,
+  packageJson,
+  /"check:migration":\s*"tsx scripts\/check-storage-migration\.ts && tsx scripts\/check-migration-recovery-ui\.ts"/,
+  'The migration command must execute both storage and recovery-UI contracts.',
+);
+requirePattern(
+  packagePath,
+  packageJson,
+  /"verify":[^\n]*npm run check:migration/,
+  'The complete migration command must remain part of npm run verify.',
+);
 
 requirePattern(
   appPath,
@@ -169,5 +184,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Migration recovery UI check passed. App blocking, native stop, save/sync/drain pause, retry, local raw backup, UI guidance, and integration tests remain guarded.',
+  'Migration recovery UI check passed. Command wiring, app blocking, native stop, save/sync/drain pause, retry, local raw backup, UI guidance, and integration tests remain guarded.',
 );
