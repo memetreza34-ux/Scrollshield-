@@ -63,7 +63,10 @@ export default function App() {
 
   useEffect(() => {
     if (!migrationBlocked || !NativeProtection.isAvailable()) return;
-    void NativeProtection.stop().catch((error) => {
+    void NativeProtection.stop({
+      code: 'migration_recovery',
+      message: 'Der Android-Schutz wurde wegen einer blockierten Datenmigration vorsorglich gestoppt',
+    }).catch((error) => {
       console.error('Failed to stop native protection during migration recovery', error);
     });
   }, [migrationBlocked]);
