@@ -30,7 +30,9 @@ const variablesGradlePath = path.join(androidDir, 'variables.gradle');
 const manifestPath = path.join(androidDir, 'app', 'src', 'main', 'AndroidManifest.xml');
 const javaRoot = path.join(androidDir, 'app', 'src', 'main', 'java', 'app', 'scrollshield', 'mobile');
 const javaTestRoot = path.join(androidDir, 'app', 'src', 'test', 'java', 'app', 'scrollshield', 'mobile');
+const mainActivityPath = path.join(javaRoot, 'MainActivity.java');
 const pluginPath = path.join(javaRoot, 'ScrollShieldNativePlugin.java');
+const diagnosticsPluginPath = path.join(javaRoot, 'ScrollShieldDiagnosticsPlugin.java');
 const servicePath = path.join(javaRoot, 'ScrollShieldProtectionService.java');
 const bootReceiverPath = path.join(javaRoot, 'ScrollShieldBootReceiver.java');
 const rulePolicyPath = path.join(javaRoot, 'ProtectionRulePolicy.java');
@@ -40,7 +42,9 @@ const workflowPath = path.join('.github', 'workflows', 'verify.yml');
 const buildGradle = await readFile(buildGradlePath, 'utf8');
 const variablesGradle = await readFile(variablesGradlePath, 'utf8');
 const manifest = await readFile(manifestPath, 'utf8');
+const mainActivity = await readFile(mainActivityPath, 'utf8');
 const plugin = await readFile(pluginPath, 'utf8');
+const diagnosticsPlugin = await readFile(diagnosticsPluginPath, 'utf8');
 const service = await readFile(servicePath, 'utf8');
 const bootReceiver = await readFile(bootReceiverPath, 'utf8');
 const rulePolicy = await readFile(rulePolicyPath, 'utf8');
@@ -125,6 +129,19 @@ requireMatch(
 );
 
 requireMatch(
+  mainActivityPath,
+  mainActivity,
+  /registerPlugin\(ScrollShieldNativePlugin\.class\)/,
+  'MainActivity must register the native protection bridge.',
+);
+requireMatch(
+  mainActivityPath,
+  mainActivity,
+  /registerPlugin\(ScrollShieldDiagnosticsPlugin\.class\)/,
+  'MainActivity must register the native diagnostics bridge.',
+);
+
+requireMatch(
   pluginPath,
   plugin,
   /setProtectionEnabled\(context, true\)/,
@@ -147,6 +164,25 @@ requireMatch(
   plugin,
   /drainProtectionEvents/,
   'Native events and measured usage must remain drainable into React state.',
+);
+
+requireMatch(
+  diagnosticsPluginPath,
+  diagnosticsPlugin,
+  /@CapacitorPlugin\(name = "ScrollShieldDiagnostics"\)/,
+  'Android diagnostics must remain available through a dedicated Capacitor plugin.',
+);
+requireMatch(
+  diagnosticsPluginPath,
+  diagnosticsPlugin,
+  /manufacturer[\s\S]*model[\s\S]*androidRelease[\s\S]*sdkInt[\s\S]*timeZone/,
+  'Android diagnostics must include device, OS, and time-zone identity.',
+);
+requireMatch(
+  diagnosticsPluginPath,
+  diagnosticsPlugin,
+  /usageAccess[\s\S]*overlay[\s\S]*batteryOptimizationExempt[\s\S]*protectionEnabled[\s\S]*serviceRunning/,
+  'Android diagnostics must include permission and service health.',
 );
 
 requireMatch(
@@ -260,6 +296,18 @@ requireMatch(
   workflow,
   /testDebugUnitTest\s+assembleDebug/,
   'Verify workflow must execute Android unit tests and compile a debug APK.',
+);
+requireMatch(
+  workflowPath,
+  workflow,
+  /actions\/upload-artifact@v7[\s\S]*android\/app\/build\/outputs\/apk\/debug\/app-debug\.apk/,
+  'Successful verification must publish the compiled debug APK.',
+);
+requireMatch(
+  workflowPath,
+  workflow,
+  /android\/app\/build\/reports\/tests\/testDebugUnitTest/,
+  'Verification must preserve Android unit-test reports for diagnosis.',
 );
 
 const allowedPermissions = new Set([
