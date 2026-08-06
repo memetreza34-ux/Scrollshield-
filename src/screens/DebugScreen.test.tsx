@@ -40,10 +40,14 @@ describe('DebugScreen native diagnostics', () => {
       protectionEnabled: true,
       serviceRunning: false,
       configuredInstalledApps: true,
+      lastProtectionStartAt: 1_785_999_000_000,
+      lastProtectionStopAt: 1_785_999_500_000,
+      lastProtectionStopCode: 'notifications_missing',
+      lastProtectionStopMessage: 'Benachrichtigungen wurden entzogen; der Android-Schutz wurde beendet',
     });
   });
 
-  it('renders build identity and separate notification health signals', async () => {
+  it('renders build, notification, and protection lifecycle diagnostics', async () => {
     render(
       <DebugScreen
         state={{ ...DEFAULT_STATE, operatingSystem: 'android' }}
@@ -63,6 +67,14 @@ describe('DebugScreen native diagnostics', () => {
     expect(screen.getByText('Schutz-Benachrichtigung')).toBeInTheDocument();
     expect(screen.getAllByText('DEAKTIVIERT')).toHaveLength(1);
     expect(screen.getByText('NICHT BEREIT')).toBeInTheDocument();
+    expect(screen.getByText('Letzter Schutzstart')).toBeInTheDocument();
+    expect(screen.getByText('Letzter Stoppzeitpunkt')).toBeInTheDocument();
+    expect(screen.getByText('Letzter Stoppcode')).toBeInTheDocument();
+    expect(screen.getByText('notifications_missing')).toBeInTheDocument();
+    expect(screen.getByText('Letzter Stoppgrund')).toBeInTheDocument();
+    expect(
+      screen.getByText('Benachrichtigungen wurden entzogen; der Android-Schutz wurde beendet'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Diagnose als JSON kopieren' })).toBeInTheDocument();
   });
 });
