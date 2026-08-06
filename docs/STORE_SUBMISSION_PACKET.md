@@ -204,3 +204,5 @@ Foreground-service video shot list:
 - Native permission and foreground-service demonstration videos: `[REQUIRED]`
 - Lifecycle diagnostic persistence evidence for the exact candidate: `[REQUIRED]`
 - Signed binary verification against every declaration above: `[REQUIRED]`
+
+The lifecycle reviewer material remains a draft until the same candidate passes automated verification, Android compilation, and `LIFE-08` physical-device evidence.
