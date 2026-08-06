@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_STATE } from '../types';
 import {
   createExportFilename,
@@ -6,6 +6,16 @@ import {
   parseScrollShieldExport,
   serializeScrollShieldExport,
 } from './dataExport';
+
+const LEGACY_ARCHIVE_KEY = 'scrollshield_legacy_v07_archive_v1';
+
+beforeEach(() => {
+  localStorage.clear();
+});
+
+afterEach(() => {
+  localStorage.clear();
+});
 
 describe('data export', () => {
   it('creates a versioned local-data export without transient session fields', () => {
@@ -50,6 +60,44 @@ describe('data export', () => {
     expect(parseScrollShieldExport(serializeScrollShieldExport(exported)).state.settings).toEqual(
       DEFAULT_STATE.settings,
     );
+  });
+
+  it('includes the exact V0.7 archive and restores it during import', () => {
+    const archive = {
+      schemaVersion: 1 as const,
+      sources: [
+        {
+          source: 'legacy_v07_pro',
+          capturedAt: '2026-08-06T16:00:00.000Z',
+          rawEntries: {
+            scrollshield_events: '[{"id":"legacy"}]',
+            scrollshield_rules: '[{"id":"rule"}]',
+          },
+        },
+      ],
+    };
+    localStorage.setItem(LEGACY_ARCHIVE_KEY, JSON.stringify(archive));
+    const exported = createScrollShieldExport(DEFAULT_STATE, { appVersion: '1.0.0' });
+    expect(exported.legacyArchive).toEqual(archive);
+
+    localStorage.removeItem(LEGACY_ARCHIVE_KEY);
+    const parsed = parseScrollShieldExport(serializeScrollShieldExport(exported));
+
+    expect(parsed.legacyArchive).toEqual(archive);
+    expect(JSON.parse(localStorage.getItem(LEGACY_ARCHIVE_KEY) as string)).toEqual(archive);
+  });
+
+  it('rejects a damaged V0.7 archive without changing local storage', () => {
+    const raw = JSON.stringify({
+      ...createScrollShieldExport(DEFAULT_STATE, { appVersion: '1.0.0' }),
+      legacyArchive: {
+        schemaVersion: 1,
+        sources: [{ source: 'legacy', capturedAt: 'today', rawEntries: { bad: 123 } }],
+      },
+    });
+
+    expect(() => parseScrollShieldExport(raw)).toThrow('V0.7-Datenarchiv');
+    expect(localStorage.getItem(LEGACY_ARCHIVE_KEY)).toBeNull();
   });
 
   it.each([
