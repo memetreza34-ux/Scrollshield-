@@ -20,13 +20,16 @@ ScrollShield is an offline-first digital wellbeing app for reducing impulsive so
 - Required app-wide and protection-channel notification visibility before Android protection can start or recover after reboot
 - Safe runtime shutdown after permission or notification-channel revocation, removal of all active rules, or loss of the final installed protected app
 - Recovery of explicitly enabled protection after reboot or app update only while all required conditions remain valid
+- Persistent protection lifecycle diagnostics with last start time, last stop time, stable stop code, and readable stop reason
+- Explicit recovery failure codes for missing target apps, Usage Access, notifications, overlays, and Android service-start failures
+- Explicit `migration_recovery` diagnostics when data recovery stops native protection
 - Native session duration, daily limits, recurring weekly schedules, Anti-Binge thresholds, and emergency-unlock counters
 - The running service uses the same pure Java rule policy covered by JUnit boundary tests
 - Scoped installed-app validation for supported Android packages
 - Import of measured native usage and protection decisions into local React statistics and history
-- Native Android diagnostics with device, OS, version name, build number, permission, protection-channel, service, and installed-target status
+- Native Android diagnostics with device, OS, version name, build number, permission, protection-channel, service, installed-target, and lifecycle status
 - Copyable diagnostic JSON for reproducible real-device reports
-- React and TypeScript tests for critical setup, permission-prompt, channel-routing, diagnostic, migration, export, and browser-fallback behavior
+- React and TypeScript tests for critical setup, permission-prompt, channel-routing, diagnostic, lifecycle, migration, export, and browser-fallback behavior
 - Mandatory Android device matrix with manufacturer, Android-version, migration, lifecycle, battery, time-boundary, tablet, and accessibility coverage
 - Explicit release approval manifest and strict gate before release APK or AAB generation
 - CI prepared to run web verification, Android JUnit tests, debug APK compilation, and artifact upload
@@ -59,6 +62,7 @@ npm run test
 npm run build
 npm run verify
 npm run check:device-matrix
+npm run check:lifecycle
 npm run check:migration
 npm run check:release-approval
 npm run readiness
@@ -93,4 +97,4 @@ npm run android:bundle
 - `docs/ENGINEERING_CHECKS.md`
 - `config/release-approval.json`
 
-Before release, replace legal placeholders, run `npm run verify`, compile and inspect the Android debug build, validate the legacy upgrade and export/import round trip on the exact candidate, complete the physical-device matrix with current-build diagnostic evidence, finalize store declarations and videos, inspect the signed binary, and complete the release approval manifest.
+Before release, replace legal placeholders, run `npm run verify`, compile and inspect the Android debug build, validate lifecycle reason persistence, validate the legacy upgrade and export/import round trip on the exact candidate, complete the physical-device matrix with current-build diagnostic evidence, finalize store declarations and videos, inspect the signed binary, and complete the release approval manifest.
