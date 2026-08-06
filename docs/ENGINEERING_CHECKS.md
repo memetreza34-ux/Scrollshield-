@@ -17,6 +17,7 @@ The verification chain covers:
 - package/app/store version consistency
 - release-approval schema and candidate-version consistency
 - transactional and legacy-storage migration safeguards
+- Android protection lifecycle and stop-reason diagnostics
 - SDK registry and third-party notices
 - committed-secret detection
 - store copy, privacy declarations, and screenshot metadata
@@ -34,6 +35,7 @@ The verification chain covers:
 
 - recognizes `scrollshield_state_v2` and the unversioned `scrollshield_state`
 - recognizes former V0.7/PRO keys for brain state, events, rules, gamification, installation metadata, and old backups
+- recognizes the former V0.7 backup-file structure and converts only safe values
 - stages every current storage chunk under a `_pending` key before live data is replaced
 - verifies staged and committed values byte-for-byte and returns explicit save success
 - completes a whole pending transaction after a process interruption
@@ -45,9 +47,11 @@ The verification chain covers:
 - keeps obsolete generated rules archived and inactive
 - preserves each converted event's original payload in history metadata
 - includes the legacy archive in normal JSON exports and validates/restores it during import
-- requires regression tests for monolithic, unversioned, V0.7, write-failure, corrupted-source, pending-recovery, and export/import cases
+- blocks normal saves, focus processing, native sync, and native draining while migration remains unresolved
+- provides retry and local raw-data recovery actions
+- requires regression tests for monolithic, unversioned, V0.7, write-failure, corrupted-source, pending-recovery, recovery-UI, and export/import cases
 
-The implementation is in `src/lib/storage.ts` and `src/lib/dataExport.ts`. The human validation contract is in `docs/DATA_MIGRATION.md`.
+The implementation is in `src/lib/storage.ts`, `src/lib/dataExport.ts`, and `src/screens/MigrationRecoveryScreen.tsx`. The human validation contract is in `docs/DATA_MIGRATION.md`.
 
 ## Android Source Checks
 
@@ -70,16 +74,39 @@ The implementation is in `src/lib/storage.ts` and `src/lib/dataExport.ts`. The h
 - Java rule-policy tests and Android compile commands
 - debug APK and unit-test report artifacts
 
+## Protection Lifecycle Diagnostics Check
+
+`npm run check:lifecycle` protects the complete Android start/stop diagnosis contract:
+
+- native preferences retain the last protection start time
+- native preferences retain the last stop time, stable stop code, and readable stop reason
+- a generic deactivation reason is written first and may be replaced by a more specific system cause
+- system warning events are classified by the pure Java `ProtectionStopReasonPolicy`
+- JUnit tests cover Usage Access, Overlay, notification, missing-rule, missing-target, recovery, and unknown-warning codes
+- Android service-start exceptions retain `start_failed`
+- React may pass explicit stop reasons to Android
+- normal manual stops retain `manual_app_stop`
+- blocked data migration uses `migration_recovery`
+- failed boot or app-update recovery clears persisted activation and records the exact `recovery_*` reason
+- the native diagnostic snapshot exposes all lifecycle fields
+- the TypeScript bridge preserves those fields
+- the Debug screen displays start time, stop time, stop code, and stop message
+- bridge, App-integration, and Debug-component tests protect the full route
+- the physical-device matrix requires persistence evidence after reopening ScrollShield
+
+The executable source contract is in `scripts/check-protection-lifecycle-diagnostics.ts`.
+
 ## Android Device-Matrix Check
 
 `npm run check:device-matrix` protects the diagnostic and manual-test contract:
 
 - installed Android version name and version code are exposed in the native diagnostic snapshot
 - app-wide notification status and protection-channel status remain separately visible
-- the debug screen displays build identity, channel creation, channel enabled state, and combined notification readiness
-- the diagnostic component test covers a disabled-channel failure case
+- protection start/stop timestamps, stop code, and stop message remain visible and copyable
+- the debug screen displays build identity, channel creation, channel enabled state, combined notification readiness, and lifecycle state
+- the diagnostic component test covers a disabled-channel failure case and a stored stop reason
 - required coverage includes Pixel, Samsung, Xiaomi/Redmi, OnePlus, Motorola, a tablet, Android 7, Android 8, and Android 13+
-- mandatory scenarios include migration, runtime notification permission, channel revocation, permission loss, app uninstall, final-rule removal, rule boundaries, reboot, long-run battery behavior, time-zone and daylight-saving changes, font scaling, tablet layout, and TalkBack
+- mandatory scenarios include migration, runtime notification permission, channel revocation, permission loss, app uninstall, final-rule removal, reason persistence, reboot, long-run battery behavior, time-zone and daylight-saving changes, font scaling, tablet layout, and TalkBack
 - every real-device result requires build identity, copied diagnostic JSON, screen evidence, logs for failures, and `PASS`, `FAIL`, or `BLOCKED` status
 
 The executable source contract is in `scripts/check-android-device-matrix.ts`. The manual test plan is in `docs/ANDROID_DEVICE_TEST_MATRIX.md`.
@@ -97,7 +124,7 @@ The executable source contract is in `scripts/check-android-device-matrix.ts`. T
 - app-wide and channel-level notification disabling are detected
 - Android protection cannot start while notifications are disabled
 - reboot recovery does not restart an invisible service
-- a running service stops, clears activation, and records a warning after notification revocation
+- a running service stops, clears activation, records a warning, and preserves a diagnostic reason after notification revocation
 - the foreground notification is removed when the service ends
 - the ongoing foreground-service notification retains its direct `Schutz stoppen` action
 - the permission screen marks notifications as required on Android
@@ -124,6 +151,7 @@ This non-strict check is included in `npm run verify` and reports the number of 
 - Android JUnit tests
 - debug APK compilation and inspection
 - physical-device matrix
+- lifecycle reason persistence
 - battery and process reliability
 - V0.7 and previous-candidate migration
 - final Play declarations
