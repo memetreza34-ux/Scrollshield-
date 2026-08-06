@@ -29,15 +29,22 @@ This branch is the active ScrollShield release foundation.
 - added scoped package visibility and native installed-app validation
 - added availability-aware app selection that disables unavailable Android apps
 - added periodic runtime validation for removed or uninstalled protected apps
-- added native device, permission, service, locale, and time-zone diagnostics with copyable JSON output
-- added component tests for unavailable-app activation prevention, weekly preset updates, diagnostics, required notifications, runtime prompt success, and denied-prompt fallback
+- expanded native diagnostics with installed version name, version code, app-wide notification status, protection-channel creation, channel enabled state, and combined notification readiness
+- added visible build and notification-channel diagnostics with copyable JSON output
+- added component tests for unavailable-app activation prevention, weekly preset updates, expanded diagnostics, required notifications, runtime prompt success, and denied-prompt fallback
 - added direct TypeScript bridge tests for notification prompt routing, protection-channel settings, other Android settings, and browser no-op behavior
 - added a pure Java protection-rule policy with JUnit boundary coverage
+- added a mandatory Android device matrix covering manufacturers, Android generations, migration, permissions, service lifecycle, rule boundaries, battery, time changes, large screens, and accessibility
+- added `check:device-matrix` to guard the diagnostic contract, required scenarios, and evidence fields
+- added an explicit release approval manifest tied to Android and package versions
+- added a non-strict approval schema check to `npm run verify`
+- added a strict `release:gate` before release APK and AAB generation
+- replaced the obsolete release checklist with the actual native permissions, testing, legal, store, migration, and device requirements
 - prepared CI to run Android unit tests and compile the debug APK
 - prepared successful CI runs to publish the debug APK and Android test report as downloadable workflow artifacts
 - pinned every external GitHub Action to an immutable commit SHA
 - expanded weekly Dependabot coverage to npm, Capacitor, React, Gradle, and GitHub Actions
-- expanded static project checks to guard native service, transparency, channel consistency, diagnostics, schedule, package, boot-recovery, rule-test, workflow-pin, and artifact requirements
+- expanded static project checks to guard native service, transparency, channel consistency, diagnostics, schedule, package, boot-recovery, rule-test, workflow-pin, artifact, device-matrix, and release-approval requirements
 - aligned release and store checkers with the honest version-one whole-app scope and non-medical positioning
 - aligned the store submission packet with exact Data Safety and `FOREGROUND_SERVICE_SPECIAL_USE` declarations
 - documented competitor-led product priorities and platform limits
@@ -45,11 +52,18 @@ This branch is the active ScrollShield release foundation.
 ## Blocking release work
 
 - successful execution of JavaScript verification, Android JUnit tests, and debug compilation in a working runner or local Android environment
+- completed physical-device evidence from `docs/ANDROID_DEVICE_TEST_MATRIX.md`
 - real-device reliability and battery testing across major Android manufacturers
 - time-zone, daylight-saving, midnight, and manual-clock tests for recurring schedules
+- V0.7-compatible and previous-candidate migration validation
 - optional custom per-day/per-app schedule editor if presets are insufficient
 - cloned-app, work-profile, manufacturer, and regional package validation
-- process-recovery, reboot, app-update, battery-saver, runtime-notification, channel-deactivation, protected-app-uninstall, and permission-loss test matrix
+- process-recovery, reboot, app-update, battery-saver, runtime-notification, channel-deactivation, protected-app-uninstall, and permission-loss testing
 - Android instrumentation tests for service lifecycle and overlays beyond the current pure rule-policy and React coverage
 - legal placeholder replacement and final Play Console declarations
+- reviewer videos recorded with the exact candidate build
+- signed binary inspection against privacy and store declarations
+- completion of all release approval flags, approver identity, and approval time
 - Reels-only beta and iOS native implementation
+
+`config/release-approval.json` intentionally remains incomplete. Release APK and AAB commands must continue to fail until the blockers above have evidence for the exact candidate version and build.
