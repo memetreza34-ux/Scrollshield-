@@ -25,14 +25,23 @@ export interface NativeProtectionStatus {
   unavailableAppIds: string[];
 }
 
+export interface NativeProtectionStopReason {
+  code: string;
+  message: string;
+}
+
 interface NativeProtectionPlugin {
   syncProtectionConfig(options: { configJson: string }): Promise<{ unavailableAppIdsJson: string }>;
   startProtectionService(): Promise<void>;
-  stopProtectionService(): Promise<void>;
+  stopProtectionService(options: { reasonCode: string; reasonMessage: string }): Promise<void>;
   getProtectionServiceStatus(): Promise<{
     running: boolean;
     enabled: boolean;
     unavailableAppIdsJson: string;
+    lastStartAt: number;
+    lastStopAt: number;
+    lastStopCode: string;
+    lastStopMessage: string;
   }>;
   drainProtectionEvents(): Promise<{ eventsJson: string; usageJson: string }>;
 }
@@ -106,6 +115,11 @@ const DEFAULT_TIME_WINDOWS: AppConfig['timeWindows'] = {
   eveningRules: 'normal',
   nightRules: 'normal',
   weekendRules: 'normal',
+};
+
+const DEFAULT_STOP_REASON: NativeProtectionStopReason = {
+  code: 'manual_app_stop',
+  message: 'Der Android-Schutz wurde in ScrollShield manuell gestoppt',
 };
 
 const EVENT_TYPES = new Set<NativeProtectionEvent['type']>(['open', 'block', 'warning', 'emergency']);
@@ -213,9 +227,12 @@ export const NativeProtection = {
     await AndroidProtection.startProtectionService();
   },
 
-  async stop(): Promise<void> {
+  async stop(reason: NativeProtectionStopReason = DEFAULT_STOP_REASON): Promise<void> {
     if (!this.isAvailable()) return;
-    await AndroidProtection.stopProtectionService();
+    await AndroidProtection.stopProtectionService({
+      reasonCode: reason.code.trim() || DEFAULT_STOP_REASON.code,
+      reasonMessage: reason.message.trim() || DEFAULT_STOP_REASON.message,
+    });
   },
 
   async getStatus(): Promise<NativeProtectionStatus> {
