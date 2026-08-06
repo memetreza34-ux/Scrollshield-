@@ -16,10 +16,38 @@ public class ScrollShieldBootReceiver extends BroadcastReceiver {
         }
 
         if (!ScrollShieldNativePlugin.isProtectionEnabled(context)) return;
-        if (!ScrollShieldNativePlugin.hasConfiguredApps(context)) return;
-        if (!ScrollShieldNativePlugin.hasUsageAccess(context)) return;
-        if (!ScrollShieldNativePlugin.hasNotificationsEnabled(context)) return;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) return;
+        if (!ScrollShieldNativePlugin.hasConfiguredApps(context)) {
+            stopRecovery(
+                context,
+                "recovery_target_app_missing",
+                "Der Android-Schutz wurde nach Neustart oder App-Update nicht gestartet, weil keine aktive installierte Ziel-App verfügbar ist"
+            );
+            return;
+        }
+        if (!ScrollShieldNativePlugin.hasUsageAccess(context)) {
+            stopRecovery(
+                context,
+                "recovery_usage_access_missing",
+                "Der Android-Schutz wurde nach Neustart oder App-Update nicht gestartet, weil der Nutzungszugriff fehlt"
+            );
+            return;
+        }
+        if (!ScrollShieldNativePlugin.hasNotificationsEnabled(context)) {
+            stopRecovery(
+                context,
+                "recovery_notifications_missing",
+                "Der Android-Schutz wurde nach Neustart oder App-Update nicht gestartet, weil die sichtbare Schutz-Benachrichtigung nicht verfügbar ist"
+            );
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
+            stopRecovery(
+                context,
+                "recovery_overlay_missing",
+                "Der Android-Schutz wurde nach Neustart oder App-Update nicht gestartet, weil die Overlay-Berechtigung fehlt"
+            );
+            return;
+        }
 
         Intent serviceIntent = new Intent(context, ScrollShieldProtectionService.class);
         try {
@@ -29,12 +57,17 @@ public class ScrollShieldBootReceiver extends BroadcastReceiver {
                 context.startService(serviceIntent);
             }
         } catch (RuntimeException error) {
-            ScrollShieldNativePlugin.appendProtectionEvent(
+            stopRecovery(
                 context,
-                "warning",
-                "system",
-                "Android konnte den Schutz nach dem Neustart nicht automatisch starten"
+                "recovery_start_failed",
+                "Android konnte den Schutz nach Neustart oder App-Update nicht automatisch starten"
             );
         }
+    }
+
+    private void stopRecovery(Context context, String code, String message) {
+        ScrollShieldNativePlugin.setProtectionEnabled(context, false);
+        ScrollShieldNativePlugin.appendProtectionEvent(context, "warning", "system", message);
+        ScrollShieldNativePlugin.recordProtectionStop(context, code, message);
     }
 }
