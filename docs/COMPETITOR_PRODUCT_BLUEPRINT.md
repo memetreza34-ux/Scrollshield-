@@ -19,11 +19,11 @@ The product must stay honest about platform limits. Whole-app blocking is the st
 | Product | Strong pattern | ScrollShield adaptation |
 | --- | --- | --- |
 | one sec | Immediate, delayed, always-ask and repeated interventions | Opening pause, chosen session duration, optional repeated intervention |
-| Opal | Focus sessions, recurring schedules, deep focus, clear progress | Start-now focus, schedules, strict session mode, real local statistics |
+| Opal | Focus sessions, recurring schedules, deep focus, clear progress | Start-now focus, native recurring schedules, strict session mode, real local statistics |
 | Jomo | Multiple unlock challenges, app groups, templates, strict mode | Wait, reason, typed phrase, optional PIN/QR later; reusable protection profiles |
-| Freedom | Blocklists, recurring schedules, locked mode, session history | App groups, automatic schedules, non-editable active sessions, annotations |
+| Freedom | Blocklists, recurring schedules, locked mode, session history | Installed-app groups, weekly schedule presets, active-session restrictions, annotations |
 | ScreenZen | Escalating delays and short use windows | Delay increases after repeated opens; session windows instead of only daily limits |
-| AppBlock | Conditions by time, usage and opening count | Deterministic rule builder with time, usage, opens and focus-state triggers |
+| AppBlock | Conditions by time, usage and opening count | Deterministic rules using recurring time windows, usage, opens and focus state |
 | Forest | Visual focus progress without fake health claims | Optional garden based only on completed real focus minutes |
 
 ## Release Information Architecture
@@ -51,15 +51,13 @@ The product must stay honest about platform limits. Whole-app blocking is the st
 ### 3. Rules and Schedules
 
 - Start now
-- Start later
-- Recurring weekly schedule
-- Time range
+- Recurring weekly schedule presets
+- Morning, work/school, evening, night and weekend windows
+- Normal, strict or block behavior per window
 - Usage limit reached
 - Open-count threshold
 - Focus mode active
-- Reusable app groups
-- Reusable templates
-- Strict mode that prevents editing an active rule
+- Reusable app groups and custom templates as later enhancements
 
 ### 4. Intervention
 
@@ -107,7 +105,7 @@ The product must stay honest about platform limits. Whole-app blocking is the st
 
 ## Current Android Implementation
 
-The release branch now contains the first native implementation of several competitor-derived patterns:
+The release branch contains the first native implementation of several competitor-derived patterns:
 
 - explicit user-controlled foreground protection service
 - real Usage Access and overlay status
@@ -115,10 +113,13 @@ The release branch now contains the first native implementation of several compe
 - limited temporary sessions followed by re-intervention
 - strict focus and per-app blocking
 - per-app daily usage limits
-- overnight-capable blocked-hour ranges
+- recurring morning, work/school, evening, night and weekend schedules
+- selectable balanced, work/learning, evening/sleep and very-strict presets
+- backward-compatible overnight blocked-hour ranges
 - deterministic Anti-Binge warning and blocking thresholds
 - daily emergency-unlock limits
 - reboot and app-update recovery only after prior user activation
+- installed-app validation without broad package inventory access
 - measured native usage imported into date-correct local statistics
 
 These features remain pre-release until compilation and real-device testing are complete.
@@ -129,28 +130,29 @@ These features remain pre-release until compilation and real-device testing are 
 
 - Build, tests and CI green
 - Real Android permission bridge
-- Real package IDs
+- Real package IDs and installed-app validation
 - Privacy and store documents complete
 - No fake permission, AI or security claims
 
 ### P1 — Real Android whole-app protection
 
-Implemented in the release branch; compilation, reliability, battery, and device-vendor validation remain open.
+Implemented in the release branch; compilation, reliability, battery, schedule-boundary and device-vendor validation remain open.
 
 ### P2 — Core competitor parity
 
-Partially implemented:
+Implemented in the release branch:
 
 - native session and daily limits
-- simple blocked-hour range
+- recurring weekly schedule presets
 - deterministic Anti-Binge thresholds
 - strict focus behavior
+- limited emergency access
 - real native event and usage statistics
 
 Still open:
 
-- complete recurring weekly schedules
-- app groups and reusable templates
+- custom per-day/per-app schedule editor
+- reusable app groups and user-created schedule templates
 - multiple intervention challenges
 - strict active-session editing rules
 - session notes and schedule success analytics
@@ -177,7 +179,7 @@ Still open:
 ### Free
 
 - One protected app
-- One active schedule
+- One recurring schedule preset
 - Standard opening pause
 - Basic focus timer
 - Seven-day local history
@@ -185,7 +187,7 @@ Still open:
 ### Pro
 
 - Unlimited protected apps and app groups
-- Recurring and advanced schedules
+- Advanced and custom schedules
 - Strict mode
 - Re-interventions
 - Advanced local insights
