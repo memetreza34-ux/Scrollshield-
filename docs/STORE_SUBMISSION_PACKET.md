@@ -76,6 +76,23 @@ binary before submission.
 > release. It does not alter, click, or read the underlying app. Without this permission, overlay-based interruption is
 > unavailable.
 
+### `POST_NOTIFICATIONS` Explanation
+
+> On Android 13 and newer, ScrollShield requests notification permission only after the user reaches the Android
+> protection setup. The permission keeps the active foreground protection service visible and provides the direct
+> `Schutz stoppen` action. ScrollShield also verifies that the dedicated `Aktiver App-Schutz` notification channel has
+> not been disabled. If app notifications or this channel are disabled, protection does not start or stops locally and
+> clears its persisted active state so it cannot continue as an invisible background service.
+
+Reviewer demonstration:
+
+1. Open Android protection setup on Android 13 or newer.
+2. Tap `Benachrichtigungen erlauben` and show the native runtime permission dialog.
+3. Grant access and show the permission status changing to `AKTIV`.
+4. Open the channel settings and show the dedicated `Aktiver App-Schutz` channel.
+5. Disable only that channel, return to ScrollShield, and show the permission status as missing.
+6. Re-enable the channel before continuing the protection test.
+
 ### Package Visibility Explanation
 
 > ScrollShield does not request `QUERY_ALL_PACKAGES`. The Android manifest contains a finite list of targeted package
@@ -101,7 +118,10 @@ Play Console functionality description:
 > ScrollShield runs a foreground service only after the user explicitly starts Android protection. The service checks
 > which app is currently in the foreground and compares it with the user's locally selected protected apps. When a rule
 > matches, ScrollShield displays a branded opening pause or block screen. A persistent notification clearly indicates
-> that protection is active and includes a direct stop action. No app content is read or transmitted.
+> that protection is active and includes a direct stop action. No app content is read or transmitted. During runtime,
+> the service repeatedly verifies notification visibility, Usage Access, overlay access, active rules, and the presence
+> of at least one installed configured target app. If one of these required conditions disappears, the service clears
+> its active state, records a local warning, removes its foreground notification, and stops.
 
 Impact if the task is deferred:
 
@@ -117,12 +137,17 @@ Impact if the task is interrupted:
 Foreground-service video shot list:
 
 1. Complete the in-app disclosure and grant Usage Access and display-over-apps permission.
-2. Select an installed supported app.
-3. Explicitly tap the in-app action to start Android protection.
-4. Show the persistent notification and its `Schutz stoppen` action.
-5. Open the selected app and show the ScrollShield intervention.
-6. Stop protection from the notification and show that the service and overlay stop.
-7. Restart protection, reboot the test device, and show recovery only because the user previously enabled it.
+2. Grant notifications through the Android runtime dialog and show the dedicated protection channel.
+3. Select an installed supported app.
+4. Explicitly tap the in-app action to start Android protection.
+5. Show the persistent notification and its `Schutz stoppen` action.
+6. Open the selected app and show the ScrollShield intervention.
+7. Stop protection from the notification and show that the service, overlay, and foreground notification stop.
+8. Restart protection, reboot the test device, and show recovery only because the user previously enabled it and all
+   required conditions remain valid.
+9. While protection is running, disable the protection notification channel and show automatic service shutdown.
+10. Re-enable protection, then deactivate all protected apps or uninstall the only protected test app and show automatic
+    service shutdown.
 
 ### Permission and Protection Review Video Shot List
 
@@ -130,10 +155,13 @@ Foreground-service video shot list:
 2. Open the permission explanation and show purpose, local processing, and fallback text.
 3. Grant Usage Access from Android settings and return to ScrollShield.
 4. Grant display-over-apps permission and return.
-5. Select an installed protected app and trigger the branded intervention.
-6. Demonstrate an opening delay, a session expiry, a daily limit, and a strict block.
-7. Demonstrate the limited emergency release and its local history entry.
-8. Disable each permission and show that protection shuts down safely while ScrollShield remains usable.
+5. Request notifications with the native Android dialog and show the dedicated protection channel.
+6. Select an installed protected app and trigger the branded intervention.
+7. Demonstrate an opening delay, a session expiry, a daily limit, and a strict block.
+8. Demonstrate the limited emergency release and its local history entry.
+9. Disable Usage Access, overlay access, app notifications, and the dedicated channel one at a time; show that protection
+   shuts down safely while ScrollShield remains usable.
+10. Remove or uninstall the final active protected app and show that the service stops instead of remaining idle.
 
 ### Rating Target
 
