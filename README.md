@@ -85,7 +85,7 @@ npm run android:release
 npm run android:bundle
 ```
 
-`android:sync` rebuilds the web app and copies it into the Capacitor Android project. `android:build` creates a debug APK and does not require production approval. `android:release` and `android:bundle` first execute the strict release gate. They remain blocked while `config/release-approval.json` contains incomplete evidence.
+`android:sync` rebuilds the web app and copies it into the Capacitor Android project. `android:build` creates the debug APK and does not require production approval. `android:release` and `android:bundle` first execute the strict release gate. They remain blocked while `config/release-approval.json` contains incomplete evidence.
 
 ## Product and Release References
 
