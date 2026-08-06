@@ -5,6 +5,7 @@ import android.app.NotificationManager;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
@@ -19,6 +20,8 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 @CapacitorPlugin(name = "ScrollShieldNative")
 public class ScrollShieldNativePlugin extends Plugin {
+    public static final String PREFERENCES_NAME = "scrollshield_native";
+    public static final String CONFIG_KEY = "protection_config";
 
     @PluginMethod
     public void getPermissionStatus(PluginCall call) {
@@ -77,21 +80,57 @@ public class ScrollShieldNativePlugin extends Plugin {
             getContext().startActivity(intent);
             call.resolve();
         } catch (ActivityNotFoundException error) {
-            try {
-                Intent fallback = new Intent(
-                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.parse("package:" + getContext().getPackageName())
-                );
-                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                getContext().startActivity(fallback);
-                call.resolve();
-            } catch (ActivityNotFoundException fallbackError) {
-                call.reject("Android settings screen is unavailable", fallbackError);
-            }
+            openApplicationSettings(call, error);
         }
     }
 
-    private boolean hasUsageAccess(Context context) {
+    @PluginMethod
+    public void syncProtectionConfig(PluginCall call) {
+        String configJson = call.getString("configJson");
+        if (configJson == null) {
+            call.reject("Missing protection configuration");
+            return;
+        }
+
+        getPreferences().edit().putString(CONFIG_KEY, configJson).apply();
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void startProtectionService(PluginCall call) {
+        Context context = getContext();
+        if (!hasUsageAccess(context)) {
+            call.reject("Usage Access is required before protection can start");
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
+            call.reject("Overlay permission is required before protection can start");
+            return;
+        }
+
+        Intent intent = new Intent(context, ScrollShieldProtectionService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(intent);
+        } else {
+            context.startService(intent);
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void stopProtectionService(PluginCall call) {
+        getContext().stopService(new Intent(getContext(), ScrollShieldProtectionService.class));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void getProtectionServiceStatus(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("running", ScrollShieldProtectionService.isRunning());
+        call.resolve(result);
+    }
+
+    public static boolean hasUsageAccess(Context context) {
         AppOpsManager appOps = (AppOpsManager) context.getSystemService(Context.APP_OPS_SERVICE);
         if (appOps == null) return false;
 
@@ -112,9 +151,27 @@ public class ScrollShieldNativePlugin extends Plugin {
         return mode == AppOpsManager.MODE_ALLOWED;
     }
 
+    private SharedPreferences getPreferences() {
+        return getContext().getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+    }
+
     private boolean hasNotificationsEnabled(Context context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return true;
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         return manager != null && manager.areNotificationsEnabled();
+    }
+
+    private void openApplicationSettings(PluginCall call, Exception originalError) {
+        try {
+            Intent fallback = new Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:" + getContext().getPackageName())
+            );
+            fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(fallback);
+            call.resolve();
+        } catch (ActivityNotFoundException fallbackError) {
+            call.reject("Android settings screen is unavailable", originalError);
+        }
     }
 }
