@@ -95,4 +95,6 @@ This branch is the active ScrollShield release foundation.
 - completion of all release approval flags, approver identity, and approval time
 - Reels-only beta and iOS native implementation
 
+The lifecycle implementation block is frozen at source and documentation level pending real execution. Do not mark it verified until the full project checks and physical-device evidence pass for the exact candidate build.
+
 `config/release-approval.json` intentionally keeps `migrationValidationPassed` and the other evidence flags incomplete. Release APK and AAB commands must continue to fail until the blockers above have evidence for the exact candidate version and build.
