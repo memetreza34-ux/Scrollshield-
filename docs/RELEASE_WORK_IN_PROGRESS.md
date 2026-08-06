@@ -74,7 +74,8 @@ This branch is the active ScrollShield release foundation.
 ## Blocking release work
 
 - successful execution of JavaScript verification, Android JUnit tests, and debug compilation in a working runner or local Android environment
-- actual execution of the new lifecycle, migration, export, and storage-failure regression tests
+- actual execution of `check:lifecycle`, `ProtectionStopReasonPolicyTest`, native bridge tests, App migration tests, and Debug diagnostic tests
+- actual execution of the migration, export, and storage-failure regression tests
 - actual Android compilation of `ProtectionStopReasonPolicy`, updated native plugins, BootReceiver, and diagnostics bridge
 - physical validation that lifecycle timestamps and codes survive app reopening, reboot, app update, and manufacturer process management
 - physical Android upgrade validation using representative V0.7 WebView/local-storage data
