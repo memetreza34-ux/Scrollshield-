@@ -16,6 +16,9 @@ This branch is the active ScrollShield release foundation.
 - added safe shutdown after permission revocation
 - added native session duration, daily limits, blocked-hour ranges, Anti-Binge thresholds, and emergency counters
 - added native history, decision, and measured-usage import into local React statistics
+- added scoped package visibility and native installed-app validation
+- added availability-aware app selection that disables unavailable Android apps
+- added a component test for unavailable-app activation prevention
 - documented competitor-led product priorities and platform limits
 
 ## Blocking release work
@@ -23,7 +26,7 @@ This branch is the active ScrollShield release foundation.
 - successful JavaScript verification and Android compilation in a working build environment
 - real-device reliability and battery testing across major Android manufacturers
 - complete recurring weekly schedules instead of one blocked-hour range
-- installed-package discovery and validation for every supported app
+- cloned-app, work-profile, manufacturer, and regional package validation
 - process-recovery, reboot, app-update, battery-saver, and permission-loss test matrix
 - automated Android tests for the native rule engine and overlay lifecycle
 - legal placeholder replacement and final Play Console declarations
