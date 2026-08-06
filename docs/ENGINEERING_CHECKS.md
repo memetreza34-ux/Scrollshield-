@@ -1,95 +1,77 @@
 # Engineering Checks
 
-Use these commands before merging or shipping changes.
-
-## Daily Development
-
-```bash
-npm run dev
-```
-
-## Full Local Gate
+ScrollShield uses one primary verification command:
 
 ```bash
 npm run verify
 ```
 
-This runs:
+## JavaScript and Web Checks
 
-- TypeScript and ESLint
-- Node/npm runtime version check
-- Prettier format check
-- Package, build, and optional native version/App-ID consistency
-- Android project configuration guard for SDK levels, release hardening, signing opt-in, and permissions
-- Runtime dependency registry consistency
-- Third-party notice/license consistency
-- Tracked-file secret and local Android signing/config checks
-- Store listing packet and screenshot asset checks
-- Non-strict release-readiness report for manual store blockers
-- Unit and component tests
-- Structural accessibility checks with `axe-core`
-- Source guards for 44px touch targets and context-labeled switches
-- Production build
-- PWA manifest, complete offline precache, and navigation-fallback checks
-- Public privacy-policy page check
-- Runtime dependency, source network API, and production tracker checks
-- Bundle budget checks
+The verification chain covers:
 
-The production build also runs `npm run generate:sw` internally so `dist/sw.js` is created deterministically after Vite
-finishes.
+- supported Node and npm runtime
+- TypeScript compilation
+- ESLint
+- Prettier formatting
+- package/app/store version consistency
+- SDK registry and third-party notices
+- committed-secret detection
+- store copy, privacy declarations, and screenshot metadata
+- release-readiness warnings
+- Vitest component and logic tests
+- accessibility source safeguards
+- production Vite build
+- PWA/service-worker output
+- production privacy/network scan
+- bundle-size budget
 
-Secondary text is centrally raised to Zinc 400 in `src/index.css`. This keeps small labels above a 6.9:1 contrast
-ratio on the app's Zinc 900 and Zinc 950 surfaces; do not weaken that override without a rendered contrast audit.
+## Android Source Checks
 
-Interactive controls also receive a global 44px minimum size. `npm run check:a11y` protects that rule and rejects
-`Switch` components without a contextual `ariaLabel`.
+`npm run check:android` guards:
 
-## Coverage
+- minimum, target, and compile SDK requirements
+- package id and namespace
+- release minification, resource shrinking, and signing configuration
+- backup and cleartext-traffic restrictions
+- approved Android permissions only
+- foreground-service type and boot receiver registration
+- scoped package visibility instead of broad installed-app access
+- native plugin and diagnostics registration
+- explicit user activation and safe stop behavior
+- installed-package validation
+- recurring schedules, daily limits, Anti-Binge, and emergency counters
+- permission-loss shutdown and boot-recovery prerequisites
+- Java rule-policy tests and Android compile commands
+- debug APK and unit-test report artifacts
 
-```bash
-npm run test:coverage
-```
+## Protection Transparency Check
 
-Coverage is intentionally focused on `src/lib/**`, where the app's protection, storage, stats, and normalization logic
-live. UI smoke tests still run through `npm run test`.
+`npm run check:transparency` verifies that:
 
-## Bundle Analysis
+- Android protection cannot start while notifications are disabled
+- reboot recovery does not restart an invisible service
+- the ongoing foreground-service notification retains its direct `Schutz stoppen` action
+- the permission screen marks notifications as required on Android
+- the React start action blocks before native startup when the permission is absent
+- a component test protects this behavior
 
-```bash
-npm run analyze
-```
+## Android CI Stage
 
-This creates `dist/bundle-report.html`. The report is ignored by git and excluded from the PWA precache.
-
-## Release Readiness
-
-```bash
-npm run check:release
-npm run check:release:strict
-```
-
-The normal command reports legal/contact/store-readiness blockers without failing local development. The strict command
-is meant for a real store submission and fails until the placeholders are replaced with verified production data.
-It also flags risky public-facing claims such as "unavoidable blocker" wording and release UI references to the Android
-Accessibility API. When an Android project exists, it also protects the manifest against enabling Accessibility
-services, sensitive Android permissions, app data backups, cleartext HTTP traffic, or unminified release builds.
-
-`npm run verify` includes the non-strict release check so CI logs the remaining manual launch blockers without blocking
-ordinary development.
-
-## Readiness Snapshot
+After the web verification passes, the GitHub workflow runs:
 
 ```bash
-npm run readiness
+cd android
+./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace
 ```
 
-This prints a compact release-readiness snapshot. Required technical checks fail the command; known manual items such as
-legal details, support mailbox verification, and local Android SDK/JDK setup are reported as attention items.
+A successful run uploads:
 
-## PWA Icons
+- the debug APK
+- the local Android unit-test HTML report
 
-```bash
-npm run generate:icons
-```
+All external GitHub Actions are pinned to immutable 40-character commit SHAs. Dependabot remains configured to propose controlled updates for GitHub Actions, npm, Capacitor, React, and Gradle.
 
-Generates the PNG launcher icons from `public/pwa-icon.svg`.
+## Current Execution Limitation
+
+The workflow is configured but the repository account currently prevents GitHub-hosted runners from starting because of a billing or spending-limit restriction. Until a runner or local Android environment executes the commands above, compilation and test success remain unverified.
