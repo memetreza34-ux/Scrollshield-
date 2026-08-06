@@ -1,8 +1,22 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Terminal, Shield, Activity, AlertTriangle, Database, Play, RefreshCw, XCircle } from 'lucide-react';
+import {
+  Activity,
+  AlertTriangle,
+  Clipboard,
+  Copy,
+  Database,
+  Play,
+  RefreshCw,
+  Shield,
+  Terminal,
+  XCircle,
+} from 'lucide-react';
 import { AppState, Screen, HistoryEvent } from '../types';
 import { Header } from '../components/ui';
 import { createEventId, getLocalDateKey } from '../lib/appUtils';
+import { NativeDiagnostics } from '../lib/nativeDiagnostics';
+import type { NativeDiagnosticsSnapshot } from '../lib/nativeDiagnostics';
 
 export function DebugScreen({
   state,
@@ -13,6 +27,11 @@ export function DebugScreen({
   updateState: (u: Partial<AppState>) => void;
   navigate: (s: Screen) => void;
 }) {
+  const [nativeSnapshot, setNativeSnapshot] = useState<NativeDiagnosticsSnapshot | null>(null);
+  const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
+  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+
   const logEvent = (type: HistoryEvent['type'], desc: string, appId?: string) => {
     const newEvent: HistoryEvent = {
       id: createEventId(),
@@ -22,6 +41,38 @@ export function DebugScreen({
       desc,
     };
     updateState({ history: [newEvent, ...state.history] });
+  };
+
+  const refreshNativeDiagnostics = async () => {
+    if (!NativeDiagnostics.isAvailable()) return;
+    setDiagnosticsBusy(true);
+    setDiagnosticsError(null);
+    try {
+      setNativeSnapshot(await NativeDiagnostics.getSnapshot());
+    } catch (error) {
+      console.error('Could not read Android diagnostics', error);
+      setDiagnosticsError('Android-Diagnose konnte nicht gelesen werden.');
+    } finally {
+      setDiagnosticsBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshNativeDiagnostics();
+    // Snapshot is refreshed manually after permission or service changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const copyDiagnostics = async () => {
+    if (!nativeSnapshot) return;
+    setCopyStatus(null);
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(nativeSnapshot, null, 2));
+      setCopyStatus('Diagnose wurde kopiert.');
+    } catch (error) {
+      console.error('Could not copy diagnostics', error);
+      setCopyStatus('Diagnose konnte nicht kopiert werden.');
+    }
   };
 
   const simulateDayChange = () => {
@@ -47,6 +98,35 @@ export function DebugScreen({
     logEvent('rule_change', 'Tageswechsel simuliert');
   };
 
+  const diagnosticRows: Array<[string, string, boolean?]> = nativeSnapshot
+    ? [
+        ['Gerät', `${nativeSnapshot.manufacturer} ${nativeSnapshot.model}`],
+        ['Android', `${nativeSnapshot.androidRelease} / SDK ${nativeSnapshot.sdkInt}`],
+        ['Paket', nativeSnapshot.packageName],
+        ['Zeitzone', nativeSnapshot.timeZone],
+        ['Sprache', nativeSnapshot.locale],
+        ['Nutzungszugriff', nativeSnapshot.usageAccess ? 'AKTIV' : 'FEHLT', nativeSnapshot.usageAccess],
+        ['Overlay', nativeSnapshot.overlay ? 'AKTIV' : 'FEHLT', nativeSnapshot.overlay],
+        ['Benachrichtigungen', nativeSnapshot.notifications ? 'AKTIV' : 'FEHLT', nativeSnapshot.notifications],
+        [
+          'Akku-Ausnahme',
+          nativeSnapshot.batteryOptimizationExempt ? 'AKTIV' : 'NICHT AKTIV',
+          nativeSnapshot.batteryOptimizationExempt,
+        ],
+        [
+          'Schutz aktiviert',
+          nativeSnapshot.protectionEnabled ? 'JA' : 'NEIN',
+          nativeSnapshot.protectionEnabled,
+        ],
+        ['Dienst läuft', nativeSnapshot.serviceRunning ? 'JA' : 'NEIN', nativeSnapshot.serviceRunning],
+        [
+          'Installierte Ziel-App',
+          nativeSnapshot.configuredInstalledApps ? 'GEFUNDEN' : 'KEINE',
+          nativeSnapshot.configuredInstalledApps,
+        ],
+      ]
+    : [];
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -57,24 +137,73 @@ export function DebugScreen({
       <Header title="Developer / Debug" onBack={() => navigate('settings')} />
 
       <div className="space-y-6 flex-1 overflow-y-auto scrollbar-hide">
-        {/* 1. System Health & Platform */}
         <section>
-          <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2 flex items-center gap-2">
+          <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2 flex items-center gap-2">
             <Terminal size={14} /> Plattformdiagnose
-          </h3>
+          </h2>
           <div className="bg-zinc-900 border border-zinc-800 rounded-[1.5rem] p-4 space-y-3 font-mono text-xs">
-            <div className="flex justify-between">
-              <span className="text-zinc-500">OS:</span>
+            <div className="flex justify-between gap-4">
+              <span className="text-zinc-500">UI-Plattform:</span>
               <span className="text-emerald-400">{state.operatingSystem.toUpperCase()}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-zinc-500">Native Diagnose:</span>
+              <span className={NativeDiagnostics.isAvailable() ? 'text-emerald-400' : 'text-zinc-500'}>
+                {NativeDiagnostics.isAvailable() ? 'VERFÜGBAR' : 'NICHT VERFÜGBAR'}
+              </span>
             </div>
           </div>
         </section>
 
-        {/* 2. Active Logic */}
+        {NativeDiagnostics.isAvailable() && (
+          <section>
+            <div className="flex items-center justify-between gap-3 mb-3 px-2">
+              <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                <Clipboard size={14} /> Android-Gerätebericht
+              </h2>
+              <button
+                type="button"
+                onClick={() => void refreshNativeDiagnostics()}
+                disabled={diagnosticsBusy}
+                aria-label="Android-Diagnose aktualisieren"
+                className="min-h-[40px] min-w-[40px] rounded-full border border-zinc-800 bg-zinc-900 text-zinc-400 flex items-center justify-center disabled:opacity-50"
+              >
+                <RefreshCw size={15} className={diagnosticsBusy ? 'animate-spin' : ''} />
+              </button>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-800 rounded-[1.5rem] p-4 space-y-3 font-mono text-xs">
+              {diagnosticsError && <p className="text-red-400">{diagnosticsError}</p>}
+              {!nativeSnapshot && !diagnosticsError && (
+                <p className="text-zinc-500">{diagnosticsBusy ? 'Diagnose wird gelesen…' : 'Noch kein Snapshot.'}</p>
+              )}
+              {diagnosticRows.map(([label, value, positive]) => (
+                <div key={label} className="flex justify-between gap-4 border-b border-zinc-800/50 pb-2 last:border-0 last:pb-0">
+                  <span className="text-zinc-500">{label}:</span>
+                  <span className={positive === undefined ? 'text-zinc-300 text-right' : positive ? 'text-emerald-400' : 'text-amber-400'}>
+                    {value}
+                  </span>
+                </div>
+              ))}
+
+              {nativeSnapshot && (
+                <button
+                  type="button"
+                  onClick={() => void copyDiagnostics()}
+                  className="w-full mt-2 rounded-xl border border-zinc-700 bg-zinc-800 py-3 text-zinc-200 font-bold flex items-center justify-center gap-2"
+                >
+                  <Copy size={14} /> Diagnose als JSON kopieren
+                </button>
+              )}
+              {copyStatus && <p role="status" className="text-center text-zinc-400">{copyStatus}</p>}
+            </div>
+          </section>
+        )}
+
         <section>
-          <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2 flex items-center gap-2">
+          <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2 flex items-center gap-2">
             <Shield size={14} /> Aktive Schutzlogik
-          </h3>
+          </h2>
           <div className="bg-zinc-900 border border-zinc-800 rounded-[1.5rem] p-4 space-y-3 font-mono text-xs">
             <div className="flex justify-between">
               <span className="text-zinc-500">Global Level:</span>
@@ -93,11 +222,10 @@ export function DebugScreen({
           </div>
         </section>
 
-        {/* 3. Test Functions */}
         <section>
-          <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2 flex items-center gap-2">
+          <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2 flex items-center gap-2">
             <Activity size={14} /> Testfunktionen
-          </h3>
+          </h2>
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => {
@@ -138,11 +266,10 @@ export function DebugScreen({
           </div>
         </section>
 
-        {/* 4. Event Log */}
         <section>
-          <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2 flex items-center gap-2">
+          <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2 flex items-center gap-2">
             <Database size={14} /> Event Log (Letzte 10)
-          </h3>
+          </h2>
           <div className="bg-zinc-900 border border-zinc-800 rounded-[1.5rem] p-4 space-y-3 font-mono text-[10px] overflow-hidden">
             {state.history.slice(0, 10).map((event) => (
               <div key={event.id} className="border-b border-zinc-800/50 pb-2 last:border-0 last:pb-0">
