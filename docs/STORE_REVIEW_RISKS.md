@@ -1,120 +1,87 @@
 # ScrollShield - Store Review Risiken & Gegenmaßnahmen
 
-Diese Analyse identifiziert potenzielle Ablehnungsrisiken bei Apple App Store und Google Play. Sie ersetzt keine
-rechtliche Beratung und muss vor jeder Einreichung mit dem tatsächlichen signierten Binary und den dann geltenden
-Store-Regeln abgeglichen werden.
+Diese Analyse identifiziert potenzielle Ablehnungsrisiken bei den App-Store-Reviews von Apple (App Store) und Google (Play Store) und definiert konkrete Gegenmaßnahmen, die in die Architektur und das UI-Design von ScrollShield eingeflossen sind.
 
-## 1. Besondere Android-Zugriffe
+## 1. Übergriffige Berechtigungen (Overreaching Permissions)
 
-- **Risiko:** `PACKAGE_USAGE_STATS` und `SYSTEM_ALERT_WINDOW` ermöglichen einen weitreichenden Eingriff in die
-  Gerätenutzung. Unklare oder übertriebene Verwendung kann zur Ablehnung führen.
-- **Gegenmaßnahmen:**
-  - Der Berechtigungsbildschirm erklärt Zweck, Umfang, lokale Verarbeitung und Funktion ohne Zugriff.
-  - Die Berechtigungen werden nicht durch einen simulierten In-App-Schalter als erteilt dargestellt.
-  - Der Nutzer gelangt in die echten Android-Systemeinstellungen und der Status wird anschließend erneut geprüft.
-  - Wird ein Zugriff später entzogen, beendet ScrollShield den Schutzdienst sicher.
-  - Jede Reviewer-Erklärung und jedes Video muss exakt den eingereichten Build zeigen.
+- **Risiko:** Google lehnt Apps ab, die `SYSTEM_ALERT_WINDOW` (Overlay) oder `PACKAGE_USAGE_STATS` ohne triftigen Grund anfordern. Apple ist extrem restriktiv bei der Freigabe des `Family Controls`-Entitlements.
+- **Gegenmaßnahme:**
+  - Der `PermissionsScreen` erklärt genau, warum jede Berechtigung benötigt wird und was passiert, wenn sie fehlt.
+  - Ohne die erforderlichen Android-Zugriffe startet der automatische Schutzdienst nicht; die übrige App bleibt für Konfiguration, Verlauf und Fokus-Timer nutzbar.
+  - Für iOS muss vor einer Einreichung ein offizieller Family-Controls-Antrag genehmigt und die native Screen-Time-Integration vollständig umgesetzt sein.
 
-## 2. Foreground Service `specialUse`
+## 2. Unklare Datenverarbeitung
 
-- **Risiko:** Google Play prüft `specialUse` einzeln. Eine unklare Begründung, ein unsichtbarer Dienst oder fehlende
-  Nutzerkontrolle können zur Ablehnung führen.
-- **Gegenmaßnahmen:**
-  - Der Dienst startet erst nach einer ausdrücklichen Nutzeraktion.
-  - Eine dauerhafte Benachrichtigung zeigt den aktiven Schutz an.
-  - Die Benachrichtigung und die App enthalten eine direkte Stop-Aktion.
-  - Manifest und Play Console erklären denselben konkreten Anwendungsfall.
-  - Das Submission-Paket beschreibt Auswirkung einer Verzögerung und Unterbrechung und enthält eine Video-Shotlist.
+- **Risiko:** Ablehnung wegen fehlender oder unklarer Privacy Policy, besonders wenn Nutzungsdaten verarbeitet werden.
+- **Gegenmaßnahme:**
+  - Lokale Speicherung als Standard (`localOnly: true`).
+  - Keine Übertragung von App-Nutzungsdaten an Entwickler-Server.
+  - Klare Deklaration im Privacy Screen und in den Store-Metadaten.
 
-## 3. Paketsichtbarkeit
+## 3. Irreführende Funktionsversprechen
 
-- **Risiko:** Das Inventar installierter Apps gilt als sensible Information. Eine umfassende Abfrage über
-  `QUERY_ALL_PACKAGES` wäre für den aktuellen Funktionsumfang unnötig und schwerer zu rechtfertigen.
-- **Gegenmaßnahmen:**
-  - ScrollShield fordert kein `QUERY_ALL_PACKAGES` an.
-  - Das Manifest nutzt eine endliche Liste gezielter `<queries>` für unterstützte Apps.
-  - Der Status wird nur verwendet, um funktionsfähige Schutzschalter anzuzeigen.
-  - App-Inventardaten werden weder übertragen noch für Werbung oder Analyse monetarisiert.
+- **Risiko:** Die App verspricht universelle oder perfekte Blockierung, die auf unterschiedlichen Plattformen und Herstellergeräten nicht nachgewiesen wurde.
+- **Gegenmaßnahme:**
+  - Version 1 wird als Android-Whole-App-Schutz für ausgewählte installierte Apps beschrieben.
+  - Reels-/Shorts-Erkennung wird nicht als verfügbare oder garantierte Version-1-Systemfunktion beworben.
+  - ScrollShield wird als Werkzeug zur Selbstkontrolle und nicht als medizinisches Produkt beschrieben.
 
-## 4. Unklare Datenverarbeitung
+## 4. Eingriffe in andere Apps
 
-- **Risiko:** Nutzungszeitpunkte und App-IDs sind sensible Verhaltensdaten, auch wenn sie nur lokal verarbeitet werden.
-- **Gegenmaßnahmen:**
-  - Lokale Speicherung als Standard.
-  - Kein Account, Tracking, Werbe-SDK oder Entwickler-Backend in Version 1.0.
-  - Datenexport, lokaler Reset und Löschung durch Deinstallation.
-  - Store-Angaben erst nach Prüfung des finalen AAB und aller eingebundenen Abhängigkeiten bestätigen.
+- **Risiko:** Google Play verbietet Apps, die andere Apps unzulässig verändern, fernsteuern oder täuschend überlagern.
+- **Gegenmaßnahme:**
+  - Das Overlay ist ein klar gebrandeter ScrollShield-Schutzbildschirm mit Rückkehr- und begrenzter Notfalloption.
+  - ScrollShield liest, verändert oder klickt keine Inhalte der darunterliegenden App.
+  - Es wird kein Accessibility Service verwendet.
 
-## 5. Irreführende Funktionsversprechen
+## 5. Unsichtbarer Foreground Service
 
-- **Risiko:** Die App verspricht universelle oder selektive Reels-/Shorts-Blockierung, obwohl Version 1.0 auf Android
-  zuverlässig nur ganze erkannte Apps unterbricht und iOS eine eigene native Integration benötigt.
-- **Gegenmaßnahmen:**
-  - Version 1 wird als Whole-App-Schutz beschrieben.
-  - Reels-only wird nicht als garantierte Version-1-Funktion beworben.
-  - Keine Aussagen über Dopamin, Gehirntraining, medizinische Wirkung oder garantierte Verhaltensänderung.
+- **Risiko:** Auf Android 13+ kann ein Foreground Service trotz verweigerter Benachrichtigungsfreigabe laufen, während seine Meldung nicht im normalen Benachrichtigungsbereich erscheint. Dadurch wäre die direkte Stop-Aktion weniger sichtbar.
+- **Gegenmaßnahme:**
+  - Benachrichtigungen sind für den Android-Schutzdienst eine Startvoraussetzung.
+  - Der Dienst wird nach Neustart nur wiederhergestellt, wenn Benachrichtigungen weiterhin aktiviert sind.
+  - Die Berechtigungsoberfläche markiert den Zugriff auf Android als erforderlich und erklärt die sichtbare Stop-Aktion.
+  - Ein eigener Quell- und Komponententest schützt diesen Ablauf.
 
-## 6. Eingriffe in andere Apps
+## 6. Breiter Zugriff auf installierte Apps
 
-- **Risiko:** Ein Overlay könnte als täuschend, manipulierend oder als unzulässige Veränderung einer fremden App bewertet
-  werden.
-- **Gegenmaßnahmen:**
-  - Der Schutzbildschirm ist klar als ScrollShield gekennzeichnet.
-  - Er liest, verändert oder klickt keine Inhalte der darunterliegenden App.
-  - Er bietet eine Rückkehr zum Startbildschirm und eine begrenzte bewusste beziehungsweise Notfallfreigabe.
-  - Der Nutzer kann den gesamten Dienst jederzeit stoppen.
+- **Risiko:** `QUERY_ALL_PACKAGES` oder eine unnötige App-Inventarisierung kann zur Ablehnung führen.
+- **Gegenmaßnahme:**
+  - Kein `QUERY_ALL_PACKAGES`.
+  - Nur gezielte `<queries>` für ausdrücklich unterstützte Apps.
+  - Installationsstatus wird ausschließlich lokal genutzt, um nicht funktionsfähige Schutzkonfigurationen zu verhindern.
 
-## 7. Accessibility Service
+## 7. Unfertige Screens
 
-- **Risiko:** Ein zukünftiger Reels-only-Modus könnte einen Accessibility Service benötigen. Nicht-barrierefreie
-  Verwendungen unterliegen zusätzlichen Offenlegungs-, Einwilligungs- und Play-Console-Anforderungen und sind besonders
-  prüfungsanfällig.
-- **Gegenmaßnahmen:**
-  - Version 1 verwendet keinen Accessibility Service.
-  - Eine spätere Beta benötigt eine getrennte deutliche Offenlegung und Zustimmung.
-  - Keine Erfassung von Nachrichten, Passwörtern, Tastatureingaben, Medien oder nicht benötigten Bildschirminhalten.
-  - Deterministische Nutzerregeln, Reviewer-Video und technische Abschaltmöglichkeit bei inkompatiblen App-Versionen.
+- **Risiko:** Platzhalter-Texte, leere Screens oder „Coming Soon“-Buttons führen zur Ablehnung.
+- **Gegenmaßnahme:**
+  - Unfertige Premium- oder Reels-only-Funktionen werden nicht als fertige Store-Funktion dargestellt.
+  - Der Release-Checker sucht nach unfertigen UI-Begriffen und rechtlichen Platzhaltern.
 
-## 8. Unfertige oder simulierte Funktionen
+## 8. Unstimmige Datenschutzangaben
 
-- **Risiko:** Debug-Flows, Demo-Statistiken, tote Buttons oder sichtbare „Coming Soon“-Bereiche können zur Ablehnung führen.
-- **Gegenmaßnahmen:**
-  - Produktions-Build blendet den Debug-Screen aus.
-  - Unfertige Cloud-, Partner-, Familien-, Abo- und KI-Funktionen bleiben über Feature Flags deaktiviert.
-  - Release-Screens dürfen nur echte Systemzustände und messbare lokale Werte anzeigen.
+- **Risiko:** Die Store-Angaben stimmen nicht mit dem tatsächlichen Binary oder seinen SDKs überein.
+- **Gegenmaßnahme:**
+  - Strikte SDK-Registry und Drittanbieterhinweise.
+  - Data-Safety-Antworten werden vor Einreichung gegen das signierte AAB und den Dependency-Report geprüft.
+  - Keine Analytics-, Werbe- oder Tracking-SDKs in Version 1.
 
-## 9. Unstabile Hintergrundfunktion
+## 9. Aggressive oder manipulative UX
 
-- **Risiko:** Hersteller-Energiesparsysteme, Prozessabbruch, Neustart oder Berechtigungsentzug können den Schutz unbemerkt
-  stoppen.
-- **Gegenmaßnahmen:**
-  - Wiederherstellung nach Neustart oder App-Update nur nach vorheriger Aktivierung durch den Nutzer.
-  - Sichtbare Foreground-Service-Benachrichtigung.
-  - Sicherer Stopp bei fehlenden Berechtigungen und lokaler Warnhinweis.
-  - Pflicht-Testmatrix für Pixel, Samsung, Xiaomi, OnePlus, Motorola und Tablet.
-  - Batterie- und Langzeittest vor Produktionsfreigabe.
+- **Risiko:** Versteckte Abos, schwer auffindbare Kündigungsmöglichkeiten oder Druck bei Berechtigungsablehnung.
+- **Gegenmaßnahme:**
+  - Neutrale Sprache im Permissions-Screen.
+  - Keine Berechtigung wird automatisch erteilt.
+  - Der Schutz kann über App und Dauerbenachrichtigung gestoppt werden.
+  - Kernfunktionen für Datenschutz, Export und Notfallzugang werden nicht künstlich versteckt.
 
-## 10. Aggressive oder manipulative UX
+## 10. Unstabile erste Version
 
-- **Risiko:** Schuldzuweisungen, versteckte Abos oder schwer erreichbare Stop- und Löschfunktionen.
-- **Gegenmaßnahmen:**
-  - Neutrale Berechtigungssprache.
-  - Kein Paywall-Zwang für Datenschutz, Export, Löschung oder Notfallzugang.
-  - Deutlich sichtbare Stop-Aktion und vollständiger lokaler Reset.
-
-## 11. Rechtliche und Store-Platzhalter
-
-- **Risiko:** Fehlendes Impressum, nicht erreichbarer Support, nicht veröffentlichte Datenschutzseite oder inkonsistente
-  Store-Formulare.
-- **Gegenmaßnahmen:**
-  - PR bleibt Draft, bis Name beziehungsweise Unternehmen, ladungsfähige Anschrift, verantwortliche Person,
-    Support-Postfach und finale Datenschutz-Domain bestätigt sind.
-  - Alle Angaben werden gegen das finale signierte Binary geprüft.
-
-## 12. Build- und Testnachweis
-
-- **Risiko:** Statische Codeprüfung ersetzt weder Kompilierung noch Gerätetests.
-- **Gegenmaßnahmen:**
-  - JavaScript-Verify-Suite, Android-Debug-APK und Release-AAB müssen erfolgreich gebaut werden.
-  - GitHub Actions gilt erst als Nachweis, wenn der Runner tatsächlich Schritte ausgeführt hat.
-  - Der aktuelle Draft darf nicht allein aufgrund eines mergebaren Git-Status veröffentlicht werden.
+- **Risiko:** Abstürze, Herstellerunterschiede, aggressive Akkuoptimierung oder fehlerhafte Zeitgrenzen.
+- **Gegenmaßnahme:**
+  - Robuster lokaler Speicher mit Migration und Fallbacks.
+  - React Error Boundary.
+  - Pure Java Tests für Zeit- und Regelschwellen.
+  - Native Geräte- und Berechtigungsdiagnose mit kopierbarem JSON-Bericht.
+  - Vorgesehene Tests auf Samsung, Pixel, Xiaomi, OnePlus, Motorola und Tablet.
+  - Release bleibt gesperrt, bis JavaScript-Verifikation, Android-Kompilierung und reale Gerätetests nachweislich durchgeführt wurden.
