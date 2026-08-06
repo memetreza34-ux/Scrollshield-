@@ -53,13 +53,18 @@ describe('App legacy migration lifecycle', () => {
     nativeStopMock.mockResolvedValue(undefined);
   });
 
-  it('shows only recovery UI, stops native protection, and pauses save and sync while migration is unresolved', async () => {
+  it('shows only recovery UI, records the stop reason, and pauses save and sync while migration is unresolved', async () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: 'Alte Daten sind geschützt' })).toBeInTheDocument();
     expect(screen.queryByText('Dein digitaler Schutzschild')).not.toBeInTheDocument();
 
-    await waitFor(() => expect(nativeStopMock).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(nativeStopMock).toHaveBeenCalledWith({
+        code: 'migration_recovery',
+        message: 'Der Android-Schutz wurde wegen einer blockierten Datenmigration vorsorglich gestoppt',
+      }),
+    );
     await new Promise((resolve) => window.setTimeout(resolve, 300));
     expect(saveStateMock).not.toHaveBeenCalled();
     expect(nativeSyncMock).not.toHaveBeenCalled();
