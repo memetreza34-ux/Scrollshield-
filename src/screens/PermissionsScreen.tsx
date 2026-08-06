@@ -139,8 +139,10 @@ export function PermissionsScreen({
       }
 
       const nativeStatus = await NativePermissions.getAndroidStatus();
-      if (!nativeStatus?.usageAccess || !nativeStatus.overlay) {
-        setStatusMessage('Aktiviere zuerst App-Nutzungszugriff und den Hinweis über anderen Apps.');
+      if (!nativeStatus?.usageAccess || !nativeStatus.overlay || !nativeStatus.notifications) {
+        setStatusMessage(
+          'Aktiviere zuerst App-Nutzungszugriff, den Hinweis über anderen Apps und Benachrichtigungen.',
+        );
         return;
       }
 
@@ -155,7 +157,7 @@ export function PermissionsScreen({
       setStatusMessage(`Android-Schutz ist für ${activeApps} App${activeApps === 1 ? '' : 's'} aktiv.`);
     } catch (error) {
       console.error('Could not change Android protection service', error);
-      setStatusMessage('Der Android-Schutzdienst konnte nicht geändert werden.');
+      setStatusMessage('Der Android-Schutzdienst konnte nicht geändert werden. Prüfe die erforderlichen Zugriffe.');
     } finally {
       setServiceBusy(false);
     }
@@ -195,10 +197,23 @@ export function PermissionsScreen({
       icon: <Bell size={24} />,
       title: 'Benachrichtigungen',
       platform: 'both',
-      optional: true,
-      purpose: ['Fokus-Erinnerungen senden', 'Tageszusammenfassungen anzeigen', 'Vor dem Ende eines Zeitfensters warnen'],
+      optional: operatingSystem !== 'android',
+      purpose:
+        operatingSystem === 'android'
+          ? [
+              'Aktiven Schutzdienst sichtbar anzeigen',
+              'Direkte Stop-Aktion jederzeit bereitstellen',
+              'Fokus- und Limit-Erinnerungen senden',
+            ]
+          : ['Fokus-Erinnerungen senden', 'Tageszusammenfassungen anzeigen', 'Vor dem Ende eines Zeitfensters warnen'],
       limitations:
-        'Du erhältst keine Erinnerungen, Warnhinweise oder Zusammenfassungen. Die übrigen Schutzregeln bleiben erhalten.',
+        operatingSystem === 'android'
+          ? 'Der Android-Schutzdienst startet nicht, weil seine sichtbare Stop-Aktion sonst im Benachrichtigungsbereich fehlen würde.'
+          : 'Du erhältst keine Erinnerungen, Warnhinweise oder Zusammenfassungen. Die übrigen Schutzregeln bleiben erhalten.',
+      details:
+        operatingSystem === 'android'
+          ? 'ScrollShield verlangt Benachrichtigungen für einen transparenten Schutzbetrieb. Der laufende Dienst bleibt dadurch sichtbar und kann direkt über die Dauerbenachrichtigung gestoppt werden.'
+          : undefined,
     },
     {
       key: 'backgroundActivity',
@@ -324,8 +339,8 @@ export function PermissionsScreen({
                     </span>
                   </div>
                   <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
-                    Läuft lokal als sichtbarer Hintergrunddienst. Über die Dauerbenachrichtigung kann der Schutz
-                    jederzeit gestoppt werden.
+                    Läuft lokal als sichtbarer Hintergrunddienst. Benachrichtigungen müssen aktiv bleiben; über die
+                    Dauerbenachrichtigung kann der Schutz jederzeit gestoppt werden.
                   </p>
                   <button
                     type="button"
