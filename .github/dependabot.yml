@@ -1,0 +1,30 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      vite-tooling:
+        patterns:
+          - vite
+          - '@vitejs/*'
+          - vite-plugin-pwa
+      test-tooling:
+        patterns:
+          - vitest
+          - '@vitest/*'
+          - '@testing-library/*'
+      lint-format:
+        patterns:
+          - eslint
+          - '@eslint/*'
+          - typescript-eslint
+          - prettier
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

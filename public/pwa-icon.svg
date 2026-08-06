@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">ScrollShield App Icon</title>
+  <desc id="desc">A shield with a calm focus mark.</desc>
+  <rect width="512" height="512" rx="112" fill="#09090b" />
+  <path
+    d="M256 76 386 126v114c0 91-53 159-130 196-77-37-130-105-130-196V126L256 76Z"
+    fill="#10b981"
+  />
+  <path
+    d="M256 116 350 152v88c0 66-35 116-94 149-59-33-94-83-94-149v-88l94-36Z"
+    fill="#052e24"
+  />
+  <path
+    d="M208 260c31 22 65 22 96 0"
+    fill="none"
+    stroke="#d1fae5"
+    stroke-width="28"
+    stroke-linecap="round"
+  />
+  <circle cx="208" cy="210" r="18" fill="#d1fae5" />
+  <circle cx="304" cy="210" r="18" fill="#d1fae5" />
+</svg>
