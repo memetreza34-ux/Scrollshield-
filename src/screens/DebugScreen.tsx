@@ -18,6 +18,9 @@ import { createEventId, getLocalDateKey } from '../lib/appUtils';
 import { NativeDiagnostics } from '../lib/nativeDiagnostics';
 import type { NativeDiagnosticsSnapshot } from '../lib/nativeDiagnostics';
 
+const formatLifecycleTime = (timestamp: number) =>
+  timestamp > 0 ? new Date(timestamp).toLocaleString() : 'NOCH NIE';
+
 export function DebugScreen({
   state,
   updateState,
@@ -145,6 +148,10 @@ export function DebugScreen({
           nativeSnapshot.configuredInstalledApps ? 'GEFUNDEN' : 'KEINE',
           nativeSnapshot.configuredInstalledApps,
         ],
+        ['Letzter Schutzstart', formatLifecycleTime(nativeSnapshot.lastProtectionStartAt)],
+        ['Letzter Stoppzeitpunkt', formatLifecycleTime(nativeSnapshot.lastProtectionStopAt)],
+        ['Letzter Stoppcode', nativeSnapshot.lastProtectionStopCode || 'KEINER'],
+        ['Letzter Stoppgrund', nativeSnapshot.lastProtectionStopMessage || 'NOCH KEIN STOPPGRUND'],
       ]
     : [];
 
