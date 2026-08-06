@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ScrollShieldProtectionService extends Service {
     private static final String CHANNEL_ID = "scrollshield_protection";
+    private static final String ACTION_STOP = "app.scrollshield.mobile.action.STOP_PROTECTION";
     private static final int NOTIFICATION_ID = 2207;
     private static final long POLL_INTERVAL_MS = 900L;
     private static final AtomicBoolean RUNNING = new AtomicBoolean(false);
@@ -83,6 +84,10 @@ public class ScrollShieldProtectionService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && ACTION_STOP.equals(intent.getAction())) {
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         return START_STICKY;
     }
 
@@ -128,7 +133,9 @@ public class ScrollShieldProtectionService extends Service {
             return;
         }
 
-        long allowedUntil = temporaryAccessUntil.getOrDefault(foregroundPackage, 0L);
+        long allowedUntil = temporaryAccessUntil.containsKey(foregroundPackage)
+            ? temporaryAccessUntil.get(foregroundPackage)
+            : 0L;
         if (allowedUntil > System.currentTimeMillis()) {
             hideOverlay();
             return;
@@ -202,7 +209,7 @@ public class ScrollShieldProtectionService extends Service {
                 if (packages == null) continue;
                 for (int packageIndex = 0; packageIndex < packages.length(); packageIndex++) {
                     String packageName = packages.optString(packageIndex, "");
-                    if (!packageName.isBlank()) rulesByPackage.put(packageName, rule);
+                    if (!packageName.trim().isEmpty()) rulesByPackage.put(packageName, rule);
                 }
             }
         } catch (JSONException error) {
@@ -353,19 +360,32 @@ public class ScrollShieldProtectionService extends Service {
 
     private Notification createNotification() {
         Intent launchIntent = new Intent(this, MainActivity.class);
-        PendingIntent pendingIntent = PendingIntent.getActivity(
+        PendingIntent launchPendingIntent = PendingIntent.getActivity(
             this,
             0,
             launchIntent,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
-        return new Notification.Builder(this, CHANNEL_ID)
+        Intent stopIntent = new Intent(this, ScrollShieldProtectionService.class).setAction(ACTION_STOP);
+        PendingIntent stopPendingIntent = PendingIntent.getService(
+            this,
+            1,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            ? new Notification.Builder(this, CHANNEL_ID)
+            : new Notification.Builder(this);
+
+        return builder
             .setContentTitle("ScrollShield ist aktiv")
             .setContentText("Deine ausgewählten Apps werden lokal überwacht.")
             .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
-            .setContentIntent(pendingIntent)
+            .setContentIntent(launchPendingIntent)
             .setOngoing(true)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Schutz stoppen", stopPendingIntent)
             .build();
     }
 
