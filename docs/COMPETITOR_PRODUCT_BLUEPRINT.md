@@ -105,6 +105,24 @@ The product must stay honest about platform limits. Whole-app blocking is the st
 - Platform capability explanation
 - Subscription and restore purchases later
 
+## Current Android Implementation
+
+The release branch now contains the first native implementation of several competitor-derived patterns:
+
+- explicit user-controlled foreground protection service
+- real Usage Access and overlay status
+- opening countdown and return-to-home action
+- limited temporary sessions followed by re-intervention
+- strict focus and per-app blocking
+- per-app daily usage limits
+- overnight-capable blocked-hour ranges
+- deterministic Anti-Binge warning and blocking thresholds
+- daily emergency-unlock limits
+- reboot and app-update recovery only after prior user activation
+- measured native usage imported into date-correct local statistics
+
+These features remain pre-release until compilation and real-device testing are complete.
+
 ## Release Priority
 
 ### P0 — Store-capable foundation
@@ -117,21 +135,25 @@ The product must stay honest about platform limits. Whole-app blocking is the st
 
 ### P1 — Real Android whole-app protection
 
-- Foreground app detection through Usage Access
-- Background monitoring service
-- Protection interruption activity/overlay
-- Native-to-TypeScript event bridge
-- Reboot and battery reliability
-- Device-vendor test matrix
+Implemented in the release branch; compilation, reliability, battery, and device-vendor validation remain open.
 
 ### P2 — Core competitor parity
 
-- Recurring schedules
-- App groups and templates
-- Immediate, delayed and always-ask interventions
-- Re-interventions
-- Strict active sessions
-- Real statistics and session notes
+Partially implemented:
+
+- native session and daily limits
+- simple blocked-hour range
+- deterministic Anti-Binge thresholds
+- strict focus behavior
+- real native event and usage statistics
+
+Still open:
+
+- complete recurring weekly schedules
+- app groups and reusable templates
+- multiple intervention challenges
+- strict active-session editing rules
+- session notes and schedule success analytics
 
 ### P3 — Differentiation
 
