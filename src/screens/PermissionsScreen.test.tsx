@@ -1,10 +1,54 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { expectNoA11yViolations } from '../test/a11y';
 import { DEFAULT_STATE } from '../types';
 import { PermissionsScreen } from './PermissionsScreen';
 
+const {
+  getAndroidStatusMock,
+  getProtectionStatusMock,
+  isAndroidNativeMock,
+  protectionAvailableMock,
+  startProtectionMock,
+} = vi.hoisted(() => ({
+  getAndroidStatusMock: vi.fn(),
+  getProtectionStatusMock: vi.fn(),
+  isAndroidNativeMock: vi.fn(),
+  protectionAvailableMock: vi.fn(),
+  startProtectionMock: vi.fn(),
+}));
+
+vi.mock('../lib/nativePermissions', () => ({
+  NativePermissions: {
+    isAndroidNative: () => isAndroidNativeMock(),
+    getAndroidStatus: () => getAndroidStatusMock(),
+    openAndroidSettings: vi.fn(),
+  },
+}));
+
+vi.mock('../lib/nativeProtection', () => ({
+  NativeProtection: {
+    isAvailable: () => protectionAvailableMock(),
+    getStatus: () => getProtectionStatusMock(),
+    start: (...args: unknown[]) => startProtectionMock(...args),
+    stop: vi.fn(),
+  },
+}));
+
 describe('PermissionsScreen', () => {
+  beforeEach(() => {
+    isAndroidNativeMock.mockReset();
+    protectionAvailableMock.mockReset();
+    getAndroidStatusMock.mockReset();
+    getProtectionStatusMock.mockReset();
+    startProtectionMock.mockReset();
+
+    isAndroidNativeMock.mockReturnValue(false);
+    protectionAvailableMock.mockReturnValue(false);
+    getAndroidStatusMock.mockResolvedValue(null);
+    getProtectionStatusMock.mockResolvedValue({ running: false });
+  });
+
   it('labels permission actions with their context for screen readers', async () => {
     const { container } = render(
       <PermissionsScreen state={DEFAULT_STATE} updateState={vi.fn()} navigate={vi.fn()} isOnboarding />,
@@ -43,5 +87,48 @@ describe('PermissionsScreen', () => {
     expect(updateState).toHaveBeenCalledWith({
       permissions: { ...DEFAULT_STATE.permissions, notifications: false },
     });
+  });
+
+  it('marks notifications as required and blocks Android protection without them', async () => {
+    isAndroidNativeMock.mockReturnValue(true);
+    protectionAvailableMock.mockReturnValue(true);
+    getAndroidStatusMock.mockResolvedValue({
+      usageAccess: true,
+      overlay: true,
+      notifications: false,
+      ignoreBatteryOptimization: false,
+      backgroundActivity: false,
+    });
+
+    const androidState = {
+      ...DEFAULT_STATE,
+      operatingSystem: 'android' as const,
+      permissions: {
+        ...DEFAULT_STATE.permissions,
+        usageAccess: true,
+        overlay: true,
+        notifications: false,
+      },
+      appsConfig: {
+        instagram: {
+          ...DEFAULT_STATE.profiles![0].appsConfig.instagram,
+          active: true,
+        },
+      },
+    };
+
+    render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    const notificationSection = screen.getByRole('heading', { name: 'Benachrichtigungen' }).closest('section');
+    expect(notificationSection).not.toBeNull();
+    expect(within(notificationSection!).getByText('FEHLT')).toBeInTheDocument();
+    expect(within(notificationSection!).queryByText('OPTIONAL')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Schutzdienst starten' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Aktiviere zuerst App-Nutzungszugriff/)).toBeInTheDocument();
+    });
+    expect(startProtectionMock).not.toHaveBeenCalled();
   });
 });
