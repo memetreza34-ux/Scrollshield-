@@ -12,6 +12,8 @@ This branch is the active ScrollShield release foundation.
 - added a full-screen local protection overlay with delay, strict blocking, return-to-home, and temporary access
 - synchronized selected app configurations and focus-mode state into the native Android layer
 - added persistent notification and direct stop action
+- required enabled notifications before initial service startup or boot recovery so protection cannot run without its normal visible stop control
+- updated the permission UI to mark notifications as required on Android and block startup before the native call
 - restored explicitly enabled protection after reboot and app update
 - added safe shutdown after permission revocation
 - added native session duration, daily limits, Anti-Binge thresholds, and emergency counters
@@ -21,11 +23,16 @@ This branch is the active ScrollShield release foundation.
 - added native history, decision, and measured-usage import into local React statistics
 - added scoped package visibility and native installed-app validation
 - added availability-aware app selection that disables unavailable Android apps
-- added component tests for unavailable-app activation prevention and weekly preset updates
+- added native device, permission, service, locale, and time-zone diagnostics with copyable JSON output
+- added component tests for unavailable-app activation prevention, weekly preset updates, diagnostics, and required notifications
 - added a pure Java protection-rule policy with JUnit boundary coverage
 - prepared CI to run Android unit tests and compile the debug APK
 - prepared successful CI runs to publish the debug APK and Android test report as downloadable workflow artifacts
-- expanded the static Android project checker to guard native service, schedule, package, boot-recovery, rule-test, and compile-workflow requirements
+- pinned every external GitHub Action to an immutable commit SHA
+- expanded weekly Dependabot coverage to npm, Capacitor, React, Gradle, and GitHub Actions
+- expanded static project checks to guard native service, transparency, diagnostics, schedule, package, boot-recovery, rule-test, workflow-pin, and artifact requirements
+- aligned release and store checkers with the honest version-one whole-app scope and non-medical positioning
+- aligned the store submission packet with exact Data Safety and `FOREGROUND_SERVICE_SPECIAL_USE` declarations
 - documented competitor-led product priorities and platform limits
 
 ## Blocking release work
@@ -35,7 +42,7 @@ This branch is the active ScrollShield release foundation.
 - time-zone, daylight-saving, midnight, and manual-clock tests for recurring schedules
 - optional custom per-day/per-app schedule editor if presets are insufficient
 - cloned-app, work-profile, manufacturer, and regional package validation
-- process-recovery, reboot, app-update, battery-saver, and permission-loss test matrix
+- process-recovery, reboot, app-update, battery-saver, notification-revocation, and permission-loss test matrix
 - Android service-lifecycle and overlay tests beyond the current pure rule-policy coverage
 - legal placeholder replacement and final Play Console declarations
 - Reels-only beta and iOS native implementation
