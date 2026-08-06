@@ -117,6 +117,12 @@ requirePattern(
 requirePattern(
   screenPath,
   screen,
+  /Android-Schutz wurde vorsorglich gestoppt[\s\S]*bewusst erneut starten/,
+  'Recovery screen must disclose native protection shutdown and deliberate restart after migration.',
+);
+requirePattern(
+  screenPath,
+  screen,
   /Migration erneut versuchen[\s\S]*Legacy-Rohdaten sichern/,
   'Recovery screen must offer retry and local raw-data backup actions.',
 );
@@ -137,6 +143,12 @@ requirePattern(
   screenTest,
   /blocks destructive guidance and explains that original data remains protected/,
   'Recovery screen tests must protect the non-destructive guidance.',
+);
+requirePattern(
+  screenTestPath,
+  screenTest,
+  /Android-Schutz wurde vorsorglich gestoppt[\s\S]*bewusst erneut starten/,
+  'Recovery screen tests must protect the native-stop and restart disclosure.',
 );
 requirePattern(
   screenTestPath,
@@ -184,5 +196,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Migration recovery UI check passed. Command wiring, app blocking, native stop, save/sync/drain pause, retry, local raw backup, UI guidance, and integration tests remain guarded.',
+  'Migration recovery UI check passed. Command wiring, app blocking, native stop and restart disclosure, save/sync/drain pause, retry, local raw backup, UI guidance, and integration tests remain guarded.',
 );
