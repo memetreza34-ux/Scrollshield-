@@ -151,6 +151,10 @@ public class ScrollShieldNativePlugin extends Plugin {
             call.reject("Overlay permission is required before protection can start");
             return;
         }
+        if (!hasNotificationsEnabled(context)) {
+            call.reject("Notifications are required so active protection and its stop action remain visible");
+            return;
+        }
         if (!hasConfiguredApps(context)) {
             call.reject("At least one installed active protected app is required");
             return;
@@ -286,6 +290,12 @@ public class ScrollShieldNativePlugin extends Plugin {
         return mode == AppOpsManager.MODE_ALLOWED;
     }
 
+    public static boolean hasNotificationsEnabled(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return true;
+        NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        return manager != null && manager.areNotificationsEnabled();
+    }
+
     public static boolean isProtectionEnabled(Context context) {
         return context
             .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
@@ -375,12 +385,6 @@ public class ScrollShieldNativePlugin extends Plugin {
 
     private SharedPreferences getPreferences() {
         return getContext().getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
-    }
-
-    private boolean hasNotificationsEnabled(Context context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return true;
-        NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-        return manager != null && manager.areNotificationsEnabled();
     }
 
     private void openApplicationSettings(PluginCall call, Exception originalError) {
