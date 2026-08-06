@@ -37,6 +37,12 @@ requirePattern(
 requirePattern(
   diagnosticsPluginPath,
   diagnosticsPlugin,
+  /lastProtectionStartAt[\s\S]*lastProtectionStopAt[\s\S]*lastProtectionStopCode[\s\S]*lastProtectionStopMessage/,
+  'Native diagnostics must expose persistent protection lifecycle evidence.',
+);
+requirePattern(
+  diagnosticsPluginPath,
+  diagnosticsPlugin,
   /getNotificationChannel\(PROTECTION_CHANNEL_ID\)[\s\S]*IMPORTANCE_NONE/,
   'Native diagnostics must inspect the exact foreground protection channel.',
 );
@@ -53,15 +59,21 @@ requirePattern(
   'The TypeScript diagnostic contract must preserve separate notification health fields.',
 );
 requirePattern(
+  diagnosticsBridgePath,
+  diagnosticsBridge,
+  /lastProtectionStartAt:\s*number[\s\S]*lastProtectionStopAt:\s*number[\s\S]*lastProtectionStopCode:\s*string[\s\S]*lastProtectionStopMessage:\s*string/,
+  'The TypeScript diagnostic contract must preserve lifecycle fields.',
+);
+requirePattern(
   debugScreenPath,
   debugScreen,
-  /Version[\s\S]*Build[\s\S]*App-Benachrichtigungen[\s\S]*Schutzkanal[\s\S]*Schutz-Benachrichtigung/,
-  'The debug screen must visibly show build identity and notification-channel health.',
+  /Version[\s\S]*Build[\s\S]*App-Benachrichtigungen[\s\S]*Schutzkanal[\s\S]*Schutz-Benachrichtigung[\s\S]*Letzter Schutzstart[\s\S]*Letzter Stoppcode/,
+  'The debug screen must visibly show build, notification, and lifecycle health.',
 );
 requirePattern(
   debugTestPath,
   debugTest,
-  /renders build identity and separate notification health signals/,
+  /renders build, notification, and protection lifecycle diagnostics/,
   'A component test must protect the expanded Android diagnostic display.',
 );
 
@@ -102,6 +114,7 @@ for (const requiredScenario of [
   'RULE-12',
   'LIFE-04',
   'LIFE-07',
+  'LIFE-08',
   'TIME-01',
   'TIME-02',
   'TIME-03',
@@ -123,6 +136,8 @@ for (const evidenceField of [
   'Screen recording',
   'adb logcat',
   'byte-for-byte',
+  'lastProtectionStopCode',
+  'lastProtectionStopMessage',
   'PASS',
   'FAIL',
   'BLOCKED',
@@ -142,5 +157,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android device-matrix check passed. Build identity, channel diagnostics, OEM coverage, migration recovery, lifecycle scenarios, and evidence requirements are guarded.',
+  'Android device-matrix check passed. Build identity, channel and lifecycle diagnostics, OEM coverage, migration recovery, lifecycle scenarios, and evidence requirements are guarded.',
 );
