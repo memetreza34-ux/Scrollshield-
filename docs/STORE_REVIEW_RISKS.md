@@ -1,87 +1,132 @@
-# ScrollShield - Store Review Risiken & Gegenmaßnahmen
+# ScrollShield Store Review Risks
 
-Diese Analyse identifiziert potenzielle Ablehnungsrisiken bei den App-Store-Reviews von Apple (App Store) und Google (Play Store) und definiert konkrete Gegenmaßnahmen, die in die Architektur und das UI-Design von ScrollShield eingeflossen sind.
+This document records the current platform and review risks for the first public release. It is not evidence of approval.
 
-## 1. Übergriffige Berechtigungen (Overreaching Permissions)
+## Critical Release Risks
 
-- **Risiko:** Google lehnt Apps ab, die `SYSTEM_ALERT_WINDOW` (Overlay) oder `PACKAGE_USAGE_STATS` ohne triftigen Grund anfordern. Apple ist extrem restriktiv bei der Freigabe des `Family Controls`-Entitlements.
-- **Gegenmaßnahme:**
-  - Der `PermissionsScreen` erklärt genau, warum jede Berechtigung benötigt wird und was passiert, wenn sie fehlt.
-  - Ohne die erforderlichen Android-Zugriffe startet der automatische Schutzdienst nicht; die übrige App bleibt für Konfiguration, Verlauf und Fokus-Timer nutzbar.
-  - Für iOS muss vor einer Einreichung ein offizieller Family-Controls-Antrag genehmigt und die native Screen-Time-Integration vollständig umgesetzt sein.
+### 1. Android binary has not been compiled in a working runner
 
-## 2. Unklare Datenverarbeitung
+The GitHub workflow is configured for JavaScript verification, Android JUnit tests, and `assembleDebug`, but the account billing or spending-limit restriction prevents the hosted runner from starting. A job with no runner and `steps: []` does not validate or invalidate the code.
 
-- **Risiko:** Ablehnung wegen fehlender oder unklarer Privacy Policy, besonders wenn Nutzungsdaten verarbeitet werden.
-- **Gegenmaßnahme:**
-  - Lokale Speicherung als Standard (`localOnly: true`).
-  - Keine Übertragung von App-Nutzungsdaten an Entwickler-Server.
-  - Klare Deklaration im Privacy Screen und in den Store-Metadaten.
+Mitigation:
 
-## 3. Irreführende Funktionsversprechen
+- keep the pull request in draft
+- keep all release-approval flags false
+- run `npm run verify`, `testDebugUnitTest`, and `assembleDebug` in a working environment
+- archive the exact APK and test report for the candidate build
 
-- **Risiko:** Die App verspricht universelle oder perfekte Blockierung, die auf unterschiedlichen Plattformen und Herstellergeräten nicht nachgewiesen wurde.
-- **Gegenmaßnahme:**
-  - Version 1 wird als Android-Whole-App-Schutz für ausgewählte installierte Apps beschrieben.
-  - Reels-/Shorts-Erkennung wird nicht als verfügbare oder garantierte Version-1-Systemfunktion beworben.
-  - ScrollShield wird als Werkzeug zur Selbstkontrolle und nicht als medizinisches Produkt beschrieben.
+### 2. Foreground service visibility and special-use review
 
-## 4. Eingriffe in andere Apps
+ScrollShield relies on a user-started foreground service to identify user-selected foreground apps and apply local interventions. Google Play may scrutinize whether the use is user-benefiting, visible, interruptible, and accurately declared.
 
-- **Risiko:** Google Play verbietet Apps, die andere Apps unzulässig verändern, fernsteuern oder täuschend überlagern.
-- **Gegenmaßnahme:**
-  - Das Overlay ist ein klar gebrandeter ScrollShield-Schutzbildschirm mit Rückkehr- und begrenzter Notfalloption.
-  - ScrollShield liest, verändert oder klickt keine Inhalte der darunterliegenden App.
-  - Es wird kein Accessibility Service verwendet.
+Mitigation:
 
-## 5. Unsichtbarer Foreground Service
+- require app-wide notifications and the `Aktiver App-Schutz` channel
+- use the Android 13+ runtime notification prompt
+- show an ongoing notification with a direct `Schutz stoppen` action
+- stop the service if notification visibility is revoked
+- remove the foreground notification when the service ends
+- provide the exact `FOREGROUND_SERVICE_SPECIAL_USE` declaration and reviewer video
 
-- **Risiko:** Auf Android 13+ kann ein Foreground Service trotz verweigerter Benachrichtigungsfreigabe laufen, während seine Meldung nicht im normalen Benachrichtigungsbereich erscheint. Dadurch wäre die direkte Stop-Aktion weniger sichtbar.
-- **Gegenmaßnahme:**
-  - Benachrichtigungen sind für den Android-Schutzdienst eine Startvoraussetzung.
-  - Der Dienst wird nach Neustart nur wiederhergestellt, wenn Benachrichtigungen weiterhin aktiviert sind.
-  - Die Berechtigungsoberfläche markiert den Zugriff auf Android als erforderlich und erklärt die sichtbare Stop-Aktion.
-  - Ein eigener Quell- und Komponententest schützt diesen Ablauf.
+### 3. Usage Access and overlay permissions
 
-## 6. Breiter Zugriff auf installierte Apps
+`PACKAGE_USAGE_STATS` and `SYSTEM_ALERT_WINDOW` are sensitive and must remain limited to the documented whole-app protection use case.
 
-- **Risiko:** `QUERY_ALL_PACKAGES` oder eine unnötige App-Inventarisierung kann zur Ablehnung führen.
-- **Gegenmaßnahme:**
-  - Kein `QUERY_ALL_PACKAGES`.
-  - Nur gezielte `<queries>` für ausdrücklich unterstützte Apps.
-  - Installationsstatus wird ausschließlich lokal genutzt, um nicht funktionsfähige Schutzkonfigurationen zu verhindern.
+Mitigation:
 
-## 7. Unfertige Screens
+- prominent in-app disclosure before permission use
+- no reading of screen content, messages, input, or media
+- no developer-server transmission of usage history
+- protection remains user-selected and locally configured
+- safe shutdown after either permission is revoked
+- reviewer video demonstrates purpose and fallback behavior
 
-- **Risiko:** Platzhalter-Texte, leere Screens oder „Coming Soon“-Buttons führen zur Ablehnung.
-- **Gegenmaßnahme:**
-  - Unfertige Premium- oder Reels-only-Funktionen werden nicht als fertige Store-Funktion dargestellt.
-  - Der Release-Checker sucht nach unfertigen UI-Begriffen und rechtlichen Platzhaltern.
+### 4. Package visibility
 
-## 8. Unstimmige Datenschutzangaben
+Play review may reject unnecessarily broad installed-app access.
 
-- **Risiko:** Die Store-Angaben stimmen nicht mit dem tatsächlichen Binary oder seinen SDKs überein.
-- **Gegenmaßnahme:**
-  - Strikte SDK-Registry und Drittanbieterhinweise.
-  - Data-Safety-Antworten werden vor Einreichung gegen das signierte AAB und den Dependency-Report geprüft.
-  - Keine Analytics-, Werbe- oder Tracking-SDKs in Version 1.
+Mitigation:
 
-## 9. Aggressive oder manipulative UX
+- do not request `QUERY_ALL_PACKAGES`
+- use finite `<queries>` entries for supported target apps
+- use visibility only to show availability and prevent non-functional configurations
+- do not collect, transmit, share, sell, or monetize an installed-app inventory
 
-- **Risiko:** Versteckte Abos, schwer auffindbare Kündigungsmöglichkeiten oder Druck bei Berechtigungsablehnung.
-- **Gegenmaßnahme:**
-  - Neutrale Sprache im Permissions-Screen.
-  - Keine Berechtigung wird automatisch erteilt.
-  - Der Schutz kann über App und Dauerbenachrichtigung gestoppt werden.
-  - Kernfunktionen für Datenschutz, Export und Notfallzugang werden nicht künstlich versteckt.
+### 5. Manufacturer-specific background restrictions
 
-## 10. Unstabile erste Version
+Foreground-service, reboot, process-recovery, overlay, and battery behavior can differ across Pixel, Samsung, Xiaomi/Redmi, OnePlus, Motorola, and tablets.
 
-- **Risiko:** Abstürze, Herstellerunterschiede, aggressive Akkuoptimierung oder fehlerhafte Zeitgrenzen.
-- **Gegenmaßnahme:**
-  - Robuster lokaler Speicher mit Migration und Fallbacks.
-  - React Error Boundary.
-  - Pure Java Tests für Zeit- und Regelschwellen.
-  - Native Geräte- und Berechtigungsdiagnose mit kopierbarem JSON-Bericht.
-  - Vorgesehene Tests auf Samsung, Pixel, Xiaomi, OnePlus, Motorola und Tablet.
-  - Release bleibt gesperrt, bis JavaScript-Verifikation, Android-Kompilierung und reale Gerätetests nachweislich durchgeführt wurden.
+Mitigation:
+
+- complete `docs/ANDROID_DEVICE_TEST_MATRIX.md`
+- record version name, version code, diagnostic JSON, screen evidence, and logs for failures
+- test reboot, app update, process termination, force-stop, manufacturer battery saver, and twelve-hour operation
+- do not claim reliable support for an untested manufacturer or package variant
+
+### 6. Notification-channel-only deactivation
+
+A user can leave app-wide notifications enabled while disabling only the ScrollShield protection channel. A simple app-wide check would falsely report readiness.
+
+Mitigation:
+
+- diagnose app-wide notification status separately from channel creation and channel importance
+- prevent start when the protection channel is disabled
+- stop the running service if the channel becomes invisible
+- include the disabled-channel case in component and physical-device tests
+
+### 7. Data migration and candidate identity
+
+A release can appear functional while damaging existing V0.7-compatible profiles, rules, history, or statistics. Evidence from a different build is not valid for the current candidate.
+
+Mitigation:
+
+- expose installed version name and version code in native diagnostics
+- copy diagnostic JSON for every test run
+- test clean install, V0.7-compatible upgrade, previous-candidate upgrade, app update while protection is enabled, uninstall, and reinstall
+- do not reuse evidence from another build number
+
+### 8. Schedule and local-time boundaries
+
+Daily counters, overnight ranges, recurring schedules, emergency limits, and temporary access can be affected by midnight, time-zone changes, daylight-saving transitions, and manual clock changes.
+
+Mitigation:
+
+- use the shared JUnit-tested `ProtectionRulePolicy` for deterministic rule boundaries
+- complete the mandatory time-boundary matrix on devices
+- verify that no negative usage or duplicated counters are stored
+
+### 9. Claims and positioning
+
+Claims of guaranteed Reels/Shorts detection, medical treatment, ADHD treatment, or universal blocking would exceed the current implementation and increase policy risk.
+
+Mitigation:
+
+- position version one as user-controlled whole-app digital-wellbeing and self-control tooling
+- state that Usage Access identifies the foreground app, not a specific feed or sub-screen
+- keep Reels-only detection as a future beta requiring separate design and review
+- avoid medical, diagnostic, or treatment claims
+
+### 10. Legal, support, and privacy placeholders
+
+Store submission is blocked while legal identity, address, responsible person, support mailbox, privacy domain, declarations, and reviewer media remain incomplete.
+
+Mitigation:
+
+- complete every manual field in `docs/STORE_SUBMISSION_PACKET.md`
+- verify the public privacy page and monitored support mailbox
+- inspect the final signed binary against the exact Data Safety and permission declarations
+- record reviewer videos using the uploaded candidate build
+
+## iOS Risks
+
+The current project does not contain an approved Family Controls entitlement or native Managed Settings enforcement. The PWA cannot replace Apple's Screen Time APIs.
+
+Mitigation:
+
+- do not submit iOS until entitlement approval and native implementation are present
+- keep Apple review notes limited to functionality demonstrated by the exact binary
+- test permission, shielding, recovery, and local data behavior on real iPhone/iPad devices
+
+## Enforced Release Position
+
+`config/release-approval.json` is intentionally incomplete. `npm run android:release` and `npm run android:bundle` execute the strict release gate before Gradle. Release output must remain blocked until verification, Android tests, debug compilation, physical-device matrix, battery reliability, migration, Play declarations, legal fields, reviewer videos, signed-binary inspection, approver identity, and approval time are complete for the exact candidate.
