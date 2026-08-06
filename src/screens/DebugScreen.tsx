@@ -103,11 +103,32 @@ export function DebugScreen({
         ['Gerät', `${nativeSnapshot.manufacturer} ${nativeSnapshot.model}`],
         ['Android', `${nativeSnapshot.androidRelease} / SDK ${nativeSnapshot.sdkInt}`],
         ['Paket', nativeSnapshot.packageName],
+        ['Version', `${nativeSnapshot.versionName} (Build ${nativeSnapshot.versionCode})`],
         ['Zeitzone', nativeSnapshot.timeZone],
         ['Sprache', nativeSnapshot.locale],
         ['Nutzungszugriff', nativeSnapshot.usageAccess ? 'AKTIV' : 'FEHLT', nativeSnapshot.usageAccess],
         ['Overlay', nativeSnapshot.overlay ? 'AKTIV' : 'FEHLT', nativeSnapshot.overlay],
-        ['Benachrichtigungen', nativeSnapshot.notifications ? 'AKTIV' : 'FEHLT', nativeSnapshot.notifications],
+        [
+          'App-Benachrichtigungen',
+          nativeSnapshot.appNotificationsEnabled ? 'AKTIV' : 'DEAKTIVIERT',
+          nativeSnapshot.appNotificationsEnabled,
+        ],
+        [
+          'Schutzkanal',
+          nativeSnapshot.protectionChannelCreated
+            ? nativeSnapshot.protectionChannelEnabled
+              ? 'AKTIV'
+              : 'DEAKTIVIERT'
+            : 'NOCH NICHT ERSTELLT',
+          nativeSnapshot.protectionChannelCreated
+            ? nativeSnapshot.protectionChannelEnabled
+            : undefined,
+        ],
+        [
+          'Schutz-Benachrichtigung',
+          nativeSnapshot.notifications ? 'BEREIT' : 'NICHT BEREIT',
+          nativeSnapshot.notifications,
+        ],
         [
           'Akku-Ausnahme',
           nativeSnapshot.batteryOptimizationExempt ? 'AKTIV' : 'NICHT AKTIV',
