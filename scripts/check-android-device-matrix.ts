@@ -86,6 +86,10 @@ for (const requiredDevice of [
 
 for (const requiredScenario of [
   'INST-02',
+  'INST-06',
+  'INST-07',
+  'INST-08',
+  'INST-09',
   'PERM-01',
   'PERM-05',
   'PERM-06',
@@ -118,6 +122,7 @@ for (const evidenceField of [
   'Copied Android diagnostic JSON',
   'Screen recording',
   'adb logcat',
+  'byte-for-byte',
   'PASS',
   'FAIL',
   'BLOCKED',
@@ -137,5 +142,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android device-matrix check passed. Build identity, channel diagnostics, OEM coverage, lifecycle scenarios, and evidence requirements are guarded.',
+  'Android device-matrix check passed. Build identity, channel diagnostics, OEM coverage, migration recovery, lifecycle scenarios, and evidence requirements are guarded.',
 );
