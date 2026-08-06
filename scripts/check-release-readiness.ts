@@ -97,11 +97,11 @@ if (!existsSync(storeCopyPath)) {
   const storeCopy = readFileSync(storeCopyPath, 'utf-8');
   const requiredStoreSignals = [
     { label: 'self-control positioning', pattern: /Werkzeug zur Selbstkontrolle/i },
-    { label: 'best-effort disclosure', pattern: /Best-Effort-Unterbrecher/i },
+    { label: 'whole-app version-one disclosure', pattern: /Version 1\.0[\s\S]*Schutz ganzer ausgewählter Apps/i },
+    { label: 'non-medical disclaimer', pattern: /kein medizinisches Produkt/i },
     { label: 'focus keyword', pattern: /\bFokus\b/i },
     { label: 'screen-time keyword', pattern: /\bBildschirmzeit\b/i },
     { label: 'digital-wellbeing keyword', pattern: /\bDigital Wellbeing\b/i },
-    { label: 'ADHD keyword', pattern: /\bADHS\b/i },
     { label: 'procrastination keyword', pattern: /\bProkrastination\b/i },
   ];
 
