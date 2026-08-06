@@ -12,7 +12,7 @@ interface NativeProtectionPlugin {
   syncProtectionConfig(options: { configJson: string }): Promise<void>;
   startProtectionService(): Promise<void>;
   stopProtectionService(): Promise<void>;
-  getProtectionServiceStatus(): Promise<{ running: boolean }>;
+  getProtectionServiceStatus(): Promise<{ running: boolean; enabled: boolean }>;
   drainProtectionEvents(): Promise<{ eventsJson: string }>;
 }
 
@@ -25,8 +25,22 @@ interface NativeProtectionConfig {
     active: boolean;
     mode: AppConfig['mode'];
     delaySeconds: number;
+    dailyLimitMinutes: number;
     sessionMinutes: number;
+    blockHours: string;
     focusModeBehavior: AppConfig['focusModeBehavior'];
+    antiBinge: {
+      enabled: boolean;
+      warningThreshold: number;
+      warningWindowMinutes: number;
+      blockThreshold: number;
+      blockWindowMinutes: number;
+    };
+    emergencyUnlock: {
+      enabled: boolean;
+      durationMinutes: number;
+      maxPerDay: number;
+    };
   }>;
 }
 
@@ -98,8 +112,22 @@ export const NativeProtection = {
           active: appConfig.active,
           mode: appConfig.mode,
           delaySeconds: Math.max(0, appConfig.openDelay),
+          dailyLimitMinutes: Math.max(0, appConfig.dailyLimit),
           sessionMinutes: Math.max(1, appConfig.sessionLimit ?? 5),
+          blockHours: appConfig.blockHours?.trim() ?? '',
           focusModeBehavior: appConfig.focusModeBehavior,
+          antiBinge: {
+            enabled: appConfig.antiBinge.enabled,
+            warningThreshold: Math.max(1, appConfig.antiBinge.warningThreshold),
+            warningWindowMinutes: Math.max(1, appConfig.antiBinge.warningTimeframe),
+            blockThreshold: Math.max(1, appConfig.antiBinge.blockThreshold),
+            blockWindowMinutes: Math.max(1, appConfig.antiBinge.blockTimeframe),
+          },
+          emergencyUnlock: {
+            enabled: appConfig.emergencyUnlock.enabled,
+            durationMinutes: Math.max(1, appConfig.emergencyUnlock.durationMinutes),
+            maxPerDay: Math.max(0, appConfig.emergencyUnlock.maxPerDay),
+          },
         })),
     };
 
@@ -117,8 +145,8 @@ export const NativeProtection = {
     await AndroidProtection.stopProtectionService();
   },
 
-  async getStatus(): Promise<{ running: boolean }> {
-    if (!this.isAvailable()) return { running: false };
+  async getStatus(): Promise<{ running: boolean; enabled: boolean }> {
+    if (!this.isAvailable()) return { running: false, enabled: false };
     return AndroidProtection.getProtectionServiceStatus();
   },
 
