@@ -107,13 +107,37 @@ requirePattern(
   dataExportPath,
   dataExport,
   /isLegacyArchive[\s\S]*restoreLegacyArchive[\s\S]*supported\.legacyArchive/,
-  'Imports must validate and restore the optional V0.7 archive.',
+  'Current-format imports must validate and restore the optional V0.7 archive.',
+);
+requirePattern(
+  dataExportPath,
+  dataExport,
+  /isLegacyV07Backup[\s\S]*convertLegacyV07Backup[\s\S]*scrollshield_backup_v15_file/,
+  'Former V0.7 backup packages must convert into the supported export contract while preserving the exact input file.',
+);
+requirePattern(
+  dataExportPath,
+  dataExport,
+  /V0\.7-Backupimport[\s\S]*nicht automatisch aktiviert/,
+  'Direct V0.7 backup import must disclose that obsolete AI rules remain inactive.',
 );
 requirePattern(
   dataExportTestPath,
   dataExportTest,
   /includes the exact V0\.7 archive and restores it during import/,
   'Export tests must cover a complete legacy-archive round trip.',
+);
+requirePattern(
+  dataExportTestPath,
+  dataExportTest,
+  /imports a former V0\.7 backup file without activating its obsolete AI rules/,
+  'Export tests must cover direct conversion of the former V0.7 backup package.',
+);
+requirePattern(
+  dataExportTestPath,
+  dataExportTest,
+  /rejects malformed former V0\.7 backup files/,
+  'Export tests must reject malformed former backup packages before storage changes.',
 );
 requirePattern(
   dataExportTestPath,
@@ -127,6 +151,7 @@ for (const requiredSection of [
   'Transactional write protocol',
   'V0.7 conversion rules',
   'Lossless archive',
+  'Former backup-file import',
   'Release-candidate validation',
 ]) {
   requirePattern(
@@ -144,5 +169,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Storage migration check passed. Legacy keys, transaction recovery, source retention, V0.7 conversion, and archive round trips remain guarded.',
+  'Storage migration check passed. Legacy keys, transaction recovery, source retention, V0.7 conversion, direct backup import, and archive round trips remain guarded.',
 );
