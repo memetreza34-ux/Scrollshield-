@@ -6,6 +6,7 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
@@ -30,6 +31,7 @@ public class ScrollShieldNativePlugin extends Plugin {
     public static final String CONFIG_KEY = "protection_config";
     public static final String SERVICE_ENABLED_KEY = "protection_service_enabled";
     private static final String EVENT_QUEUE_KEY = "protection_events";
+    private static final String UNAVAILABLE_APPS_KEY = "unavailable_app_ids";
     private static final String USAGE_COUNTER_PREFIX = "usage_ms_";
     private static final String EXPORTED_USAGE_PREFIX = "exported_";
     private static final int MAX_QUEUED_EVENTS = 200;
@@ -104,8 +106,34 @@ public class ScrollShieldNativePlugin extends Plugin {
             return;
         }
 
-        getPreferences().edit().putString(CONFIG_KEY, configJson).apply();
-        call.resolve();
+        Context context = getContext();
+        JSONArray unavailableApps = getUnavailableAppIds(context, configJson);
+        String unavailableJson = unavailableApps.toString();
+        SharedPreferences preferences = getPreferences();
+        String previousUnavailable = preferences.getString(UNAVAILABLE_APPS_KEY, "[]");
+        preferences
+            .edit()
+            .putString(CONFIG_KEY, configJson)
+            .putString(UNAVAILABLE_APPS_KEY, unavailableJson)
+            .apply();
+
+        if (!unavailableJson.equals(previousUnavailable)) {
+            for (int index = 0; index < unavailableApps.length(); index++) {
+                String appId = unavailableApps.optString(index, "");
+                if (!appId.isEmpty()) {
+                    appendProtectionEvent(
+                        context,
+                        "warning",
+                        appId,
+                        "App ist nicht installiert oder für Android nicht sichtbar; Schutz ist für diese App inaktiv"
+                    );
+                }
+            }
+        }
+
+        JSObject result = new JSObject();
+        result.put("unavailableAppIdsJson", unavailableJson);
+        call.resolve(result);
     }
 
     @PluginMethod
@@ -120,7 +148,7 @@ public class ScrollShieldNativePlugin extends Plugin {
             return;
         }
         if (!hasConfiguredApps(context)) {
-            call.reject("At least one active protected app is required");
+            call.reject("At least one installed active protected app is required");
             return;
         }
 
@@ -153,6 +181,7 @@ public class ScrollShieldNativePlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("running", ScrollShieldProtectionService.isRunning());
         result.put("enabled", isProtectionEnabled(context));
+        result.put("unavailableAppIdsJson", getPreferences().getString(UNAVAILABLE_APPS_KEY, "[]"));
         call.resolve(result);
     }
 
@@ -273,10 +302,59 @@ public class ScrollShieldNativePlugin extends Plugin {
         try {
             JSONObject root = new JSONObject(configJson == null ? "{}" : configJson);
             JSONArray apps = root.optJSONArray("apps");
-            return apps != null && apps.length() > 0;
+            if (apps == null) return false;
+
+            for (int index = 0; index < apps.length(); index++) {
+                JSONObject app = apps.optJSONObject(index);
+                if (app == null || !app.optBoolean("active", false)) continue;
+                JSONArray packages = app.optJSONArray("packages");
+                if (hasInstalledPackage(context, packages)) return true;
+            }
+            return false;
         } catch (JSONException error) {
             return false;
         }
+    }
+
+    private static JSONArray getUnavailableAppIds(Context context, String configJson) {
+        JSONArray unavailable = new JSONArray();
+        try {
+            JSONObject root = new JSONObject(configJson);
+            JSONArray apps = root.optJSONArray("apps");
+            if (apps == null) return unavailable;
+
+            for (int index = 0; index < apps.length(); index++) {
+                JSONObject app = apps.optJSONObject(index);
+                if (app == null || !app.optBoolean("active", false)) continue;
+                JSONArray packages = app.optJSONArray("packages");
+                if (!hasInstalledPackage(context, packages)) {
+                    unavailable.put(app.optString("id", "unknown"));
+                }
+            }
+        } catch (JSONException ignored) {
+            // Invalid configurations are rejected by the TypeScript state layer before synchronization.
+        }
+        return unavailable;
+    }
+
+    private static boolean hasInstalledPackage(Context context, JSONArray packages) {
+        if (packages == null || packages.length() == 0) return false;
+        PackageManager packageManager = context.getPackageManager();
+        for (int index = 0; index < packages.length(); index++) {
+            String packageName = packages.optString(index, "");
+            if (packageName.isEmpty()) continue;
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0L));
+                } else {
+                    packageManager.getPackageInfo(packageName, 0);
+                }
+                return true;
+            } catch (PackageManager.NameNotFoundException | SecurityException ignored) {
+                // Try the next known regional package.
+            }
+        }
+        return false;
     }
 
     private static UsageKey parseUsageKey(String key) {
