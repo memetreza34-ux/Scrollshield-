@@ -1,6 +1,7 @@
 package app.scrollshield.mobile;
 
 import android.app.AppOpsManager;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
@@ -30,6 +31,7 @@ public class ScrollShieldNativePlugin extends Plugin {
     public static final String PREFERENCES_NAME = "scrollshield_native";
     public static final String CONFIG_KEY = "protection_config";
     public static final String SERVICE_ENABLED_KEY = "protection_service_enabled";
+    private static final String PROTECTION_CHANNEL_ID = "scrollshield_protection";
     private static final String EVENT_QUEUE_KEY = "protection_events";
     private static final String UNAVAILABLE_APPS_KEY = "unavailable_app_ids";
     private static final String UNAVAILABLE_ACTIVE_APPS_KEY = "unavailable_active_app_ids";
@@ -293,7 +295,11 @@ public class ScrollShieldNativePlugin extends Plugin {
     public static boolean hasNotificationsEnabled(Context context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return true;
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-        return manager != null && manager.areNotificationsEnabled();
+        if (manager == null || !manager.areNotificationsEnabled()) return false;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true;
+
+        NotificationChannel channel = manager.getNotificationChannel(PROTECTION_CHANNEL_ID);
+        return channel == null || channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
     }
 
     public static boolean isProtectionEnabled(Context context) {
