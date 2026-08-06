@@ -33,6 +33,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Locale;
@@ -232,6 +233,7 @@ public class ScrollShieldProtectionService extends Service {
                 JSONObject app = apps.optJSONObject(index);
                 if (app == null) continue;
 
+                JSONObject timeWindows = app.optJSONObject("timeWindows");
                 JSONObject antiBinge = app.optJSONObject("antiBinge");
                 JSONObject emergencyUnlock = app.optJSONObject("emergencyUnlock");
 
@@ -245,6 +247,11 @@ public class ScrollShieldProtectionService extends Service {
                     Math.max(1, app.optInt("sessionMinutes", 5)),
                     app.optString("blockHours", ""),
                     app.optString("focusModeBehavior", "warn"),
+                    timeWindows == null ? "normal" : normalizeScheduleAction(timeWindows.optString("morningRules", "normal")),
+                    timeWindows == null ? "normal" : normalizeScheduleAction(timeWindows.optString("workRules", "normal")),
+                    timeWindows == null ? "normal" : normalizeScheduleAction(timeWindows.optString("eveningRules", "normal")),
+                    timeWindows == null ? "normal" : normalizeScheduleAction(timeWindows.optString("nightRules", "normal")),
+                    timeWindows == null ? "normal" : normalizeScheduleAction(timeWindows.optString("weekendRules", "normal")),
                     antiBinge != null && antiBinge.optBoolean("enabled", false),
                     antiBinge == null ? 3 : Math.max(1, antiBinge.optInt("warningThreshold", 3)),
                     antiBinge == null ? 10 : Math.max(1, antiBinge.optInt("warningWindowMinutes", 10)),
@@ -272,6 +279,15 @@ public class ScrollShieldProtectionService extends Service {
             && getDailyUsageMs(rule.id, now) >= rule.dailyLimitMinutes * 60_000L) {
             return "Dein Tageslimit von " + rule.dailyLimitMinutes + " Minuten ist erreicht.";
         }
+
+        String scheduledAction = getScheduledAction(rule, now);
+        if ("block".equals(scheduledAction)) {
+            return "Diese App ist durch deinen wiederkehrenden Wochenplan gesperrt.";
+        }
+        if ("strict".equals(scheduledAction)) {
+            return "Für dieses Zeitfenster gilt dein strenger Wochenplan.";
+        }
+
         if (isInsideBlockedHours(rule.blockHours, now)) {
             return "Diese App ist in deinem festgelegten Zeitfenster gesperrt.";
         }
@@ -285,6 +301,36 @@ public class ScrollShieldProtectionService extends Service {
             return "Diese App ist durch deinen strikten Schutzmodus gesperrt.";
         }
         return null;
+    }
+
+    private String getScheduledAction(ProtectionRule rule, long now) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(now);
+        int dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK);
+        int minuteOfDay = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE);
+        boolean weekend = dayOfWeek == Calendar.SATURDAY || dayOfWeek == Calendar.SUNDAY;
+
+        if (weekend && !"normal".equals(rule.weekendRules)) {
+            return rule.weekendRules;
+        }
+        if ((minuteOfDay >= 22 * 60 || minuteOfDay < 6 * 60) && !"normal".equals(rule.nightRules)) {
+            return rule.nightRules;
+        }
+        if (!weekend && minuteOfDay >= 6 * 60 && minuteOfDay < 9 * 60 && !"normal".equals(rule.morningRules)) {
+            return rule.morningRules;
+        }
+        if (!weekend && minuteOfDay >= 9 * 60 && minuteOfDay < 17 * 60 && !"normal".equals(rule.workRules)) {
+            return rule.workRules;
+        }
+        if (minuteOfDay >= 17 * 60 && minuteOfDay < 22 * 60 && !"normal".equals(rule.eveningRules)) {
+            return rule.eveningRules;
+        }
+        return "normal";
+    }
+
+    private static String normalizeScheduleAction(String value) {
+        if ("strict".equals(value) || "block".equals(value)) return value;
+        return "normal";
     }
 
     private boolean isAntiBingeBlocked(ProtectionRule rule, long now) {
@@ -599,10 +645,10 @@ public class ScrollShieldProtectionService extends Service {
         int endMinutes = parseMinutes(range[1]);
         if (startMinutes < 0 || endMinutes < 0 || startMinutes == endMinutes) return false;
 
-        java.util.Calendar calendar = java.util.Calendar.getInstance();
+        Calendar calendar = Calendar.getInstance();
         calendar.setTimeInMillis(now);
-        int currentMinutes = calendar.get(java.util.Calendar.HOUR_OF_DAY) * 60
-            + calendar.get(java.util.Calendar.MINUTE);
+        int currentMinutes = calendar.get(Calendar.HOUR_OF_DAY) * 60
+            + calendar.get(Calendar.MINUTE);
 
         if (startMinutes < endMinutes) {
             return currentMinutes >= startMinutes && currentMinutes < endMinutes;
@@ -743,6 +789,11 @@ public class ScrollShieldProtectionService extends Service {
         private final int sessionMinutes;
         private final String blockHours;
         private final String focusModeBehavior;
+        private final String morningRules;
+        private final String workRules;
+        private final String eveningRules;
+        private final String nightRules;
+        private final String weekendRules;
         private final boolean antiBingeEnabled;
         private final int warningThreshold;
         private final int warningWindowMinutes;
@@ -762,6 +813,11 @@ public class ScrollShieldProtectionService extends Service {
             int sessionMinutes,
             String blockHours,
             String focusModeBehavior,
+            String morningRules,
+            String workRules,
+            String eveningRules,
+            String nightRules,
+            String weekendRules,
             boolean antiBingeEnabled,
             int warningThreshold,
             int warningWindowMinutes,
@@ -780,6 +836,11 @@ public class ScrollShieldProtectionService extends Service {
             this.sessionMinutes = sessionMinutes;
             this.blockHours = blockHours;
             this.focusModeBehavior = focusModeBehavior;
+            this.morningRules = morningRules;
+            this.workRules = workRules;
+            this.eveningRules = eveningRules;
+            this.nightRules = nightRules;
+            this.weekendRules = weekendRules;
             this.antiBingeEnabled = antiBingeEnabled;
             this.warningThreshold = warningThreshold;
             this.warningWindowMinutes = warningWindowMinutes;
