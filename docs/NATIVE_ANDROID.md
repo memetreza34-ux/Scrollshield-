@@ -15,6 +15,9 @@ ScrollShield uses Capacitor with the Android package id `app.scrollshield.mobile
   - Battery optimization exemption
 - Prominent in-app disclosure explaining which usage information is read and which content is never accessed
 - Explicit user-controlled start and stop controls for the protection service
+- Persisted user intent for protection-service recovery
+- Recovery after device reboot and app-package replacement when permissions are still granted
+- Automatic safe shutdown when Usage Access or overlay permission is revoked
 - Foreground protection service with a persistent notification and stop action
 - Foreground-app detection through `UsageStatsManager`
 - Local synchronization of selected app rules from TypeScript into Android `SharedPreferences`
@@ -25,9 +28,16 @@ ScrollShield uses Capacitor with the Android package id `app.scrollshield.mobile
   - return-to-home action
   - intentional temporary access
   - limited emergency access
-- Native focus-mode blocking behavior for selected apps
-- Local native event queue for blocks, warnings, intentional opens, and emergency unlocks
-- Import of native events into React history and daily statistics
+- Native enforcement for:
+  - focus-mode blocking
+  - per-app session duration
+  - daily usage limits
+  - simple blocked-hour ranges, including overnight ranges
+  - Anti-Binge warning and blocking thresholds
+  - per-app daily emergency-unlock limits
+- Batched native usage measurement while temporary access is active
+- Local native event queue for blocks, warnings, intentional opens, permission loss, and emergency unlocks
+- Import of native events and measured usage into React history and date-correct daily statistics
 
 The browser/PWA build remains a preview and cannot block other installed apps. Only the installed Android build can use the native protection service.
 
@@ -46,13 +56,14 @@ npm run android:bundle
 ## Release Blockers
 
 1. Compile the Android project and run the complete JavaScript verification suite in a working CI or local environment.
-2. Test foreground detection and overlays on Samsung, Google Pixel, Xiaomi, OnePlus, Motorola, and at least one Android tablet.
-3. Add boot/restart handling and verify behavior after process termination, device restart, battery saver, and permission revocation.
-4. Port daily limits, schedules, anti-binge thresholds, and emergency-unlock counters into the native enforcement layer.
-5. Measure real session duration and feed it into usage statistics rather than recording only protection decisions.
-6. Verify every Android package mapping and handle unavailable or region-specific app packages.
+2. Test foreground detection, overlays, daily limits, session expiry, and counters on Samsung, Google Pixel, Xiaomi, OnePlus, Motorola, and at least one Android tablet.
+3. Verify recovery after process termination, device restart, app update, battery saver, manufacturer task killers, and permission revocation.
+4. Replace the single `blockHours` range with a complete recurring weekly schedule engine.
+5. Verify every Android package mapping and handle unavailable, cloned, work-profile, and region-specific app packages.
+6. Prevent unsupported apps from being presented as fully enforceable until their installed package is confirmed.
 7. Replace legal placeholders and prepare Play Console declarations, reviewer instructions, and permission demonstration videos.
-8. Add automated Android tests for permission loss, service restarts, overlays, countdowns, event import, and emergency access.
+8. Add automated Android tests for permission loss, service restarts, overlays, countdowns, usage import, Anti-Binge rules, limits, and emergency access.
+9. Measure battery consumption over long sessions and tune the foreground-app polling interval before production rollout.
 
 ## Reels-only Protection
 
