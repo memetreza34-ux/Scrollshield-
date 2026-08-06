@@ -19,6 +19,7 @@ interface ScrollShieldNativePlugin {
 
 interface ScrollShieldNotificationPlugin {
   requestPermission(): Promise<NotificationPermissionResult>;
+  openSettings(): Promise<void>;
 }
 
 const ScrollShieldNative = registerPlugin<ScrollShieldNativePlugin>('ScrollShieldNative');
@@ -38,6 +39,11 @@ export const NativePermissions = {
     if (!this.isAndroidNative()) return false;
     const result = await ScrollShieldNotifications.requestPermission();
     return result.granted;
+  },
+
+  async openAndroidNotificationSettings(): Promise<void> {
+    if (!this.isAndroidNative()) return;
+    await ScrollShieldNotifications.openSettings();
   },
 
   async openAndroidSettings(permission: AndroidPermissionKey): Promise<void> {
