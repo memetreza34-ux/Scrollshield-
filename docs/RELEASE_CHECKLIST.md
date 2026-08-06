@@ -1,79 +1,140 @@
-# ScrollShield - Pre-Launch Release Checkliste
+# ScrollShield – verbindliche Release-Checkliste
 
-Diese Checkliste dient der systematischen Prüfung aller kritischen App-Bereiche vor einem Produktions-Release (Launch) in den App Stores. Sie stellt sicher, dass ScrollShield professionell, stabil und richtlinienkonform veröffentlicht wird.
+Diese Checkliste gilt für den ersten öffentlichen Android-Release. Ein Haken darf nur gesetzt werden, wenn Nachweise für exakt dieselbe Version und Build-Nummer vorliegen. Der technische Freigabestatus steht in `config/release-approval.json`.
 
----
+## 1. Kandidat und Freigabe-Gate
 
-## 1. Allgemeine Release-Freigabe
+- [x] `package.json`, Android `versionName` und Freigabemanifest verwenden dieselbe Version.
+- [x] Android `versionCode` und `candidateVersionCode` stimmen überein.
+- [x] `npm run check:release-approval` prüft Schema und Versionsgleichheit.
+- [x] `npm run android:release` und `npm run android:bundle` rufen zuerst `npm run release:gate` auf.
+- [ ] Alle Nachweise in `config/release-approval.json` sind für den aktuellen Kandidaten auf `true` gesetzt.
+- [ ] `approvedBy` benennt die verantwortliche freigebende Person.
+- [ ] `approvedAt` enthält den tatsächlichen Freigabezeitpunkt.
 
-- [x] **Versionsnummern:** `npm run check:version` synchronisiert `package.json`, Lockfile und `__APP_VERSION__`; sobald native Projekte existieren, prüft es zusätzlich Android `versionName` und iOS `MARKETING_VERSION`.
-- [x] **Keine Platzhalter:** Außer den separat geführten Impressumsangaben enthält die Release-UI keine unfertigen Texte oder Testdaten; der Release-Check scannt alle sichtbaren Screens.
-- [ ] **Impressum & Kontakt:** Die Platzhalter im `ImprintScreen` (Musterstraße, Max Mustermann) wurden durch die echten Unternehmensdaten ersetzt.
-- [ ] **E-Mail-Routing:** Die Support-E-Mail (`support@scrollshield.app`) ist eingerichtet und empfängt Nachrichten.
-- [x] **Kein veralteter ODR-Link:** Der frühere Link zur EU-Plattform für Online-Streitbeilegung ist nicht mehr in der Release-UI enthalten.
-- [x] **Offline-Fähigkeit:** Der Produktions-Build wurde nach vollständigem Stoppen des lokalen Servers erfolgreich neu geladen; Startscreen und Assets erschienen ohne Browserfehler aus dem Service-Worker-Cache.
+Solange ein Punkt offen ist, dürfen weder Release-APK noch AAB als veröffentlichungsbereit behandelt werden.
 
-## 2. Apple App Store Submission (iOS)
+## 2. Automatische Verifikation und Android-Build
 
-- [ ] **Screen Time API Entitlement:** Das "Family Controls" (Screen Time) Entitlement wurde bei Apple offiziell beantragt und für das Developer-Konto freigeschaltet.
-- [x] **Wording-Check iOS:** Die vorbereiteten Apple-Review-Texte sind von Google-Play-Hinweisen getrennt; der Release-Check verbietet dort Android- und Overlay-Begriffe.
-- [ ] **Altersfreigabe:** Das Rating ist auf 4+ gesetzt (keine anstößigen Inhalte).
-- [ ] **Privacy Nutrition Labels:** Im App Store Connect ist korrekt hinterlegt, dass keine Daten mit der Identität des Nutzers verknüpft werden ("Data Not Linked to You").
-- [ ] **Review-Notizen:** Dem Apple-Review-Team wurde ein Test-Account (falls Login aktiv) und ein Video zur Verfügung gestellt, das zeigt, wie die Screen Time API in der App genutzt wird.
+- [ ] `npm ci` läuft mit dem festgelegten Node- und npm-Bereich erfolgreich.
+- [ ] `npm run verify` läuft vollständig ohne Fehler.
+- [ ] TypeScript, ESLint und Prettier bestehen.
+- [ ] Alle Vitest-, Accessibility- und Migrationsprüfungen bestehen.
+- [ ] Android `testDebugUnitTest` besteht.
+- [ ] Android `assembleDebug` erstellt eine installierbare Debug-APK.
+- [ ] APK und Android-Testbericht wurden als Workflow-Artefakte oder lokal archiviert.
+- [ ] Ein tatsächlicher Android-/Gradle-Build bestätigt die Kompilierbarkeit aller nativen Plugins und des Schutzdienstes.
 
-## 3. Google Play Submission (Android)
+GitHub Actions ist derzeit durch die Kontoabrechnung beziehungsweise das Spending-Limit blockiert. Ein Workflow mit `steps: []` ist kein bestandener oder fehlgeschlagener Code-Test.
 
-- [x] **Android-Projekt:** Ein Capacitor-Android-Wrapper existiert unter `android/`; Version, Backup- und Cleartext-Flags werden automatisch geprüft.
-- [x] **Release-Härtung:** Android-Release-Builds nutzen R8-Minifizierung und Resource-Shrinking; der Release-Check schützt diese Flags.
-- [x] **Signing-Schutz:** Android-Keystores und lokale `signing.properties` sind ignoriert; `android/signing.properties.example` dokumentiert den lokalen Signing-Pfad.
-- [x] **Berechtigungs-Minimum:** Das aktuelle Android-Manifest fordert nur Internet an; sensible Enforcement-Berechtigungen sind bis zur nativen Implementierung blockiert.
-- [ ] **Berechtigungs-Deklaration:** `PACKAGE_USAGE_STATS` (Nutzungsdaten) und `SYSTEM_ALERT_WINDOW` (Overlay) sind im Play Console Formular für sensible Berechtigungen deklariert und mit einem Video-Beweis des Use-Cases (Digital Wellbeing) begründet.
-- [x] **Keine Accessibility API:** Die Release-UI enthält keinen Accessibility-API-Pfad; der Release-Check lehnt `BIND_ACCESSIBILITY_SERVICE` in einem künftigen Android-Manifest ab.
-- [ ] **Altersfreigabe:** USK 0 / PEGI 3 Fragebogen in der Play Console korrekt ausgefüllt.
-- [ ] **Data Safety Section:** Im Formular zur Datensicherheit ist angegeben, dass App-Aktivitäten lokal verarbeitet und nicht an Entwickler-Server gesendet werden.
+## 3. Android-Projekt und Sicherheit
 
-## 4. Datenschutz- und Rechtstext-Prüfung
+- [x] Paket-ID und Namespace sind `app.scrollshield.mobile`.
+- [x] Cleartext-HTTP und Android-App-Backup sind deaktiviert.
+- [x] Release-Minifizierung und Resource-Shrinking sind aktiviert.
+- [x] Keystore, Signing-Dateien und Play-Zugangsdaten sind nicht eingecheckt.
+- [x] Externe GitHub Actions sind auf unveränderliche Commit-SHAs gepinnt.
+- [x] `QUERY_ALL_PACKAGES` wird nicht verwendet.
+- [x] Unterstützte Ziel-Apps werden über begrenzte `<queries>` und bekannte Paketnamen geprüft.
+- [ ] Die endgültige Paket-ID wurde vor dem ersten Play-Upload ausdrücklich bestätigt.
+- [ ] Der signierte Release-Build wurde auf unerwartete SDKs, Tracker, Netzwerkziele und Berechtigungen untersucht.
 
-- [ ] **Datenschutzerklärung (Privacy Policy):** `public/privacy.html` ist auf der finalen Domain veröffentlicht und die URL ist in den App Stores sowie in der App verlinkt.
-- [x] **DSGVO/GDPR-Prozesse:** Die Buttons für "Datenschutzanfrage" und "Datenlöschanfrage" im Support-Screen öffnen korrekt den E-Mail-Client mit dem passenden Betreff und einer Vorlage.
-- [x] **Youth Safety:** Bei unbekanntem Alter und für Nutzer unter 16 Jahren erzwingt die Zustandsnormalisierung `strictPrivacyMode: true`; Version 1.0 erzwingt außerdem immer `localOnly: true`.
-- [x] **Kein Tracking:** `npm run check:privacy` prüft Laufzeit-Abhängigkeiten, Netzwerk-APIs im Quellcode und bekannte Tracker-Marker im Produktionsbundle.
+## 4. Berechtigungen und Foreground Service
 
-## 5. Barrierefreiheits-Prüfung (Accessibility)
+- [x] Usage Access wird nur zur Erkennung einer vom Nutzer ausgewählten Vordergrund-App verwendet.
+- [x] Overlay-Zugriff wird nur für die klar erkennbare ScrollShield-Unterbrechung verwendet.
+- [x] Android 13+ verwendet den nativen `POST_NOTIFICATIONS`-Systemdialog.
+- [x] Android 8+ kann direkt den Kanal `Aktiver App-Schutz` öffnen.
+- [x] Android 7 verwendet einen sicheren App-Details-Fallback.
+- [x] App-weite Benachrichtigungen und der einzelne Schutzkanal werden getrennt diagnostiziert.
+- [x] Schutz startet nicht ohne Usage Access, Overlay, sichtbare Benachrichtigung und installierte aktive Ziel-App.
+- [x] Die laufende Benachrichtigung zeigt den aktiven Schutz und enthält `Schutz stoppen`.
+- [x] Der Dienst beendet sich bei Entzug von Benachrichtigungen, Schutzkanal, Usage Access oder Overlay.
+- [x] Der Dienst beendet sich, wenn alle aktiven Regeln oder die letzte installierte Ziel-App verschwinden.
+- [x] Beim Dienstende werden Overlay, Aktivierungsstatus und Foreground-Benachrichtigung entfernt und ein lokaler Warnhinweis gespeichert.
+- [ ] Alle genannten Fälle wurden auf realen Geräten mit aktuellem Build nachgewiesen.
 
-- [x] **Kontraste:** Sekundärtexte verwenden mindestens Zinc 400; auf den Zinc-900/950-Flächen liegt der gemessene Kontrast bei mindestens 6,91:1 und damit über WCAG AA.
-- [x] **Touch Targets:** Eine globale CSS-Regel erzwingt mindestens 44x44 Pixel für Bedienelemente; `npm run check:a11y` schützt die Regel vor Regressionen.
-- [x] **Screenreader:** Icon-Buttons, Navigation, Zeitwähler und alle Schalter haben kontextbezogene Namen; zentrale Screens werden mit `axe-core` geprüft.
-- [x] **Textskalierung:** Überschriften und Lauftexte dürfen umbrechen, feste Einzeiler sind aus der Release-UI entfernt und der Quellcode-Guard schützt diese Regeln.
+## 5. Schutzlogik
 
-## 6. Berechtigungs-Prüfung
+- [x] Der laufende Dienst verwendet dieselbe `ProtectionRulePolicy`, die durch lokale JUnit-Tests abgedeckt ist.
+- [x] Standardverzögerung, Zurück-zum-Startbildschirm und bewusste temporäre Freigabe sind implementiert.
+- [x] Strikter Modus und begrenzte Notfallfreigabe sind implementiert.
+- [x] Tageslimit, Sitzungsdauer, Blockzeiten über Mitternacht und Fokusregeln sind implementiert.
+- [x] Wiederkehrende Morgen-, Arbeits-/Schul-, Abend-, Nacht- und Wochenendregeln sind implementiert.
+- [x] Anti-Binge-Warn- und Sperrschwellen sind implementiert.
+- [x] Gemessene native Nutzung und Schutzereignisse werden lokal in Verlauf und Tagesstatistik importiert.
+- [ ] Instrumentationstests decken Dienstlebenszyklus, Overlay, Countdown, Sitzungsende, Usage-Import und Boot-Recovery ab.
+- [ ] Alle Regeln wurden nach `docs/ANDROID_DEVICE_TEST_MATRIX.md` auf realen Geräten geprüft.
 
-- [x] **Transparenz:** Der `PermissionsScreen` erklärt Zweck und Einschränkungen in Alltagssprache; technische Begriffe stehen nur in den zusätzlichen Erklärungen.
-- [x] **Graceful Degradation (Fallback):** Abgelehnte oder übersprungene Berechtigungen bleiben deaktiviert; die App zeigt den eingeschränkten Schutzstatus und bleibt bedienbar.
-- [x] **Kein Zwang:** Ein Komponententest stellt sicher, dass Nutzer das Onboarding auch ohne erteilte Berechtigungen abschließen können.
+## 6. Geräte-, Batterie- und Zeitmatrix
 
-## 7. Store-Text- und Screenshot-Prüfung
+- [ ] Google Pixel oder ein anderes physisches Near-Stock-Gerät besteht.
+- [ ] Samsung Galaxy besteht.
+- [ ] Xiaomi/Redmi besteht.
+- [ ] OnePlus besteht.
+- [ ] Motorola besteht.
+- [ ] Mindestens ein Android-Tablet besteht in Hoch- und Querformat.
+- [ ] Android 7 / API 24 Legacy-Fallback besteht.
+- [ ] Android 8 / API 26 Kanal- und Foreground-Service-Verhalten besteht.
+- [ ] Android 13+ Runtime-Benachrichtigungsdialog besteht.
+- [ ] Reboot, App-Update, Prozessende, Force-Stop und Herstellersparmodi sind dokumentiert.
+- [ ] Ein mindestens zwölfstündiger Lauf zeigt keinen Benachrichtigungs-, Overlay-, Event- oder Batteriefehler.
+- [ ] Mitternacht, Zeitzonenwechsel, Sommerzeit und manuelle Uhränderung bestehen.
+- [ ] Für jeden Lauf liegen Version, Build, Diagnose-JSON, Ergebnis und Fehlernachweise vor.
 
-- [x] **Keine falschen Versprechen:** Die Store-Beschreibung positioniert ScrollShield als "Werkzeug zur Selbstkontrolle" und wird vom Release-Check auf riskante Garantien geprüft.
-- [x] **Best-Effort-Kommunikation:** Der Kurzvideo-Schutz ist ausdrücklich als Best-Effort-Unterbrecher beschrieben, der keine vollständige Feed-Erkennung oder Sperre garantiert.
-- [x] **Screenshots:** Sechs echte Produktions-PWA-Screenshots liegen unter `docs/store-assets`; sie zeigen nur vorhandene Funktionen und wurden visuell auf Überlagerungen geprüft.
-- [x] **Keywords:** ADHS, Fokus, Bildschirmzeit, Digital Wellbeing und Prokrastination sind enthalten und werden vom Release-Check abgesichert.
+## 7. Installation und Datenmigration
 
-## 8. Stabilitäts- und Crash-Prüfung
+- [x] Lokale Daten bleiben offline und werden nicht an einen Entwickler-Server übertragen.
+- [x] Export, validierter Import und lokaler Komplettreset sind vorhanden.
+- [x] Beschädigte lokale Daten werden defensiv normalisiert beziehungsweise verworfen.
+- [ ] Clean Install wurde mit dem aktuellen Kandidaten geprüft.
+- [ ] Bestehende V0.7-kompatible Daten wurden ohne Verlust von Profilen, Regeln, Verlauf und Statistiken migriert.
+- [ ] Upgrade vom vorherigen Release-Kandidaten wurde geprüft.
+- [ ] App-Update bei aktivem Schutz wurde geprüft.
+- [ ] Deinstallation und anschließende Neuinstallation wurden geprüft.
 
-- [x] **Storage Fallback:** Tests mit korrupten Einstellungs- und Statistikdaten bestätigen, dass gültige Daten weiter geladen und beschädigte Chunks verworfen werden.
-- [x] **Error Boundary:** Ein Komponententest löst absichtlich einen React-Fehler aus und bestätigt den Wiederherstellungsbildschirm.
-- [x] **Hintergrund-Stabilität:** Fokus- und App-Sitzungen werden lokal gespeichert; Fokus-Restzeiten werden nach Hintergrundpause oder Neustart aus absoluten Zeitstempeln rekonstruiert und durch einen App-Neustarttest abgesichert.
+## 8. Datenschutz, Recht und Support
 
-## 9. Datenlösch-/Reset-Prüfung
+- [x] Version 1 enthält keinen Account, keine Cloud-Synchronisierung, keine Werbung, keine Analyse und kein Tracking.
+- [x] Privacy- und Produktionsprüfungen suchen nach unerwarteten Netzwerk- und Tracker-Mustern.
+- [ ] Echter rechtlicher Name beziehungsweise Unternehmen ist eingetragen.
+- [ ] Vollständige ladungsfähige Adresse ist eingetragen.
+- [ ] Verantwortliche Person ist eingetragen.
+- [ ] `support@scrollshield.app` oder die endgültige Support-Adresse ist verifiziert und überwacht.
+- [ ] Die finale Datenschutzdomain ist erreichbar und enthält die veröffentlichte Datenschutzerklärung.
+- [ ] Alle Platzhalter in App, Store-Paket und Rechtstexten sind ersetzt.
+- [ ] Die endgültigen Aussagen wurden gegen den signierten AAB geprüft.
 
-- [x] **Datenexport:** Der Privacy-Screen kann lokale Regeln, Verlauf und Statistiken als JSON-Datei exportieren.
-- [x] **Datenimport:** Unterstützte ScrollShield-JSON-Exporte werden validiert und importiert; echte Systemberechtigungen werden dabei nicht überschrieben.
-- [x] **Lokaler Reset:** Der Button "App auf Werkseinstellungen zurücksetzen" löscht den `localStorage` (`scrollshield_*` Keys) restlos, setzt den Zustand auf `DEFAULT_STATE` zurück und führt zurück zum Onboarding.
-- [x] **Cloud-Löschung (nicht anwendbar in v1.0):** Version 1.0 enthält weder Account noch Firebase/Auth-/Cloud-SDK; lokale Daten werden über den geprüften App-Reset gelöscht.
+## 9. Google Play Console
 
-## 10. Spätere Premium-Fähigkeit (ohne aktive Paywall)
+- [x] Vorbereitete Data-Safety-Antworten lauten für Entwicklererhebung und Weitergabe auf `Nein`, sofern der finale Build unverändert bleibt.
+- [x] Erklärungen für `PACKAGE_USAGE_STATS`, `SYSTEM_ALERT_WINDOW`, Paket-Sichtbarkeit und `FOREGROUND_SERVICE_SPECIAL_USE` sind vorbereitet.
+- [x] Version 1 verspricht nur zuverlässigen Whole-App-Schutz, keine garantierte Reels-/Shorts-Unterseiten-Erkennung.
+- [x] Medizinische beziehungsweise ADHS-Behandlungsversprechen wurden entfernt.
+- [ ] Data Safety wurde im Play Console Formular final bestätigt.
+- [ ] Usage-Access- und Overlay-Deklarationen wurden final eingereicht.
+- [ ] Foreground-Service-Special-Use-Deklaration wurde final eingereicht.
+- [ ] USK-/PEGI-Fragebogen wurde final ausgefüllt.
+- [ ] Reviewer-Video zeigt Runtime-Prompt, Schutzkanal, sichtbaren Dienst, direkte Stop-Aktion, Overlay und sicheren Entzug.
+- [ ] Reviewer-Video verwendet exakt denselben Build wie der hochgeladene AAB.
+- [ ] Interner oder geschlossener Testtrack wurde vor Produktion erfolgreich abgeschlossen.
 
-- [x] **Versteckte Premium-Features:** Zentrale `FEATURE_FLAGS` halten Cloud-Sync, Partner-/Familienmodus, Abos, KI und erweiterte Statistiken in Version 1.0 auf `false`; ein Test prüft dies.
-- [x] **Keine toten Buttons:** Der Produktions-Versionshinweis ist nicht interaktiv; die Dashboard-Schnellaktion öffnet den Schutzablauf; es gibt keine sichtbaren Upgrade-/Paywall-Buttons.
-- [x] **Architektur-Ready:** `SubscriptionScreen` und `SubscriptionPlan` sind getestet vorbereitet, aber nicht in die Release-Navigation importiert oder gebündelt.
+## 10. iOS-Status
+
+- [ ] Family-Controls-Entitlement wurde genehmigt.
+- [ ] Native Family Controls und Managed Settings sind implementiert.
+- [ ] iOS-Berechtigung, Shielding und Wiederherstellung sind auf realen Geräten getestet.
+- [ ] Apple-Review-Unterlagen und Video stimmen mit dem tatsächlichen iOS-Build überein.
+
+Der aktuelle iOS-Stand ist nicht einreichbar. Eine Web-/PWA-Vorschau ersetzt keine native Screen-Time-Durchsetzung.
+
+## 11. Endgültige Freigabe
+
+- [ ] Keine offenen Blocker oder kritischen Defekte.
+- [ ] Alle Herstellerabweichungen sind behoben oder ausdrücklich aus dem Release ausgeschlossen.
+- [ ] Freigabemanifest ist vollständig und gehört zur exakten Version und Build-Nummer.
+- [ ] Signierter AAB wurde installiert und erneut einem Smoke-Test unterzogen.
+- [ ] Store-Texte, Screenshots, Reviewer-Video und Binärdatei zeigen dieselbe Funktionalität.
+- [ ] Rollback-, Support- und Staged-Rollout-Verantwortung sind festgelegt.
+
+Erst danach darf `npm run android:bundle` erfolgreich durch das Release-Gate laufen.
