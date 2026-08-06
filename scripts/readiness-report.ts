@@ -11,6 +11,7 @@ const steps: Step[] = [
   { command: 'npm', args: ['run', 'check:version'], required: true },
   { command: 'npm', args: ['run', 'check:android'], required: true },
   { command: 'npm', args: ['run', 'check:device-matrix'], required: true },
+  { command: 'npm', args: ['run', 'check:migration'], required: true },
   { command: 'npm', args: ['run', 'check:release-approval'], required: true },
   { command: 'npm', args: ['run', 'check:transparency'], required: true },
   { command: 'npm', args: ['run', 'check:secrets'], required: true },
