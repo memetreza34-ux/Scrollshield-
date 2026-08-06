@@ -4,22 +4,25 @@ ScrollShield is an offline-first digital wellbeing app for reducing impulsive so
 
 ## Current Scope
 
-- App protection profiles and intentional opening flows
-- Opening delays, limited sessions, daily limits and emergency unlocks
+- App and short-video protection profiles
+- Intentional opening delay and emergency unlock flows
 - Focus sessions and local history/statistics
-- Recurring weekly presets for morning, work/school, evening, night and weekends
 - Local-only storage with migration and export support
 - PWA build, automated tests, CI and release-readiness checks
-- Android native permission bridge with real Usage Access, overlay, notification and battery-status checks
-- Android whole-app protection using foreground-app detection, a foreground service and a full-screen interruption overlay
+- Android native permission bridge with real Usage Access, overlay, notification, and battery-status checks
+- Android whole-app protection using foreground-app detection, a foreground service, and a full-screen interruption overlay
 - Explicit protection-service start/stop controls and a persistent stop action in the Android notification
+- Required visible notifications before Android protection can start or recover after reboot
 - Recovery of explicitly enabled protection after reboot or app update
-- Native session duration, daily limits, recurring schedules, Anti-Binge thresholds and emergency-unlock counters
-- Scoped installed-app validation without `QUERY_ALL_PACKAGES`
-- Availability-aware Android app selection that disables unsupported or uninstalled targets
+- Native session duration, daily limits, recurring weekly schedules, Anti-Binge thresholds, and emergency-unlock counters
+- Scoped installed-app validation for supported Android packages
 - Import of measured native usage and protection decisions into local React statistics and history
+- Native Android device and permission diagnostics with copyable JSON output
+- Pure Java rule-boundary tests and React component coverage for critical setup behavior
+- CI prepared to run web verification, Android JUnit tests, debug APK compilation, and artifact upload
+- External GitHub Actions pinned to immutable commit SHAs
 
-The browser/PWA version cannot physically block other installed apps. Native whole-app protection is available only in the installed Android build and still requires successful compilation, real-device validation, battery testing, schedule-boundary testing and Play Console review preparation before release.
+The browser/PWA version cannot physically block other installed apps. Native whole-app protection is available only in the installed Android build and still requires successful compilation, real-device validation, battery testing, schedule edge-case testing, and Play Console review preparation before release.
 
 Reels-only protection remains an Android beta target because Usage Access identifies the foreground app but not the exact short-video screen inside a third-party app.
 
