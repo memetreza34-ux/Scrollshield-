@@ -1,0 +1,101 @@
+import { Capacitor, registerPlugin } from '@capacitor/core';
+import type { AppConfig } from '../types';
+
+interface NativeProtectionPlugin {
+  syncProtectionConfig(options: { configJson: string }): Promise<void>;
+  startProtectionService(): Promise<void>;
+  stopProtectionService(): Promise<void>;
+  getProtectionServiceStatus(): Promise<{ running: boolean }>;
+}
+
+interface NativeProtectionConfig {
+  focusMode: boolean;
+  apps: Array<{
+    id: string;
+    name: string;
+    packages: string[];
+    active: boolean;
+    mode: AppConfig['mode'];
+    delaySeconds: number;
+    sessionMinutes: number;
+    focusModeBehavior: AppConfig['focusModeBehavior'];
+  }>;
+}
+
+const AndroidProtection = registerPlugin<NativeProtectionPlugin>('ScrollShieldNative');
+
+const ANDROID_PACKAGES: Record<string, string[]> = {
+  instagram: ['com.instagram.android'],
+  tiktok: ['com.zhiliaoapp.musically', 'com.ss.android.ugc.trill'],
+  youtube: ['com.google.android.youtube'],
+  facebook: ['com.facebook.katana'],
+  twitter: ['com.twitter.android'],
+  snapchat: ['com.snapchat.android'],
+  reddit: ['com.reddit.frontpage'],
+  linkedin: ['com.linkedin.android'],
+  pinterest: ['com.pinterest'],
+  threads: ['com.instagram.barcelona'],
+  twitch: ['tv.twitch.android.app'],
+  netflix: ['com.netflix.mediaclient'],
+  discord: ['com.discord'],
+};
+
+const APP_NAMES: Record<string, string> = {
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+  facebook: 'Facebook',
+  twitter: 'X',
+  snapchat: 'Snapchat',
+  reddit: 'Reddit',
+  linkedin: 'LinkedIn',
+  pinterest: 'Pinterest',
+  threads: 'Threads',
+  twitch: 'Twitch',
+  netflix: 'Netflix',
+  discord: 'Discord',
+};
+
+export const NativeProtection = {
+  isAvailable(): boolean {
+    return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+  },
+
+  async sync(appsConfig: Record<string, AppConfig>, focusMode: boolean): Promise<void> {
+    if (!this.isAvailable()) return;
+
+    const config: NativeProtectionConfig = {
+      focusMode,
+      apps: Object.entries(appsConfig)
+        .filter(([appId, appConfig]) => appConfig.active && ANDROID_PACKAGES[appId]?.length)
+        .map(([appId, appConfig]) => ({
+          id: appId,
+          name: APP_NAMES[appId] ?? appId,
+          packages: ANDROID_PACKAGES[appId],
+          active: appConfig.active,
+          mode: appConfig.mode,
+          delaySeconds: Math.max(0, appConfig.openDelay),
+          sessionMinutes: Math.max(1, appConfig.sessionLimit ?? 5),
+          focusModeBehavior: appConfig.focusModeBehavior,
+        })),
+    };
+
+    await AndroidProtection.syncProtectionConfig({ configJson: JSON.stringify(config) });
+  },
+
+  async start(appsConfig: Record<string, AppConfig>, focusMode: boolean): Promise<void> {
+    if (!this.isAvailable()) return;
+    await this.sync(appsConfig, focusMode);
+    await AndroidProtection.startProtectionService();
+  },
+
+  async stop(): Promise<void> {
+    if (!this.isAvailable()) return;
+    await AndroidProtection.stopProtectionService();
+  },
+
+  async getStatus(): Promise<{ running: boolean }> {
+    if (!this.isAvailable()) return { running: false };
+    return AndroidProtection.getProtectionServiceStatus();
+  },
+};
