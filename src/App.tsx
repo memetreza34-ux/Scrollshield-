@@ -4,6 +4,7 @@ import { AppState, Screen, DEFAULT_STATE } from './types';
 import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
 import { reconcileFocusRuntime } from './lib/focus';
+import { NativeProtection } from './lib/nativeProtection';
 import { BottomNav } from './components/ui';
 import { Welcome, Onboarding } from './screens/OnboardingScreens';
 import { Dashboard, History } from './screens/MainScreens';
@@ -80,7 +81,6 @@ export default function App() {
     }
   }, [isLoaded, currentScreen, appState.hasCompletedOnboarding]);
 
-  // Sync state to local storage when it changes
   useEffect(() => {
     if (isLoaded) {
       if (skipNextSaveRef.current) {
@@ -90,6 +90,18 @@ export default function App() {
       StorageService.saveState(appState);
     }
   }, [appState, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded || !NativeProtection.isAvailable()) return;
+
+    const syncTimer = window.setTimeout(() => {
+      void NativeProtection.sync(appState.appsConfig, appState.isFocusModeActive).catch((error) => {
+        console.error('Failed to sync native protection configuration', error);
+      });
+    }, 250);
+
+    return () => window.clearTimeout(syncTimer);
+  }, [appState.appsConfig, appState.isFocusModeActive, isLoaded]);
 
   if (!isLoaded)
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">Laden...</div>;
