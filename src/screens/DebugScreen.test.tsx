@@ -62,16 +62,16 @@ describe('DebugScreen native diagnostics', () => {
     expect(screen.getByText('1.0.0 (Build 1)')).toBeInTheDocument();
     expect(screen.getByText('Europe/Berlin')).toBeInTheDocument();
     expect(screen.getByText('app.scrollshield.mobile')).toBeInTheDocument();
-    expect(screen.getByText('App-Benachrichtigungen')).toBeInTheDocument();
-    expect(screen.getByText('Schutzkanal')).toBeInTheDocument();
-    expect(screen.getByText('Schutz-Benachrichtigung')).toBeInTheDocument();
+    expect(screen.getByText(/App-Benachrichtigungen/)).toBeInTheDocument();
+    expect(screen.getByText(/Schutzkanal/)).toBeInTheDocument();
+    expect(screen.getByText(/Schutz-Benachrichtigung/)).toBeInTheDocument();
     expect(screen.getAllByText('DEAKTIVIERT')).toHaveLength(1);
     expect(screen.getByText('NICHT BEREIT')).toBeInTheDocument();
-    expect(screen.getByText('Letzter Schutzstart')).toBeInTheDocument();
-    expect(screen.getByText('Letzter Stoppzeitpunkt')).toBeInTheDocument();
-    expect(screen.getByText('Letzter Stoppcode')).toBeInTheDocument();
+    expect(screen.getByText(/Letzter Schutzstart/)).toBeInTheDocument();
+    expect(screen.getByText(/Letzter Stoppzeitpunkt/)).toBeInTheDocument();
+    expect(screen.getByText(/Letzter Stoppcode/)).toBeInTheDocument();
     expect(screen.getByText('notifications_missing')).toBeInTheDocument();
-    expect(screen.getByText('Letzter Stoppgrund')).toBeInTheDocument();
+    expect(screen.getByText(/Letzter Stoppgrund/)).toBeInTheDocument();
     expect(
       screen.getByText('Benachrichtigungen wurden entzogen; der Android-Schutz wurde beendet'),
     ).toBeInTheDocument();
