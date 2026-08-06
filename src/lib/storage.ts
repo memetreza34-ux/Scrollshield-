@@ -264,6 +264,9 @@ const cleanupArchivedLegacySources = () => {
   }
 };
 
+const hasLegacySource = (): boolean =>
+  [...LEGACY_MONOLITHIC_KEYS, ...LEGACY_V07_KEYS].some((key) => localStorage.getItem(key) !== null);
+
 const parseLegacyTimestamp = (value: unknown, fallback: number): number => {
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value;
   if (typeof value !== 'string') return fallback;
@@ -436,8 +439,9 @@ export const StorageService = {
         }
       }
 
-      const migrated = migrateMonolithicState() ?? migrateV07State();
-      if (migrated) return migrated;
+      if (hasLegacySource()) {
+        return migrateMonolithicState() ?? migrateV07State();
+      }
 
       const orphaned = loadCurrentState();
       if (!orphaned) return null;
