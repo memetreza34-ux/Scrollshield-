@@ -22,16 +22,20 @@ This branch is the active ScrollShield release foundation.
 - added scoped package visibility and native installed-app validation
 - added availability-aware app selection that disables unavailable Android apps
 - added component tests for unavailable-app activation prevention and weekly preset updates
+- added a pure Java protection-rule policy with JUnit boundary coverage
+- prepared CI to run Android unit tests and compile the debug APK
+- prepared successful CI runs to publish the debug APK and Android test report as downloadable workflow artifacts
+- expanded the static Android project checker to guard native service, schedule, package, boot-recovery, rule-test, and compile-workflow requirements
 - documented competitor-led product priorities and platform limits
 
 ## Blocking release work
 
-- successful JavaScript verification and Android compilation in a working build environment
+- successful execution of JavaScript verification, Android JUnit tests, and debug compilation in a working runner or local Android environment
 - real-device reliability and battery testing across major Android manufacturers
 - time-zone, daylight-saving, midnight, and manual-clock tests for recurring schedules
 - optional custom per-day/per-app schedule editor if presets are insufficient
 - cloned-app, work-profile, manufacturer, and regional package validation
 - process-recovery, reboot, app-update, battery-saver, and permission-loss test matrix
-- automated Android tests for the native rule engine and overlay lifecycle
+- Android service-lifecycle and overlay tests beyond the current pure rule-policy coverage
 - legal placeholder replacement and final Play Console declarations
 - Reels-only beta and iOS native implementation
