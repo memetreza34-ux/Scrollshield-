@@ -63,6 +63,16 @@ export function PermissionsScreen({
   updateStateRef.current = updateState;
   permissionsRef.current = permissions;
 
+  const applyNativePermissionStatus = (nativeStatus: Awaited<ReturnType<typeof NativePermissions.getAndroidStatus>>) => {
+    if (!nativeStatus) return;
+    updateStateRef.current({
+      permissions: {
+        ...permissionsRef.current,
+        ...nativeStatus,
+      },
+    });
+  };
+
   const refreshNativeStatus = async () => {
     if (!NativePermissions.isAndroidNative()) return;
 
@@ -73,14 +83,7 @@ export function PermissionsScreen({
         NativePermissions.getAndroidStatus(),
         NativeProtection.getStatus(),
       ]);
-      if (nativeStatus) {
-        updateStateRef.current({
-          permissions: {
-            ...permissionsRef.current,
-            ...nativeStatus,
-          },
-        });
-      }
+      applyNativePermissionStatus(nativeStatus);
       setServiceRunning(serviceStatus.running);
       setStatusMessage('Android-Status wurde aktualisiert.');
     } catch (error) {
@@ -111,11 +114,28 @@ export function PermissionsScreen({
       setOpeningSetting(key);
       setStatusMessage(null);
       try {
+        if (key === 'notifications') {
+          const granted = await NativePermissions.requestAndroidNotifications();
+          const nativeStatus = await NativePermissions.getAndroidStatus();
+          applyNativePermissionStatus(nativeStatus);
+
+          if (granted && nativeStatus?.notifications) {
+            setStatusMessage('Benachrichtigungen und die sichtbare Stop-Aktion sind aktiviert.');
+            return;
+          }
+
+          await NativePermissions.openAndroidSettings('notifications');
+          setStatusMessage(
+            'Die Freigabe oder der Schutzkanal ist deaktiviert. Aktiviere Benachrichtigungen in Android und prüfe den Status erneut.',
+          );
+          return;
+        }
+
         await NativePermissions.openAndroidSettings(key);
         setStatusMessage('Erteile den Zugriff in Android und tippe danach auf „Status neu prüfen“.');
       } catch (error) {
-        console.error('Could not open Android settings', error);
-        setStatusMessage('Die Android-Einstellungen konnten nicht geöffnet werden.');
+        console.error('Could not activate Android permission', error);
+        setStatusMessage('Die Android-Berechtigung konnte nicht angefragt oder geöffnet werden.');
       } finally {
         setOpeningSetting(null);
       }
@@ -212,7 +232,7 @@ export function PermissionsScreen({
           : 'Du erhältst keine Erinnerungen, Warnhinweise oder Zusammenfassungen. Die übrigen Schutzregeln bleiben erhalten.',
       details:
         operatingSystem === 'android'
-          ? 'ScrollShield verlangt Benachrichtigungen für einen transparenten Schutzbetrieb. Der laufende Dienst bleibt dadurch sichtbar und kann direkt über die Dauerbenachrichtigung gestoppt werden.'
+          ? 'ScrollShield fragt die Android-Benachrichtigungsfreigabe direkt an. Falls sie abgelehnt oder nur der Schutzkanal deaktiviert wurde, öffnet die App anschließend die Systemeinstellungen. Der laufende Dienst bleibt dadurch sichtbar und kann direkt über die Dauerbenachrichtigung gestoppt werden.'
           : undefined,
     },
     {
@@ -377,7 +397,9 @@ export function PermissionsScreen({
             const nativeAndroidAction =
               operatingSystem === 'android' && NativePermissions.isAndroidNative() && isAndroidSettingKey(card.key);
             const primaryLabel = nativeAndroidAction
-              ? 'Systemeinstellungen öffnen'
+              ? card.key === 'notifications'
+                ? 'Benachrichtigungen erlauben'
+                : 'Systemeinstellungen öffnen'
               : active
                 ? 'Deaktivieren'
                 : 'Aktivieren';
