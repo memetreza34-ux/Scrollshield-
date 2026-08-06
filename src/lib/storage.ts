@@ -264,6 +264,27 @@ const cleanupArchivedLegacySources = () => {
   }
 };
 
+const archiveRemainingLegacySources = () => {
+  const existing = parseJson<LegacyStorageArchive>(localStorage.getItem(LEGACY_ARCHIVE_KEY));
+  const archivedSources = new Set(existing?.sources?.map((source) => source.source) ?? []);
+
+  for (const key of LEGACY_MONOLITHIC_KEYS) {
+    const raw = localStorage.getItem(key);
+    if (raw === null || archivedSources.has(key)) continue;
+    if (archiveLegacyEntries(key, { [key]: raw })) archivedSources.add(key);
+  }
+
+  const v07Entries = Object.fromEntries(
+    LEGACY_V07_KEYS.flatMap((key) => {
+      const raw = localStorage.getItem(key);
+      return raw === null ? [] : [[key, raw]];
+    }),
+  );
+  if (Object.keys(v07Entries).length > 0 && !archivedSources.has('legacy_v07_pro')) {
+    archiveLegacyEntries('legacy_v07_pro', v07Entries);
+  }
+};
+
 const hasLegacySource = (): boolean =>
   [...LEGACY_MONOLITHIC_KEYS, ...LEGACY_V07_KEYS].some((key) => localStorage.getItem(key) !== null);
 
@@ -425,7 +446,13 @@ const migrateV07State = (): Partial<AppState> | null => {
 };
 
 export const StorageService = {
-  saveState: (state: AppState): boolean => saveStateInternal(state),
+  saveState: (state: AppState): boolean => {
+    if (hasLegacySource()) {
+      console.error('State save blocked while legacy migration data is unresolved');
+      return false;
+    }
+    return saveStateInternal(state);
+  },
 
   loadState: (): Partial<AppState> | null => {
     try {
@@ -434,6 +461,7 @@ export const StorageService = {
       if (meta?.version === VERSION) {
         const current = loadCurrentState();
         if (current) {
+          archiveRemainingLegacySources();
           cleanupArchivedLegacySources();
           return current;
         }
@@ -467,6 +495,8 @@ export const StorageService = {
   },
 
   migrateFromV2: (): Partial<AppState> | null => migrateMonolithicState(),
+
+  hasPendingLegacyMigration: (): boolean => hasLegacySource(),
 
   getLegacyArchive: (): LegacyStorageArchive | null =>
     parseJson<LegacyStorageArchive>(localStorage.getItem(LEGACY_ARCHIVE_KEY)),
