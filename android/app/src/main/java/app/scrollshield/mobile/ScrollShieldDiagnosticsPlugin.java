@@ -1,6 +1,5 @@
 package app.scrollshield.mobile;
 
-import android.app.NotificationManager;
 import android.content.Context;
 import android.os.Build;
 import android.os.PowerManager;
@@ -21,14 +20,8 @@ public class ScrollShieldDiagnosticsPlugin extends Plugin {
     public void getSnapshot(PluginCall call) {
         Context context = getContext();
         PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-        NotificationManager notificationManager = (NotificationManager) context.getSystemService(
-            Context.NOTIFICATION_SERVICE
-        );
-
         boolean batteryExempt = powerManager != null
             && powerManager.isIgnoringBatteryOptimizations(context.getPackageName());
-        boolean notificationsEnabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.N
-            || (notificationManager != null && notificationManager.areNotificationsEnabled());
 
         JSObject result = new JSObject();
         result.put("capturedAt", System.currentTimeMillis());
@@ -46,7 +39,7 @@ public class ScrollShieldDiagnosticsPlugin extends Plugin {
             "overlay",
             Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)
         );
-        result.put("notifications", notificationsEnabled);
+        result.put("notifications", ScrollShieldNativePlugin.hasNotificationsEnabled(context));
         result.put("batteryOptimizationExempt", batteryExempt);
         result.put("protectionEnabled", ScrollShieldNativePlugin.isProtectionEnabled(context));
         result.put("serviceRunning", ScrollShieldProtectionService.isRunning());
