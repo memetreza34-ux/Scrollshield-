@@ -79,6 +79,7 @@ describe('StorageService interrupted migration recovery', () => {
     const failedAttempt = StorageService.loadState();
 
     expect(failedAttempt).toBeNull();
+    expect(StorageService.hasPendingLegacyMigration()).toBe(true);
     expect(localStorage.getItem('scrollshield_state_v2')).toBe(raw);
     expect(localStorage.getItem('scrollshield_meta_v3')).toBeNull();
     expect(localStorage.getItem('scrollshield_settings_v3_pending')).not.toBeNull();
@@ -87,11 +88,16 @@ describe('StorageService interrupted migration recovery', () => {
     expect(localStorage.getItem('scrollshield_history_v3_pending')).not.toBeNull();
     expect(localStorage.getItem('scrollshield_meta_v3_pending')).not.toBeNull();
 
+    expect(StorageService.saveState(DEFAULT_STATE)).toBe(false);
+    expect(localStorage.getItem('scrollshield_meta_v3')).toBeNull();
+    expect(localStorage.getItem('scrollshield_state_v2')).toBe(raw);
+
     const recovered = StorageService.loadState();
 
     expect(recovered?.goals).toEqual(['Legacy-Ziel muss erhalten bleiben']);
     expect(recovered?.stats?.totalSavedTime).toBe(777);
     expect(recovered?.history?.[0].id).toBe('legacy-critical-event');
+    expect(StorageService.hasPendingLegacyMigration()).toBe(false);
     expect(localStorage.getItem('scrollshield_state_v2')).toBeNull();
     expect(Object.keys(localStorage).some((key) => key.endsWith('_pending'))).toBe(false);
     expect(StorageService.getLegacyArchive()?.sources[0].rawEntries.scrollshield_state_v2).toBe(raw);
@@ -119,5 +125,7 @@ describe('StorageService interrupted migration recovery', () => {
     StorageService.loadState();
 
     expect(localStorage.getItem('scrollshield_state_v2')).toBe(changedRaw);
+    expect(StorageService.hasPendingLegacyMigration()).toBe(true);
+    expect(StorageService.saveState(DEFAULT_STATE)).toBe(false);
   });
 });
