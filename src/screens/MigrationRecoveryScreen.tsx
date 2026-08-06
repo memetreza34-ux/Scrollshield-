@@ -74,6 +74,14 @@ export function MigrationRecoveryScreen({ onRetry }: { onRetry: () => boolean })
           </div>
         </div>
 
+        <div className="mt-3 rounded-2xl border border-zinc-700 bg-zinc-950/70 p-4">
+          <h2 className="font-bold">Android-Schutz wurde vorsorglich gestoppt</h2>
+          <p className="mt-1 text-sm leading-5 text-zinc-400">
+            Während der Datenwiederherstellung läuft kein App-Schutz mit einer möglicherweise unvollständigen
+            Konfiguration. Nach erfolgreicher Migration musst du den Schutz in ScrollShield bewusst erneut starten.
+          </p>
+        </div>
+
         <div className="mt-6 space-y-3">
           <button
             type="button"
