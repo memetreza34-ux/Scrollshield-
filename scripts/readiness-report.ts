@@ -10,9 +10,13 @@ const steps: Step[] = [
   { command: 'npm', args: ['run', 'check:runtime'], required: true },
   { command: 'npm', args: ['run', 'check:version'], required: true },
   { command: 'npm', args: ['run', 'check:android'], required: true },
+  { command: 'npm', args: ['run', 'check:device-matrix'], required: true },
+  { command: 'npm', args: ['run', 'check:release-approval'], required: true },
+  { command: 'npm', args: ['run', 'check:transparency'], required: true },
   { command: 'npm', args: ['run', 'check:secrets'], required: true },
   { command: 'npm', args: ['run', 'check:store'], required: true },
   { command: 'npm', args: ['run', 'check:release'], required: false },
+  { command: 'npm', args: ['run', 'release:gate'], required: false },
   { command: 'npm', args: ['run', 'android:doctor'], required: false },
 ];
 
@@ -58,4 +62,6 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Readiness report completed. Required checks passed; attention items may still need manual setup.');
+console.log(
+  'Readiness report completed. Required source checks passed; attention items still require manual environment or release evidence.',
+);
