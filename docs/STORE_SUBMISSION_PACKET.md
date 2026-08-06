@@ -6,7 +6,7 @@ binary before submission.
 ## Shared Facts
 
 - No account, login, cloud sync, advertising, analytics, tracking, or developer backend
-- App rules, history, and statistics remain on the device
+- App rules, history, statistics, and protection lifecycle diagnostics remain on the device
 - Local data can be exported, imported, or deleted with the in-app reset
 - Public privacy page in the build: `/privacy.html`
 - Support address pending verification: `support@scrollshield.app`
@@ -81,8 +81,9 @@ binary before submission.
 > On Android 13 and newer, ScrollShield requests notification permission only after the user reaches the Android
 > protection setup. The permission keeps the active foreground protection service visible and provides the direct
 > `Schutz stoppen` action. ScrollShield also verifies that the dedicated `Aktiver App-Schutz` notification channel has
-> not been disabled. If app notifications or this channel are disabled, protection does not start or stops locally and
-> clears its persisted active state so it cannot continue as an invisible background service.
+> not been disabled. If app notifications or this channel are disabled, protection does not start or stops locally,
+> clears its persisted active state, and records a local diagnostic stop reason so it cannot continue as an invisible
+> background service.
 
 Reviewer demonstration:
 
@@ -91,7 +92,8 @@ Reviewer demonstration:
 3. Grant access and show the permission status changing to `AKTIV`.
 4. Open the channel settings and show the dedicated `Aktiver App-Schutz` channel.
 5. Disable only that channel, return to ScrollShield, and show the permission status as missing.
-6. Re-enable the channel before continuing the protection test.
+6. Open the Debug screen and show `lastProtectionStopCode` as `notifications_missing` with the matching stop message.
+7. Re-enable the channel before continuing the protection test.
 
 ### Package Visibility Explanation
 
@@ -121,7 +123,7 @@ Play Console functionality description:
 > that protection is active and includes a direct stop action. No app content is read or transmitted. During runtime,
 > the service repeatedly verifies notification visibility, Usage Access, overlay access, active rules, and the presence
 > of at least one installed configured target app. If one of these required conditions disappears, the service clears
-> its active state, records a local warning, removes its foreground notification, and stops.
+> its active state, records a local warning and stable diagnostic reason, removes its foreground notification, and stops.
 
 Impact if the task is deferred:
 
@@ -130,9 +132,26 @@ Impact if the task is deferred:
 
 Impact if the task is interrupted:
 
-> Automatic protection stops until Android restarts the service or the user starts it again. The underlying protected
-> apps remain usable; ScrollShield does not lock the device. The app reports missing permissions or an inactive service
-> when the user returns.
+> Automatic protection stops until the user deliberately starts it again. The underlying protected apps remain usable;
+> ScrollShield does not lock the device. When the user returns, the app reports permission and service state plus the
+> locally stored last start time, stop time, stop code, and readable stop reason.
+
+### Local Protection Lifecycle Diagnostics
+
+ScrollShield stores the following local-only support and release-test fields:
+
+- `lastProtectionStartAt`
+- `lastProtectionStopAt`
+- `lastProtectionStopCode`
+- `lastProtectionStopMessage`
+
+The fields distinguish manual stop, migration recovery, permission loss, notification-channel loss, final-rule removal,
+final-target removal, native startup failure, and failed reboot/app-update recovery. They are shown in the development
+Debug screen and copied only when the user explicitly selects `Diagnose als JSON kopieren`. ScrollShield does not upload
+the report.
+
+A failed reboot or app-update recovery clears the stale persisted activation state and records a `recovery_*` code instead
+of presenting protection as active while no service is running.
 
 Foreground-service video shot list:
 
@@ -143,11 +162,14 @@ Foreground-service video shot list:
 5. Show the persistent notification and its `Schutz stoppen` action.
 6. Open the selected app and show the ScrollShield intervention.
 7. Stop protection from the notification and show that the service, overlay, and foreground notification stop.
-8. Restart protection, reboot the test device, and show recovery only because the user previously enabled it and all
+8. Open the Debug screen and show the updated stop timestamp, code, and message.
+9. Restart protection, reboot the test device, and show recovery only because the user previously enabled it and all
    required conditions remain valid.
-9. While protection is running, disable the protection notification channel and show automatic service shutdown.
-10. Re-enable protection, then deactivate all protected apps or uninstall the only protected test app and show automatic
-    service shutdown.
+10. While protection is running, disable the protection notification channel and show automatic service shutdown plus
+    `notifications_missing` in the Debug screen.
+11. Re-enable protection, then deactivate all protected apps or uninstall the only protected test app and show automatic
+    service shutdown plus the matching configuration stop code.
+12. Copy the diagnostic JSON and show the same version name, build number, service state, and lifecycle reason.
 
 ### Permission and Protection Review Video Shot List
 
@@ -160,8 +182,9 @@ Foreground-service video shot list:
 7. Demonstrate an opening delay, a session expiry, a daily limit, and a strict block.
 8. Demonstrate the limited emergency release and its local history entry.
 9. Disable Usage Access, overlay access, app notifications, and the dedicated channel one at a time; show that protection
-   shuts down safely while ScrollShield remains usable.
+   shuts down safely while ScrollShield remains usable and records the matching diagnostic reason.
 10. Remove or uninstall the final active protected app and show that the service stops instead of remaining idle.
+11. Reopen ScrollShield and confirm the lifecycle reason persisted.
 
 ### Rating Target
 
@@ -179,4 +202,5 @@ Foreground-service video shot list:
 - Apple entitlement approval: `[REQUIRED]`
 - Apple and Google questionnaire confirmations: `[REQUIRED]`
 - Native permission and foreground-service demonstration videos: `[REQUIRED]`
+- Lifecycle diagnostic persistence evidence for the exact candidate: `[REQUIRED]`
 - Signed binary verification against every declaration above: `[REQUIRED]`
