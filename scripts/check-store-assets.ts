@@ -32,7 +32,13 @@ requireText(listingPath, listing, /## Screenshot-Texte/i, 'Missing screenshot te
 requireText(listingPath, listing, /## Review Notes - Apple/i, 'Missing Apple review notes.');
 requireText(listingPath, listing, /## Review Notes - Google Play/i, 'Missing Google Play review notes.');
 requireText(listingPath, listing, /Werkzeug zur Selbstkontrolle/i, 'Missing self-control positioning.');
-requireText(listingPath, listing, /Best-Effort-Unterbrecher/i, 'Missing best-effort short-video disclosure.');
+requireText(
+  listingPath,
+  listing,
+  /Version 1\.0[\s\S]*Schutz ganzer ausgewählter Apps/i,
+  'Missing explicit version-one whole-app scope.',
+);
+requireText(listingPath, listing, /kein medizinisches Produkt/i, 'Missing non-medical product disclaimer.');
 requireText(listingPath, listing, /keinen Cloud-Sync, keine Werbung und kein Tracking/i, 'Missing privacy promise.');
 
 const riskyClaimPattern =
@@ -49,6 +55,7 @@ requireText(packetPath, packet, /Data shared:\s+\*\*No\*\*/i, 'Missing Play Cons
 requireText(packetPath, packet, /Tracking:\s+\*\*No\*\*/i, 'Missing tracking answer.');
 requireText(packetPath, packet, /PACKAGE_USAGE_STATS/i, 'Missing Usage Access declaration draft.');
 requireText(packetPath, packet, /SYSTEM_ALERT_WINDOW/i, 'Missing overlay declaration draft.');
+requireText(packetPath, packet, /FOREGROUND_SERVICE_SPECIAL_USE/i, 'Missing special-use foreground-service declaration draft.');
 requireText(packetPath, packet, /USK 0 \/ PEGI 3/i, 'Missing Google rating target.');
 requireText(packetPath, packet, /Target:\s+\*\*4\+\*\*/i, 'Missing Apple rating target.');
 
