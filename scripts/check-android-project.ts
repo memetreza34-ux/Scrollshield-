@@ -28,10 +28,17 @@ if (!existsSync(androidDir)) {
 const buildGradlePath = path.join(androidDir, 'app', 'build.gradle');
 const variablesGradlePath = path.join(androidDir, 'variables.gradle');
 const manifestPath = path.join(androidDir, 'app', 'src', 'main', 'AndroidManifest.xml');
+const javaRoot = path.join(androidDir, 'app', 'src', 'main', 'java', 'app', 'scrollshield', 'mobile');
+const pluginPath = path.join(javaRoot, 'ScrollShieldNativePlugin.java');
+const servicePath = path.join(javaRoot, 'ScrollShieldProtectionService.java');
+const bootReceiverPath = path.join(javaRoot, 'ScrollShieldBootReceiver.java');
 
 const buildGradle = await readFile(buildGradlePath, 'utf8');
 const variablesGradle = await readFile(variablesGradlePath, 'utf8');
 const manifest = await readFile(manifestPath, 'utf8');
+const plugin = await readFile(pluginPath, 'utf8');
+const service = await readFile(servicePath, 'utf8');
+const bootReceiver = await readFile(bootReceiverPath, 'utf8');
 
 const minSdk = Number(variablesGradle.match(/minSdkVersion\s*=\s*(\d+)/)?.[1]);
 const compileSdk = Number(variablesGradle.match(/compileSdkVersion\s*=\s*(\d+)/)?.[1]);
@@ -108,6 +115,81 @@ requireMatch(
   manifest,
   /<queries>[\s\S]*com\.instagram\.android[\s\S]*com\.google\.android\.youtube[\s\S]*<\/queries>/,
   'Android package visibility queries must include supported protected apps.',
+);
+
+requireMatch(
+  pluginPath,
+  plugin,
+  /setProtectionEnabled\(context, true\)/,
+  'Starting native protection must persist explicit user activation.',
+);
+requireMatch(
+  pluginPath,
+  plugin,
+  /setProtectionEnabled\(context, false\)/,
+  'Stopping native protection must clear persisted user activation.',
+);
+requireMatch(
+  pluginPath,
+  plugin,
+  /hasInstalledPackage\(context, packages\)/,
+  'Native protection must validate supported installed packages.',
+);
+requireMatch(
+  pluginPath,
+  plugin,
+  /drainProtectionEvents/,
+  'Native events and measured usage must remain drainable into React state.',
+);
+
+requireMatch(
+  servicePath,
+  service,
+  /ACTION_STOP/,
+  'The foreground-service notification must keep a direct stop action.',
+);
+requireMatch(
+  servicePath,
+  service,
+  /getScheduledAction\(rule, now\)/,
+  'Native enforcement must evaluate recurring weekly schedules.',
+);
+requireMatch(
+  servicePath,
+  service,
+  /dailyLimitMinutes[\s\S]*getDailyUsageMs/,
+  'Native enforcement must keep daily usage-limit checks.',
+);
+requireMatch(
+  servicePath,
+  service,
+  /isAntiBingeBlocked/,
+  'Native enforcement must keep deterministic Anti-Binge blocking.',
+);
+requireMatch(
+  servicePath,
+  service,
+  /getEmergencyCount/,
+  'Native enforcement must keep daily emergency-unlock counters.',
+);
+requireMatch(
+  servicePath,
+  service,
+  /stopForMissingPermission/,
+  'Native protection must stop safely when required permissions are revoked.',
+);
+
+requireMatch(
+  bootReceiverPath,
+  bootReceiver,
+  /isProtectionEnabled\(context\)/,
+  'Boot recovery must require prior explicit user activation.',
+);
+requireMatch(
+  bootReceiverPath,
+  bootReceiver,
+  /hasUsageAccess\(context\)/,
+  'Boot recovery must re-check Usage Access before starting protection.',
 );
 
 const allowedPermissions = new Set([
