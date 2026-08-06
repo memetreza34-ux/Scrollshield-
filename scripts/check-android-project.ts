@@ -29,9 +29,13 @@ const buildGradlePath = path.join(androidDir, 'app', 'build.gradle');
 const variablesGradlePath = path.join(androidDir, 'variables.gradle');
 const manifestPath = path.join(androidDir, 'app', 'src', 'main', 'AndroidManifest.xml');
 const javaRoot = path.join(androidDir, 'app', 'src', 'main', 'java', 'app', 'scrollshield', 'mobile');
+const javaTestRoot = path.join(androidDir, 'app', 'src', 'test', 'java', 'app', 'scrollshield', 'mobile');
 const pluginPath = path.join(javaRoot, 'ScrollShieldNativePlugin.java');
 const servicePath = path.join(javaRoot, 'ScrollShieldProtectionService.java');
 const bootReceiverPath = path.join(javaRoot, 'ScrollShieldBootReceiver.java');
+const rulePolicyPath = path.join(javaRoot, 'ProtectionRulePolicy.java');
+const rulePolicyTestPath = path.join(javaTestRoot, 'ProtectionRulePolicyTest.java');
+const workflowPath = path.join('.github', 'workflows', 'verify.yml');
 
 const buildGradle = await readFile(buildGradlePath, 'utf8');
 const variablesGradle = await readFile(variablesGradlePath, 'utf8');
@@ -39,6 +43,9 @@ const manifest = await readFile(manifestPath, 'utf8');
 const plugin = await readFile(pluginPath, 'utf8');
 const service = await readFile(servicePath, 'utf8');
 const bootReceiver = await readFile(bootReceiverPath, 'utf8');
+const rulePolicy = await readFile(rulePolicyPath, 'utf8');
+const rulePolicyTest = await readFile(rulePolicyTestPath, 'utf8');
+const workflow = await readFile(workflowPath, 'utf8');
 
 const minSdk = Number(variablesGradle.match(/minSdkVersion\s*=\s*(\d+)/)?.[1]);
 const compileSdk = Number(variablesGradle.match(/compileSdkVersion\s*=\s*(\d+)/)?.[1]);
@@ -190,6 +197,69 @@ requireMatch(
   bootReceiver,
   /hasUsageAccess\(context\)/,
   'Boot recovery must re-check Usage Access before starting protection.',
+);
+
+requireMatch(
+  rulePolicyPath,
+  rulePolicy,
+  /getScheduledAction[\s\S]*weekend[\s\S]*nightAction[\s\S]*morningAction[\s\S]*workAction[\s\S]*eveningAction/,
+  'The deterministic rule policy must keep explicit weekly-window precedence.',
+);
+requireMatch(
+  rulePolicyPath,
+  rulePolicy,
+  /isInsideBlockedHours/,
+  'The deterministic rule policy must keep blocked-hour parsing.',
+);
+requireMatch(
+  rulePolicyPath,
+  rulePolicy,
+  /isDailyLimitReached/,
+  'The deterministic rule policy must keep exact daily-limit checks.',
+);
+requireMatch(
+  rulePolicyPath,
+  rulePolicy,
+  /hasEmergencyAvailable/,
+  'The deterministic rule policy must keep emergency-limit checks.',
+);
+
+requireMatch(
+  rulePolicyTestPath,
+  rulePolicyTest,
+  /appliesWeekdayTimeBoundariesWithoutGaps/,
+  'Android local tests must cover recurring schedule boundaries.',
+);
+requireMatch(
+  rulePolicyTestPath,
+  rulePolicyTest,
+  /overnightBlockedRangeIncludesBothSidesOfMidnight/,
+  'Android local tests must cover ranges crossing midnight.',
+);
+requireMatch(
+  rulePolicyTestPath,
+  rulePolicyTest,
+  /dailyLimitIsDisabledAtZeroAndTriggersAtExactBoundary/,
+  'Android local tests must cover exact daily-limit boundaries.',
+);
+requireMatch(
+  rulePolicyTestPath,
+  rulePolicyTest,
+  /emergencyLimitIsStrictlyLessThanDailyMaximum/,
+  'Android local tests must cover daily emergency limits.',
+);
+
+requireMatch(
+  workflowPath,
+  workflow,
+  /actions\/setup-java@v5/,
+  'Verify workflow must configure Java for Android checks.',
+);
+requireMatch(
+  workflowPath,
+  workflow,
+  /testDebugUnitTest\s+assembleDebug/,
+  'Verify workflow must execute Android unit tests and compile a debug APK.',
 );
 
 const allowedPermissions = new Set([
