@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_STATE } from '../types';
+import { DEFAULT_APP_CONFIG, DEFAULT_STATE } from '../types';
 import { AppList } from './AppListScreen';
 
 const { syncMock } = vi.hoisted(() => ({
@@ -40,5 +40,48 @@ describe('AppList', () => {
     expect(instagramDetails).toBeDisabled();
     expect(updateState).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('applies a recurring weekly preset to every active app', async () => {
+    const updateState = vi.fn();
+    const state = {
+      ...DEFAULT_STATE,
+      appsConfig: {
+        youtube: {
+          id: 'youtube',
+          ...DEFAULT_APP_CONFIG,
+          active: true,
+        },
+        reddit: {
+          id: 'reddit',
+          ...DEFAULT_APP_CONFIG,
+          active: false,
+        },
+      },
+    };
+
+    render(<AppList state={state} updateState={updateState} navigate={vi.fn()} />);
+    await screen.findByText('Nicht installiert');
+
+    fireEvent.change(screen.getByLabelText('Plan auswählen'), { target: { value: 'sleep' } });
+
+    expect(updateState).toHaveBeenCalledWith({
+      appsConfig: {
+        youtube: expect.objectContaining({
+          active: true,
+          timeWindows: {
+            morningRules: 'normal',
+            workRules: 'normal',
+            eveningRules: 'strict',
+            nightRules: 'block',
+            weekendRules: 'normal',
+          },
+        }),
+        reddit: expect.objectContaining({
+          active: false,
+          timeWindows: DEFAULT_APP_CONFIG.timeWindows,
+        }),
+      },
+    });
   });
 });
