@@ -36,6 +36,18 @@ requirePattern(
 requirePattern(
   servicePath,
   service,
+  /enforceCurrentApp\(\)[\s\S]*!ScrollShieldNativePlugin\.hasNotificationsEnabled\(this\)[\s\S]*nicht unsichtbar läuft/,
+  'A running service must stop and record a warning if notification visibility is revoked.',
+);
+requirePattern(
+  servicePath,
+  service,
+  /stopForeground\(STOP_FOREGROUND_REMOVE\)[\s\S]*stopForeground\(true\)/,
+  'Service destruction must explicitly remove the foreground notification on supported and legacy Android versions.',
+);
+requirePattern(
+  servicePath,
+  service,
   /\.setOngoing\(true\)[\s\S]*"Schutz stoppen"/,
   'The foreground-service notification must remain ongoing and include a direct stop action.',
 );
@@ -70,4 +82,6 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log('Protection transparency check passed. Android protection remains visible and directly stoppable.');
+console.log(
+  'Protection transparency check passed. Android protection remains visible, revocation-safe, and directly stoppable.',
+);
