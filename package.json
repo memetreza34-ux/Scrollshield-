@@ -18,7 +18,7 @@
     "check:a11y": "tsx scripts/check-accessibility-source.ts",
     "check:android": "tsx scripts/check-android-project.ts",
     "check:device-matrix": "tsx scripts/check-android-device-matrix.ts",
-    "check:migration": "tsx scripts/check-storage-migration.ts",
+    "check:migration": "tsx scripts/check-storage-migration.ts && tsx scripts/check-migration-recovery-ui.ts",
     "check:release-approval": "tsx scripts/check-release-approval.ts",
     "check:transparency": "tsx scripts/check-protection-transparency.ts",
     "check:version": "tsx scripts/check-version-consistency.ts",
