@@ -91,9 +91,22 @@ requireMatch(
   /android:foregroundServiceType="specialUse"/,
   'Android protection service must declare its foreground service type.',
 );
+requireMatch(
+  manifestPath,
+  manifest,
+  /android:name="\.ScrollShieldBootReceiver"/,
+  'Android boot recovery receiver must stay registered.',
+);
+requireMatch(
+  manifestPath,
+  manifest,
+  /android\.intent\.action\.BOOT_COMPLETED/,
+  'Android boot recovery receiver must listen for BOOT_COMPLETED.',
+);
 
 const allowedPermissions = new Set([
   'android.permission.INTERNET',
+  'android.permission.RECEIVE_BOOT_COMPLETED',
   'android.permission.PACKAGE_USAGE_STATS',
   'android.permission.SYSTEM_ALERT_WINDOW',
   'android.permission.POST_NOTIFICATIONS',
