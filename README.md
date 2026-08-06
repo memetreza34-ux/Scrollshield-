@@ -37,6 +37,8 @@ ScrollShield is an offline-first digital wellbeing app for reducing impulsive so
 
 The browser/PWA version cannot physically block other installed apps. Native whole-app protection is available only in the installed Android build and still requires successful compilation, real-device validation, battery testing, schedule edge-case testing, migration validation, legal completion, and Play Console review preparation before release.
 
+The lifecycle implementation, JUnit classifier, TypeScript bridge tests, App integration tests, Debug component tests, complete verification chain, and Android compilation are prepared but have not yet executed successfully in a working runner or local Android environment.
+
 Reels-only protection remains an Android beta target because Usage Access identifies the foreground app but not the exact short-video screen inside a third-party app.
 
 For iOS, real enforcement requires the Screen Time / Family Controls entitlement and native Managed Settings integration.
