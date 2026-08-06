@@ -8,12 +8,23 @@ export interface NativeProtectionEvent {
   desc: string;
 }
 
+export interface NativeUsageSample {
+  date: string;
+  appId: string;
+  durationMs: number;
+}
+
+export interface NativeProtectionDrain {
+  events: NativeProtectionEvent[];
+  usage: NativeUsageSample[];
+}
+
 interface NativeProtectionPlugin {
   syncProtectionConfig(options: { configJson: string }): Promise<void>;
   startProtectionService(): Promise<void>;
   stopProtectionService(): Promise<void>;
   getProtectionServiceStatus(): Promise<{ running: boolean; enabled: boolean }>;
-  drainProtectionEvents(): Promise<{ eventsJson: string }>;
+  drainProtectionEvents(): Promise<{ eventsJson: string; usageJson: string }>;
 }
 
 interface NativeProtectionConfig {
@@ -79,18 +90,43 @@ const APP_NAMES: Record<string, string> = {
 };
 
 const EVENT_TYPES = new Set<NativeProtectionEvent['type']>(['open', 'block', 'warning', 'emergency']);
+const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const isNativeProtectionEvent = (value: unknown): value is NativeProtectionEvent => {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<NativeProtectionEvent>;
   return (
     typeof candidate.timestamp === 'number' &&
+    Number.isFinite(candidate.timestamp) &&
     typeof candidate.type === 'string' &&
     EVENT_TYPES.has(candidate.type as NativeProtectionEvent['type']) &&
     typeof candidate.appId === 'string' &&
     candidate.appId.length > 0 &&
     typeof candidate.desc === 'string'
   );
+};
+
+const isNativeUsageSample = (value: unknown): value is NativeUsageSample => {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<NativeUsageSample>;
+  return (
+    typeof candidate.date === 'string' &&
+    DATE_KEY_PATTERN.test(candidate.date) &&
+    typeof candidate.appId === 'string' &&
+    candidate.appId.length > 0 &&
+    typeof candidate.durationMs === 'number' &&
+    Number.isFinite(candidate.durationMs) &&
+    candidate.durationMs > 0
+  );
+};
+
+const parseArray = <T>(raw: string, predicate: (value: unknown) => value is T): T[] => {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(predicate) : [];
+  } catch {
+    return [];
+  }
 };
 
 export const NativeProtection = {
@@ -150,14 +186,12 @@ export const NativeProtection = {
     return AndroidProtection.getProtectionServiceStatus();
   },
 
-  async drainEvents(): Promise<NativeProtectionEvent[]> {
-    if (!this.isAvailable()) return [];
+  async drain(): Promise<NativeProtectionDrain> {
+    if (!this.isAvailable()) return { events: [], usage: [] };
     const result = await AndroidProtection.drainProtectionEvents();
-    try {
-      const parsed: unknown = JSON.parse(result.eventsJson);
-      return Array.isArray(parsed) ? parsed.filter(isNativeProtectionEvent) : [];
-    } catch {
-      return [];
-    }
+    return {
+      events: parseArray(result.eventsJson, isNativeProtectionEvent),
+      usage: parseArray(result.usageJson, isNativeUsageSample),
+    };
   },
 };
