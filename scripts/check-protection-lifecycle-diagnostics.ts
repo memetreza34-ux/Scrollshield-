@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 
 const javaRoot = 'android/app/src/main/java/app/scrollshield/mobile';
 const javaTestRoot = 'android/app/src/test/java/app/scrollshield/mobile';
+const packagePath = 'package.json';
+const readinessPath = 'scripts/readiness-report.ts';
 const pluginPath = `${javaRoot}/ScrollShieldNativePlugin.java`;
 const diagnosticsPath = `${javaRoot}/ScrollShieldDiagnosticsPlugin.java`;
 const bootReceiverPath = `${javaRoot}/ScrollShieldBootReceiver.java`;
@@ -17,6 +19,8 @@ const debugTestPath = 'src/screens/DebugScreen.test.tsx';
 const matrixPath = 'docs/ANDROID_DEVICE_TEST_MATRIX.md';
 
 const [
+  packageJson,
+  readiness,
   plugin,
   diagnostics,
   bootReceiver,
@@ -31,6 +35,8 @@ const [
   debugTest,
   matrix,
 ] = await Promise.all([
+  readFile(packagePath, 'utf8'),
+  readFile(readinessPath, 'utf8'),
   readFile(pluginPath, 'utf8'),
   readFile(diagnosticsPath, 'utf8'),
   readFile(bootReceiverPath, 'utf8'),
@@ -52,6 +58,25 @@ function requirePattern(file: string, content: string, pattern: RegExp, message:
   if (pattern.test(content)) return;
   findings.push(`${file}: ${message}`);
 }
+
+requirePattern(
+  packagePath,
+  packageJson,
+  /"check:lifecycle":\s*"tsx scripts\/check-protection-lifecycle-diagnostics\.ts"/,
+  'package.json must expose the lifecycle diagnostics check.',
+);
+requirePattern(
+  packagePath,
+  packageJson,
+  /"verify":[^\n]*npm run check:lifecycle/,
+  'The lifecycle diagnostics check must remain part of npm run verify.',
+);
+requirePattern(
+  readinessPath,
+  readiness,
+  /args: \['run', 'check:lifecycle'\], required: true/,
+  'The readiness report must execute lifecycle diagnostics as a required source check.',
+);
 
 requirePattern(
   pluginPath,
@@ -190,5 +215,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection lifecycle diagnostics check passed. Start/stop timestamps, stable reason codes, recovery failures, explicit migration stops, UI visibility, tests, and device evidence remain guarded.',
+  'Protection lifecycle diagnostics check passed. Verify/readiness wiring, start/stop timestamps, stable reason codes, recovery failures, explicit migration stops, UI visibility, tests, and device evidence remain guarded.',
 );
