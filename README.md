@@ -1,6 +1,6 @@
 # ScrollShield
 
-ScrollShield is an offline-first digital wellbeing app for reducing impulsive social media use. The repository contains a production-oriented web/PWA experience and a Capacitor Android shell.
+ScrollShield is an offline-first digital wellbeing app for reducing impulsive social media use. The repository contains a production-oriented web/PWA experience and a Capacitor Android app.
 
 ## Current Scope
 
@@ -9,9 +9,13 @@ ScrollShield is an offline-first digital wellbeing app for reducing impulsive so
 - Focus sessions and local history/statistics
 - Local-only storage with migration and export support
 - PWA build, automated tests, CI and release-readiness checks
-- Android native permission bridge for real Usage Access, overlay, notification and battery-status checks
+- Android native permission bridge with real Usage Access, overlay, notification, and battery-status checks
+- First Android whole-app protection prototype using foreground-app detection, a foreground service, and a full-screen interruption overlay
+- Explicit protection-service start/stop controls and a persistent stop action in the Android notification
 
-The browser/PWA version cannot physically block other installed apps. The Android build now opens the real system settings and verifies their status, but complete blocking enforcement still requires the foreground-app monitor and interruption service described in `docs/NATIVE_ANDROID.md`.
+The browser/PWA version cannot physically block other installed apps. Native whole-app protection is available only in the installed Android build and still requires compilation, real-device validation, native event/statistics integration, and Play Console review preparation before release.
+
+Reels-only protection remains an Android beta target because Usage Access identifies the foreground app but not the exact short-video screen inside a third-party app.
 
 For iOS, real enforcement requires the Screen Time / Family Controls entitlement and native Managed Settings integration.
 
@@ -62,4 +66,4 @@ npm run android:bundle
 - `docs/ROLLOUT_PLAN.md`
 - `docs/STORE_SUBMISSION_PACKET.md`
 
-Before release, replace legal placeholders in the imprint, complete real blocking enforcement, remove all demo-only entry points from production, run `npm run verify`, and execute the device test matrix.
+Before release, replace legal placeholders, complete the remaining native rule and event integration, run `npm run verify`, compile the Android project, and execute the device test matrix.
