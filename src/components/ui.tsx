@@ -7,18 +7,22 @@ export function Switch({
   checked,
   onChange,
   ariaLabel,
+  disabled = false,
 }: {
   checked: boolean;
   onChange: (c: boolean) => void;
   ariaLabel?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       role="switch"
       aria-checked={checked}
       aria-label={ariaLabel || (checked ? 'Deaktivieren' : 'Aktivieren')}
+      aria-disabled={disabled}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="w-12 h-11 relative flex items-center flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 rounded-full"
+      className="w-12 h-11 relative flex items-center flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 rounded-full disabled:cursor-not-allowed disabled:opacity-40"
     >
       <span
         className={`w-12 h-7 rounded-full p-1 transition-colors duration-300 ease-in-out ${checked ? 'bg-zinc-200' : 'bg-zinc-800'}`}
@@ -118,7 +122,7 @@ export function TimeSelector({
         onChange={(e) => {
           if (e.target.value === 'custom') {
             setIsCustom(true);
-            onChange(options[0] || 1); // default to first option when switching to custom
+            onChange(options[0] || 1);
           } else {
             setIsCustom(false);
             onChange(Number(e.target.value));
@@ -181,7 +185,7 @@ export function Header({
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2.5"
+              strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
             >
@@ -189,9 +193,9 @@ export function Header({
             </svg>
           </button>
         )}
-        <h1 className="min-w-0 pt-2 text-2xl font-semibold leading-tight tracking-tight text-zinc-50">{title}</h1>
+        <h1 className="min-w-0 break-words text-2xl font-bold tracking-tight leading-tight pt-2">{title}</h1>
       </div>
-      {rightAction && <div className="flex-shrink-0">{rightAction}</div>}
+      {rightAction}
     </header>
   );
 }
