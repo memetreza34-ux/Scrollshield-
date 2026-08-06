@@ -37,6 +37,10 @@ public class ScrollShieldNativePlugin extends Plugin {
     private static final String UNAVAILABLE_ACTIVE_APPS_KEY = "unavailable_active_app_ids";
     private static final String USAGE_COUNTER_PREFIX = "usage_ms_";
     private static final String EXPORTED_USAGE_PREFIX = "exported_";
+    private static final String LAST_START_AT_KEY = "protection_last_start_at";
+    private static final String LAST_STOP_AT_KEY = "protection_last_stop_at";
+    private static final String LAST_STOP_CODE_KEY = "protection_last_stop_code";
+    private static final String LAST_STOP_MESSAGE_KEY = "protection_last_stop_message";
     private static final int MAX_QUEUED_EVENTS = 200;
     private static final Object EVENT_LOCK = new Object();
 
@@ -173,6 +177,11 @@ public class ScrollShieldNativePlugin extends Plugin {
             call.resolve();
         } catch (RuntimeException error) {
             setProtectionEnabled(context, false);
+            recordProtectionStop(
+                context,
+                "start_failed",
+                "Android konnte den Schutzdienst nicht starten"
+            );
             call.reject("Protection service could not be started", error);
         }
     }
@@ -180,7 +189,15 @@ public class ScrollShieldNativePlugin extends Plugin {
     @PluginMethod
     public void stopProtectionService(PluginCall call) {
         Context context = getContext();
+        String reasonCode = call.getString("reasonCode");
+        String reasonMessage = call.getString("reasonMessage");
+        if (reasonCode == null || reasonCode.trim().isEmpty()) reasonCode = "manual_app_stop";
+        if (reasonMessage == null || reasonMessage.trim().isEmpty()) {
+            reasonMessage = "Der Android-Schutz wurde in ScrollShield manuell gestoppt";
+        }
+
         setProtectionEnabled(context, false);
+        recordProtectionStop(context, reasonCode, reasonMessage);
         context.stopService(new Intent(context, ScrollShieldProtectionService.class));
         call.resolve();
     }
@@ -192,6 +209,10 @@ public class ScrollShieldNativePlugin extends Plugin {
         result.put("running", ScrollShieldProtectionService.isRunning());
         result.put("enabled", isProtectionEnabled(context));
         result.put("unavailableAppIdsJson", getPreferences().getString(UNAVAILABLE_APPS_KEY, "[]"));
+        result.put("lastStartAt", getLastProtectionStartAt(context));
+        result.put("lastStopAt", getLastProtectionStopAt(context));
+        result.put("lastStopCode", getLastProtectionStopCode(context));
+        result.put("lastStopMessage", getLastProtectionStopMessage(context));
         call.resolve(result);
     }
 
@@ -256,7 +277,8 @@ public class ScrollShieldNativePlugin extends Plugin {
 
             JSONObject event = new JSONObject();
             try {
-                event.put("timestamp", System.currentTimeMillis());
+                long timestamp = System.currentTimeMillis();
+                event.put("timestamp", timestamp);
                 event.put("type", type);
                 event.put("appId", appId);
                 event.put("desc", description);
@@ -264,7 +286,20 @@ public class ScrollShieldNativePlugin extends Plugin {
                 while (events.length() > MAX_QUEUED_EVENTS) {
                     events.remove(0);
                 }
-                preferences.edit().putString(EVENT_QUEUE_KEY, events.toString()).commit();
+
+                SharedPreferences.Editor editor = preferences
+                    .edit()
+                    .putString(EVENT_QUEUE_KEY, events.toString());
+                if ("warning".equals(type) && "system".equals(appId)) {
+                    editor
+                        .putLong(LAST_STOP_AT_KEY, timestamp)
+                        .putString(
+                            LAST_STOP_CODE_KEY,
+                            ProtectionStopReasonPolicy.classifySystemWarning(description)
+                        )
+                        .putString(LAST_STOP_MESSAGE_KEY, safeDiagnosticText(description, "Systemwarnung"));
+                }
+                editor.commit();
             } catch (JSONException error) {
                 error.printStackTrace();
             }
@@ -309,11 +344,63 @@ public class ScrollShieldNativePlugin extends Plugin {
     }
 
     public static void setProtectionEnabled(Context context, boolean enabled) {
+        SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        boolean wasEnabled = preferences.getBoolean(SERVICE_ENABLED_KEY, false);
+        long now = System.currentTimeMillis();
+        SharedPreferences.Editor editor = preferences.edit().putBoolean(SERVICE_ENABLED_KEY, enabled);
+
+        if (enabled) {
+            editor.putLong(LAST_START_AT_KEY, now);
+        } else if (wasEnabled) {
+            editor
+                .putLong(LAST_STOP_AT_KEY, now)
+                .putString(LAST_STOP_CODE_KEY, "protection_disabled")
+                .putString(
+                    LAST_STOP_MESSAGE_KEY,
+                    "Der Android-Schutz wurde über App, Benachrichtigung oder System deaktiviert"
+                );
+        }
+        editor.commit();
+    }
+
+    public static void recordProtectionStop(Context context, String code, String message) {
         context
             .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putBoolean(SERVICE_ENABLED_KEY, enabled)
+            .putLong(LAST_STOP_AT_KEY, System.currentTimeMillis())
+            .putString(LAST_STOP_CODE_KEY, safeDiagnosticText(code, "unknown_stop"))
+            .putString(LAST_STOP_MESSAGE_KEY, safeDiagnosticText(message, "Unbekannter Stoppgrund"))
             .commit();
+    }
+
+    public static long getLastProtectionStartAt(Context context) {
+        return context
+            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .getLong(LAST_START_AT_KEY, 0L);
+    }
+
+    public static long getLastProtectionStopAt(Context context) {
+        return context
+            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .getLong(LAST_STOP_AT_KEY, 0L);
+    }
+
+    public static String getLastProtectionStopCode(Context context) {
+        return safeDiagnosticText(
+            context
+                .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+                .getString(LAST_STOP_CODE_KEY, ""),
+            ""
+        );
+    }
+
+    public static String getLastProtectionStopMessage(Context context) {
+        return safeDiagnosticText(
+            context
+                .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+                .getString(LAST_STOP_MESSAGE_KEY, ""),
+            ""
+        );
     }
 
     public static boolean hasConfiguredApps(Context context) {
@@ -387,6 +474,10 @@ public class ScrollShieldNativePlugin extends Plugin {
         String appId = key.substring(appStart);
         if (appId.trim().isEmpty()) return null;
         return new UsageKey(date, appId);
+    }
+
+    private static String safeDiagnosticText(String value, String fallback) {
+        return value == null || value.trim().isEmpty() ? fallback : value.trim();
     }
 
     private SharedPreferences getPreferences() {
