@@ -194,32 +194,62 @@ requireMatch(
 requireMatch(
   servicePath,
   service,
-  /getScheduledAction\(rule, now\)/,
-  'Native enforcement must evaluate recurring weekly schedules.',
+  /ProtectionRulePolicy\.getScheduledAction/,
+  'Native schedule enforcement must execute the JUnit-tested rule policy.',
 );
 requireMatch(
   servicePath,
   service,
-  /dailyLimitMinutes[\s\S]*getDailyUsageMs/,
-  'Native enforcement must keep daily usage-limit checks.',
+  /ProtectionRulePolicy\.isDailyLimitReached[\s\S]*getDailyUsageMs/,
+  'Native daily-limit enforcement must execute the JUnit-tested rule policy.',
 );
 requireMatch(
   servicePath,
   service,
-  /isAntiBingeBlocked/,
-  'Native enforcement must keep deterministic Anti-Binge blocking.',
+  /ProtectionRulePolicy\.isInsideBlockedHours/,
+  'Native blocked-hour enforcement must execute the JUnit-tested rule policy.',
 );
 requireMatch(
   servicePath,
   service,
-  /getEmergencyCount/,
-  'Native enforcement must keep daily emergency-unlock counters.',
+  /ProtectionRulePolicy\.isAntiBingeBlocked[\s\S]*ProtectionRulePolicy\.isAntiBingeWarning/,
+  'Native Anti-Binge enforcement must execute the JUnit-tested rule policy.',
+);
+requireMatch(
+  servicePath,
+  service,
+  /ProtectionRulePolicy\.hasEmergencyAvailable/,
+  'Native emergency-unlock enforcement must execute the JUnit-tested rule policy.',
+);
+requireMatch(
+  servicePath,
+  service,
+  /CONFIGURATION_HEALTH_INTERVAL_MS[\s\S]*hasConfiguredApps\(this\)/,
+  'The running service must periodically stop after protected apps are removed or become unavailable.',
+);
+requireMatch(
+  servicePath,
+  service,
+  /hasActiveConfiguredRule[\s\S]*Keine aktive Schutzregel/,
+  'The running service must stop when all protection rules are disabled.',
+);
+requireMatch(
+  servicePath,
+  service,
+  /hasNotificationsEnabled\(this\)[\s\S]*nicht unsichtbar läuft/,
+  'The running service must stop when notification visibility is revoked.',
+);
+requireMatch(
+  servicePath,
+  service,
+  /stopForeground\(STOP_FOREGROUND_REMOVE\)[\s\S]*stopForeground\(true\)/,
+  'Service shutdown must explicitly remove the foreground notification.',
 );
 requireMatch(
   servicePath,
   service,
   /stopForMissingPermission/,
-  'Native protection must stop safely when required permissions are revoked.',
+  'Native protection must clear explicit activation and record a warning when a required condition disappears.',
 );
 
 requireMatch(
@@ -233,6 +263,12 @@ requireMatch(
   bootReceiver,
   /hasUsageAccess\(context\)/,
   'Boot recovery must re-check Usage Access before starting protection.',
+);
+requireMatch(
+  bootReceiverPath,
+  bootReceiver,
+  /hasNotificationsEnabled\(context\)/,
+  'Boot recovery must re-check visible notifications before starting protection.',
 );
 
 requireMatch(
