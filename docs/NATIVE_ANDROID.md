@@ -1,18 +1,23 @@
 # Native Android Status
 
-ScrollShield now has a Capacitor Android wrapper under `android/`.
+ScrollShield uses Capacitor with the Android package id `app.scrollshield.mobile`.
 
 ## Implemented
 
-- Capacitor app id: `app.scrollshield.mobile`
-- Android `versionName` aligned with `package.json` version `1.0.0`
-- Cleartext HTTP disabled in the Android manifest
-- Android app backup disabled so local wellbeing data is not copied into device backups
-- Android release builds use R8 minification and resource shrinking
-- Current Android manifest only requests `android.permission.INTERNET`; sensitive enforcement permissions are
-  intentionally absent until native implementation and Play Console declarations are ready
-- Release signing is configured through ignored local files only: start from `android/signing.properties.example`
-- Reproducible npm scripts for sync, Android Studio opening, and debug APK builds
+- Capacitor Android project and release signing configuration
+- Cleartext HTTP and Android backup disabled
+- R8 minification and resource shrinking for release builds
+- Native `ScrollShieldNative` Capacitor plugin
+- Real status checks for:
+  - Usage Access
+  - Display over other apps
+  - Notifications
+  - Battery optimization exemption
+- Direct links to the relevant Android system settings
+- Prominent in-app disclosure explaining what usage data is accessed and what is not read
+- Manifest declarations for Usage Access, overlays, and notifications
+
+The web/PWA preview still uses local preview state. Only the installed Android build can return real permission status.
 
 ## Commands
 
@@ -26,27 +31,35 @@ npm run android:release
 npm run android:bundle
 ```
 
-## Still Native Work
+## Required Before App Blocking Works
 
-- Implement Usage Access based app detection
-- Implement overlay or interruption UI for protected apps
-- Add background reliability handling for device reboot, battery optimization, and OEM restrictions
-- Add sensitive Android permissions only together with the native feature, Play Console declaration text, and review
-  video evidence
-- Add Play Console sensitive permission declaration videos for `PACKAGE_USAGE_STATS` and any overlay permission if used
-- Confirm the final package id before the first Play Console upload
+1. Implement a foreground-app detector based on Usage Access.
+2. Add a background protection service with reboot and battery-reliability handling.
+3. Trigger the existing TypeScript protection rules from native app-open events.
+4. Display the ScrollShield interruption activity/overlay when a rule blocks or delays an app.
+5. Add exact package mappings for every supported Android app.
+6. Test on Samsung, Google Pixel, Xiaomi, OnePlus, and Motorola devices.
+7. Prepare Play Console declarations and a reviewer video for every sensitive permission.
+
+## Reels-only Protection
+
+Whole-app protection is the stable first release target. Detecting only Reels, Shorts, or similar sections inside third-party apps may require an Accessibility Service because Usage Access only identifies the foreground app, not the current screen inside it.
+
+Do not add an Accessibility Service until all of these are ready together:
+
+- deterministic, user-defined rules only
+- separate prominent disclosure and affirmative consent
+- no message, password, keyboard, or media collection
+- Play Console Accessibility declaration
+- reviewer demonstration video
+- resilient selectors and a remote kill switch for broken app versions
 
 ## Local Tooling
 
-The project requires free local tooling for Android builds:
-
 - Java 21 or newer
-- Android Studio or Android command-line tools with Android SDK Platform 36
-- A configured `android/local.properties` pointing at the Android SDK. Start from `android/local.properties.example`.
-- For release signing, copy `android/signing.properties.example` to `android/signing.properties` and point it at a
-  local keystore. Do not commit `signing.properties`, `.jks`, or `.keystore` files.
+- Android Studio or command-line tools
+- Android SDK Platform 36
+- `android/local.properties`, based on `android/local.properties.example`
+- local release keystore and ignored `android/signing.properties`
 
-Run `npm run android:configure` after installing Android tooling to auto-create `android/local.properties` when the SDK
-is in a standard location. Run `npm run android:doctor` after that; it reports missing Java, SDK, and
-`local.properties` setup before Gradle is started. If `android/signing.properties` exists, it also validates the
-required signing fields and keystore path.
+Never commit signing files, keystores, or Play credentials.
