@@ -19,11 +19,21 @@ export interface NativeProtectionDrain {
   usage: NativeUsageSample[];
 }
 
+export interface NativeProtectionStatus {
+  running: boolean;
+  enabled: boolean;
+  unavailableAppIds: string[];
+}
+
 interface NativeProtectionPlugin {
-  syncProtectionConfig(options: { configJson: string }): Promise<void>;
+  syncProtectionConfig(options: { configJson: string }): Promise<{ unavailableAppIdsJson: string }>;
   startProtectionService(): Promise<void>;
   stopProtectionService(): Promise<void>;
-  getProtectionServiceStatus(): Promise<{ running: boolean; enabled: boolean }>;
+  getProtectionServiceStatus(): Promise<{
+    running: boolean;
+    enabled: boolean;
+    unavailableAppIdsJson: string;
+  }>;
   drainProtectionEvents(): Promise<{ eventsJson: string; usageJson: string }>;
 }
 
@@ -129,45 +139,58 @@ const parseArray = <T>(raw: string, predicate: (value: unknown) => value is T): 
   }
 };
 
+const parseStringArray = (raw: string): string[] => {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? [...new Set(parsed.filter((value): value is string => typeof value === 'string' && value.length > 0))]
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const buildConfig = (appsConfig: Record<string, AppConfig>, focusMode: boolean): NativeProtectionConfig => ({
+  focusMode,
+  apps: Object.entries(appsConfig)
+    .filter(([appId, appConfig]) => appConfig.active && ANDROID_PACKAGES[appId]?.length)
+    .map(([appId, appConfig]) => ({
+      id: appId,
+      name: APP_NAMES[appId] ?? appId,
+      packages: ANDROID_PACKAGES[appId],
+      active: appConfig.active,
+      mode: appConfig.mode,
+      delaySeconds: Math.max(0, appConfig.openDelay),
+      dailyLimitMinutes: Math.max(0, appConfig.dailyLimit),
+      sessionMinutes: Math.max(1, appConfig.sessionLimit ?? 5),
+      blockHours: appConfig.blockHours?.trim() ?? '',
+      focusModeBehavior: appConfig.focusModeBehavior,
+      antiBinge: {
+        enabled: appConfig.antiBinge.enabled,
+        warningThreshold: Math.max(1, appConfig.antiBinge.warningThreshold),
+        warningWindowMinutes: Math.max(1, appConfig.antiBinge.warningTimeframe),
+        blockThreshold: Math.max(1, appConfig.antiBinge.blockThreshold),
+        blockWindowMinutes: Math.max(1, appConfig.antiBinge.blockTimeframe),
+      },
+      emergencyUnlock: {
+        enabled: appConfig.emergencyUnlock.enabled,
+        durationMinutes: Math.max(1, appConfig.emergencyUnlock.durationMinutes),
+        maxPerDay: Math.max(0, appConfig.emergencyUnlock.maxPerDay),
+      },
+    })),
+});
+
 export const NativeProtection = {
   isAvailable(): boolean {
     return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
   },
 
-  async sync(appsConfig: Record<string, AppConfig>, focusMode: boolean): Promise<void> {
-    if (!this.isAvailable()) return;
-
-    const config: NativeProtectionConfig = {
-      focusMode,
-      apps: Object.entries(appsConfig)
-        .filter(([appId, appConfig]) => appConfig.active && ANDROID_PACKAGES[appId]?.length)
-        .map(([appId, appConfig]) => ({
-          id: appId,
-          name: APP_NAMES[appId] ?? appId,
-          packages: ANDROID_PACKAGES[appId],
-          active: appConfig.active,
-          mode: appConfig.mode,
-          delaySeconds: Math.max(0, appConfig.openDelay),
-          dailyLimitMinutes: Math.max(0, appConfig.dailyLimit),
-          sessionMinutes: Math.max(1, appConfig.sessionLimit ?? 5),
-          blockHours: appConfig.blockHours?.trim() ?? '',
-          focusModeBehavior: appConfig.focusModeBehavior,
-          antiBinge: {
-            enabled: appConfig.antiBinge.enabled,
-            warningThreshold: Math.max(1, appConfig.antiBinge.warningThreshold),
-            warningWindowMinutes: Math.max(1, appConfig.antiBinge.warningTimeframe),
-            blockThreshold: Math.max(1, appConfig.antiBinge.blockThreshold),
-            blockWindowMinutes: Math.max(1, appConfig.antiBinge.blockTimeframe),
-          },
-          emergencyUnlock: {
-            enabled: appConfig.emergencyUnlock.enabled,
-            durationMinutes: Math.max(1, appConfig.emergencyUnlock.durationMinutes),
-            maxPerDay: Math.max(0, appConfig.emergencyUnlock.maxPerDay),
-          },
-        })),
-    };
-
-    await AndroidProtection.syncProtectionConfig({ configJson: JSON.stringify(config) });
+  async sync(appsConfig: Record<string, AppConfig>, focusMode: boolean): Promise<string[]> {
+    if (!this.isAvailable()) return [];
+    const result = await AndroidProtection.syncProtectionConfig({
+      configJson: JSON.stringify(buildConfig(appsConfig, focusMode)),
+    });
+    return parseStringArray(result.unavailableAppIdsJson);
   },
 
   async start(appsConfig: Record<string, AppConfig>, focusMode: boolean): Promise<void> {
@@ -181,9 +204,14 @@ export const NativeProtection = {
     await AndroidProtection.stopProtectionService();
   },
 
-  async getStatus(): Promise<{ running: boolean; enabled: boolean }> {
-    if (!this.isAvailable()) return { running: false, enabled: false };
-    return AndroidProtection.getProtectionServiceStatus();
+  async getStatus(): Promise<NativeProtectionStatus> {
+    if (!this.isAvailable()) return { running: false, enabled: false, unavailableAppIds: [] };
+    const result = await AndroidProtection.getProtectionServiceStatus();
+    return {
+      running: result.running,
+      enabled: result.enabled,
+      unavailableAppIds: parseStringArray(result.unavailableAppIdsJson),
+    };
   },
 
   async drain(): Promise<NativeProtectionDrain> {
