@@ -1,0 +1,38 @@
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
+export interface NativeDiagnosticsSnapshot {
+  capturedAt: number;
+  manufacturer: string;
+  brand: string;
+  model: string;
+  device: string;
+  androidRelease: string;
+  sdkInt: number;
+  packageName: string;
+  locale: string;
+  timeZone: string;
+  usageAccess: boolean;
+  overlay: boolean;
+  notifications: boolean;
+  batteryOptimizationExempt: boolean;
+  protectionEnabled: boolean;
+  serviceRunning: boolean;
+  configuredInstalledApps: boolean;
+}
+
+interface NativeDiagnosticsPlugin {
+  getSnapshot(): Promise<NativeDiagnosticsSnapshot>;
+}
+
+const AndroidDiagnostics = registerPlugin<NativeDiagnosticsPlugin>('ScrollShieldDiagnostics');
+
+export const NativeDiagnostics = {
+  isAvailable(): boolean {
+    return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+  },
+
+  async getSnapshot(): Promise<NativeDiagnosticsSnapshot | null> {
+    if (!this.isAvailable()) return null;
+    return AndroidDiagnostics.getSnapshot();
+  },
+};
