@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "candidateVersion": "1.0.0",
+  "candidateVersionCode": 1,
+  "webVerificationPassed": false,
+  "androidUnitTestsPassed": false,
+  "debugApkCompiled": false,
+  "physicalDeviceMatrixPassed": false,
+  "batteryReliabilityPassed": false,
+  "migrationValidationPassed": false,
+  "playDeclarationsFinal": false,
+  "legalFieldsComplete": false,
+  "reviewVideosRecorded": false,
+  "signedBinaryInspected": false,
+  "approvedBy": "",
+  "approvedAt": ""
+}
