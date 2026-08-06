@@ -87,6 +87,63 @@ describe('data export', () => {
     expect(JSON.parse(localStorage.getItem(LEGACY_ARCHIVE_KEY) as string)).toEqual(archive);
   });
 
+  it('imports a former V0.7 backup file without activating its obsolete AI rules', () => {
+    const legacyBackup = {
+      appVersion: '2040.1.0-PRO',
+      schemaVersion: 15,
+      exportedAt: '2026-05-01T10:00:00.000Z',
+      brainState: { savedTimeMinutesToday: 91, mindfulnessScore: 80 },
+      impulseEvents: [
+        {
+          id: 'old-1',
+          appName: 'Instagram',
+          timestamp: '14:20',
+          delayDurationSeconds: 15,
+          outcome: 'blocked',
+          vulnerabilityScoreAtTime: 65,
+        },
+        {
+          id: 'old-2',
+          appName: 'TikTok',
+          timestamp: '16:05',
+          delayDurationSeconds: 20,
+          outcome: 'emergency_unlocked',
+          vulnerabilityScoreAtTime: 40,
+        },
+      ],
+      aiRules: [{ id: 'legacy-rule', isActive: true, prompt: 'Alte Regel' }],
+      userGamification: { level: 12 },
+    };
+    const raw = JSON.stringify(legacyBackup);
+
+    const converted = parseScrollShieldExport(raw);
+
+    expect(converted.app).toBe('ScrollShield');
+    expect(converted.appVersion).toBe('2040.1.0-PRO');
+    expect(converted.state.stats.totalSavedTime).toBe(91);
+    expect(converted.state.history.some((event) => event.id === 'legacy-file-old-1')).toBe(true);
+    expect(converted.state.history.some((event) => event.id === 'legacy-file-old-2' && event.type === 'emergency')).toBe(
+      true,
+    );
+    expect(converted.state.history[0].desc).toContain('nicht automatisch aktiviert');
+    expect(Object.values(converted.state.appsConfig).every((config) => !config.active)).toBe(true);
+    expect(converted.legacyArchive?.sources[0].rawEntries.scrollshield_backup_v15_file).toBe(raw);
+    expect(JSON.parse(localStorage.getItem(LEGACY_ARCHIVE_KEY) as string)).toEqual(converted.legacyArchive);
+  });
+
+  it('rejects malformed former V0.7 backup files', () => {
+    const raw = JSON.stringify({
+      appVersion: '2040.1.0-PRO',
+      schemaVersion: 15,
+      brainState: {},
+      impulseEvents: 'not-an-array',
+      aiRules: [],
+    });
+
+    expect(() => parseScrollShieldExport(raw)).toThrow('kein unterstützter ScrollShield-Export');
+    expect(localStorage.getItem(LEGACY_ARCHIVE_KEY)).toBeNull();
+  });
+
   it('rejects a damaged V0.7 archive without changing local storage', () => {
     const raw = JSON.stringify({
       ...createScrollShieldExport(DEFAULT_STATE, { appVersion: '1.0.0' }),
