@@ -20,9 +20,10 @@ Solange ein Punkt offen ist, dürfen weder Release-APK noch AAB als veröffentli
 - [ ] `npm run verify` läuft vollständig ohne Fehler.
 - [ ] TypeScript, ESLint und Prettier bestehen.
 - [ ] Alle Vitest- und Accessibility-Prüfungen bestehen.
+- [ ] `npm run check:lifecycle` besteht.
 - [ ] `npm run check:migration` besteht.
-- [ ] Alle Storage-, V0.7-, Export- und Import-Regressionstests bestehen.
-- [ ] Android `testDebugUnitTest` besteht.
+- [ ] Alle Lifecycle-, Storage-, V0.7-, Export- und Import-Regressionstests bestehen.
+- [ ] Android `testDebugUnitTest` besteht, einschließlich `ProtectionStopReasonPolicyTest`.
 - [ ] Android `assembleDebug` erstellt eine installierbare Debug-APK.
 - [ ] APK und Android-Testbericht wurden als Workflow-Artefakte oder lokal archiviert.
 - [ ] Ein tatsächlicher Android-/Gradle-Build bestätigt die Kompilierbarkeit aller nativen Plugins und des Schutzdienstes.
@@ -41,7 +42,7 @@ GitHub Actions ist derzeit durch die Kontoabrechnung beziehungsweise das Spendin
 - [ ] Die endgültige Paket-ID wurde vor dem ersten Play-Upload ausdrücklich bestätigt.
 - [ ] Der signierte Release-Build wurde auf unerwartete SDKs, Tracker, Netzwerkziele und Berechtigungen untersucht.
 
-## 4. Berechtigungen und Foreground Service
+## 4. Berechtigungen, Foreground Service und Lifecycle-Diagnose
 
 - [x] Usage Access wird nur zur Erkennung einer vom Nutzer ausgewählten Vordergrund-App verwendet.
 - [x] Overlay-Zugriff wird nur für die klar erkennbare ScrollShield-Unterbrechung verwendet.
@@ -54,7 +55,13 @@ GitHub Actions ist derzeit durch die Kontoabrechnung beziehungsweise das Spendin
 - [x] Der Dienst beendet sich bei Entzug von Benachrichtigungen, Schutzkanal, Usage Access oder Overlay.
 - [x] Der Dienst beendet sich, wenn alle aktiven Regeln oder die letzte installierte Ziel-App verschwinden.
 - [x] Beim Dienstende werden Overlay, Aktivierungsstatus und Foreground-Benachrichtigung entfernt und ein lokaler Warnhinweis gespeichert.
+- [x] Native Einstellungen speichern `lastProtectionStartAt`, `lastProtectionStopAt`, `lastProtectionStopCode` und `lastProtectionStopMessage`.
+- [x] Berechtigungs- und Konfigurationsabbrüche erhalten stabile Codes wie `notifications_missing`, `usage_access_missing`, `overlay_permission_missing`, `no_active_rules` und `target_app_missing`.
+- [x] Ein blockierter V0.7-Recovery-Start stoppt den Dienst mit `migration_recovery`.
+- [x] Fehlgeschlagene Boot-/App-Update-Wiederherstellung löscht den falschen Aktivstatus und speichert einen genauen `recovery_*`-Code.
+- [x] Start-/Stoppzeit, Code und Grund erscheinen im Debug-Bericht und im kopierbaren Diagnose-JSON.
 - [ ] Alle genannten Fälle wurden auf realen Geräten mit aktuellem Build nachgewiesen.
+- [ ] Die Lifecycle-Werte bleiben nach Schließen und erneutem Öffnen von ScrollShield erhalten.
 
 ## 5. Schutzlogik
 
@@ -68,7 +75,7 @@ GitHub Actions ist derzeit durch die Kontoabrechnung beziehungsweise das Spendin
 - [ ] Instrumentationstests decken Dienstlebenszyklus, Overlay, Countdown, Sitzungsende, Usage-Import und Boot-Recovery ab.
 - [ ] Alle Regeln wurden nach `docs/ANDROID_DEVICE_TEST_MATRIX.md` auf realen Geräten geprüft.
 
-## 6. Geräte-, Batterie- und Zeitmatrix
+## 6. Geräte-, Batterie-, Lifecycle- und Zeitmatrix
 
 - [ ] Google Pixel oder ein anderes physisches Near-Stock-Gerät besteht.
 - [ ] Samsung Galaxy besteht.
@@ -80,6 +87,7 @@ GitHub Actions ist derzeit durch die Kontoabrechnung beziehungsweise das Spendin
 - [ ] Android 8 / API 26 Kanal- und Foreground-Service-Verhalten besteht.
 - [ ] Android 13+ Runtime-Benachrichtigungsdialog besteht.
 - [ ] Reboot, App-Update, Prozessende, Force-Stop und Herstellersparmodi sind dokumentiert.
+- [ ] `LIFE-08` bestätigt manuelle, Migrations-, Berechtigungs-, Konfigurations- und Recovery-Stoppgründe.
 - [ ] Ein mindestens zwölfstündiger Lauf zeigt keinen Benachrichtigungs-, Overlay-, Event- oder Batteriefehler.
 - [ ] Mitternacht, Zeitzonenwechsel, Sommerzeit und manuelle Uhränderung bestehen.
 - [ ] Für jeden Lauf liegen Version, Build, Diagnose-JSON, Ergebnis und Fehlernachweise vor.
@@ -134,6 +142,7 @@ Die genaue Spezifikation steht in `docs/DATA_MIGRATION.md`. `migrationValidation
 - [ ] Foreground-Service-Special-Use-Deklaration wurde final eingereicht.
 - [ ] USK-/PEGI-Fragebogen wurde final ausgefüllt.
 - [ ] Reviewer-Video zeigt Runtime-Prompt, Schutzkanal, sichtbaren Dienst, direkte Stop-Aktion, Overlay und sicheren Entzug.
+- [ ] Reviewer-Video zeigt den kopierten Diagnosebericht mit passendem Stoppcode nach einem sicheren Entzug.
 - [ ] Reviewer-Video verwendet exakt denselben Build wie der hochgeladene AAB.
 - [ ] Interner oder geschlossener Testtrack wurde vor Produktion erfolgreich abgeschlossen.
 
