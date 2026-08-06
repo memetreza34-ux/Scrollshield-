@@ -18,10 +18,17 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 @CapacitorPlugin(name = "ScrollShieldNative")
 public class ScrollShieldNativePlugin extends Plugin {
     public static final String PREFERENCES_NAME = "scrollshield_native";
     public static final String CONFIG_KEY = "protection_config";
+    private static final String EVENT_QUEUE_KEY = "protection_events";
+    private static final int MAX_QUEUED_EVENTS = 200;
+    private static final Object EVENT_LOCK = new Object();
 
     @PluginMethod
     public void getPermissionStatus(PluginCall call) {
@@ -128,6 +135,53 @@ public class ScrollShieldNativePlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("running", ScrollShieldProtectionService.isRunning());
         call.resolve(result);
+    }
+
+    @PluginMethod
+    public void drainProtectionEvents(PluginCall call) {
+        String eventsJson;
+        synchronized (EVENT_LOCK) {
+            SharedPreferences preferences = getPreferences();
+            eventsJson = preferences.getString(EVENT_QUEUE_KEY, "[]");
+            preferences.edit().putString(EVENT_QUEUE_KEY, "[]").commit();
+        }
+
+        JSObject result = new JSObject();
+        result.put("eventsJson", eventsJson == null ? "[]" : eventsJson);
+        call.resolve(result);
+    }
+
+    public static void appendProtectionEvent(
+        Context context,
+        String type,
+        String appId,
+        String description
+    ) {
+        synchronized (EVENT_LOCK) {
+            SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+            JSONArray events;
+            try {
+                String existing = preferences.getString(EVENT_QUEUE_KEY, "[]");
+                events = new JSONArray(existing == null ? "[]" : existing);
+            } catch (JSONException error) {
+                events = new JSONArray();
+            }
+
+            JSONObject event = new JSONObject();
+            try {
+                event.put("timestamp", System.currentTimeMillis());
+                event.put("type", type);
+                event.put("appId", appId);
+                event.put("desc", description);
+                events.put(event);
+                while (events.length() > MAX_QUEUED_EVENTS) {
+                    events.remove(0);
+                }
+                preferences.edit().putString(EVENT_QUEUE_KEY, events.toString()).commit();
+            } catch (JSONException error) {
+                error.printStackTrace();
+            }
+        }
     }
 
     public static boolean hasUsageAccess(Context context) {
