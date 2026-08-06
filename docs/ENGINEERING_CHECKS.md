@@ -16,6 +16,7 @@ The verification chain covers:
 - Prettier formatting
 - package/app/store version consistency
 - release-approval schema and candidate-version consistency
+- transactional and legacy-storage migration safeguards
 - SDK registry and third-party notices
 - committed-secret detection
 - store copy, privacy declarations, and screenshot metadata
@@ -26,6 +27,27 @@ The verification chain covers:
 - PWA/service-worker output
 - production privacy/network scan
 - bundle-size budget
+
+## Storage Migration Check
+
+`npm run check:migration` protects the complete local-data migration contract:
+
+- recognizes `scrollshield_state_v2` and the unversioned `scrollshield_state`
+- recognizes former V0.7/PRO keys for brain state, events, rules, gamification, installation metadata, and old backups
+- stages every current storage chunk under a `_pending` key before live data is replaced
+- verifies staged and committed values byte-for-byte and returns explicit save success
+- completes a whole pending transaction after a process interruption
+- discards an incomplete pending set instead of replacing the last complete live state
+- writes a byte-for-byte legacy archive before source deletion
+- removes source keys only after both archive and normalized current-state writes are verified
+- retains corrupted or unwritable legacy source data for retry or manual recovery
+- converts only deterministic V0.7 events and saved-time values
+- keeps obsolete generated rules archived and inactive
+- preserves each converted event's original payload in history metadata
+- includes the legacy archive in normal JSON exports and validates/restores it during import
+- requires regression tests for monolithic, unversioned, V0.7, write-failure, corrupted-source, pending-recovery, and export/import cases
+
+The implementation is in `src/lib/storage.ts` and `src/lib/dataExport.ts`. The human validation contract is in `docs/DATA_MIGRATION.md`.
 
 ## Android Source Checks
 
