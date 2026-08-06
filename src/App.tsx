@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { AppState, Screen, DEFAULT_STATE } from './types';
+import { AppState, HistoryEvent, Screen, DEFAULT_STATE } from './types';
 import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
 import { reconcileFocusRuntime } from './lib/focus';
 import { NativeProtection } from './lib/nativeProtection';
+import { createEventId } from './lib/appUtils';
+import { recordProtectionEventStats } from './lib/session';
 import { BottomNav } from './components/ui';
 import { Welcome, Onboarding } from './screens/OnboardingScreens';
 import { Dashboard, History } from './screens/MainScreens';
@@ -102,6 +104,49 @@ export default function App() {
 
     return () => window.clearTimeout(syncTimer);
   }, [appState.appsConfig, appState.isFocusModeActive, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded || !NativeProtection.isAvailable()) return;
+
+    let cancelled = false;
+    const drainNativeEvents = async () => {
+      try {
+        const nativeEvents = await NativeProtection.drainEvents();
+        if (cancelled || nativeEvents.length === 0) return;
+
+        setAppState((previousState) => {
+          let dailyStats = previousState.dailyStats;
+          const historyEvents: HistoryEvent[] = nativeEvents.map((event) => {
+            dailyStats = recordProtectionEventStats(dailyStats, event.type, event.timestamp);
+            return {
+              id: createEventId(),
+              timestamp: event.timestamp,
+              type: event.type,
+              appId: event.appId,
+              desc: event.desc,
+              trigger: 'Android-Systemschutz',
+              metadata: { source: 'native_android' },
+            };
+          });
+
+          return {
+            ...previousState,
+            history: [...historyEvents.reverse(), ...previousState.history].slice(0, 1_000),
+            dailyStats,
+          };
+        });
+      } catch (error) {
+        console.error('Failed to import native protection events', error);
+      }
+    };
+
+    void drainNativeEvents();
+    const interval = window.setInterval(() => void drainNativeEvents(), 2_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [isLoaded]);
 
   if (!isLoaded)
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">Laden...</div>;
