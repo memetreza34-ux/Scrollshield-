@@ -1,9 +1,11 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_STATE } from '../types';
 import { AppList } from './AppListScreen';
 
-const syncMock = vi.fn().mockResolvedValue(['instagram']);
+const { syncMock } = vi.hoisted(() => ({
+  syncMock: vi.fn(),
+}));
 
 vi.mock('../lib/nativeProtection', () => ({
   NativeProtection: {
@@ -13,6 +15,11 @@ vi.mock('../lib/nativeProtection', () => ({
 }));
 
 describe('AppList', () => {
+  beforeEach(() => {
+    syncMock.mockReset();
+    syncMock.mockResolvedValue(['instagram']);
+  });
+
   it('marks unavailable Android apps and prevents activation', async () => {
     const updateState = vi.fn();
     const navigate = vi.fn();
