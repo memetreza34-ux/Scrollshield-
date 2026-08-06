@@ -93,6 +93,7 @@ The implementation is in `src/lib/storage.ts`, `src/lib/dataExport.ts`, and `src
 - the Debug screen displays start time, stop time, stop code, and stop message
 - bridge, App-integration, and Debug-component tests protect the full route
 - the physical-device matrix requires persistence evidence after reopening ScrollShield
+- the reviewer flow must show the matching code and message in both the Debug rows and copied diagnostic JSON
 
 The executable source contract is in `scripts/check-protection-lifecycle-diagnostics.ts`.
 
