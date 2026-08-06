@@ -50,18 +50,24 @@ ScrollShield uses Capacitor with the Android package id `app.scrollshield.mobile
   - normal, strict, or block behavior per recurring window
   - Anti-Binge warning and blocking thresholds
   - per-app daily emergency-unlock limits
-- The running Android service now executes the same pure Java `ProtectionRulePolicy` covered by local JUnit tests
+- The running Android service executes the same pure Java `ProtectionRulePolicy` covered by local JUnit tests
 - App-list presets for no schedule, balanced use, work/learning, evening/sleep, and very strict protection
 - Batched native usage measurement while temporary access is active
 - Local native event queue for blocks, warnings, intentional opens, permission loss, and emergency unlocks
 - Import of native events and measured usage into React history and date-correct daily statistics
 - Native Android device diagnostics for:
-  - manufacturer and model
+  - manufacturer, brand, model, and device code
   - Android release and SDK level
-  - package id, locale, and time zone
-  - Usage Access, overlay, notifications, and battery exemption
+  - package id, installed version name, and installed version code
+  - locale and time zone
+  - Usage Access and overlay status
+  - app-wide notification status
+  - protection-channel creation and enabled status
+  - combined protection-notification readiness
+  - battery exemption
   - persisted activation, running service, and installed configured apps
 - Copyable JSON diagnostic snapshot in the development screen
+- Visible diagnostic rows for build identity and channel-specific failure analysis
 - Pure Java protection-rule policy with local JUnit coverage for:
   - weekday schedule boundaries
   - weekend precedence
@@ -74,6 +80,7 @@ ScrollShield uses Capacitor with the Android package id `app.scrollshield.mobile
   - unavailable apps
   - weekly schedule presets
   - Android diagnostics
+  - version/build and protection-channel diagnostics
   - required notification startup
   - successful Android runtime permission prompt
   - denied-prompt settings fallback
@@ -87,6 +94,9 @@ ScrollShield uses Capacitor with the Android package id `app.scrollshield.mobile
 - External GitHub Actions pinned to immutable commit SHAs
 - Weekly Dependabot coverage for npm, Capacitor, React, Gradle, and GitHub Actions
 - Dedicated transparency check guarding the complete notification flow, visible service status, channel consistency, permission revocation, and direct stop action
+- Mandatory Android device matrix guarded by `npm run check:device-matrix`
+- Explicit release approval manifest under `config/release-approval.json`
+- Strict release gate before release APK or AAB generation
 
 The browser/PWA build remains a preview and cannot block other installed apps. Only the installed Android build can use the native protection service.
 
@@ -98,21 +108,51 @@ npm run android:doctor
 npm run android:sync
 npm run android:open
 npm run android:build
+npm run check:device-matrix
+npm run check:release-approval
+npm run release:gate
 npm run android:release
 npm run android:bundle
 ```
 
+`android:build` creates the debug APK without requiring production approval. `android:release` and `android:bundle` first execute the strict release gate and therefore remain blocked while mandatory evidence is incomplete.
+
+## Mandatory Real-Device Evidence
+
+The complete plan is in `docs/ANDROID_DEVICE_TEST_MATRIX.md`. At minimum, the release candidate requires current-build evidence for:
+
+- Google Pixel or another physical near-stock device
+- Samsung Galaxy
+- Xiaomi or Redmi
+- OnePlus
+- Motorola
+- an Android tablet
+- Android 7 / API 24 fallback behavior
+- Android 8 / API 26 channel behavior
+- Android 13+ notification runtime permission
+- permission and channel revocation while protection runs
+- final protected-app uninstall and final-rule removal
+- reboot, app update, process termination, force-stop, and manufacturer battery restrictions
+- twelve-hour battery and service reliability
+- midnight, time-zone, daylight-saving, and manual-clock transitions
+- maximum font scaling, large displays, rotation, multi-window, and TalkBack smoke testing
+
+Every result must identify the exact installed version and build and include copied diagnostic JSON. Emulator-only completion is insufficient.
+
 ## Release Blockers
 
 1. Execute the complete JavaScript verification suite, Android JUnit tests, and debug compilation in a working CI or local Android environment.
-2. Test foreground detection, overlays, schedules, daily limits, session expiry, and counters on Samsung, Google Pixel, Xiaomi, OnePlus, Motorola, and at least one Android tablet.
+2. Complete `docs/ANDROID_DEVICE_TEST_MATRIX.md` with physical-device evidence.
 3. Verify recovery and shutdown after process termination, device restart, app update, battery saver, manufacturer task killers, permission revocation, protection-channel deactivation, rule removal, and protected-app uninstall.
 4. Test weekly schedules across device time-zone changes, daylight-saving transitions, midnight boundaries, and manual clock changes.
-5. Add a custom per-day/per-app schedule editor if preset schedules are insufficient for the first public release.
-6. Validate cloned apps, work-profile packages, manufacturer variants, and region-specific package names.
-7. Replace legal placeholders and prepare Play Console declarations, reviewer instructions, and permission demonstration videos.
-8. Expand Android tests from pure rule logic to instrumentation coverage for service lifecycle, permission loss, overlays, countdowns, usage import, boot recovery, and package availability.
-9. Measure battery consumption over long sessions and tune the foreground-app polling and installed-app health intervals before production rollout.
+5. Validate V0.7-compatible and previous-release-candidate migrations.
+6. Add a custom per-day/per-app schedule editor if preset schedules are insufficient for the first public release.
+7. Validate cloned apps, work-profile packages, manufacturer variants, and region-specific package names.
+8. Replace legal placeholders and finalize Play Console declarations, reviewer instructions, and permission demonstration videos.
+9. Expand Android tests from pure rule logic to instrumentation coverage for service lifecycle, permission loss, overlays, countdowns, usage import, boot recovery, and package availability.
+10. Measure battery consumption over long sessions and tune the foreground-app polling and installed-app health intervals before production rollout.
+11. Inspect the final signed binary against privacy, permission, SDK, and store declarations.
+12. Complete every field in `config/release-approval.json`, then record the responsible approver and approval time.
 
 ## Reels-only Protection
 
