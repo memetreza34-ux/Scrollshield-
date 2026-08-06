@@ -22,13 +22,16 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.Map;
+
 @CapacitorPlugin(name = "ScrollShieldNative")
 public class ScrollShieldNativePlugin extends Plugin {
     public static final String PREFERENCES_NAME = "scrollshield_native";
     public static final String CONFIG_KEY = "protection_config";
     public static final String SERVICE_ENABLED_KEY = "protection_service_enabled";
     private static final String EVENT_QUEUE_KEY = "protection_events";
-    private static final String USAGE_EXPORT_KEY = "pending_usage_export";
+    private static final String USAGE_COUNTER_PREFIX = "usage_ms_";
+    private static final String EXPORTED_USAGE_PREFIX = "exported_";
     private static final int MAX_QUEUED_EVENTS = 200;
     private static final Object EVENT_LOCK = new Object();
 
@@ -156,21 +159,43 @@ public class ScrollShieldNativePlugin extends Plugin {
     @PluginMethod
     public void drainProtectionEvents(PluginCall call) {
         String eventsJson;
-        String usageJson;
+        JSONArray usageSamples = new JSONArray();
         synchronized (EVENT_LOCK) {
             SharedPreferences preferences = getPreferences();
             eventsJson = preferences.getString(EVENT_QUEUE_KEY, "[]");
-            usageJson = preferences.getString(USAGE_EXPORT_KEY, "{}");
-            preferences
-                .edit()
-                .putString(EVENT_QUEUE_KEY, "[]")
-                .putString(USAGE_EXPORT_KEY, "{}")
-                .commit();
+            SharedPreferences.Editor editor = preferences.edit().putString(EVENT_QUEUE_KEY, "[]");
+
+            for (Map.Entry<String, ?> entry : preferences.getAll().entrySet()) {
+                String key = entry.getKey();
+                Object value = entry.getValue();
+                if (!key.startsWith(USAGE_COUNTER_PREFIX) || !(value instanceof Long)) continue;
+
+                long current = (Long) value;
+                String exportedKey = EXPORTED_USAGE_PREFIX + key;
+                long exported = preferences.getLong(exportedKey, 0L);
+                if (current < exported) exported = 0L;
+                long delta = current - exported;
+                editor.putLong(exportedKey, current);
+                if (delta <= 0L) continue;
+
+                UsageKey usageKey = parseUsageKey(key);
+                if (usageKey == null) continue;
+                try {
+                    JSONObject sample = new JSONObject();
+                    sample.put("date", usageKey.date);
+                    sample.put("appId", usageKey.appId);
+                    sample.put("durationMs", delta);
+                    usageSamples.put(sample);
+                } catch (JSONException error) {
+                    error.printStackTrace();
+                }
+            }
+            editor.commit();
         }
 
         JSObject result = new JSObject();
         result.put("eventsJson", eventsJson == null ? "[]" : eventsJson);
-        result.put("usageJson", usageJson == null ? "{}" : usageJson);
+        result.put("usageJson", usageSamples.toString());
         call.resolve(result);
     }
 
@@ -201,28 +226,6 @@ public class ScrollShieldNativePlugin extends Plugin {
                     events.remove(0);
                 }
                 preferences.edit().putString(EVENT_QUEUE_KEY, events.toString()).commit();
-            } catch (JSONException error) {
-                error.printStackTrace();
-            }
-        }
-    }
-
-    public static void appendUsageSample(Context context, String appId, long durationMs) {
-        if (appId == null || appId.trim().isEmpty() || durationMs <= 0L) return;
-
-        synchronized (EVENT_LOCK) {
-            SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
-            JSONObject usage;
-            try {
-                String existing = preferences.getString(USAGE_EXPORT_KEY, "{}");
-                usage = new JSONObject(existing == null ? "{}" : existing);
-            } catch (JSONException error) {
-                usage = new JSONObject();
-            }
-
-            try {
-                usage.put(appId, usage.optLong(appId, 0L) + durationMs);
-                preferences.edit().putString(USAGE_EXPORT_KEY, usage.toString()).commit();
             } catch (JSONException error) {
                 error.printStackTrace();
             }
@@ -276,6 +279,17 @@ public class ScrollShieldNativePlugin extends Plugin {
         }
     }
 
+    private static UsageKey parseUsageKey(String key) {
+        int dateStart = USAGE_COUNTER_PREFIX.length();
+        int appStart = dateStart + 11;
+        if (key.length() <= appStart) return null;
+        String date = key.substring(dateStart, dateStart + 10);
+        if (key.charAt(dateStart + 10) != '_') return null;
+        String appId = key.substring(appStart);
+        if (appId.trim().isEmpty()) return null;
+        return new UsageKey(date, appId);
+    }
+
     private SharedPreferences getPreferences() {
         return getContext().getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
     }
@@ -297,6 +311,16 @@ public class ScrollShieldNativePlugin extends Plugin {
             call.resolve();
         } catch (ActivityNotFoundException fallbackError) {
             call.reject("Android settings screen is unavailable", originalError);
+        }
+    }
+
+    private static final class UsageKey {
+        private final String date;
+        private final String appId;
+
+        private UsageKey(String date, String appId) {
+            this.date = date;
+            this.appId = appId;
         }
     }
 }
