@@ -36,6 +36,7 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -49,6 +50,7 @@ public class ScrollShieldProtectionService extends Service {
     private static final int NOTIFICATION_ID = 2207;
     private static final long POLL_INTERVAL_MS = 900L;
     private static final long USAGE_FLUSH_INTERVAL_MS = 10_000L;
+    private static final long CONFIGURATION_HEALTH_INTERVAL_MS = 30_000L;
     private static final AtomicBoolean RUNNING = new AtomicBoolean(false);
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -61,11 +63,13 @@ public class ScrollShieldProtectionService extends Service {
     private String overlayPackage;
     private String cachedConfigJson = "";
     private boolean focusMode;
+    private boolean hasActiveConfiguredRule;
     private Runnable countdownRunnable;
     private String lastDetectedForegroundPackage;
     private String lastUsagePackage;
     private long lastUsageTickMs;
     private long lastUsageFlushMs;
+    private long lastConfigurationHealthCheckMs;
 
     private final Runnable pollRunnable = new Runnable() {
         @Override
@@ -107,9 +111,28 @@ public class ScrollShieldProtectionService extends Service {
             return START_NOT_STICKY;
         }
 
-        if (!ScrollShieldNativePlugin.isProtectionEnabled(this)
-            || !ScrollShieldNativePlugin.hasConfiguredApps(this)) {
+        if (!ScrollShieldNativePlugin.isProtectionEnabled(this)) {
             stopSelf();
+            return START_NOT_STICKY;
+        }
+        if (!ScrollShieldNativePlugin.hasConfiguredApps(this)) {
+            stopForMissingPermission(
+                "Keine aktive installierte Ziel-App ist mehr konfiguriert; der Android-Schutz wurde gestoppt"
+            );
+            return START_NOT_STICKY;
+        }
+        if (!ScrollShieldNativePlugin.hasUsageAccess(this)) {
+            stopForMissingPermission("Nutzungszugriff fehlt; der Android-Schutz wurde gestoppt");
+            return START_NOT_STICKY;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            stopForMissingPermission("Overlay-Berechtigung fehlt; der Android-Schutz wurde gestoppt");
+            return START_NOT_STICKY;
+        }
+        if (!ScrollShieldNativePlugin.hasNotificationsEnabled(this)) {
+            stopForMissingPermission(
+                "Benachrichtigungen fehlen; der Android-Schutz wurde beendet, damit er nicht unsichtbar läuft"
+            );
             return START_NOT_STICKY;
         }
         return START_STICKY;
@@ -120,6 +143,11 @@ public class ScrollShieldProtectionService extends Service {
         handler.removeCallbacksAndMessages(null);
         flushPendingUsage(System.currentTimeMillis(), true);
         hideOverlay();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+        } else {
+            stopForeground(true);
+        }
         RUNNING.set(false);
         super.onDestroy();
     }
@@ -131,6 +159,16 @@ public class ScrollShieldProtectionService extends Service {
     }
 
     private void enforceCurrentApp() {
+        if (!ScrollShieldNativePlugin.isProtectionEnabled(this)) {
+            stopSelf();
+            return;
+        }
+        if (!ScrollShieldNativePlugin.hasNotificationsEnabled(this)) {
+            stopForMissingPermission(
+                "Benachrichtigungen wurden entzogen; der Android-Schutz wurde beendet, damit er nicht unsichtbar läuft"
+            );
+            return;
+        }
         if (!ScrollShieldNativePlugin.hasUsageAccess(this)) {
             stopForMissingPermission("Nutzungszugriff wurde entzogen; der Android-Schutz wurde gestoppt");
             return;
@@ -139,15 +177,31 @@ public class ScrollShieldProtectionService extends Service {
             stopForMissingPermission("Overlay-Berechtigung wurde entzogen; der Android-Schutz wurde gestoppt");
             return;
         }
-
-        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
-        if (powerManager != null && !powerManager.isInteractive()) {
-            recordAllowedUsage(null, System.currentTimeMillis());
-            hideOverlay();
+        if (!hasActiveConfiguredRule) {
+            stopForMissingPermission(
+                "Keine aktive Schutzregel ist mehr konfiguriert; der Android-Schutz wurde gestoppt"
+            );
             return;
         }
 
         long now = System.currentTimeMillis();
+        if (now - lastConfigurationHealthCheckMs >= CONFIGURATION_HEALTH_INTERVAL_MS) {
+            lastConfigurationHealthCheckMs = now;
+            if (!ScrollShieldNativePlugin.hasConfiguredApps(this)) {
+                stopForMissingPermission(
+                    "Keine aktive installierte Ziel-App ist mehr verfügbar; der Android-Schutz wurde gestoppt"
+                );
+                return;
+            }
+        }
+
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        if (powerManager != null && !powerManager.isInteractive()) {
+            recordAllowedUsage(null, now);
+            hideOverlay();
+            return;
+        }
+
         String foregroundPackage = getForegroundPackage();
         recordAllowedUsage(foregroundPackage, now);
 
@@ -222,12 +276,16 @@ public class ScrollShieldProtectionService extends Service {
         cachedConfigJson = configJson;
         rulesByPackage.clear();
         focusMode = false;
+        hasActiveConfiguredRule = false;
 
         try {
             JSONObject root = new JSONObject(configJson);
             focusMode = root.optBoolean("focusMode", false);
             JSONArray apps = root.optJSONArray("apps");
-            if (apps == null) return;
+            if (apps == null) {
+                pruneTemporaryAccess();
+                return;
+            }
 
             for (int index = 0; index < apps.length(); index++) {
                 JSONObject app = apps.optJSONObject(index);
@@ -247,11 +305,31 @@ public class ScrollShieldProtectionService extends Service {
                     Math.max(1, app.optInt("sessionMinutes", 5)),
                     app.optString("blockHours", ""),
                     app.optString("focusModeBehavior", "warn"),
-                    timeWindows == null ? "normal" : normalizeScheduleAction(timeWindows.optString("morningRules", "normal")),
-                    timeWindows == null ? "normal" : normalizeScheduleAction(timeWindows.optString("workRules", "normal")),
-                    timeWindows == null ? "normal" : normalizeScheduleAction(timeWindows.optString("eveningRules", "normal")),
-                    timeWindows == null ? "normal" : normalizeScheduleAction(timeWindows.optString("nightRules", "normal")),
-                    timeWindows == null ? "normal" : normalizeScheduleAction(timeWindows.optString("weekendRules", "normal")),
+                    timeWindows == null
+                        ? ProtectionRulePolicy.NORMAL
+                        : ProtectionRulePolicy.normalizeScheduleAction(
+                            timeWindows.optString("morningRules", ProtectionRulePolicy.NORMAL)
+                        ),
+                    timeWindows == null
+                        ? ProtectionRulePolicy.NORMAL
+                        : ProtectionRulePolicy.normalizeScheduleAction(
+                            timeWindows.optString("workRules", ProtectionRulePolicy.NORMAL)
+                        ),
+                    timeWindows == null
+                        ? ProtectionRulePolicy.NORMAL
+                        : ProtectionRulePolicy.normalizeScheduleAction(
+                            timeWindows.optString("eveningRules", ProtectionRulePolicy.NORMAL)
+                        ),
+                    timeWindows == null
+                        ? ProtectionRulePolicy.NORMAL
+                        : ProtectionRulePolicy.normalizeScheduleAction(
+                            timeWindows.optString("nightRules", ProtectionRulePolicy.NORMAL)
+                        ),
+                    timeWindows == null
+                        ? ProtectionRulePolicy.NORMAL
+                        : ProtectionRulePolicy.normalizeScheduleAction(
+                            timeWindows.optString("weekendRules", ProtectionRulePolicy.NORMAL)
+                        ),
                     antiBinge != null && antiBinge.optBoolean("enabled", false),
                     antiBinge == null ? 3 : Math.max(1, antiBinge.optInt("warningThreshold", 3)),
                     antiBinge == null ? 10 : Math.max(1, antiBinge.optInt("warningWindowMinutes", 10)),
@@ -266,25 +344,40 @@ public class ScrollShieldProtectionService extends Service {
                 if (packages == null) continue;
                 for (int packageIndex = 0; packageIndex < packages.length(); packageIndex++) {
                     String packageName = packages.optString(packageIndex, "");
-                    if (!packageName.trim().isEmpty()) rulesByPackage.put(packageName, rule);
+                    if (packageName.trim().isEmpty()) continue;
+                    rulesByPackage.put(packageName, rule);
+                    if (rule.active) hasActiveConfiguredRule = true;
                 }
             }
+            pruneTemporaryAccess();
         } catch (JSONException error) {
+            rulesByPackage.clear();
+            hasActiveConfiguredRule = false;
+            pruneTemporaryAccess();
             error.printStackTrace();
         }
     }
 
+    private void pruneTemporaryAccess() {
+        Iterator<String> iterator = temporaryAccessUntil.keySet().iterator();
+        while (iterator.hasNext()) {
+            if (!rulesByPackage.containsKey(iterator.next())) iterator.remove();
+        }
+    }
+
     private String getStrictReason(ProtectionRule rule, long now) {
-        if (rule.dailyLimitMinutes > 0
-            && getDailyUsageMs(rule.id, now) >= rule.dailyLimitMinutes * 60_000L) {
+        if (ProtectionRulePolicy.isDailyLimitReached(
+            rule.dailyLimitMinutes,
+            getDailyUsageMs(rule.id, now)
+        )) {
             return "Dein Tageslimit von " + rule.dailyLimitMinutes + " Minuten ist erreicht.";
         }
 
         String scheduledAction = getScheduledAction(rule, now);
-        if ("block".equals(scheduledAction)) {
+        if (ProtectionRulePolicy.BLOCK.equals(scheduledAction)) {
             return "Diese App ist durch deinen wiederkehrenden Wochenplan gesperrt.";
         }
-        if ("strict".equals(scheduledAction)) {
+        if (ProtectionRulePolicy.STRICT.equals(scheduledAction)) {
             return "Für dieses Zeitfenster gilt dein strenger Wochenplan.";
         }
 
@@ -294,10 +387,10 @@ public class ScrollShieldProtectionService extends Service {
         if (isAntiBingeBlocked(rule, now)) {
             return "Zu viele bewusste Öffnungen in kurzer Zeit haben den Anti-Binge-Schutz ausgelöst.";
         }
-        if (focusMode && "block".equals(rule.focusModeBehavior)) {
+        if (focusMode && ProtectionRulePolicy.BLOCK.equals(rule.focusModeBehavior)) {
             return "Diese App ist während deiner Fokus-Sitzung gesperrt.";
         }
-        if ("strict".equals(rule.mode)) {
+        if (ProtectionRulePolicy.STRICT.equals(rule.mode)) {
             return "Diese App ist durch deinen strikten Schutzmodus gesperrt.";
         }
         return null;
@@ -306,41 +399,34 @@ public class ScrollShieldProtectionService extends Service {
     private String getScheduledAction(ProtectionRule rule, long now) {
         Calendar calendar = Calendar.getInstance();
         calendar.setTimeInMillis(now);
-        int dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK);
         int minuteOfDay = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE);
-        boolean weekend = dayOfWeek == Calendar.SATURDAY || dayOfWeek == Calendar.SUNDAY;
-
-        if (weekend && !"normal".equals(rule.weekendRules)) {
-            return rule.weekendRules;
-        }
-        if ((minuteOfDay >= 22 * 60 || minuteOfDay < 6 * 60) && !"normal".equals(rule.nightRules)) {
-            return rule.nightRules;
-        }
-        if (!weekend && minuteOfDay >= 6 * 60 && minuteOfDay < 9 * 60 && !"normal".equals(rule.morningRules)) {
-            return rule.morningRules;
-        }
-        if (!weekend && minuteOfDay >= 9 * 60 && minuteOfDay < 17 * 60 && !"normal".equals(rule.workRules)) {
-            return rule.workRules;
-        }
-        if (minuteOfDay >= 17 * 60 && minuteOfDay < 22 * 60 && !"normal".equals(rule.eveningRules)) {
-            return rule.eveningRules;
-        }
-        return "normal";
-    }
-
-    private static String normalizeScheduleAction(String value) {
-        if ("strict".equals(value) || "block".equals(value)) return value;
-        return "normal";
+        return ProtectionRulePolicy.getScheduledAction(
+            calendar.get(Calendar.DAY_OF_WEEK),
+            minuteOfDay,
+            rule.morningRules,
+            rule.workRules,
+            rule.eveningRules,
+            rule.nightRules,
+            rule.weekendRules
+        );
     }
 
     private boolean isAntiBingeBlocked(ProtectionRule rule, long now) {
-        return rule.antiBingeEnabled
-            && countRecentOpens(rule.id, rule.blockWindowMinutes, now) >= rule.blockThreshold;
+        int recentOpens = countRecentOpens(rule.id, rule.blockWindowMinutes, now);
+        return ProtectionRulePolicy.isAntiBingeBlocked(
+            rule.antiBingeEnabled,
+            recentOpens,
+            rule.blockThreshold
+        );
     }
 
     private boolean isAntiBingeWarning(ProtectionRule rule, long now) {
-        return rule.antiBingeEnabled
-            && countRecentOpens(rule.id, rule.warningWindowMinutes, now) >= rule.warningThreshold;
+        int recentOpens = countRecentOpens(rule.id, rule.warningWindowMinutes, now);
+        return ProtectionRulePolicy.isAntiBingeWarning(
+            rule.antiBingeEnabled,
+            recentOpens,
+            rule.warningThreshold
+        );
     }
 
     private void showOverlay(
@@ -415,8 +501,11 @@ public class ScrollShieldProtectionService extends Service {
 
         int emergencyCount = getEmergencyCount(rule.id, System.currentTimeMillis());
         boolean emergencyAvailable = strict
-            && rule.emergencyEnabled
-            && rule.emergencyMaxPerDay > emergencyCount;
+            && ProtectionRulePolicy.hasEmergencyAvailable(
+                rule.emergencyEnabled,
+                emergencyCount,
+                rule.emergencyMaxPerDay
+            );
         String continueLabel;
         if (strict) {
             continueLabel = emergencyAvailable
@@ -624,8 +713,11 @@ public class ScrollShieldProtectionService extends Service {
     }
 
     private boolean hasEmergencyAvailable(ProtectionRule rule, long now) {
-        return rule.emergencyEnabled
-            && rule.emergencyMaxPerDay > getEmergencyCount(rule.id, now);
+        return ProtectionRulePolicy.hasEmergencyAvailable(
+            rule.emergencyEnabled,
+            getEmergencyCount(rule.id, now),
+            rule.emergencyMaxPerDay
+        );
     }
 
     private void incrementEmergencyCount(String appId, long now) {
@@ -635,38 +727,10 @@ public class ScrollShieldProtectionService extends Service {
     }
 
     private boolean isInsideBlockedHours(String blockHours, long now) {
-        if (blockHours == null) return false;
-        String normalized = blockHours.trim();
-        if (normalized.isEmpty()) return false;
-
-        String[] range = normalized.split("-");
-        if (range.length != 2) return false;
-        int startMinutes = parseMinutes(range[0]);
-        int endMinutes = parseMinutes(range[1]);
-        if (startMinutes < 0 || endMinutes < 0 || startMinutes == endMinutes) return false;
-
         Calendar calendar = Calendar.getInstance();
         calendar.setTimeInMillis(now);
-        int currentMinutes = calendar.get(Calendar.HOUR_OF_DAY) * 60
-            + calendar.get(Calendar.MINUTE);
-
-        if (startMinutes < endMinutes) {
-            return currentMinutes >= startMinutes && currentMinutes < endMinutes;
-        }
-        return currentMinutes >= startMinutes || currentMinutes < endMinutes;
-    }
-
-    private int parseMinutes(String value) {
-        String[] parts = value.trim().split(":");
-        if (parts.length != 2) return -1;
-        try {
-            int hour = Integer.parseInt(parts[0]);
-            int minute = Integer.parseInt(parts[1]);
-            if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return -1;
-            return hour * 60 + minute;
-        } catch (NumberFormatException error) {
-            return -1;
-        }
+        int minuteOfDay = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE);
+        return ProtectionRulePolicy.isInsideBlockedHours(blockHours, minuteOfDay);
     }
 
     private String getDayKey(long timestamp) {
