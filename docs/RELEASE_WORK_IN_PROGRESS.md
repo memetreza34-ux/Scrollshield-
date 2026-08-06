@@ -12,14 +12,19 @@ This branch is the active ScrollShield release foundation.
 - added a full-screen local protection overlay with delay, strict blocking, return-to-home, and temporary access
 - synchronized selected app configurations and focus-mode state into the native Android layer
 - added persistent notification and direct stop action
+- restored explicitly enabled protection after reboot and app update
+- added safe shutdown after permission revocation
+- added native session duration, daily limits, blocked-hour ranges, Anti-Binge thresholds, and emergency counters
+- added native history, decision, and measured-usage import into local React statistics
 - documented competitor-led product priorities and platform limits
 
 ## Blocking release work
 
 - successful JavaScript verification and Android compilation in a working build environment
-- real-device reliability testing across major Android manufacturers
-- native history/statistics event bridge
-- native enforcement of schedules, daily limits, anti-binge rules, and emergency counters
-- restart-after-boot and process-recovery validation
+- real-device reliability and battery testing across major Android manufacturers
+- complete recurring weekly schedules instead of one blocked-hour range
+- installed-package discovery and validation for every supported app
+- process-recovery, reboot, app-update, battery-saver, and permission-loss test matrix
+- automated Android tests for the native rule engine and overlay lifecycle
 - legal placeholder replacement and final Play Console declarations
 - Reels-only beta and iOS native implementation
