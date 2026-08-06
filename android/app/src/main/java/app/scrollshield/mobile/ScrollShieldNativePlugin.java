@@ -28,6 +28,7 @@ public class ScrollShieldNativePlugin extends Plugin {
     public static final String CONFIG_KEY = "protection_config";
     public static final String SERVICE_ENABLED_KEY = "protection_service_enabled";
     private static final String EVENT_QUEUE_KEY = "protection_events";
+    private static final String USAGE_EXPORT_KEY = "pending_usage_export";
     private static final int MAX_QUEUED_EVENTS = 200;
     private static final Object EVENT_LOCK = new Object();
 
@@ -155,14 +156,21 @@ public class ScrollShieldNativePlugin extends Plugin {
     @PluginMethod
     public void drainProtectionEvents(PluginCall call) {
         String eventsJson;
+        String usageJson;
         synchronized (EVENT_LOCK) {
             SharedPreferences preferences = getPreferences();
             eventsJson = preferences.getString(EVENT_QUEUE_KEY, "[]");
-            preferences.edit().putString(EVENT_QUEUE_KEY, "[]").commit();
+            usageJson = preferences.getString(USAGE_EXPORT_KEY, "{}");
+            preferences
+                .edit()
+                .putString(EVENT_QUEUE_KEY, "[]")
+                .putString(USAGE_EXPORT_KEY, "{}")
+                .commit();
         }
 
         JSObject result = new JSObject();
         result.put("eventsJson", eventsJson == null ? "[]" : eventsJson);
+        result.put("usageJson", usageJson == null ? "{}" : usageJson);
         call.resolve(result);
     }
 
@@ -193,6 +201,28 @@ public class ScrollShieldNativePlugin extends Plugin {
                     events.remove(0);
                 }
                 preferences.edit().putString(EVENT_QUEUE_KEY, events.toString()).commit();
+            } catch (JSONException error) {
+                error.printStackTrace();
+            }
+        }
+    }
+
+    public static void appendUsageSample(Context context, String appId, long durationMs) {
+        if (appId == null || appId.trim().isEmpty() || durationMs <= 0L) return;
+
+        synchronized (EVENT_LOCK) {
+            SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+            JSONObject usage;
+            try {
+                String existing = preferences.getString(USAGE_EXPORT_KEY, "{}");
+                usage = new JSONObject(existing == null ? "{}" : existing);
+            } catch (JSONException error) {
+                usage = new JSONObject();
+            }
+
+            try {
+                usage.put(appId, usage.optLong(appId, 0L) + durationMs);
+                preferences.edit().putString(USAGE_EXPORT_KEY, usage.toString()).commit();
             } catch (JSONException error) {
                 error.printStackTrace();
             }
