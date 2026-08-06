@@ -285,11 +285,20 @@ requireMatch(
   'Android local tests must cover daily emergency limits.',
 );
 
+const actionUseLines = workflow.split(/\r?\n/).filter((line) => /^\s*uses:\s*/.test(line));
+for (const line of actionUseLines) {
+  if (/^\s*uses:\s*[^@\s]+@[0-9a-f]{40}(?:\s+#\s*\S+)?\s*$/.test(line)) continue;
+  findings.push({
+    file: workflowPath,
+    text: `External GitHub Action must use an immutable 40-character commit SHA: ${line.trim()}`,
+  });
+}
+
 requireMatch(
   workflowPath,
   workflow,
-  /actions\/setup-java@v5/,
-  'Verify workflow must configure Java for Android checks.',
+  /actions\/setup-java@[0-9a-f]{40}\s+# v5/,
+  'Verify workflow must configure Java through an immutable setup-java v5 commit.',
 );
 requireMatch(
   workflowPath,
@@ -300,8 +309,8 @@ requireMatch(
 requireMatch(
   workflowPath,
   workflow,
-  /actions\/upload-artifact@v7[\s\S]*android\/app\/build\/outputs\/apk\/debug\/app-debug\.apk/,
-  'Successful verification must publish the compiled debug APK.',
+  /actions\/upload-artifact@[0-9a-f]{40}\s+# v7[\s\S]*android\/app\/build\/outputs\/apk\/debug\/app-debug\.apk/,
+  'Successful verification must publish the compiled debug APK through a pinned upload-artifact v7 commit.',
 );
 requireMatch(
   workflowPath,
