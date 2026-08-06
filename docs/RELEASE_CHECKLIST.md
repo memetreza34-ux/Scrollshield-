@@ -19,7 +19,9 @@ Solange ein Punkt offen ist, dürfen weder Release-APK noch AAB als veröffentli
 - [ ] `npm ci` läuft mit dem festgelegten Node- und npm-Bereich erfolgreich.
 - [ ] `npm run verify` läuft vollständig ohne Fehler.
 - [ ] TypeScript, ESLint und Prettier bestehen.
-- [ ] Alle Vitest-, Accessibility- und Migrationsprüfungen bestehen.
+- [ ] Alle Vitest- und Accessibility-Prüfungen bestehen.
+- [ ] `npm run check:migration` besteht.
+- [ ] Alle Storage-, V0.7-, Export- und Import-Regressionstests bestehen.
 - [ ] Android `testDebugUnitTest` besteht.
 - [ ] Android `assembleDebug` erstellt eine installierbare Debug-APK.
 - [ ] APK und Android-Testbericht wurden als Workflow-Artefakte oder lokal archiviert.
@@ -86,12 +88,28 @@ GitHub Actions ist derzeit durch die Kontoabrechnung beziehungsweise das Spendin
 
 - [x] Lokale Daten bleiben offline und werden nicht an einen Entwickler-Server übertragen.
 - [x] Export, validierter Import und lokaler Komplettreset sind vorhanden.
-- [x] Beschädigte lokale Daten werden defensiv normalisiert beziehungsweise verworfen.
+- [x] Aktuelle V3-Speicherung verwendet vollständig geprüfte `_pending`-Transaktionen.
+- [x] Ein vollständiger unterbrochener Speichervorgang wird beim nächsten Start wieder aufgenommen.
+- [x] Ein unvollständiger Pending-Satz ersetzt nicht den letzten vollständigen Zustand.
+- [x] `scrollshield_state_v2` und der unversionierte Schlüssel `scrollshield_state` werden erkannt.
+- [x] Die ehemaligen V0.7/PRO-Schlüssel für Brain State, Events, Regeln, Gamification, Installation und Backup werden erkannt.
+- [x] Konvertierbare V0.7-Ereignisse und gespeicherte Zeit werden in aktuellen Verlauf und Statistik übernommen.
+- [x] Alte generierte Regeln werden archiviert, aber nicht automatisch als heutige Schutzregeln aktiviert.
+- [x] Vor einer Löschung werden alle Legacy-Werte bytegenau in `scrollshield_legacy_v07_archive_v1` archiviert.
+- [x] Die normale JSON-Sicherung enthält das Legacy-Archiv und stellt es nach vollständiger Validierung wieder her.
+- [x] Beschädigte oder nicht schreibbare Legacy-Daten bleiben für Wiederholung oder manuelle Rettung erhalten.
 - [ ] Clean Install wurde mit dem aktuellen Kandidaten geprüft.
-- [ ] Bestehende V0.7-kompatible Daten wurden ohne Verlust von Profilen, Regeln, Verlauf und Statistiken migriert.
+- [ ] `npm run check:migration` und sämtliche Migrationstests wurden im vollständigen Projektlauf ausgeführt.
+- [ ] Repräsentative V0.7-WebView-Daten wurden auf einem physischen Android-Gerät aktualisiert.
+- [ ] Migrierte Ereignisse, Zeitersparnis und Statistiken wurden mit dem Ausgangsbestand verglichen.
+- [ ] Jedes archivierte Rohfeld wurde bytegenau mit seinem V0.7-Ausgangswert verglichen.
+- [ ] Export → Reset → Import stellt dasselbe Legacy-Archiv wieder her.
+- [ ] Ein simulierter Speicherfehler lässt die Legacy-Quelle unverändert bestehen.
 - [ ] Upgrade vom vorherigen Release-Kandidaten wurde geprüft.
 - [ ] App-Update bei aktivem Schutz wurde geprüft.
 - [ ] Deinstallation und anschließende Neuinstallation wurden geprüft.
+
+Die genaue Spezifikation steht in `docs/DATA_MIGRATION.md`. `migrationValidationPassed` bleibt bis zum physischen Nachweis für denselben Kandidaten auf `false`.
 
 ## 8. Datenschutz, Recht und Support
 
