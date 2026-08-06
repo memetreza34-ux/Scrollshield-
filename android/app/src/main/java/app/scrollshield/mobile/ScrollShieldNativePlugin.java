@@ -32,6 +32,7 @@ public class ScrollShieldNativePlugin extends Plugin {
     public static final String SERVICE_ENABLED_KEY = "protection_service_enabled";
     private static final String EVENT_QUEUE_KEY = "protection_events";
     private static final String UNAVAILABLE_APPS_KEY = "unavailable_app_ids";
+    private static final String UNAVAILABLE_ACTIVE_APPS_KEY = "unavailable_active_app_ids";
     private static final String USAGE_COUNTER_PREFIX = "usage_ms_";
     private static final String EXPORTED_USAGE_PREFIX = "exported_";
     private static final int MAX_QUEUED_EVENTS = 200;
@@ -107,19 +108,22 @@ public class ScrollShieldNativePlugin extends Plugin {
         }
 
         Context context = getContext();
-        JSONArray unavailableApps = getUnavailableAppIds(context, configJson);
+        JSONArray unavailableApps = getUnavailableAppIds(context, configJson, false);
+        JSONArray unavailableActiveApps = getUnavailableAppIds(context, configJson, true);
         String unavailableJson = unavailableApps.toString();
+        String unavailableActiveJson = unavailableActiveApps.toString();
         SharedPreferences preferences = getPreferences();
-        String previousUnavailable = preferences.getString(UNAVAILABLE_APPS_KEY, "[]");
+        String previousUnavailableActive = preferences.getString(UNAVAILABLE_ACTIVE_APPS_KEY, "[]");
         preferences
             .edit()
             .putString(CONFIG_KEY, configJson)
             .putString(UNAVAILABLE_APPS_KEY, unavailableJson)
+            .putString(UNAVAILABLE_ACTIVE_APPS_KEY, unavailableActiveJson)
             .apply();
 
-        if (!unavailableJson.equals(previousUnavailable)) {
-            for (int index = 0; index < unavailableApps.length(); index++) {
-                String appId = unavailableApps.optString(index, "");
+        if (!unavailableActiveJson.equals(previousUnavailableActive)) {
+            for (int index = 0; index < unavailableActiveApps.length(); index++) {
+                String appId = unavailableActiveApps.optString(index, "");
                 if (!appId.isEmpty()) {
                     appendProtectionEvent(
                         context,
@@ -316,7 +320,7 @@ public class ScrollShieldNativePlugin extends Plugin {
         }
     }
 
-    private static JSONArray getUnavailableAppIds(Context context, String configJson) {
+    private static JSONArray getUnavailableAppIds(Context context, String configJson, boolean activeOnly) {
         JSONArray unavailable = new JSONArray();
         try {
             JSONObject root = new JSONObject(configJson);
@@ -325,7 +329,8 @@ public class ScrollShieldNativePlugin extends Plugin {
 
             for (int index = 0; index < apps.length(); index++) {
                 JSONObject app = apps.optJSONObject(index);
-                if (app == null || !app.optBoolean("active", false)) continue;
+                if (app == null) continue;
+                if (activeOnly && !app.optBoolean("active", false)) continue;
                 JSONArray packages = app.optJSONArray("packages");
                 if (!hasInstalledPackage(context, packages)) {
                     unavailable.put(app.optString("id", "unknown"));
