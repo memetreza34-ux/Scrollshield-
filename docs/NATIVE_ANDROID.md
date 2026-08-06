@@ -45,6 +45,15 @@ ScrollShield uses Capacitor with the Android package id `app.scrollshield.mobile
 - Batched native usage measurement while temporary access is active
 - Local native event queue for blocks, warnings, intentional opens, permission loss, and emergency unlocks
 - Import of native events and measured usage into React history and date-correct daily statistics
+- Pure Java protection-rule policy with local JUnit coverage for:
+  - weekday schedule boundaries
+  - weekend precedence
+  - daytime and overnight blocked ranges
+  - invalid range fallback
+  - exact daily-limit boundaries
+  - Anti-Binge thresholds
+  - daily emergency-unlock limits
+- Verify workflow prepared to run `testDebugUnitTest` and compile `assembleDebug` after the GitHub runner is available
 
 The browser/PWA build remains a preview and cannot block other installed apps. Only the installed Android build can use the native protection service.
 
@@ -62,14 +71,14 @@ npm run android:bundle
 
 ## Release Blockers
 
-1. Compile the Android project and run the complete JavaScript verification suite in a working CI or local environment.
+1. Execute the complete JavaScript verification suite, Android JUnit tests, and debug compilation in a working CI or local Android environment.
 2. Test foreground detection, overlays, schedules, daily limits, session expiry, and counters on Samsung, Google Pixel, Xiaomi, OnePlus, Motorola, and at least one Android tablet.
 3. Verify recovery after process termination, device restart, app update, battery saver, manufacturer task killers, and permission revocation.
 4. Test weekly schedules across device time-zone changes, daylight-saving transitions, midnight boundaries, and manual clock changes.
 5. Add a custom per-day/per-app schedule editor if preset schedules are insufficient for the first public release.
 6. Validate cloned apps, work-profile packages, manufacturer variants, and region-specific package names.
 7. Replace legal placeholders and prepare Play Console declarations, reviewer instructions, and permission demonstration videos.
-8. Add automated Android tests for permission loss, service restarts, overlays, countdowns, usage import, schedules, Anti-Binge rules, limits, package availability, and emergency access.
+8. Expand Android tests from pure rule logic to service lifecycle, permission loss, overlays, countdowns, usage import, boot recovery, and package availability.
 9. Measure battery consumption over long sessions and tune the foreground-app polling interval before production rollout.
 
 ## Reels-only Protection
