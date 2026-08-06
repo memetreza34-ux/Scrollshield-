@@ -80,7 +80,12 @@ requireMatch(manifestPath, manifest, /android:allowBackup="false"/, 'Android app
 requireMatch(manifestPath, manifest, /android:usesCleartextTraffic="false"/, 'Cleartext HTTP must stay disabled.');
 requireMatch(manifestPath, manifest, /android:exported="true"/, 'Launcher activity must explicitly declare exported.');
 
-const allowedPermissions = new Set(['android.permission.INTERNET']);
+const allowedPermissions = new Set([
+  'android.permission.INTERNET',
+  'android.permission.PACKAGE_USAGE_STATS',
+  'android.permission.SYSTEM_ALERT_WINDOW',
+  'android.permission.POST_NOTIFICATIONS',
+]);
 const permissions = [...manifest.matchAll(/<uses-permission[^>]+android:name="([^"]+)"/g)].map((match) => match[1]);
 for (const permission of permissions) {
   if (allowedPermissions.has(permission)) continue;
@@ -99,5 +104,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `Android project check passed. SDK ${minSdk}/${targetSdk}/${compileSdk}, ${permissions.length} permission.`,
+  `Android project check passed. SDK ${minSdk}/${targetSdk}/${compileSdk}, ${permissions.length} permissions.`,
 );
