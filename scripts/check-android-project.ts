@@ -79,12 +79,26 @@ requireMatch(
 requireMatch(manifestPath, manifest, /android:allowBackup="false"/, 'Android app backup must stay disabled.');
 requireMatch(manifestPath, manifest, /android:usesCleartextTraffic="false"/, 'Cleartext HTTP must stay disabled.');
 requireMatch(manifestPath, manifest, /android:exported="true"/, 'Launcher activity must explicitly declare exported.');
+requireMatch(
+  manifestPath,
+  manifest,
+  /android:name="\.ScrollShieldProtectionService"/,
+  'Android protection service must stay registered.',
+);
+requireMatch(
+  manifestPath,
+  manifest,
+  /android:foregroundServiceType="specialUse"/,
+  'Android protection service must declare its foreground service type.',
+);
 
 const allowedPermissions = new Set([
   'android.permission.INTERNET',
   'android.permission.PACKAGE_USAGE_STATS',
   'android.permission.SYSTEM_ALERT_WINDOW',
   'android.permission.POST_NOTIFICATIONS',
+  'android.permission.FOREGROUND_SERVICE',
+  'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
 ]);
 const permissions = [...manifest.matchAll(/<uses-permission[^>]+android:name="([^"]+)"/g)].map((match) => match[1]);
 for (const permission of permissions) {
