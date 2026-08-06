@@ -1,15 +1,31 @@
 import { readFile } from 'node:fs/promises';
 
+const mainActivityPath = 'android/app/src/main/java/app/scrollshield/mobile/MainActivity.java';
 const pluginPath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldNativePlugin.java';
+const notificationPluginPath =
+  'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldNotificationPlugin.java';
 const bootReceiverPath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldBootReceiver.java';
 const servicePath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldProtectionService.java';
+const nativePermissionsPath = 'src/lib/nativePermissions.ts';
 const permissionScreenPath = 'src/screens/PermissionsScreen.tsx';
 const permissionTestPath = 'src/screens/PermissionsScreen.test.tsx';
 
-const [plugin, bootReceiver, service, permissionScreen, permissionTest] = await Promise.all([
+const [
+  mainActivity,
+  plugin,
+  notificationPlugin,
+  bootReceiver,
+  service,
+  nativePermissions,
+  permissionScreen,
+  permissionTest,
+] = await Promise.all([
+  readFile(mainActivityPath, 'utf8'),
   readFile(pluginPath, 'utf8'),
+  readFile(notificationPluginPath, 'utf8'),
   readFile(bootReceiverPath, 'utf8'),
   readFile(servicePath, 'utf8'),
+  readFile(nativePermissionsPath, 'utf8'),
   readFile(permissionScreenPath, 'utf8'),
   readFile(permissionTestPath, 'utf8'),
 ]);
@@ -22,10 +38,40 @@ function requirePattern(file: string, content: string, pattern: RegExp, message:
 }
 
 requirePattern(
+  mainActivityPath,
+  mainActivity,
+  /registerPlugin\(ScrollShieldNotificationPlugin\.class\)/,
+  'MainActivity must register the dedicated notification permission plugin.',
+);
+requirePattern(
+  notificationPluginPath,
+  notificationPlugin,
+  /@CapacitorPlugin\([\s\S]*Manifest\.permission\.POST_NOTIFICATIONS[\s\S]*NOTIFICATION_PERMISSION_ALIAS/,
+  'The dedicated plugin must declare POST_NOTIFICATIONS through a Capacitor permission alias.',
+);
+requirePattern(
+  notificationPluginPath,
+  notificationPlugin,
+  /requestPermissionForAlias\([\s\S]*notificationPermissionCallback/,
+  'Android 13+ notification access must use Capacitor requestPermissionForAlias.',
+);
+requirePattern(
+  notificationPluginPath,
+  notificationPlugin,
+  /@PermissionCallback[\s\S]*notificationPermissionCallback[\s\S]*resolvePermission/,
+  'The native permission request must resolve through a registered PermissionCallback.',
+);
+requirePattern(
   pluginPath,
   plugin,
   /if \(!hasNotificationsEnabled\(context\)\)[\s\S]*call\.reject\("Notifications are required/,
   'Protection start must require enabled notifications so the ongoing service and stop action remain visible.',
+);
+requirePattern(
+  pluginPath,
+  plugin,
+  /getNotificationChannel\(PROTECTION_CHANNEL_ID\)[\s\S]*IMPORTANCE_NONE/,
+  'Notification health must detect a disabled protection channel, not only app-wide notification status.',
 );
 requirePattern(
   bootReceiverPath,
@@ -52,10 +98,28 @@ requirePattern(
   'The foreground-service notification must remain ongoing and include a direct stop action.',
 );
 requirePattern(
+  nativePermissionsPath,
+  nativePermissions,
+  /registerPlugin<ScrollShieldNotificationPlugin>\('ScrollShieldNotifications'\)/,
+  'The TypeScript bridge must register the dedicated notification permission plugin.',
+);
+requirePattern(
+  nativePermissionsPath,
+  nativePermissions,
+  /requestAndroidNotifications[\s\S]*ScrollShieldNotifications\.requestPermission/,
+  'The TypeScript permission helper must call the native Android notification prompt.',
+);
+requirePattern(
   permissionScreenPath,
   permissionScreen,
   /optional:\s*operatingSystem !== 'android'/,
   'The notification permission must be required on Android and optional only on other platforms.',
+);
+requirePattern(
+  permissionScreenPath,
+  permissionScreen,
+  /requestAndroidNotifications\(\)[\s\S]*openAndroidSettings\('notifications'\)/,
+  'The UI must request the runtime permission before falling back to Android settings.',
 );
 requirePattern(
   permissionScreenPath,
@@ -75,6 +139,18 @@ requirePattern(
   /marks notifications as required and blocks Android protection without them/,
   'A component test must protect the notification requirement and blocked startup behavior.',
 );
+requirePattern(
+  permissionTestPath,
+  permissionTest,
+  /uses the native Android notification prompt before opening settings/,
+  'A component test must cover the successful native notification prompt.',
+);
+requirePattern(
+  permissionTestPath,
+  permissionTest,
+  /opens Android settings after the notification prompt is denied/,
+  'A component test must cover the denied-prompt settings fallback.',
+);
 
 if (findings.length > 0) {
   console.log('Protection transparency check failed:\n');
@@ -83,5 +159,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection transparency check passed. Android protection remains visible, revocation-safe, and directly stoppable.',
+  'Protection transparency check passed. Android protection remains visible, prompt-driven, revocation-safe, and directly stoppable.',
 );
