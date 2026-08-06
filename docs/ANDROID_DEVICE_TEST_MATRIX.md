@@ -29,7 +29,7 @@ Capture the following before each scenario:
 - Installation source: debug APK, internal testing, closed testing, or release candidate
 - Clean install or upgrade path
 - Copied Android diagnostic JSON
-- Screen recording for permission, overlay, notification, and recovery scenarios
+- Screen recording for permission, overlay, notification, migration, and recovery scenarios
 - Relevant `adb logcat` excerpt for failures
 - Result: `PASS`, `FAIL`, or `BLOCKED`
 - Defect or GitHub issue reference for every failure
@@ -41,10 +41,14 @@ Do not reuse evidence from a different build number.
 | ID | Scenario | Acceptance criteria |
 | --- | --- | --- |
 | INST-01 | Clean install | App starts without crash, onboarding is usable, and no permission is granted implicitly. |
-| INST-02 | Upgrade from the last V0.7-compatible data set | Existing profiles, rules, history, statistics, and permission flags migrate without destructive reset. |
-| INST-03 | Upgrade from the previous release candidate | App version and build number change while local data remains intact. |
+| INST-02 | Upgrade from installed V0.7/PRO local data | Former brain state, events, rules, gamification, installation metadata, and backup values are discovered. Safe events and saved time appear in current history/statistics; old generated rules remain inactive; every original value exists byte-for-byte in `scrollshield_legacy_v07_archive_v1` before old keys are removed. |
+| INST-03 | Upgrade from the previous release candidate | App version and build number change while current profiles, rules, history, statistics, and settings remain intact. |
 | INST-04 | Reinstall after uninstall | Local app data is removed as Android specifies; app starts in a clean onboarding state. |
 | INST-05 | App update while protection is explicitly enabled | Protection recovers only when all required permissions, notification visibility, and an installed active target remain valid. |
+| INST-06 | Import former V0.7 backup file | A valid package containing `brainState`, `impulseEvents`, `aiRules`, and `userGamification` converts safe events and saved time, leaves obsolete rules inactive, and archives the complete original file string. Malformed legacy files are rejected before local archive changes. |
+| INST-07 | Migration write failure | Simulated quota/write failure leaves every original legacy source untouched and does not create a false successful metadata marker. |
+| INST-08 | Interrupted storage commit | A complete `_pending` set repairs a damaged live chunk at startup; an incomplete pending set does not replace the last complete state. |
+| INST-09 | Export-reset-import after migration | Current state and the byte-for-byte V0.7 archive survive normal export, factory reset, and validated import. |
 
 ## Permission and Notification Lifecycle
 
@@ -139,6 +143,15 @@ Every copied diagnostic JSON must contain at least:
 - persisted protection activation and live service state
 - whether an installed configured target is available
 
+Migration evidence must additionally include:
+
+- exact list of source keys or the former backup filename;
+- pre-upgrade source-value hashes or byte counts;
+- post-upgrade archive-value hashes or byte counts;
+- screenshots of converted history and statistics;
+- confirmation that old generated rules are not active;
+- exported archive comparison after reset and import.
+
 ## Exit Criteria
 
 The Android release candidate remains blocked until:
@@ -147,6 +160,7 @@ The Android release candidate remains blocked until:
 2. No open blocker or critical defect remains.
 3. Manufacturer-specific failures have either a verified fix or explicit release exclusion.
 4. Battery behavior has been measured on physical devices.
-5. The copied diagnostic JSON matches the installed version and build under test.
-6. GitHub or local verification successfully runs TypeScript, React tests, Android JUnit tests, and `assembleDebug`.
-7. Play reviewer videos demonstrate the same tested build.
+5. Installed V0.7 upgrade, direct former-backup import, write-failure retention, pending recovery, and export/import archive round trip have passed.
+6. The copied diagnostic JSON matches the installed version and build under test.
+7. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, and `assembleDebug`.
+8. Play reviewer videos demonstrate the same tested build.
