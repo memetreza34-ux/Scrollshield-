@@ -2,7 +2,6 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import type { AppConfig } from '../types';
 
 interface NativeProtectionPlugin {
-  getPermissionStatus(): Promise<{ usageAccess: boolean; overlay: boolean }>;
   syncProtectionConfig(options: { configJson: string }): Promise<void>;
   startProtectionService(): Promise<void>;
   stopProtectionService(): Promise<void>;
@@ -82,23 +81,12 @@ export const NativeProtection = {
     };
 
     await AndroidProtection.syncProtectionConfig({ configJson: JSON.stringify(config) });
-
-    if (config.apps.length === 0) {
-      await AndroidProtection.stopProtectionService();
-      return;
-    }
-
-    const permissions = await AndroidProtection.getPermissionStatus();
-    if (permissions.usageAccess && permissions.overlay) {
-      await AndroidProtection.startProtectionService();
-    } else {
-      await AndroidProtection.stopProtectionService();
-    }
   },
 
   async start(appsConfig: Record<string, AppConfig>, focusMode: boolean): Promise<void> {
     if (!this.isAvailable()) return;
     await this.sync(appsConfig, focusMode);
+    await AndroidProtection.startProtectionService();
   },
 
   async stop(): Promise<void> {
