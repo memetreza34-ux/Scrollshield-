@@ -8,6 +8,8 @@
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:allowBackup="false"
@@ -32,6 +34,15 @@
             </intent-filter>
 
         </activity>
+
+        <service
+            android:name=".ScrollShieldProtectionService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-enabled monitoring of user-selected distracting apps to display local protection interventions." />
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"
