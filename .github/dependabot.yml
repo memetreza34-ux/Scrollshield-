@@ -6,6 +6,15 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
+      capacitor:
+        patterns:
+          - '@capacitor/*'
+      react-runtime:
+        patterns:
+          - react
+          - react-dom
+          - '@types/react'
+          - '@types/react-dom'
       vite-tooling:
         patterns:
           - vite
@@ -16,12 +25,20 @@ updates:
           - vitest
           - '@vitest/*'
           - '@testing-library/*'
+          - jsdom
+          - axe-core
       lint-format:
         patterns:
           - eslint
           - '@eslint/*'
           - typescript-eslint
           - prettier
+
+  - package-ecosystem: gradle
+    directory: /android
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
 
   - package-ecosystem: github-actions
     directory: /
