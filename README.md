@@ -7,7 +7,11 @@ ScrollShield is an offline-first digital wellbeing app for reducing impulsive so
 - App and short-video protection profiles
 - Intentional opening delay and emergency unlock flows
 - Focus sessions and local history/statistics
-- Local-only storage with migration and export support
+- Local-only storage with transactional saves, legacy migration, export, and reset support
+- Recovery of complete interrupted storage transactions without replacing the last complete state with partial data
+- Recognition of monolithic V2/unversioned state and the former V0.7/PRO storage keys
+- Safe conversion of legacy events and saved-time data without automatically activating obsolete AI rules
+- Byte-for-byte local archive of every discovered legacy value, included in normal JSON export/import
 - PWA build, automated tests, CI and release-readiness checks
 - Android native permission bridges with real Usage Access, overlay, notification, and battery-status checks
 - Android 13+ runtime notification permission request and direct Android 8+ protection-channel settings
@@ -22,7 +26,7 @@ ScrollShield is an offline-first digital wellbeing app for reducing impulsive so
 - Import of measured native usage and protection decisions into local React statistics and history
 - Native Android diagnostics with device, OS, version name, build number, permission, protection-channel, service, and installed-target status
 - Copyable diagnostic JSON for reproducible real-device reports
-- React and TypeScript tests for critical setup, permission-prompt, channel-routing, diagnostic, and browser-fallback behavior
+- React and TypeScript tests for critical setup, permission-prompt, channel-routing, diagnostic, migration, export, and browser-fallback behavior
 - Mandatory Android device matrix with manufacturer, Android-version, migration, lifecycle, battery, time-boundary, tablet, and accessibility coverage
 - Explicit release approval manifest and strict gate before release APK or AAB generation
 - CI prepared to run web verification, Android JUnit tests, debug APK compilation, and artifact upload
@@ -55,6 +59,7 @@ npm run test
 npm run build
 npm run verify
 npm run check:device-matrix
+npm run check:migration
 npm run check:release-approval
 npm run readiness
 ```
@@ -80,6 +85,7 @@ npm run android:bundle
 
 - `docs/COMPETITOR_PRODUCT_BLUEPRINT.md`
 - `docs/NATIVE_ANDROID.md`
+- `docs/DATA_MIGRATION.md`
 - `docs/ANDROID_DEVICE_TEST_MATRIX.md`
 - `docs/RELEASE_CHECKLIST.md`
 - `docs/ROLLOUT_PLAN.md`
@@ -87,4 +93,4 @@ npm run android:bundle
 - `docs/ENGINEERING_CHECKS.md`
 - `config/release-approval.json`
 
-Before release, replace legal placeholders, run `npm run verify`, compile and inspect the Android debug build, complete the physical-device matrix with current-build diagnostic evidence, finalize store declarations and videos, inspect the signed binary, and complete the release approval manifest.
+Before release, replace legal placeholders, run `npm run verify`, compile and inspect the Android debug build, validate the legacy upgrade and export/import round trip on the exact candidate, complete the physical-device matrix with current-build diagnostic evidence, finalize store declarations and videos, inspect the signed binary, and complete the release approval manifest.
