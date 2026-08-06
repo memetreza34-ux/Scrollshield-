@@ -30,6 +30,8 @@ describe('MigrationRecoveryScreen', () => {
 
     expect(screen.getByRole('heading', { name: 'Alte Daten sind geschützt' })).toBeInTheDocument();
     expect(screen.getByText(/nicht zurücksetzen oder deinstallieren/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Android-Schutz wurde vorsorglich gestoppt' })).toBeInTheDocument();
+    expect(screen.getByText(/bewusst erneut starten/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Migration erneut versuchen' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Legacy-Rohdaten sichern' })).toBeInTheDocument();
     await expectNoA11yViolations(container);
