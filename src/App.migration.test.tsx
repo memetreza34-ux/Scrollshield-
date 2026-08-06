@@ -9,12 +9,14 @@ const {
   saveStateMock,
   nativeSyncMock,
   nativeDrainMock,
+  nativeStopMock,
 } = vi.hoisted(() => ({
   loadStateMock: vi.fn(),
   hasPendingLegacyMigrationMock: vi.fn(),
   saveStateMock: vi.fn(),
   nativeSyncMock: vi.fn(),
   nativeDrainMock: vi.fn(),
+  nativeStopMock: vi.fn(),
 }));
 
 vi.mock('./lib/storage', () => ({
@@ -31,6 +33,7 @@ vi.mock('./lib/nativeProtection', () => ({
     isAvailable: () => true,
     sync: (...args: unknown[]) => nativeSyncMock(...args),
     drain: (...args: unknown[]) => nativeDrainMock(...args),
+    stop: (...args: unknown[]) => nativeStopMock(...args),
   },
 }));
 
@@ -41,19 +44,22 @@ describe('App legacy migration lifecycle', () => {
     saveStateMock.mockReset();
     nativeSyncMock.mockReset();
     nativeDrainMock.mockReset();
+    nativeStopMock.mockReset();
 
     loadStateMock.mockReturnValue(null);
     hasPendingLegacyMigrationMock.mockReturnValue(true);
     nativeSyncMock.mockResolvedValue(undefined);
     nativeDrainMock.mockResolvedValue({ events: [], usage: [] });
+    nativeStopMock.mockResolvedValue(undefined);
   });
 
-  it('shows only recovery UI and pauses normal save and native synchronization while migration is unresolved', async () => {
+  it('shows only recovery UI, stops native protection, and pauses save and sync while migration is unresolved', async () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: 'Alte Daten sind geschützt' })).toBeInTheDocument();
     expect(screen.queryByText('Dein digitaler Schutzschild')).not.toBeInTheDocument();
 
+    await waitFor(() => expect(nativeStopMock).toHaveBeenCalledTimes(1));
     await new Promise((resolve) => window.setTimeout(resolve, 300));
     expect(saveStateMock).not.toHaveBeenCalled();
     expect(nativeSyncMock).not.toHaveBeenCalled();
