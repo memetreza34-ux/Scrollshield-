@@ -164,4 +164,6 @@ Der aktuelle iOS-Stand ist nicht einreichbar. Eine Web-/PWA-Vorschau ersetzt kei
 - [ ] Store-Texte, Screenshots, Reviewer-Video und Binärdatei zeigen dieselbe Funktionalität.
 - [ ] Rollback-, Support- und Staged-Rollout-Verantwortung sind festgelegt.
 
+Der Lifecycle-Block bleibt unverifiziert, bis `npm run verify`, Android JUnit, `assembleDebug` und `LIFE-08` für denselben Kandidaten bestanden sind.
+
 Erst danach darf `npm run android:bundle` erfolgreich durch das Release-Gate laufen.
