@@ -39,12 +39,21 @@ This branch is the active ScrollShield release foundation.
 - added an explicit release approval manifest tied to Android and package versions
 - added a non-strict approval schema check to `npm run verify`
 - added a strict `release:gate` before release APK and AAB generation
+- added transactional local saves with verified `_pending` staging and startup recovery after an interrupted commit
+- added explicit Boolean save success so migrations cannot delete old data after a hidden storage failure
+- added migration support for `scrollshield_state_v2`, unversioned `scrollshield_state`, and the former V0.7/PRO key set
+- added safe V0.7 conversion for legacy events and saved time without automatically activating obsolete generated rules
+- added a byte-for-byte local archive of every discovered legacy value before source deletion
+- added archive preservation through normal ScrollShield JSON export and validated import
+- added regression tests for monolithic, unversioned, V0.7, failed-write, corrupted-source, interrupted-transaction, and archive round-trip cases
+- added `check:migration` to `npm run verify` and the readiness report
+- documented the complete data-preservation contract in `docs/DATA_MIGRATION.md`
 - replaced the obsolete release checklist with the actual native permissions, testing, legal, store, migration, and device requirements
 - prepared CI to run Android unit tests and compile the debug APK
 - prepared successful CI runs to publish the debug APK and Android test report as downloadable workflow artifacts
 - pinned every external GitHub Action to an immutable commit SHA
 - expanded weekly Dependabot coverage to npm, Capacitor, React, Gradle, and GitHub Actions
-- expanded static project checks to guard native service, transparency, channel consistency, diagnostics, schedule, package, boot-recovery, rule-test, workflow-pin, artifact, device-matrix, and release-approval requirements
+- expanded static project checks to guard native service, transparency, channel consistency, diagnostics, migration, schedule, package, boot-recovery, rule-test, workflow-pin, artifact, device-matrix, and release-approval requirements
 - aligned release and store checkers with the honest version-one whole-app scope and non-medical positioning
 - aligned the store submission packet with exact Data Safety and `FOREGROUND_SERVICE_SPECIAL_USE` declarations
 - documented competitor-led product priorities and platform limits
@@ -52,10 +61,13 @@ This branch is the active ScrollShield release foundation.
 ## Blocking release work
 
 - successful execution of JavaScript verification, Android JUnit tests, and debug compilation in a working runner or local Android environment
+- actual execution of the new migration, export, and storage-failure regression tests
+- physical Android upgrade validation using representative V0.7 WebView/local-storage data
+- byte-for-byte comparison of the migrated legacy archive after export, reset, and import on the exact candidate build
 - completed physical-device evidence from `docs/ANDROID_DEVICE_TEST_MATRIX.md`
 - real-device reliability and battery testing across major Android manufacturers
 - time-zone, daylight-saving, midnight, and manual-clock tests for recurring schedules
-- V0.7-compatible and previous-candidate migration validation
+- previous-candidate migration validation
 - optional custom per-day/per-app schedule editor if presets are insufficient
 - cloned-app, work-profile, manufacturer, and regional package validation
 - process-recovery, reboot, app-update, battery-saver, runtime-notification, channel-deactivation, protected-app-uninstall, and permission-loss testing
@@ -66,4 +78,4 @@ This branch is the active ScrollShield release foundation.
 - completion of all release approval flags, approver identity, and approval time
 - Reels-only beta and iOS native implementation
 
-`config/release-approval.json` intentionally remains incomplete. Release APK and AAB commands must continue to fail until the blockers above have evidence for the exact candidate version and build.
+`config/release-approval.json` intentionally keeps `migrationValidationPassed` and the other evidence flags incomplete. Release APK and AAB commands must continue to fail until the blockers above have evidence for the exact candidate version and build.
