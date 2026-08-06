@@ -1,57 +1,197 @@
-# ScrollShield - Soft-Launch & Beta-Rollout Plan
+# ScrollShield Android Rollout Plan
 
-Dieser Plan definiert die Phasen für die Markteinführung von ScrollShield. Die oberste Maxime lautet: **Die erste öffentliche Version (v1.0) muss klein, extrem stabil und in ihrer Kommunikation glasklar sein.** Features wie Cloud-Sync, Partner-Control oder komplexe Abos bleiben vorerst deaktiviert, bis das Kernprodukt fehlerfrei läuft.
+Dieser Rollout-Plan gilt erst, nachdem das strikte Release-Gate für exakt dieselbe Version und Build-Nummer bestanden wurde. Der aktuelle Branch befindet sich ausschließlich in der Vorbereitung von Phase 0.
 
----
+## Phase 0 – Engineering Candidate
 
-## Phase 1: Interne Alpha-Version (Dogfooding)
+### Eintrittskriterien
 
-**Ziel:** Grundlegende technische Stabilität und "Happy Path"-Prüfung.
-**Tester:** Kernteam, Entwickler, Designer und enge Freunde (ca. 5-10 Personen).
+- `npm run verify` besteht vollständig.
+- Android `testDebugUnitTest` besteht.
+- `assembleDebug` erzeugt eine installierbare APK.
+- Die native Diagnose zeigt erwartete Versionsnummer und Build-Nummer.
+- Kein Blocker oder kritischer Defekt ist offen.
 
-- **Fokus:** Lässt sich die App installieren, starten und das Onboarding abschließen?
-- **Test von leeren Zuständen (Empty States):** Wie sieht das Dashboard am ersten Tag aus, wenn noch keine Statistiken oder Verläufe existieren? Sind die Platzhalter motivierend und verständlich?
-- **Test von Reset- und Löschfunktionen:** Funktioniert der "App auf Werkseinstellungen zurücksetzen"-Button zuverlässig? Werden wirklich alle lokalen `localStorage`-Daten gelöscht, ohne dass die App abstürzt?
+### Umfang
 
-## Phase 2: Geschlossene Beta (Technical Beta)
+- Entwickler und ausdrücklich benannte Tester
+- direkte Debug-APK oder Installation über Android Studio
+- keine öffentliche Vermarktung
+- keine Store-Einreichung
 
-**Ziel:** Plattformspezifische Eigenheiten und Edge-Cases unter realen Bedingungen testen.
-**Tester:** 20-50 ausgewählte Nutzer (z.B. via TestFlight für iOS und Google Play Internal Testing für Android).
+### Pflichtnachweise
 
-- **Test von Android und iOS getrennt:**
-  - _iOS:_ Funktioniert die Screen Time API zuverlässig? Werden die kritischen Benachrichtigungen zugestellt?
-  - _Android:_ Funktioniert das Overlay zuverlässig über anderen Apps? Wird der Nutzungsdatenzugriff korrekt ausgewertet?
-- **Test von Berechtigungsflüssen:** Verstehen die Tester, _warum_ sie bestimmte Berechtigungen erteilen müssen? Brechen sie das Onboarding ab? Funktioniert die App (mit Einschränkungen) weiter, wenn Berechtigungen verweigert werden?
-- **Sammeln von Feedback (Technisch):** Fokus auf Abstürze, UI-Glitches und Akkuverbrauch.
+- CI- oder lokale Kommandoausgaben
+- Prüfsumme der Debug-APK
+- Android-Testbericht
+- kopiertes Diagnose-JSON von mindestens einem physischen Gerät
 
-## Phase 3: Soft-Launch (Test mit wenigen echten Nutzern)
+## Phase 1 – Interne Geräte-Matrix
 
-**Ziel:** Prüfung der User Retention (Bleiben die Nutzer?) und des echten Mehrwerts.
-**Tester:** 100-500 echte Nutzer aus einer spezifischen Zielgruppe (z.B. ein Reddit-Forum für Produktivität/ADHS) oder einem kleinen Testmarkt (z.B. nur Österreich/Schweiz).
+### Eintrittskriterien
 
-- **Test von Fokusmodus, Regeln, Verlauf und Statistiken:**
-  - Ergeben die Statistiken nach 3-7 Tagen Nutzung Sinn?
-  - Ist der Fokusmodus zu streng oder zu leicht zu umgehen?
-  - Wird der Verlauf (History) korrekt aufgezeichnet (Blockierungen, Notfallfreigaben)?
-- **Sammeln von Feedback (Qualitativ):**
-  - Aktive Nutzung der "Feedback senden"- und "Problem melden"-Buttons im neuen Support-Screen.
-  - Versand einer kurzen Umfrage nach 7 Tagen Nutzung: "Hilft dir ScrollShield, deine Bildschirmzeit bewusster zu gestalten?"
+- Phase 0 abgeschlossen
+- aktueller Kandidat auf physischen Geräten installiert
 
-## Phase 4: Release Candidate (RC) & Öffentlicher Launch
+### Pflichtgeräte
 
-**Ziel:** Finaler Feinschliff und Freigabe für den globalen App Store / Play Store.
+- Google Pixel oder anderes Near-Stock-Android-Gerät
+- Samsung Galaxy
+- Xiaomi oder Redmi
+- OnePlus
+- Motorola
+- Android-Tablet
+- Android 7 / API 24 für den Legacy-Fallback
+- Android 8 / API 26 für Benachrichtigungskanal und Foreground Service
+- Android 13+ für den Runtime-Benachrichtigungsdialog
 
-### Kriterien für den Release Candidate (Go/No-Go):
+### Pflichtszenarien
 
-1.  **Stabilität:** Crash-free Rate von > 99% in der Soft-Launch-Phase.
-2.  **Berechtigungen:** Keine "Dead Ends" (Sackgassen) im Berechtigungsfluss auf beiden Plattformen.
-3.  **Kernversprechen erfüllt:** Die Verzögerungs- und Einschränkungsmechanismen funktionieren zuverlässig (Best-Effort bei Reels/Shorts ist transparent kommuniziert).
-4.  **Rechtliches & Store:** Impressum, Datenschutzerklärung und Store-Texte sind final geprüft und entsprechen der Realität (keine falschen Versprechen).
-5.  **Support-Readiness:** Das Postfach `support@scrollshield.app` wird aktiv überwacht.
+- Clean Install und V0.7-kompatible Migration
+- Berechtigungserteilung, Ablehnung und Entzug
+- ausschließliche Deaktivierung des Schutzkanals
+- installierte und nicht verfügbare Ziel-Apps
+- Deinstallation der letzten geschützten App
+- Entfernung der letzten aktiven Regel
+- Standardverzögerung, bewusste Sitzung, Sitzungsende, strikter Modus, Tageslimit, Zeitpläne, Anti-Binge, Fokus und Notfalllimit
+- Prozessende, Force-Stop, Reboot, App-Update, Batteriesparmodus und zwölfstündiger Lauf
+- Mitternacht, Zeitzonenwechsel, Sommerzeit und manuelle Uhränderung
+- maximale Textskalierung, Tablet-Rotation, Multi-Window und TalkBack-Smoke-Test
 
-**Launch-Strategie:**
-Sobald der RC die Kriterien erfüllt, wird die App öffentlich geschaltet. Marketing-Maßnahmen werden erst 1-2 Wochen _nach_ dem öffentlichen Launch hochgefahren, um sicherzustellen, dass die Server (falls genutzt) und die App-Logik der Last standhalten.
+### Austrittskriterien
 
----
+- Jeder Pflichtpunkt in `docs/ANDROID_DEVICE_TEST_MATRIX.md` besitzt Nachweise für den aktuellen Build.
+- Kein Blocker oder kritischer Defekt bleibt offen.
+- Herstellerspezifische Ausschlüsse sind dokumentiert.
 
-_Hinweis: Premium-Features (Paywall) werden erst in Phase 5 (Post-Launch, v1.1 oder v1.2) aktiviert, sobald eine solide, zufriedene Nutzerbasis aufgebaut wurde._
+## Phase 2 – Google Play Internal Testing
+
+### Eintrittskriterien
+
+- interne physische Geräte-Matrix abgeschlossen
+- rechtlicher Name, Adresse, Support-Mailbox und Datenschutzdomain final
+- Play-Deklarationen gegen den tatsächlichen Kandidaten geprüft
+- signierter AAB erst nach bestandenem `npm run release:gate` erzeugt
+
+### Umfang
+
+- Inhaber und vertrauenswürdige interne Tester
+- Google-Play-Track „Interner Test“
+
+### Validierung
+
+- Installation und Update über Google Play
+- Versions- und Build-Identität des signierten Builds
+- Berechtigungsflüsse und sichtbare Dauerbenachrichtigung
+- Overlay und Schutzregeln
+- lokale Migration und Reset
+- keine unerwarteten SDKs, Tracker, Berechtigungen oder Netzwerkziele
+
+### Austrittskriterien
+
+- signierte Binärdatei vollständig geprüft
+- kein Store-Auslieferungsfehler
+- Data Safety und sensible Berechtigungsdeklarationen stimmen weiterhin mit der Binärdatei überein
+
+## Phase 3 – Geschlossener Test
+
+### Eintrittskriterien
+
+- interner Test abgeschlossen
+- Reviewer-Videos mit exakt dem Kandidaten-Build aufgenommen
+- Support- und Defekt-Triage-Prozess aktiv
+
+### Empfohlene Testgruppe
+
+- kleine eingeladene Gruppe mit unterschiedlichen Herstellern
+- Nutzer für Standard-, strikte, Zeitplan- und Notfall-Szenarien
+
+### Zu beobachten
+
+- Abschluss der Einrichtung und Missverständnisse bei Berechtigungen
+- unerwartet gestoppter Dienst
+- Kanal- oder Benachrichtigungsfehler
+- Overlay-Schleifen oder nicht erreichbare Aktionen
+- Akkuverbrauch
+- falsche Aktiv-Anzeige
+- Migration oder lokaler Datenverlust
+- herstellerspezifisches Prozessende
+
+### Datenschutzfreundliche Fehleraufnahme
+
+- keine automatische Analyse in Version 1
+- Tester senden Diagnose-JSON und Reproduktionsschritte manuell
+- persönliche Inhalte vor Weitergabe aus Bildschirmaufnahmen und Logs entfernen
+
+### Austrittskriterien
+
+- kein ungelöster Blocker oder kritischer Defekt
+- schwere Defekte besitzen verifizierte Korrekturen auf den betroffenen Herstellern
+- Reviewer-Anweisungen entsprechen dem getesteten Verhalten
+
+## Phase 4 – Gestaffelter Produktions-Rollout
+
+Nicht direkt mit 100 Prozent starten.
+
+Empfohlene Stufen:
+
+1. 5 Prozent für mindestens 48 Stunden
+2. 10 Prozent für mindestens 48 Stunden
+3. 25 Prozent für mindestens 72 Stunden
+4. 50 Prozent für mindestens 72 Stunden
+5. 100 Prozent erst nach ausdrücklicher Prüfung
+
+### Kriterien zum Pausieren
+
+- Crash- oder ANR-Verschlechterung
+- wiederholte Meldungen, dass Schutz aktiv erscheint, obwohl der Dienst gestoppt ist
+- fehlende Foreground-Benachrichtigung oder fehlende direkte Stop-Aktion
+- Overlay lässt sich nicht schließen oder erzeugt eine Schleife
+- erheblicher Akkuverbrauch
+- Migration oder lokaler Datenverlust
+- Problem mit Berechtigungs- oder Richtliniendeklaration
+- kritischer herstellerspezifischer Fehler für einen relevanten Nutzeranteil
+
+Bei jeder Stufe:
+
+- aktiven Play-Build prüfen
+- Supportfälle nach Hersteller und Android-Version auswerten
+- Rollback-Fähigkeit erhalten
+- Store-Deklarationen nie unabhängig von der Binärdatei ändern
+
+## Rollback und Hotfix
+
+### Rollback-Vorbereitung
+
+- vorheriges signiertes Produktionsartefakt und Source-Tag aufbewahren
+- Kompatibilität lokaler Datenmigration dokumentieren
+- Android `versionCode` niemals reduzieren
+- Kommunikation für eine vorübergehende Schutz-Deaktivierung vorbereiten
+
+### Hotfix-Anforderungen
+
+- neue Build-Nummer
+- vollständige automatische Verifikation
+- gezielter Reproduktionstest
+- Regression-Smoke-Test auf der Pflichtgeräte-Gruppe
+- aktualisierte Diagnose- und Reviewer-Nachweise
+- neue strikte Release-Freigabe
+
+## Verantwortlichkeiten vor dem Launch
+
+Namentliche Verantwortliche festlegen für:
+
+- Release-Freigabe
+- Android-Build und Signing
+- Play-Console-Deklarationen
+- Datenschutz und Recht
+- Geräte-Matrix
+- Batterie- und Zuverlässigkeitstests
+- Support-Mailbox
+- Defekt-Triage
+- Rollout-Überwachung
+- Rollback-Entscheidung
+
+## Aktueller Status
+
+Das Repository befindet sich nur in der Vorbereitung von Phase 0. Die GitHub-Verifikation wird wegen einer Abrechnungs- beziehungsweise Spending-Limit-Sperre vor dem ersten Workflow-Schritt gestoppt. Das Release-Freigabemanifest ist absichtlich unvollständig; Release-APK und AAB müssen weiterhin blockiert bleiben.
