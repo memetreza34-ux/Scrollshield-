@@ -56,8 +56,26 @@ requirePattern(
 requirePattern(
   storagePath,
   storage,
+  /saveState:\s*\(state: AppState\): boolean => \{[\s\S]*if \(hasLegacySource\(\)\)[\s\S]*State save blocked while legacy migration data is unresolved[\s\S]*return false/,
+  'Normal application saves must remain blocked while any unresolved legacy source exists.',
+);
+requirePattern(
+  storagePath,
+  storage,
+  /hasPendingLegacyMigration:\s*\(\): boolean => hasLegacySource\(\)/,
+  'The application must be able to identify unresolved legacy migration state.',
+);
+requirePattern(
+  storagePath,
+  storage,
   /hasLegacySource[\s\S]*if \(hasLegacySource\(\)\)[\s\S]*return migrateMonolithicState\(\) \?\? migrateV07State\(\)[\s\S]*const orphaned/,
   'A failed legacy migration must return before orphaned current chunks can be normalized over the source data.',
+);
+requirePattern(
+  storagePath,
+  storage,
+  /archiveRemainingLegacySources[\s\S]*cleanupArchivedLegacySources[\s\S]*return current/,
+  'A recovered current state must retry missing archival and only then clean exact legacy duplicates.',
 );
 requirePattern(
   storagePath,
@@ -128,6 +146,12 @@ for (const testName of [
     `Required interrupted-migration recovery test is missing: ${testName}.`,
   );
 }
+requirePattern(
+  storageRecoveryTestPath,
+  storageRecoveryTest,
+  /StorageService\.saveState\(DEFAULT_STATE\)\)\.toBe\(false\)[\s\S]*scrollshield_meta_v3[\s\S]*toBeNull/,
+  'Recovery tests must prove that the normal React save path cannot write default V3 metadata over unresolved legacy data.',
+);
 
 requirePattern(
   dataExportPath,
@@ -201,5 +225,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Storage migration check passed. Legacy keys, transaction recovery, source retention, partial-write isolation, V0.7 conversion, direct backup import, and archive round trips remain guarded.',
+  'Storage migration check passed. Legacy keys, transaction recovery, unresolved-save locking, source retention, partial-write isolation, V0.7 conversion, direct backup import, and archive round trips remain guarded.',
 );
