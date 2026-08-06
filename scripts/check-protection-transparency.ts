@@ -7,6 +7,7 @@ const notificationPluginPath =
 const bootReceiverPath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldBootReceiver.java';
 const servicePath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldProtectionService.java';
 const nativePermissionsPath = 'src/lib/nativePermissions.ts';
+const nativePermissionsTestPath = 'src/lib/nativePermissions.test.ts';
 const permissionScreenPath = 'src/screens/PermissionsScreen.tsx';
 const permissionTestPath = 'src/screens/PermissionsScreen.test.tsx';
 
@@ -17,6 +18,7 @@ const [
   bootReceiver,
   service,
   nativePermissions,
+  nativePermissionsTest,
   permissionScreen,
   permissionTest,
 ] = await Promise.all([
@@ -26,6 +28,7 @@ const [
   readFile(bootReceiverPath, 'utf8'),
   readFile(servicePath, 'utf8'),
   readFile(nativePermissionsPath, 'utf8'),
+  readFile(nativePermissionsTestPath, 'utf8'),
   readFile(permissionScreenPath, 'utf8'),
   readFile(permissionTestPath, 'utf8'),
 ]);
@@ -35,6 +38,15 @@ const findings: string[] = [];
 function requirePattern(file: string, content: string, pattern: RegExp, message: string) {
   if (pattern.test(content)) return;
   findings.push(`${file}: ${message}`);
+}
+
+const channelIds = [plugin, notificationPlugin, service]
+  .map((content) => content.match(/(?:PROTECTION_CHANNEL_ID|CHANNEL_ID)\s*=\s*"([^"]+)"/)?.[1])
+  .filter((value): value is string => Boolean(value));
+if (channelIds.length !== 3 || new Set(channelIds).size !== 1 || channelIds[0] !== 'scrollshield_protection') {
+  findings.push(
+    `${pluginPath}: native plugin, notification plugin, and service must share the scrollshield_protection channel id.`,
+  );
 }
 
 requirePattern(
@@ -60,6 +72,18 @@ requirePattern(
   notificationPlugin,
   /@PermissionCallback[\s\S]*notificationPermissionCallback[\s\S]*resolvePermission/,
   'The native permission request must resolve through a registered PermissionCallback.',
+);
+requirePattern(
+  notificationPluginPath,
+  notificationPlugin,
+  /ACTION_CHANNEL_NOTIFICATION_SETTINGS[\s\S]*EXTRA_APP_PACKAGE[\s\S]*EXTRA_CHANNEL_ID/,
+  'Android 8+ fallback must open the exact protection notification channel.',
+);
+requirePattern(
+  notificationPluginPath,
+  notificationPlugin,
+  /ACTION_APPLICATION_DETAILS_SETTINGS[\s\S]*Uri\.parse\("package:"/,
+  'Android 7 fallback must open reliable application details settings.',
 );
 requirePattern(
   pluginPath,
@@ -108,6 +132,30 @@ requirePattern(
   nativePermissions,
   /requestAndroidNotifications[\s\S]*ScrollShieldNotifications\.requestPermission/,
   'The TypeScript permission helper must call the native Android notification prompt.',
+);
+requirePattern(
+  nativePermissionsPath,
+  nativePermissions,
+  /permission === 'notifications'[\s\S]*openAndroidNotificationSettings/,
+  'Notification settings must route to the dedicated protection-channel plugin.',
+);
+requirePattern(
+  nativePermissionsTestPath,
+  nativePermissionsTest,
+  /routes the Android notification prompt to the dedicated plugin/,
+  'A unit test must cover runtime notification prompt routing.',
+);
+requirePattern(
+  nativePermissionsTestPath,
+  nativePermissionsTest,
+  /routes notification settings to the protection channel/,
+  'A unit test must cover channel-settings routing.',
+);
+requirePattern(
+  nativePermissionsTestPath,
+  nativePermissionsTest,
+  /keeps other Android settings on the main native plugin/,
+  'A unit test must prevent unrelated Android settings from being misrouted.',
 );
 requirePattern(
   permissionScreenPath,
@@ -159,5 +207,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection transparency check passed. Android protection remains visible, prompt-driven, revocation-safe, and directly stoppable.',
+  'Protection transparency check passed. Android protection remains visible, channel-aware, prompt-driven, revocation-safe, and directly stoppable.',
 );
