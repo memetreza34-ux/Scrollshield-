@@ -2,13 +2,15 @@ import { readFile } from 'node:fs/promises';
 
 const storagePath = 'src/lib/storage.ts';
 const storageTestPath = 'src/lib/storage.test.ts';
+const storageRecoveryTestPath = 'src/lib/storageRecovery.test.ts';
 const dataExportPath = 'src/lib/dataExport.ts';
 const dataExportTestPath = 'src/lib/dataExport.test.ts';
 const migrationDocPath = 'docs/DATA_MIGRATION.md';
 
-const [storage, storageTest, dataExport, dataExportTest, migrationDoc] = await Promise.all([
+const [storage, storageTest, storageRecoveryTest, dataExport, dataExportTest, migrationDoc] = await Promise.all([
   readFile(storagePath, 'utf8'),
   readFile(storageTestPath, 'utf8'),
+  readFile(storageRecoveryTestPath, 'utf8'),
   readFile(dataExportPath, 'utf8'),
   readFile(dataExportTestPath, 'utf8'),
   readFile(migrationDocPath, 'utf8'),
@@ -54,6 +56,24 @@ requirePattern(
 requirePattern(
   storagePath,
   storage,
+  /hasLegacySource[\s\S]*if \(hasLegacySource\(\)\)[\s\S]*return migrateMonolithicState\(\) \?\? migrateV07State\(\)[\s\S]*const orphaned/,
+  'A failed legacy migration must return before orphaned current chunks can be normalized over the source data.',
+);
+requirePattern(
+  storagePath,
+  storage,
+  /cleanupArchivedLegacySources[\s\S]*localStorage\.getItem\(source\.source\) === archivedValue[\s\S]*localStorage\.removeItem\(source\.source\)/,
+  'Recovered monolithic sources may only be removed when their live value exactly matches the archived value.',
+);
+requirePattern(
+  storagePath,
+  storage,
+  /source\.source !== 'legacy_v07_pro'[\s\S]*localStorage\.getItem\(key\) === archivedValue[\s\S]*localStorage\.removeItem\(key\)/,
+  'Recovered V0.7 source keys may only be removed after exact archive comparison.',
+);
+requirePattern(
+  storagePath,
+  storage,
   /archiveLegacyEntries\(key[\s\S]*saveStateInternal\(normalized, key\)[\s\S]*if \(archived\) localStorage\.removeItem\(key\)/,
   'Monolithic legacy data must only be removed after archival and a verified current-format write.',
 );
@@ -94,6 +114,18 @@ for (const testName of [
     storageTest,
     new RegExp(testName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
     `Required migration regression test is missing: ${testName}.`,
+  );
+}
+
+for (const testName of [
+  'does not normalize partially committed chunks after a legacy migration failure',
+  'never deletes a legacy source when its value no longer matches the archived copy',
+]) {
+  requirePattern(
+    storageRecoveryTestPath,
+    storageRecoveryTest,
+    new RegExp(testName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    `Required interrupted-migration recovery test is missing: ${testName}.`,
   );
 }
 
@@ -169,5 +201,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Storage migration check passed. Legacy keys, transaction recovery, source retention, V0.7 conversion, direct backup import, and archive round trips remain guarded.',
+  'Storage migration check passed. Legacy keys, transaction recovery, source retention, partial-write isolation, V0.7 conversion, direct backup import, and archive round trips remain guarded.',
 );
