@@ -9,10 +9,15 @@ export interface NativeDiagnosticsSnapshot {
   androidRelease: string;
   sdkInt: number;
   packageName: string;
+  versionName: string;
+  versionCode: number;
   locale: string;
   timeZone: string;
   usageAccess: boolean;
   overlay: boolean;
+  appNotificationsEnabled: boolean;
+  protectionChannelCreated: boolean;
+  protectionChannelEnabled: boolean;
   notifications: boolean;
   batteryOptimizationExempt: boolean;
   protectionEnabled: boolean;
