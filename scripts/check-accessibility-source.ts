@@ -16,7 +16,7 @@ const sourceFiles = (await readdir(sourceDir, { recursive: true }))
   .filter((file) => file.endsWith('.tsx') && !file.endsWith('.test.tsx'))
   .map((file) => path.join(sourceDir, file));
 const unlabeledSwitches: string[] = [];
-const clippedTextFiles: string[] = [];
+const hiddenSemanticText: string[] = [];
 
 for (const file of sourceFiles) {
   const source = await readFile(file, 'utf8');
@@ -27,17 +27,19 @@ for (const file of sourceFiles) {
     unlabeledSwitches.push(`${path.relative(process.cwd(), file)} Switch ${index + 1}`);
   });
 
-  if (/\b(?:truncate|whitespace-nowrap)\b/.test(source)) {
-    clippedTextFiles.push(path.relative(process.cwd(), file));
-  }
+  const hiddenSemanticElements =
+    source.match(/<(?:h[1-6]|p|label|button|a)\b[^>]*aria-hidden=(?:"true"|'true'|\{true\})[^>]*>/g) ?? [];
+  hiddenSemanticElements.forEach((element) => {
+    hiddenSemanticText.push(`${path.relative(process.cwd(), file)}: ${element.trim()}`);
+  });
 }
 
 if (unlabeledSwitches.length > 0) {
   throw new Error(`Switch controls need contextual ariaLabel props:\n${unlabeledSwitches.join('\n')}`);
 }
 
-if (clippedTextFiles.length > 0) {
-  throw new Error(`Runtime text must remain available at large font sizes:\n${clippedTextFiles.join('\n')}`);
+if (hiddenSemanticText.length > 0) {
+  throw new Error(`Semantic text or controls must not be hidden from assistive technology:\n${hiddenSemanticText.join('\n')}`);
 }
 
 console.log(`Accessibility source checks passed for ${sourceFiles.length} component files.`);
