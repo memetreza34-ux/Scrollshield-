@@ -55,8 +55,8 @@ requirePattern(
 requirePattern(
   appPath,
   app,
-  /if \(!migrationBlocked \|\| !NativeProtection\.isAvailable\(\)\) return;[\s\S]*NativeProtection\.stop\(\)/,
-  'Blocked migration must stop any previously running native protection service.',
+  /if \(!migrationBlocked \|\| !NativeProtection\.isAvailable\(\)\) return;[\s\S]*NativeProtection\.stop\(\{[\s\S]*code: 'migration_recovery'[\s\S]*blockierten Datenmigration/,
+  'Blocked migration must stop native protection with an explicit migration-recovery reason.',
 );
 requirePattern(
   appPath,
@@ -160,8 +160,8 @@ requirePattern(
 requirePattern(
   appTestPath,
   appTest,
-  /shows only recovery UI, stops native protection, and pauses save and sync while migration is unresolved/,
-  'App integration tests must prove recovery exclusivity and lifecycle pausing.',
+  /shows only recovery UI, records the stop reason, and pauses save and sync while migration is unresolved/,
+  'App integration tests must prove recovery exclusivity, lifecycle pausing, and reason capture.',
 );
 requirePattern(
   appTestPath,
@@ -172,8 +172,8 @@ requirePattern(
 requirePattern(
   appTestPath,
   appTest,
-  /nativeStopMock\)\.toHaveBeenCalledTimes\(1\)/,
-  'App integration test must prove native protection is stopped.',
+  /nativeStopMock\)\.toHaveBeenCalledWith\(\{[\s\S]*code: 'migration_recovery'[\s\S]*blockierten Datenmigration/,
+  'App integration test must prove native protection receives the migration recovery reason.',
 );
 requirePattern(
   appTestPath,
@@ -196,5 +196,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Migration recovery UI check passed. Command wiring, app blocking, native stop and restart disclosure, save/sync/drain pause, retry, local raw backup, UI guidance, and integration tests remain guarded.',
+  'Migration recovery UI check passed. Command wiring, app blocking, explicit migration stop reason, native-stop and restart disclosure, save/sync/drain pause, retry, local raw backup, UI guidance, and integration tests remain guarded.',
 );
