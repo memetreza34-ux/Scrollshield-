@@ -241,6 +241,29 @@ const archiveLegacyEntries = (source: string, rawEntries: Record<string, string>
   }
 };
 
+const cleanupArchivedLegacySources = () => {
+  const archive = parseJson<LegacyStorageArchive>(localStorage.getItem(LEGACY_ARCHIVE_KEY));
+  if (archive?.schemaVersion !== 1 || !Array.isArray(archive.sources)) return;
+
+  for (const source of archive.sources) {
+    if (!source || !isRecord(source.rawEntries)) continue;
+    if ((LEGACY_MONOLITHIC_KEYS as readonly string[]).includes(source.source)) {
+      const archivedValue = source.rawEntries[source.source];
+      if (typeof archivedValue === 'string' && localStorage.getItem(source.source) === archivedValue) {
+        localStorage.removeItem(source.source);
+      }
+      continue;
+    }
+    if (source.source !== 'legacy_v07_pro') continue;
+    for (const key of LEGACY_V07_KEYS) {
+      const archivedValue = source.rawEntries[key];
+      if (typeof archivedValue === 'string' && localStorage.getItem(key) === archivedValue) {
+        localStorage.removeItem(key);
+      }
+    }
+  }
+};
+
 const parseLegacyTimestamp = (value: unknown, fallback: number): number => {
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value;
   if (typeof value !== 'string') return fallback;
@@ -407,7 +430,10 @@ export const StorageService = {
       const meta = parseJson<{ version?: number }>(localStorage.getItem(KEYS.META));
       if (meta?.version === VERSION) {
         const current = loadCurrentState();
-        if (current) return current;
+        if (current) {
+          cleanupArchivedLegacySources();
+          return current;
+        }
       }
 
       const migrated = migrateMonolithicState() ?? migrateV07State();
