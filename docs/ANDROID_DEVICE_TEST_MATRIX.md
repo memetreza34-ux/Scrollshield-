@@ -29,7 +29,7 @@ Capture the following before each scenario:
 - Installation source: debug APK, internal testing, closed testing, or release candidate
 - Clean install or upgrade path
 - Copied Android diagnostic JSON
-- Screen recording for permission, overlay, notification, migration, and recovery scenarios
+- Screen recording for permission, overlay, notification, migration, lifecycle, and recovery scenarios
 - Relevant `adb logcat` excerpt for failures
 - Result: `PASS`, `FAIL`, or `BLOCKED`
 - Defect or GitHub issue reference for every failure
@@ -58,9 +58,9 @@ Do not reuse evidence from a different build number.
 | PERM-02 | Android 13+ notification runtime prompt denied | Protection remains stopped and ScrollShield opens the relevant notification settings only after denial. |
 | PERM-03 | App-wide notifications disabled before startup | Start is blocked before the foreground service launches. |
 | PERM-04 | Only the `Aktiver App-Schutz` channel is disabled | Diagnostics distinguish app-wide permission from the disabled protection channel; protection cannot start. |
-| PERM-05 | Protection channel disabled while service runs | Service stops, persisted activation clears, overlay disappears, foreground notification is removed, and a local warning event is recorded. |
-| PERM-06 | Usage Access revoked while service runs | Service stops safely and a local warning event is recorded. |
-| PERM-07 | Overlay permission revoked while service runs | Service stops safely and any visible overlay is removed. |
+| PERM-05 | Protection channel disabled while service runs | Service stops, persisted activation clears, overlay disappears, foreground notification is removed, a local warning event is recorded, and `lastProtectionStopCode` is `notifications_missing`. |
+| PERM-06 | Usage Access revoked while service runs | Service stops safely, a local warning event is recorded, and `lastProtectionStopCode` is `usage_access_missing`. |
+| PERM-07 | Overlay permission revoked while service runs | Service stops safely, any visible overlay is removed, and `lastProtectionStopCode` is `overlay_permission_missing`. |
 | PERM-08 | Battery optimization exemption absent | App explains reduced reliability without falsely claiming the exemption is mandatory. |
 | PERM-09 | Android 7 notification action | The app opens a supported app-details fallback without crashing. |
 | PERM-10 | Android 8+ protection-channel action | The app opens the exact ScrollShield protection-channel settings. |
@@ -72,8 +72,8 @@ Do not reuse evidence from a different build number.
 | APP-01 | Activate an installed supported app | Configuration synchronizes and the selected package is protected. |
 | APP-02 | Attempt to activate an unavailable app | Controls remain disabled and a clear unavailable status is shown. |
 | APP-03 | Uninstall one of several protected apps | Remaining installed active targets continue to work; unavailable status refreshes locally. |
-| APP-04 | Uninstall the final installed protected app | Running service stops within the configuration-health interval and persisted activation clears. |
-| APP-05 | Disable the final active rule | Running service stops and no empty foreground service remains. |
+| APP-04 | Uninstall the final installed protected app | Running service stops within the configuration-health interval, persisted activation clears, and diagnostics retain `target_app_missing`. |
+| APP-05 | Disable the final active rule | Running service stops, no empty foreground service remains, and diagnostics retain `no_active_rules`. |
 | APP-06 | Clone or work-profile variant | Record package visibility and behavior; do not mark supported unless the exact package is validated. |
 
 ## Protection Rule Matrix
@@ -101,10 +101,11 @@ Do not reuse evidence from a different build number.
 | LIFE-01 | Swipe ScrollShield away from recents | Behavior is documented per device; protection does not silently claim to run when stopped. |
 | LIFE-02 | Force-stop from Android settings | Protection remains stopped until the user explicitly opens and re-enables it. |
 | LIFE-03 | Normal process termination by Android | Service recovery follows Android rules and retains visible notification requirements. |
-| LIFE-04 | Device reboot | Previously enabled protection recovers only when all prerequisites remain valid. |
+| LIFE-04 | Device reboot | Previously enabled protection recovers only when all prerequisites remain valid. A failed recovery clears persisted activation and records the exact `recovery_*` stop code. |
 | LIFE-05 | Manufacturer battery saver | Failures are recorded by manufacturer and mitigation copy remains honest. |
 | LIFE-06 | Extreme battery saver / restricted background mode | App reports degraded or stopped protection instead of showing a false active state. |
 | LIFE-07 | Twelve-hour active run | No runaway battery use, repeated overlays, duplicated notifications, or unbounded event growth. |
+| LIFE-08 | Protection lifecycle reason persistence | Trigger a manual app stop, migration-recovery stop, notification loss, Usage Access loss, Overlay loss, final-target removal, final-rule removal, and failed boot/app-update recovery. After each case and after reopening ScrollShield, `lastProtectionStartAt`, `lastProtectionStopAt`, `lastProtectionStopCode`, and `lastProtectionStopMessage` remain accurate and visible in both the debug report and copied JSON. |
 
 ## Time and Calendar Boundaries
 
@@ -142,6 +143,10 @@ Every copied diagnostic JSON must contain at least:
 - battery optimization exemption
 - persisted protection activation and live service state
 - whether an installed configured target is available
+- `lastProtectionStartAt`
+- `lastProtectionStopAt`
+- `lastProtectionStopCode`
+- `lastProtectionStopMessage`
 
 Migration evidence must additionally include:
 
@@ -161,6 +166,7 @@ The Android release candidate remains blocked until:
 3. Manufacturer-specific failures have either a verified fix or explicit release exclusion.
 4. Battery behavior has been measured on physical devices.
 5. Installed V0.7 upgrade, direct former-backup import, write-failure retention, pending recovery, and export/import archive round trip have passed.
-6. The copied diagnostic JSON matches the installed version and build under test.
-7. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, and `assembleDebug`.
-8. Play reviewer videos demonstrate the same tested build.
+6. Lifecycle stop codes and timestamps persist correctly for manual, migration, permission, configuration, and recovery failures.
+7. The copied diagnostic JSON matches the installed version and build under test.
+8. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, and `assembleDebug`.
+9. Play reviewer videos demonstrate the same tested build.
