@@ -197,6 +197,7 @@ public class ScrollShieldProtectionService extends Service {
                 if (app == null) continue;
 
                 ProtectionRule rule = new ProtectionRule(
+                    app.optString("id", "unknown"),
                     app.optString("name", "Geschützte App"),
                     app.optBoolean("active", false),
                     app.optString("mode", "standard"),
@@ -287,6 +288,14 @@ public class ScrollShieldProtectionService extends Service {
         continueButton.setOnClickListener(view -> {
             int minutes = strict ? 5 : rule.sessionMinutes;
             temporaryAccessUntil.put(packageName, System.currentTimeMillis() + minutes * 60_000L);
+            ScrollShieldNativePlugin.appendProtectionEvent(
+                this,
+                strict ? "emergency" : "open",
+                rule.id,
+                strict
+                    ? "Notfallfreigabe für 5 Minuten"
+                    : "Bewusst geöffnet für bis zu " + minutes + " Minuten"
+            );
             hideOverlay();
         });
         LinearLayout.LayoutParams continueParams = matchWidth();
@@ -308,6 +317,12 @@ public class ScrollShieldProtectionService extends Service {
         overlayView = container;
         try {
             windowManager.addView(overlayView, layoutParams);
+            ScrollShieldNativePlugin.appendProtectionEvent(
+                this,
+                strict ? "block" : "warning",
+                rule.id,
+                strict ? "Durch Android-Schutz blockiert" : "Bewusste Öffnungspause ausgelöst"
+            );
             startCountdown(countdown, continueButton, countdownSeconds);
         } catch (RuntimeException error) {
             overlayView = null;
@@ -445,6 +460,7 @@ public class ScrollShieldProtectionService extends Service {
     }
 
     private static final class ProtectionRule {
+        private final String id;
         private final String name;
         private final boolean active;
         private final String mode;
@@ -453,6 +469,7 @@ public class ScrollShieldProtectionService extends Service {
         private final String focusModeBehavior;
 
         private ProtectionRule(
+            String id,
             String name,
             boolean active,
             String mode,
@@ -460,6 +477,7 @@ public class ScrollShieldProtectionService extends Service {
             int sessionMinutes,
             String focusModeBehavior
         ) {
+            this.id = id;
             this.name = name;
             this.active = active;
             this.mode = mode;
