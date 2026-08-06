@@ -176,6 +176,8 @@ The complete plan is in `docs/ANDROID_DEVICE_TEST_MATRIX.md`. At minimum, the re
 
 Every result must identify the exact installed version and build and include copied diagnostic JSON. Emulator-only completion is insufficient.
 
+The reviewer flow must show the exact candidate build, trigger at least one safe shutdown, reopen the Debug screen, display the matching lifecycle code and message, and copy the same values in the diagnostic JSON.
+
 ## Release Blockers
 
 1. Execute the complete JavaScript verification suite, Android JUnit tests, and debug compilation in a working CI or local Android environment.
