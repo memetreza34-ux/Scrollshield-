@@ -30,6 +30,7 @@ This branch is the active ScrollShield release foundation.
 - added TypeScript native-stop routing tests, App migration integration assertions, and Debug lifecycle rendering tests
 - added `check:lifecycle` to `npm run verify` and the readiness report
 - added mandatory physical-device lifecycle persistence scenario `LIFE-08`
+- added reviewer steps that show the exact build, trigger a safe shutdown, display the matching stop code/message, and copy the same diagnostic JSON
 - connected the running Android service to the JUnit-tested `ProtectionRulePolicy`
 - added native session duration, daily limits, Anti-Binge thresholds, and emergency counters
 - added recurring weekly morning, work/school, evening, night, and weekend enforcement
@@ -68,7 +69,7 @@ This branch is the active ScrollShield release foundation.
 - expanded weekly Dependabot coverage to npm, Capacitor, React, Gradle, and GitHub Actions
 - expanded static project checks to guard native service, transparency, channel consistency, diagnostics, lifecycle, migration, schedule, package, boot recovery, rule tests, workflow pins, artifacts, device matrix, and release approval requirements
 - aligned release and store checkers with the honest version-one whole-app scope and non-medical positioning
-- aligned the store submission packet with exact Data Safety and `FOREGROUND_SERVICE_SPECIAL_USE` declarations
+- aligned the store submission packet with exact Data Safety, lifecycle evidence, and `FOREGROUND_SERVICE_SPECIAL_USE` declarations
 - documented competitor-led product priorities and platform limits
 
 ## Blocking release work
