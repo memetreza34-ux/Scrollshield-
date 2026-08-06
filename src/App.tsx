@@ -62,6 +62,13 @@ export default function App() {
   }, [applyLoadedState]);
 
   useEffect(() => {
+    if (!migrationBlocked || !NativeProtection.isAvailable()) return;
+    void NativeProtection.stop().catch((error) => {
+      console.error('Failed to stop native protection during migration recovery', error);
+    });
+  }, [migrationBlocked]);
+
+  useEffect(() => {
     if (!isLoaded || migrationBlocked || !appState.isFocusModeActive) return;
 
     const syncFocusRuntime = () => {
