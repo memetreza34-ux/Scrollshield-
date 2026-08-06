@@ -26,6 +26,7 @@ import org.json.JSONObject;
 public class ScrollShieldNativePlugin extends Plugin {
     public static final String PREFERENCES_NAME = "scrollshield_native";
     public static final String CONFIG_KEY = "protection_config";
+    public static final String SERVICE_ENABLED_KEY = "protection_service_enabled";
     private static final String EVENT_QUEUE_KEY = "protection_events";
     private static final int MAX_QUEUED_EVENTS = 200;
     private static final Object EVENT_LOCK = new Object();
@@ -114,26 +115,40 @@ public class ScrollShieldNativePlugin extends Plugin {
             call.reject("Overlay permission is required before protection can start");
             return;
         }
-
-        Intent intent = new Intent(context, ScrollShieldProtectionService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent);
-        } else {
-            context.startService(intent);
+        if (!hasConfiguredApps(context)) {
+            call.reject("At least one active protected app is required");
+            return;
         }
-        call.resolve();
+
+        setProtectionEnabled(context, true);
+        Intent intent = new Intent(context, ScrollShieldProtectionService.class);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent);
+            } else {
+                context.startService(intent);
+            }
+            call.resolve();
+        } catch (RuntimeException error) {
+            setProtectionEnabled(context, false);
+            call.reject("Protection service could not be started", error);
+        }
     }
 
     @PluginMethod
     public void stopProtectionService(PluginCall call) {
-        getContext().stopService(new Intent(getContext(), ScrollShieldProtectionService.class));
+        Context context = getContext();
+        setProtectionEnabled(context, false);
+        context.stopService(new Intent(context, ScrollShieldProtectionService.class));
         call.resolve();
     }
 
     @PluginMethod
     public void getProtectionServiceStatus(PluginCall call) {
+        Context context = getContext();
         JSObject result = new JSObject();
         result.put("running", ScrollShieldProtectionService.isRunning());
+        result.put("enabled", isProtectionEnabled(context));
         call.resolve(result);
     }
 
@@ -203,6 +218,32 @@ public class ScrollShieldNativePlugin extends Plugin {
             );
         }
         return mode == AppOpsManager.MODE_ALLOWED;
+    }
+
+    public static boolean isProtectionEnabled(Context context) {
+        return context
+            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .getBoolean(SERVICE_ENABLED_KEY, false);
+    }
+
+    public static void setProtectionEnabled(Context context, boolean enabled) {
+        context
+            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(SERVICE_ENABLED_KEY, enabled)
+            .commit();
+    }
+
+    public static boolean hasConfiguredApps(Context context) {
+        SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        String configJson = preferences.getString(CONFIG_KEY, "{}");
+        try {
+            JSONObject root = new JSONObject(configJson == null ? "{}" : configJson);
+            JSONArray apps = root.optJSONArray("apps");
+            return apps != null && apps.length() > 0;
+        } catch (JSONException error) {
+            return false;
+        }
     }
 
     private SharedPreferences getPreferences() {
