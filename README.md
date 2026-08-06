@@ -99,4 +99,4 @@ npm run android:bundle
 - `docs/ENGINEERING_CHECKS.md`
 - `config/release-approval.json`
 
-Before release, replace legal placeholders, run `npm run verify`, compile and inspect the Android debug build, validate lifecycle reason persistence, validate the legacy upgrade and export/import round trip on the exact candidate, complete the physical-device matrix with current-build diagnostic evidence, finalize store declarations and videos, inspect the signed binary, and complete the release approval manifest.
+Before release, replace legal placeholders, run `npm run verify`, compile and inspect the Android debug build, validate lifecycle reason persistence, validate the legacy upgrade and export/import round trip on the exact candidate, complete the physical-device matrix with current-build diagnostic evidence, record reviewer evidence showing the matching Debug stop code and copied JSON, finalize store declarations and videos, inspect the signed binary, and complete the release approval manifest.
