@@ -37,24 +37,38 @@ The verification chain covers:
 - approved Android permissions only
 - foreground-service type and boot receiver registration
 - scoped package visibility instead of broad installed-app access
-- native plugin and diagnostics registration
+- native protection and diagnostics registration
 - explicit user activation and safe stop behavior
-- installed-package validation
+- installed-package validation and periodic runtime health checks
 - recurring schedules, daily limits, Anti-Binge, and emergency counters
-- permission-loss shutdown and boot-recovery prerequisites
+- actual service usage of the JUnit-tested `ProtectionRulePolicy`
+- permission-loss, no-active-rule, removed-app, and boot-recovery safeguards
+- explicit foreground-notification removal
 - Java rule-policy tests and Android compile commands
 - debug APK and unit-test report artifacts
 
 ## Protection Transparency Check
 
-`npm run check:transparency` verifies that:
+`npm run check:transparency` verifies the complete Android notification path:
 
+- the dedicated notification plugin is registered in `MainActivity`
+- `POST_NOTIFICATIONS` is declared through a Capacitor permission alias
+- Android 13+ uses `requestPermissionForAlias` and a `PermissionCallback`
+- Android 8+ opens the exact `Aktiver App-Schutz` channel when manual settings are needed
+- Android 7 falls back to application details
+- the protection service, status checker, and settings plugin share one channel id
+- app-wide and channel-level notification disabling are detected
 - Android protection cannot start while notifications are disabled
 - reboot recovery does not restart an invisible service
+- a running service stops, clears activation, and records a warning after notification revocation
+- the foreground notification is removed when the service ends
 - the ongoing foreground-service notification retains its direct `Schutz stoppen` action
 - the permission screen marks notifications as required on Android
 - the React start action blocks before native startup when the permission is absent
-- a component test protects this behavior
+- the TypeScript bridge routes notification prompts and channel settings to the dedicated plugin
+- other Android settings remain on the main native plugin
+- browser preview calls remain no-ops
+- component tests cover successful permission grant and denied-prompt fallback
 
 ## Android CI Stage
 
