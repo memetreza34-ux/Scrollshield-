@@ -1,8 +1,17 @@
-import { AlertTriangle, Clock, Info, Shield } from 'lucide-react';
+import { AlertTriangle, Clock, Info, Moon, Shield } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Header, Switch, TimeSelector } from '../components/ui';
+import { normalizeProtectionConfig } from '../lib/protectionConfig';
 import type { AppConfig, AppState, Screen } from '../types';
 import { DEFAULT_APP_CONFIG, SUPPORTED_APPS } from '../types';
+
+const BLOCK_RANGE_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)$/;
+
+const parseBlockRange = (value: string): [string, string] | null => {
+  const match = BLOCK_RANGE_PATTERN.exec(value.trim());
+  if (!match) return null;
+  return [`${match[1]}:${match[2]}`, `${match[3]}:${match[4]}`];
+};
 
 export function AppDetailScreen({
   state,
@@ -15,18 +24,26 @@ export function AppDetailScreen({
 }) {
   const appId = state.selectedAppId;
   const appInfo = SUPPORTED_APPS.find((app) => app.id === appId);
-  const config = state.appsConfig[appId || ''] || { id: appId, ...DEFAULT_APP_CONFIG };
 
   if (!appId || !appInfo) return null;
 
+  const config = normalizeProtectionConfig(
+    state.appsConfig[appId] ?? { id: appId, ...DEFAULT_APP_CONFIG },
+  );
+  const parsedBlockRange = parseBlockRange(config.blockHours);
+  const blockWindowEnabled = parsedBlockRange !== null;
+  const blockStart = parsedBlockRange?.[0] ?? '22:00';
+  const blockEnd = parsedBlockRange?.[1] ?? '07:00';
+
   const updateConfig = (updates: Partial<AppConfig>) => {
+    const nextConfig = normalizeProtectionConfig({
+      ...config,
+      ...updates,
+    });
     updateState({
       appsConfig: {
         ...state.appsConfig,
-        [appId]: {
-          ...config,
-          ...updates,
-        },
+        [appId]: nextConfig,
       },
     });
   };
@@ -51,14 +68,13 @@ export function AppDetailScreen({
     });
   };
 
-  const emergency = {
-    ...DEFAULT_APP_CONFIG.emergencyUnlock,
-    ...config.emergencyUnlock,
+  const updateBlockWindow = (start: string, end: string) => {
+    if (start === end) return;
+    updateConfig({ blockHours: `${start}-${end}` });
   };
-  const antiBinge = {
-    ...DEFAULT_APP_CONFIG.antiBinge,
-    ...config.antiBinge,
-  };
+
+  const emergency = config.emergencyUnlock;
+  const antiBinge = config.antiBinge;
 
   return (
     <motion.div
@@ -141,14 +157,12 @@ export function AppDetailScreen({
               <div className="flex items-center justify-between gap-4 border-b border-zinc-800/50 p-6">
                 <div>
                   <div className="font-semibold">Session-Länge</div>
-                  <p className="mt-1 text-xs text-zinc-500">So lange bleibt eine bewusst freigegebene Öffnung maximal aktiv.</p>
+                  <p className="mt-1 text-xs text-zinc-500">So lange bleibt eine bewusst freigegebene Öffnung maximal aktiv. Mindestens eine Minute.</p>
                 </div>
                 <TimeSelector
-                  value={config.sessionLimit || 0}
+                  value={config.sessionLimit}
                   onChange={(sessionLimit) => updateConfig({ sessionLimit })}
-                  options={[2, 5, 10, 15, 30]}
-                  allowDisabled
-                  disabledLabel="Aus"
+                  options={[1, 2, 5, 10, 15, 30]}
                 />
               </div>
 
@@ -169,6 +183,58 @@ export function AppDetailScreen({
             </div>
           </section>
 
+          <section aria-labelledby="app-detail-schedule-title">
+            <h2 id="app-detail-schedule-title" className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">
+              Tägliches Sperrfenster
+            </h2>
+            <div className="overflow-hidden rounded-[2rem] border border-zinc-800/50 bg-zinc-900/80">
+              <div className="flex items-center justify-between gap-4 border-b border-zinc-800/50 p-6">
+                <div className="flex items-start gap-3 pr-4">
+                  <Moon size={18} className="mt-0.5 flex-shrink-0 text-indigo-400" aria-hidden="true" />
+                  <div>
+                    <h3 className="font-semibold">Jeden Tag strikt sperren</h3>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                      Funktioniert auch über Mitternacht, zum Beispiel 22:30 bis 07:00.
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={blockWindowEnabled}
+                  onChange={(enabled) => updateConfig({ blockHours: enabled ? '22:00-07:00' : '' })}
+                  ariaLabel="Tägliches Sperrfenster aktivieren"
+                />
+              </div>
+
+              {blockWindowEnabled && (
+                <div className="grid grid-cols-2 gap-4 bg-zinc-900/50 p-6">
+                  <label className="text-xs font-semibold text-zinc-400">
+                    Von
+                    <input
+                      type="time"
+                      aria-label="Sperrfenster Start"
+                      value={blockStart}
+                      onChange={(event) => updateBlockWindow(event.target.value, blockEnd)}
+                      className="mt-2 min-h-[44px] w-full rounded-xl border border-zinc-700 bg-zinc-800 px-3 text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-zinc-400">
+                    Bis
+                    <input
+                      type="time"
+                      aria-label="Sperrfenster Ende"
+                      value={blockEnd}
+                      onChange={(event) => updateBlockWindow(blockStart, event.target.value)}
+                      className="mt-2 min-h-[44px] w-full rounded-xl border border-zinc-700 bg-zinc-800 px-3 text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                    />
+                  </label>
+                  <p className="col-span-2 text-xs leading-relaxed text-zinc-500">
+                    Start ist inklusive, Ende exklusive. Identische Start- und Endzeit wird nicht gespeichert, damit kein versehentlicher 24-Stunden-Block entsteht.
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+
           <section aria-labelledby="app-detail-focus-title">
             <h2 id="app-detail-focus-title" className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">
               Fokus
@@ -181,7 +247,7 @@ export function AppDetailScreen({
                 </div>
                 <select
                   aria-label="Fokus-Modus Verhalten"
-                  value={config.focusModeBehavior || 'warn'}
+                  value={config.focusModeBehavior}
                   onChange={(event) => updateConfig({ focusModeBehavior: event.target.value as AppConfig['focusModeBehavior'] })}
                   className="rounded-xl border border-zinc-700 bg-zinc-800 p-2 text-sm text-zinc-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                 >
@@ -296,7 +362,7 @@ export function AppDetailScreen({
                     <input
                       id="warning-threshold"
                       type="range"
-                      min="2"
+                      min="1"
                       max="10"
                       step="1"
                       value={antiBinge.warningThreshold}
@@ -323,7 +389,7 @@ export function AppDetailScreen({
                     <input
                       id="block-threshold"
                       type="range"
-                      min="3"
+                      min="2"
                       max="15"
                       step="1"
                       value={antiBinge.blockThreshold}
@@ -338,6 +404,9 @@ export function AppDetailScreen({
                         options={[5, 10, 15, 20, 30, 45, 60]}
                       />
                     </div>
+                    <p className="mt-3 text-xs leading-relaxed text-zinc-600">
+                      Die Sperrschwelle wird automatisch mindestens eine Öffnung über der Warnschwelle gehalten.
+                    </p>
                   </div>
                 </>
               )}
