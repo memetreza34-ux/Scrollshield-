@@ -5,14 +5,36 @@ const dashboardPath = 'src/screens/DashboardScreen.tsx';
 const dashboardTestPath = 'src/screens/DashboardScreen.test.tsx';
 const appDetailPath = 'src/screens/AppDetailScreen.tsx';
 const appDetailTestPath = 'src/screens/AppDetailScreen.test.tsx';
+const settingsPath = 'src/screens/SettingsScreen.tsx';
+const helpPath = 'src/screens/HelpScreen.tsx';
+const historyPath = 'src/screens/HistoryScreen.tsx';
+const supportPath = 'src/screens/ReleaseSupportScreen.tsx';
+const releaseInfoTestPath = 'src/screens/ReleaseInformationScreens.test.tsx';
 const competitiveStrategyPath = 'docs/COMPETITIVE_PRODUCT_STRATEGY.md';
 
-const [app, dashboard, dashboardTest, appDetail, appDetailTest, competitiveStrategy] = await Promise.all([
+const [
+  app,
+  dashboard,
+  dashboardTest,
+  appDetail,
+  appDetailTest,
+  settings,
+  help,
+  history,
+  support,
+  releaseInfoTest,
+  competitiveStrategy,
+] = await Promise.all([
   readFile(appPath, 'utf8'),
   readFile(dashboardPath, 'utf8'),
   readFile(dashboardTestPath, 'utf8'),
   readFile(appDetailPath, 'utf8'),
   readFile(appDetailTestPath, 'utf8'),
+  readFile(settingsPath, 'utf8'),
+  readFile(helpPath, 'utf8'),
+  readFile(historyPath, 'utf8'),
+  readFile(supportPath, 'utf8'),
+  readFile(releaseInfoTestPath, 'utf8'),
   readFile(competitiveStrategyPath, 'utf8'),
 ]);
 
@@ -31,27 +53,35 @@ function rejectPattern(file: string, content: string, pattern: RegExp, message: 
 requirePattern(
   appPath,
   app,
-  /import \{ DashboardScreen \} from '\.\/screens\/DashboardScreen';[\s\S]*import \{ AppDetailScreen \} from '\.\/screens\/AppDetailScreen';/,
-  'The production route must use the release-safe DashboardScreen and AppDetailScreen.',
+  /DashboardScreen[\s\S]*HistoryScreen[\s\S]*AppDetailScreen[\s\S]*SettingsScreen[\s\S]*HelpScreen[\s\S]*ReleaseSupportScreen/,
+  'The production route must import every release-safe screen.',
 );
 requirePattern(
   appPath,
   app,
-  /currentScreen === 'reels_protection'[\s\S]*setCurrentScreen\('apps'\)/,
-  'Legacy reels_protection navigation must be redirected to the supported app list.',
+  /\['reels_protection', 'protection_flow', 'active_session'\]\.includes\(currentScreen\)[\s\S]*setCurrentScreen\(appState\.hasCompletedOnboarding \? 'apps' : 'welcome'\)/,
+  'Legacy reels, simulation, and web-session routes must redirect away from production surfaces.',
 );
-rejectPattern(
+requirePattern(
   appPath,
   app,
+  /releaseState:[\s\S]*activeSession: null[\s\S]*simulatedAppToOpen: null/,
+  'Loaded demo/runtime session state must be cleared before entering the release UI.',
+);
+for (const forbidden of [
   /ReelsProtectionScreen/,
-  'The production App route must not import or render the unsupported ReelsProtectionScreen.',
-);
-rejectPattern(
-  appPath,
-  app,
+  /ProtectionFlow/,
+  /ActiveSessionScreen/,
+  /import \{ History \} from '\.\/screens\/MainScreens'/,
+  /import \{[^}]*Settings[^}]*Help[^}]*\} from '\.\/screens\/ConfigScreens'/,
+  /import \{ SupportScreen[,}]/,
   /<AppDetail\b/,
-  'The production App route must not render the legacy demo AppDetail surface.',
-);
+  /<Settings\b/,
+  /<Help\b/,
+  /<History\b/,
+]) {
+  rejectPattern(appPath, app, forbidden, 'A legacy/demo production route has returned to App.tsx.');
+}
 
 requirePattern(
   appDetailPath,
@@ -117,6 +147,77 @@ requirePattern(
 );
 
 requirePattern(
+  settingsPath,
+  settings,
+  /Schutzstatus & Berechtigungen[\s\S]*Geschützte Apps[\s\S]*Profile & Regeln[\s\S]*Statistiken & Verlauf[\s\S]*Datenschutz & lokale Daten/,
+  'Settings must route to real protection and local-data functions.',
+);
+rejectPattern(
+  settingsPath,
+  settings,
+  /Tageszusammenfassung|Wochenrückblick|Rückfall-Warnung|Fokus-Erinnerungen|Abend-Erinnerung/,
+  'Unimplemented reminder toggles must not be presented as active release settings.',
+);
+requirePattern(
+  settingsPath,
+  settings,
+  /Abo-Funktionen werden hier bewusst nicht als aktive Einstellungen angeboten/,
+  'Settings must not imply that unfinished subscription functionality is live.',
+);
+
+requirePattern(
+  helpPath,
+  help,
+  /gesamte ausgewählte App[\s\S]*Reels-, Shorts-, Feed-Elemente oder Swipe-Bewegungen werden in Version 1 nicht separat erkannt/,
+  'Help must explain whole-app-only v1 protection.',
+);
+requirePattern(
+  helpPath,
+  help,
+  /iOS-Oberfläche ist derzeit nur Produktvorschau[\s\S]*nicht Teil des freigabefähigen Kandidaten/,
+  'Help must describe unfinished iOS enforcement honestly.',
+);
+requirePattern(
+  helpPath,
+  help,
+  /mindestens drei Zeichen[\s\S]*160 Zeichen[\s\S]*lokalen Verlauf/,
+  'Help must explain emergency-reason friction and local storage.',
+);
+
+requirePattern(
+  historyPath,
+  history,
+  /Gemessene Freigabezeit[\s\S]*Geschätzt gespart[\s\S]*fünf Minuten pro Block-\/Warnintervention als Produktschätzung/,
+  'History must distinguish measured usage from estimated saved time.',
+);
+rejectPattern(
+  historyPath,
+  history,
+  /Heute im Feed|Erlaubte Videos|Kurzvideo-Schutz|Größter Zeitfresser/,
+  'History must not surface unsupported or overclaimed short-video analytics.',
+);
+
+requirePattern(
+  supportPath,
+  support,
+  /keinen ScrollShield-Account und keinen Cloud-Sync[\s\S]*Lokale Daten verwalten/,
+  'Support must direct local usage-data deletion to local controls.',
+);
+rejectPattern(
+  supportPath,
+  support,
+  /Serverseitige Daten prüfen und löschen lassen|Nutzungsdaten.*Server/,
+  'Support must not invent server-side usage data for the local-first release.',
+);
+
+requirePattern(
+  releaseInfoTestPath,
+  releaseInfoTest,
+  /settings exposes real destinations without demo reminder toggles[\s\S]*help states whole-app Android scope[\s\S]*history separates measured usage from estimated saved time[\s\S]*support directs local data deletion to local controls/,
+  'Release information-screen tests must cover settings, help, history, and support truthfulness.',
+);
+
+requirePattern(
   competitiveStrategyPath,
   competitiveStrategy,
   /product-planning reference, not store copy[\s\S]*A roadmap feature is never a store-listing feature/,
@@ -136,5 +237,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Release surface check passed. Production routing remains whole-app-only, unsupported Reels/Shorts controls stay unreachable, emergency controls remain visible, and roadmap claims stay separated from store claims.',
+  'Release surface check passed. Production routing is whole-app-only, simulation/reels surfaces stay unreachable, settings/help/history/support remain truthful, emergency controls stay visible, and roadmap claims stay separated from store claims.',
 );
