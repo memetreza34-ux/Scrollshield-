@@ -24,8 +24,8 @@ import { DashboardScreen } from './screens/DashboardScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { AppList } from './screens/AppListScreen';
 import { ReleaseAppDetailScreen } from './screens/ReleaseAppDetailScreen';
-import { PrivacyScreen } from './screens/ConfigScreens';
 import { ProfilesScreen } from './screens/ProfilesScreen';
+import { ReleasePrivacyScreen } from './screens/ReleasePrivacyScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { HelpScreen } from './screens/HelpScreen';
 import { ReleaseSupportScreen } from './screens/ReleaseSupportScreen';
@@ -358,12 +358,13 @@ export default function App() {
               {currentScreen === 'history' && <HistoryScreen key="history" state={appState} navigate={navigate} />}
               {currentScreen === 'settings' && <SettingsScreen key="settings" state={appState} navigate={navigate} />}
               {currentScreen === 'privacy' && (
-                <PrivacyScreen
+                <ReleasePrivacyScreen
                   key="privacy"
                   state={appState}
                   updateState={updateState}
                   resetApp={resetApp}
                   navigate={navigate}
+                  commitmentLock={commitmentLock}
                 />
               )}
               {currentScreen === 'help' && <HelpScreen key="help" state={appState} navigate={navigate} />}
