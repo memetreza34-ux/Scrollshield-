@@ -129,6 +129,7 @@ Do not reuse evidence from a different build number.
 | UI-03 | Tablet portrait and landscape | Debug report, permission flow, app list, and overlay remain usable. |
 | UI-04 | Multi-window where supported | Overlay and service state do not enter a crash loop. |
 | UI-05 | TalkBack smoke test | Permission and service controls expose understandable labels and state. |
+| UI-06 | Small display, maximum font and software keyboard | On a strict block with emergency reason enabled, use the maximum font scale and a small-phone display, focus the reason field so the software keyboard is visible, and verify the overlay remains vertically scrollable. `Zurück zum Startbildschirm`, the reason field and the enabled `Notfall` action must remain reachable without closing the keyboard or rotating the device. Record a screen capture of the exact candidate. |
 
 ## Diagnostics Contract
 
@@ -155,6 +156,8 @@ The in-app Permissions status panel must derive its label from both persisted ac
 
 Emergency-friction evidence must additionally prove the exact candidate honors `requireCountdown` and `requireReason`, keeps the normalized reason local, bounds it to 160 characters, and never bypasses the daily emergency maximum.
 
+Overlay-accessibility evidence must additionally prove that the exact candidate remains scrollable under maximum font scale and a visible software keyboard, and that both the safe return-home action and the emergency action remain reachable.
+
 Migration evidence must additionally include:
 
 - exact list of source keys or the former backup filename;
@@ -177,6 +180,7 @@ The Android release candidate remains blocked until:
 7. Controlled shutdown paths retain their specific reason instead of being overwritten by `unexpected_service_destroy`.
 8. The Permissions screen correctly distinguishes active, deliberately stopped, stale-activation, and running-without-activation states.
 9. Emergency unlock countdown/reason friction and the daily maximum pass `LIFE-11` on the exact candidate without network transmission of the local reason.
-10. The copied diagnostic JSON matches the installed version and build under test.
-11. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, and `assembleDebug`.
-12. Play reviewer videos demonstrate the same tested build.
+10. `UI-06` proves the block overlay remains scrollable and both safe-return and emergency actions stay reachable with maximum font scaling and the software keyboard visible.
+11. The copied diagnostic JSON matches the installed version and build under test.
+12. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, and `assembleDebug`.
+13. Play reviewer videos demonstrate the same tested build.
