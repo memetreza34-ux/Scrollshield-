@@ -5,10 +5,11 @@ import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
 import { reconcileFocusRuntime } from './lib/focus';
 import { NativeProtection } from './lib/nativeProtection';
+import { getRuntimeOperatingSystem } from './lib/runtimePlatform';
 import { createEventId } from './lib/appUtils';
 import { recordProtectionEventStats } from './lib/session';
 import { BottomNav } from './components/ui';
-import { Welcome, Onboarding } from './screens/OnboardingScreens';
+import { ReleaseWelcome, ReleaseOnboarding } from './screens/ReleaseOnboardingScreens';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { AppList } from './screens/AppListScreen';
@@ -24,9 +25,19 @@ import { MigrationRecoveryScreen } from './screens/MigrationRecoveryScreen';
 import { ImprintScreen } from './screens/SupportScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
+const createRuntimeDefaultState = (): AppState => {
+  const normalized = normalizeAppState(DEFAULT_STATE);
+  return {
+    ...normalized,
+    operatingSystem: getRuntimeOperatingSystem(normalized.operatingSystem),
+    activeSession: null,
+    simulatedAppToOpen: null,
+  };
+};
+
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
-  const [appState, setAppState] = useState<AppState>(DEFAULT_STATE);
+  const [appState, setAppState] = useState<AppState>(createRuntimeDefaultState);
   const [isLoaded, setIsLoaded] = useState(false);
   const [migrationBlocked, setMigrationBlocked] = useState(false);
   const skipNextSaveRef = useRef(false);
@@ -35,8 +46,12 @@ export default function App() {
   const applyLoadedState = React.useCallback((saved: Partial<AppState>): boolean => {
     try {
       const normalizedState = normalizeAppState(saved);
-      const focusUpdate = reconcileFocusRuntime(normalizedState);
-      const restoredState = focusUpdate ? { ...normalizedState, ...focusUpdate } : normalizedState;
+      const platformState: AppState = {
+        ...normalizedState,
+        operatingSystem: getRuntimeOperatingSystem(normalizedState.operatingSystem),
+      };
+      const focusUpdate = reconcileFocusRuntime(platformState);
+      const restoredState = focusUpdate ? { ...platformState, ...focusUpdate } : platformState;
       const releaseState: AppState = {
         ...restoredState,
         activeSession: null,
@@ -227,7 +242,7 @@ export default function App() {
   const resetApp = () => {
     skipNextSaveRef.current = true;
     StorageService.clearState();
-    setAppState(DEFAULT_STATE);
+    setAppState(createRuntimeDefaultState());
     setCurrentScreen('welcome');
   };
 
@@ -245,9 +260,14 @@ export default function App() {
             className="flex-1 overflow-y-auto overflow-x-hidden relative scrollbar-hide"
           >
             <AnimatePresence mode="wait">
-              {currentScreen === 'welcome' && <Welcome key="welcome" navigate={navigate} />}
+              {currentScreen === 'welcome' && <ReleaseWelcome key="welcome" navigate={navigate} />}
               {currentScreen === 'onboarding' && (
-                <Onboarding key="onboarding" state={appState} updateState={updateState} navigate={navigate} />
+                <ReleaseOnboarding
+                  key="onboarding"
+                  state={appState}
+                  updateState={updateState}
+                  navigate={navigate}
+                />
               )}
               {currentScreen === 'permissions' && (
                 <ReleasePermissionsScreen
