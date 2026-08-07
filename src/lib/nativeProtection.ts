@@ -19,10 +19,23 @@ export interface NativeProtectionDrain {
   usage: NativeUsageSample[];
 }
 
+export type NativeProtectionHealth =
+  | 'active'
+  | 'running-without-activation'
+  | 'stale-activation'
+  | 'stopped-with-reason'
+  | 'stopped-without-reason'
+  | 'never-started';
+
 export interface NativeProtectionStatus {
   running: boolean;
   enabled: boolean;
   unavailableAppIds: string[];
+  lastStartAt: number;
+  lastStopAt: number;
+  lastStopCode: string;
+  lastStopMessage: string;
+  health: NativeProtectionHealth;
 }
 
 export interface NativeProtectionStopReason {
@@ -122,6 +135,17 @@ const DEFAULT_STOP_REASON: NativeProtectionStopReason = {
   message: 'Der Android-Schutz wurde in ScrollShield manuell gestoppt',
 };
 
+const EMPTY_STATUS: NativeProtectionStatus = {
+  running: false,
+  enabled: false,
+  unavailableAppIds: [],
+  lastStartAt: 0,
+  lastStopAt: 0,
+  lastStopCode: '',
+  lastStopMessage: '',
+  health: 'never-started',
+};
+
 const EVENT_TYPES = new Set<NativeProtectionEvent['type']>(['open', 'block', 'warning', 'emergency']);
 const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -171,6 +195,30 @@ const parseStringArray = (raw: string): string[] => {
   } catch {
     return [];
   }
+};
+
+const normalizeTimestamp = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+
+const normalizeDiagnosticText = (value: unknown): string =>
+  typeof value === 'string' ? value.trim() : '';
+
+export const assessNativeProtectionHealth = (status: {
+  running: boolean;
+  enabled: boolean;
+  lastStartAt: number;
+  lastStopAt: number;
+  lastStopCode: string;
+  lastStopMessage: string;
+}): NativeProtectionHealth => {
+  if (status.running && status.enabled) return 'active';
+  if (status.running && !status.enabled) return 'running-without-activation';
+  if (!status.running && status.enabled) return 'stale-activation';
+  if (status.lastStopAt > 0 && (status.lastStopCode.length > 0 || status.lastStopMessage.length > 0)) {
+    return 'stopped-with-reason';
+  }
+  if (status.lastStartAt > 0) return 'stopped-without-reason';
+  return 'never-started';
 };
 
 const buildConfig = (appsConfig: Record<string, AppConfig>, focusMode: boolean): NativeProtectionConfig => ({
@@ -236,12 +284,20 @@ export const NativeProtection = {
   },
 
   async getStatus(): Promise<NativeProtectionStatus> {
-    if (!this.isAvailable()) return { running: false, enabled: false, unavailableAppIds: [] };
+    if (!this.isAvailable()) return { ...EMPTY_STATUS, unavailableAppIds: [] };
     const result = await AndroidProtection.getProtectionServiceStatus();
-    return {
-      running: result.running,
-      enabled: result.enabled,
+    const statusWithoutHealth = {
+      running: result.running === true,
+      enabled: result.enabled === true,
       unavailableAppIds: parseStringArray(result.unavailableAppIdsJson),
+      lastStartAt: normalizeTimestamp(result.lastStartAt),
+      lastStopAt: normalizeTimestamp(result.lastStopAt),
+      lastStopCode: normalizeDiagnosticText(result.lastStopCode),
+      lastStopMessage: normalizeDiagnosticText(result.lastStopMessage),
+    };
+    return {
+      ...statusWithoutHealth,
+      health: assessNativeProtectionHealth(statusWithoutHealth),
     };
   },
 
