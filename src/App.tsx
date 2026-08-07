@@ -13,7 +13,7 @@ import { ReleaseWelcome, ReleaseOnboarding } from './screens/ReleaseOnboardingSc
 import { DashboardScreen } from './screens/DashboardScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { AppList } from './screens/AppListScreen';
-import { AppDetailScreen } from './screens/AppDetailScreen';
+import { ReleaseAppDetailScreen } from './screens/ReleaseAppDetailScreen';
 import { PrivacyScreen } from './screens/ConfigScreens';
 import { ProfilesScreen } from './screens/ProfilesScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
@@ -286,7 +286,12 @@ export default function App() {
                 <AppList key="apps" state={appState} updateState={updateState} navigate={navigate} />
               )}
               {currentScreen === 'app_detail' && (
-                <AppDetailScreen key="app_detail" state={appState} updateState={updateState} navigate={navigate} />
+                <ReleaseAppDetailScreen
+                  key="app_detail"
+                  state={appState}
+                  updateState={updateState}
+                  navigate={navigate}
+                />
               )}
               {currentScreen === 'rules' && (
                 <ProfilesScreen key="rules" state={appState} updateState={updateState} navigate={navigate} />
