@@ -5,6 +5,8 @@ const dashboardPath = 'src/screens/DashboardScreen.tsx';
 const dashboardTestPath = 'src/screens/DashboardScreen.test.tsx';
 const appDetailPath = 'src/screens/AppDetailScreen.tsx';
 const appDetailTestPath = 'src/screens/AppDetailScreen.test.tsx';
+const focusPath = 'src/screens/FocusScreen.tsx';
+const focusTestPath = 'src/screens/FocusScreen.test.tsx';
 const settingsPath = 'src/screens/SettingsScreen.tsx';
 const helpPath = 'src/screens/HelpScreen.tsx';
 const historyPath = 'src/screens/HistoryScreen.tsx';
@@ -18,6 +20,8 @@ const [
   dashboardTest,
   appDetail,
   appDetailTest,
+  focus,
+  focusTest,
   settings,
   help,
   history,
@@ -30,6 +34,8 @@ const [
   readFile(dashboardTestPath, 'utf8'),
   readFile(appDetailPath, 'utf8'),
   readFile(appDetailTestPath, 'utf8'),
+  readFile(focusPath, 'utf8'),
+  readFile(focusTestPath, 'utf8'),
   readFile(settingsPath, 'utf8'),
   readFile(helpPath, 'utf8'),
   readFile(historyPath, 'utf8'),
@@ -53,7 +59,7 @@ function rejectPattern(file: string, content: string, pattern: RegExp, message: 
 requirePattern(
   appPath,
   app,
-  /DashboardScreen[\s\S]*HistoryScreen[\s\S]*AppDetailScreen[\s\S]*SettingsScreen[\s\S]*HelpScreen[\s\S]*ReleaseSupportScreen/,
+  /DashboardScreen[\s\S]*HistoryScreen[\s\S]*AppDetailScreen[\s\S]*SettingsScreen[\s\S]*HelpScreen[\s\S]*ReleaseSupportScreen[\s\S]*FocusScreen/,
   'The production route must import every release-safe screen.',
 );
 requirePattern(
@@ -72,6 +78,7 @@ for (const forbidden of [
   /ReelsProtectionScreen/,
   /ProtectionFlow/,
   /ActiveSessionScreen/,
+  /import \{ Focus \} from '\.\/screens\/FocusScreens'/,
   /import \{ History \} from '\.\/screens\/MainScreens'/,
   /import \{[^}]*Settings[^}]*Help[^}]*\} from '\.\/screens\/ConfigScreens'/,
   /import \{ SupportScreen[,}]/,
@@ -79,6 +86,7 @@ for (const forbidden of [
   /<Settings\b/,
   /<Help\b/,
   /<History\b/,
+  /<Focus\b/,
 ]) {
   rejectPattern(appPath, app, forbidden, 'A legacy/demo production route has returned to App.tsx.');
 }
@@ -144,6 +152,31 @@ requirePattern(
   dashboardTest,
   /whole-app release metrics instead of unsupported reel statistics[\s\S]*Kurzvideo-Schutz[\s\S]*iOS as preview/,
   'Dashboard tests must guard truthful whole-app and iOS-preview messaging.',
+);
+
+requirePattern(
+  focusPath,
+  focus,
+  /Fokusregeln aktiv[\s\S]*konfigurierte Fokusverhalten[\s\S]*Blockieren[\s\S]*Warnen/,
+  'Focus must describe the actual per-app focus behavior instead of universal strict blocking.',
+);
+requirePattern(
+  focusPath,
+  focus,
+  /Wiederkehrende Fokus-Zeitpläne werden erst angeboten[\s\S]*alten Demo-Zeitpläne sind aus dem Release-Pfad entfernt/,
+  'Focus must not expose non-persistent demo schedules.',
+);
+rejectPattern(
+  focusPath,
+  focus,
+  /setSchedules|Arbeit \/ Deep Work|Digital Detox \/ Schlaf|>Zeitpläne</,
+  'The release focus screen must not contain local-only demo schedule state.',
+);
+requirePattern(
+  focusTestPath,
+  focusTest,
+  /persistent focus timer and no demo schedule tab[\s\S]*starts the actual global focus state[\s\S]*instead of universal strict blocking/,
+  'Focus tests must protect persistent state and truthful per-app behavior.',
 );
 
 requirePattern(
@@ -237,5 +270,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Release surface check passed. Production routing is whole-app-only, simulation/reels surfaces stay unreachable, settings/help/history/support remain truthful, emergency controls stay visible, and roadmap claims stay separated from store claims.',
+  'Release surface check passed. Production routing is whole-app-only, demo reels/sessions/schedules stay unreachable, settings/help/history/support/focus remain truthful, emergency controls stay visible, and roadmap claims stay separated from store claims.',
 );
