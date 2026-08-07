@@ -124,6 +124,7 @@ for (const requiredScenario of [
   'UI-01',
   'UI-03',
   'UI-05',
+  'UI-06',
 ]) {
   requirePattern(
     matrixPath,
@@ -147,6 +148,9 @@ for (const evidenceField of [
   'requireReason',
   '160 characters',
   'daily emergency maximum',
+  'maximum font',
+  'software keyboard',
+  'Zurück zum Startbildschirm',
   'NEUSTART NÖTIG',
   'INKONSISTENT',
   'PASS',
@@ -168,5 +172,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android device-matrix check passed. Build identity, channel/lifecycle diagnostics, emergency-friction evidence, stale activation, terminal service reasons, OEM coverage, migration recovery, and evidence requirements are guarded.',
+  'Android device-matrix check passed. Build identity, channel/lifecycle diagnostics, emergency friction, overlay accessibility, stale activation, OEM coverage, migration recovery, and physical evidence requirements are guarded.',
 );
