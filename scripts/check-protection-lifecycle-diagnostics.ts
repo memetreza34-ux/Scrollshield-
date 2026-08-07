@@ -5,10 +5,13 @@ const javaTestRoot = 'android/app/src/test/java/app/scrollshield/mobile';
 const packagePath = 'package.json';
 const readinessPath = 'scripts/readiness-report.ts';
 const pluginPath = `${javaRoot}/ScrollShieldNativePlugin.java`;
+const servicePath = `${javaRoot}/ScrollShieldProtectionService.java`;
 const diagnosticsPath = `${javaRoot}/ScrollShieldDiagnosticsPlugin.java`;
 const bootReceiverPath = `${javaRoot}/ScrollShieldBootReceiver.java`;
 const policyPath = `${javaRoot}/ProtectionStopReasonPolicy.java`;
 const policyTestPath = `${javaTestRoot}/ProtectionStopReasonPolicyTest.java`;
+const serviceLifecyclePolicyPath = `${javaRoot}/ProtectionServiceLifecyclePolicy.java`;
+const serviceLifecyclePolicyTestPath = `${javaTestRoot}/ProtectionServiceLifecyclePolicyTest.java`;
 const bridgePath = 'src/lib/nativeProtection.ts';
 const bridgeTestPath = 'src/lib/nativeProtection.test.ts';
 const healthPath = 'src/lib/nativeProtectionHealth.ts';
@@ -28,10 +31,13 @@ const [
   packageJson,
   readiness,
   plugin,
+  service,
   diagnostics,
   bootReceiver,
   policy,
   policyTest,
+  serviceLifecyclePolicy,
+  serviceLifecyclePolicyTest,
   bridge,
   bridgeTest,
   health,
@@ -50,10 +56,13 @@ const [
   readFile(packagePath, 'utf8'),
   readFile(readinessPath, 'utf8'),
   readFile(pluginPath, 'utf8'),
+  readFile(servicePath, 'utf8'),
   readFile(diagnosticsPath, 'utf8'),
   readFile(bootReceiverPath, 'utf8'),
   readFile(policyPath, 'utf8'),
   readFile(policyTestPath, 'utf8'),
+  readFile(serviceLifecyclePolicyPath, 'utf8'),
+  readFile(serviceLifecyclePolicyTestPath, 'utf8'),
   readFile(bridgePath, 'utf8'),
   readFile(bridgeTestPath, 'utf8'),
   readFile(healthPath, 'utf8'),
@@ -139,6 +148,51 @@ for (const code of [
   requirePattern(policyPath, policy, new RegExp(`\\b${code}\\b`), `Stop policy is missing code ${code}.`);
   requirePattern(policyTestPath, policyTest, new RegExp(`\\b${code}\\b`), `JUnit coverage is missing code ${code}.`);
 }
+
+for (const code of ['notification_action_stop', 'unexpected_service_destroy']) {
+  requirePattern(
+    serviceLifecyclePolicyPath,
+    serviceLifecyclePolicy,
+    new RegExp(`\\b${code}\\b`),
+    `Service lifecycle policy is missing terminal code ${code}.`,
+  );
+  requirePattern(
+    serviceLifecyclePolicyTestPath,
+    serviceLifecyclePolicyTest,
+    new RegExp(`\\b${code}\\b`),
+    `Service lifecycle JUnit coverage is missing terminal code ${code}.`,
+  );
+}
+requirePattern(
+  serviceLifecyclePolicyPath,
+  serviceLifecyclePolicy,
+  /shouldRecordUnexpectedDestroy[\s\S]*protectionEnabled && !explicitStopRequested/,
+  'Unexpected destroy classification must require enabled protection without an explicit stop request.',
+);
+requirePattern(
+  serviceLifecyclePolicyTestPath,
+  serviceLifecyclePolicyTest,
+  /shouldRecordUnexpectedDestroy\(true, false\)[\s\S]*shouldRecordUnexpectedDestroy\(false, false\)[\s\S]*shouldRecordUnexpectedDestroy\(true, true\)/,
+  'Service lifecycle JUnit tests must cover unexpected and controlled destroy boundaries.',
+);
+requirePattern(
+  servicePath,
+  service,
+  /ACTION_STOP[\s\S]*explicitStopRequested = true[\s\S]*NOTIFICATION_ACTION_STOP_CODE[\s\S]*recordProtectionStop[\s\S]*stopSelf\(\)/,
+  'The persistent notification stop action must record notification_action_stop before stopping the service.',
+);
+requirePattern(
+  servicePath,
+  service,
+  /onDestroy\(\)[\s\S]*shouldRecordUnexpectedDestroy[\s\S]*isProtectionEnabled\(this\)[\s\S]*explicitStopRequested[\s\S]*UNEXPECTED_SERVICE_DESTROY_CODE[\s\S]*recordProtectionStop/,
+  'Unexpected service destruction must clear stale activation and retain an exact terminal stop reason.',
+);
+requirePattern(
+  servicePath,
+  service,
+  /stopForMissingPermission[\s\S]*explicitStopRequested = true[\s\S]*setProtectionEnabled\(this, false\)[\s\S]*appendProtectionEvent/,
+  'Controlled permission and configuration shutdowns must not be overwritten as unexpected destruction.',
+);
 
 requirePattern(
   bootReceiverPath,
@@ -282,6 +336,10 @@ requirePattern(
 
 for (const requiredMatrixText of [
   'LIFE-08',
+  'LIFE-09',
+  'LIFE-10',
+  'notification_action_stop',
+  'unexpected_service_destroy',
   'lastProtectionStartAt',
   'lastProtectionStopAt',
   'lastProtectionStopCode',
@@ -302,5 +360,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection lifecycle diagnostics check passed. Native fields remain preserved, inconsistent service states are classified, stop reasons stay visible in Debug and Permissions, and verification/device evidence remains guarded.',
+  'Protection lifecycle diagnostics check passed. Native fields remain preserved, terminal notification/unexpected stops are classified, inconsistent service states are visible, and verification/device evidence remains guarded.',
 );
