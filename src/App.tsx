@@ -14,7 +14,8 @@ import { DashboardScreen } from './screens/DashboardScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { AppList } from './screens/AppListScreen';
 import { AppDetailScreen } from './screens/AppDetailScreen';
-import { Rules, PrivacyScreen } from './screens/ConfigScreens';
+import { PrivacyScreen } from './screens/ConfigScreens';
+import { ProfilesScreen } from './screens/ProfilesScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { HelpScreen } from './screens/HelpScreen';
 import { ReleaseSupportScreen } from './screens/ReleaseSupportScreen';
@@ -288,7 +289,7 @@ export default function App() {
                 <AppDetailScreen key="app_detail" state={appState} updateState={updateState} navigate={navigate} />
               )}
               {currentScreen === 'rules' && (
-                <Rules key="rules" state={appState} updateState={updateState} navigate={navigate} />
+                <ProfilesScreen key="rules" state={appState} updateState={updateState} navigate={navigate} />
               )}
               {currentScreen === 'focus' && (
                 <FocusScreen key="focus" state={appState} updateState={updateState} navigate={navigate} />
