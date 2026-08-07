@@ -17,7 +17,7 @@ import { Rules, PrivacyScreen } from './screens/ConfigScreens';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { HelpScreen } from './screens/HelpScreen';
 import { ReleaseSupportScreen } from './screens/ReleaseSupportScreen';
-import { Focus } from './screens/FocusScreens';
+import { FocusScreen } from './screens/FocusScreen';
 import { PermissionsScreen } from './screens/PermissionsScreen';
 import { DebugScreen } from './screens/DebugScreen';
 import { MigrationRecoveryScreen } from './screens/MigrationRecoveryScreen';
@@ -271,7 +271,7 @@ export default function App() {
                 <Rules key="rules" state={appState} updateState={updateState} navigate={navigate} />
               )}
               {currentScreen === 'focus' && (
-                <Focus key="focus" state={appState} updateState={updateState} navigate={navigate} />
+                <FocusScreen key="focus" state={appState} updateState={updateState} navigate={navigate} />
               )}
               {currentScreen === 'history' && (
                 <HistoryScreen key="history" state={appState} navigate={navigate} />
