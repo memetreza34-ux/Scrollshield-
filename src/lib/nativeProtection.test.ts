@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   getPlatformMock,
+  getProtectionServiceStatusMock,
   isNativePlatformMock,
   startProtectionServiceMock,
   stopProtectionServiceMock,
   syncProtectionConfigMock,
 } = vi.hoisted(() => ({
   getPlatformMock: vi.fn(),
+  getProtectionServiceStatusMock: vi.fn(),
   isNativePlatformMock: vi.fn(),
   startProtectionServiceMock: vi.fn(),
   stopProtectionServiceMock: vi.fn(),
@@ -23,17 +25,18 @@ vi.mock('@capacitor/core', () => ({
     syncProtectionConfig: (...args: unknown[]) => syncProtectionConfigMock(...args),
     startProtectionService: (...args: unknown[]) => startProtectionServiceMock(...args),
     stopProtectionService: (...args: unknown[]) => stopProtectionServiceMock(...args),
-    getProtectionServiceStatus: vi.fn(),
+    getProtectionServiceStatus: (...args: unknown[]) => getProtectionServiceStatusMock(...args),
     drainProtectionEvents: vi.fn(),
   }),
 }));
 
-import { NativeProtection } from './nativeProtection';
+import { assessNativeProtectionHealth, NativeProtection } from './nativeProtection';
 
 describe('NativeProtection lifecycle reasons', () => {
   beforeEach(() => {
     isNativePlatformMock.mockReset();
     getPlatformMock.mockReset();
+    getProtectionServiceStatusMock.mockReset();
     startProtectionServiceMock.mockReset();
     stopProtectionServiceMock.mockReset();
     syncProtectionConfigMock.mockReset();
@@ -64,11 +67,95 @@ describe('NativeProtection lifecycle reasons', () => {
     });
   });
 
-  it('does not call Android in the browser preview', async () => {
+  it('preserves lifecycle diagnostics and detects stale activation', async () => {
+    getProtectionServiceStatusMock.mockResolvedValue({
+      running: false,
+      enabled: true,
+      unavailableAppIdsJson: '["instagram","instagram","tiktok"]',
+      lastStartAt: 1_786_000_000_000,
+      lastStopAt: 1_786_000_100_000,
+      lastStopCode: ' notifications_missing ',
+      lastStopMessage: ' Benachrichtigungen wurden entzogen ',
+    });
+
+    await expect(NativeProtection.getStatus()).resolves.toEqual({
+      running: false,
+      enabled: true,
+      unavailableAppIds: ['instagram', 'tiktok'],
+      lastStartAt: 1_786_000_000_000,
+      lastStopAt: 1_786_000_100_000,
+      lastStopCode: 'notifications_missing',
+      lastStopMessage: 'Benachrichtigungen wurden entzogen',
+      health: 'stale-activation',
+    });
+  });
+
+  it('normalizes malformed lifecycle values instead of exposing invalid diagnostics', async () => {
+    getProtectionServiceStatusMock.mockResolvedValue({
+      running: false,
+      enabled: false,
+      unavailableAppIdsJson: 'invalid-json',
+      lastStartAt: Number.NaN,
+      lastStopAt: -100,
+      lastStopCode: null,
+      lastStopMessage: 123,
+    });
+
+    await expect(NativeProtection.getStatus()).resolves.toEqual({
+      running: false,
+      enabled: false,
+      unavailableAppIds: [],
+      lastStartAt: 0,
+      lastStopAt: 0,
+      lastStopCode: '',
+      lastStopMessage: '',
+      health: 'never-started',
+    });
+  });
+
+  it('distinguishes active, inconsistent, and stopped states deterministically', () => {
+    const base = {
+      lastStartAt: 0,
+      lastStopAt: 0,
+      lastStopCode: '',
+      lastStopMessage: '',
+    };
+
+    expect(assessNativeProtectionHealth({ ...base, running: true, enabled: true })).toBe('active');
+    expect(assessNativeProtectionHealth({ ...base, running: true, enabled: false })).toBe(
+      'running-without-activation',
+    );
+    expect(assessNativeProtectionHealth({ ...base, running: false, enabled: true })).toBe('stale-activation');
+    expect(
+      assessNativeProtectionHealth({
+        ...base,
+        running: false,
+        enabled: false,
+        lastStopAt: 100,
+        lastStopCode: 'manual_app_stop',
+      }),
+    ).toBe('stopped-with-reason');
+    expect(
+      assessNativeProtectionHealth({ ...base, running: false, enabled: false, lastStartAt: 100 }),
+    ).toBe('stopped-without-reason');
+    expect(assessNativeProtectionHealth({ ...base, running: false, enabled: false })).toBe('never-started');
+  });
+
+  it('does not call Android in the browser preview and returns a safe empty status', async () => {
     isNativePlatformMock.mockReturnValue(false);
 
     await NativeProtection.stop({ code: 'migration_recovery', message: 'Nicht auf Android' });
 
     expect(stopProtectionServiceMock).not.toHaveBeenCalled();
+    await expect(NativeProtection.getStatus()).resolves.toEqual({
+      running: false,
+      enabled: false,
+      unavailableAppIds: [],
+      lastStartAt: 0,
+      lastStopAt: 0,
+      lastStopCode: '',
+      lastStopMessage: '',
+      health: 'never-started',
+    });
   });
 });
