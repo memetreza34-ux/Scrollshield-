@@ -49,10 +49,18 @@ Commitment Mode must never remove:
 - the Android overlay action that returns to the launcher/home screen;
 - a configured bounded emergency unlock;
 - Help and release disclosures;
-- local data export and recovery tools;
+- local data export and migration/recovery evidence;
 - a complete ScrollShield app reset.
 
 A complete reset intentionally clears the device-local commitment key together with all other `scrollshield_` storage. This destructive escape route is part of the safety contract, not a bug.
+
+## Backup import during Commitment
+
+Normal **export stays available** while Commitment is active so the user can always preserve owned data.
+
+A full JSON **import is temporarily disabled** until the Commitment expires or the user deliberately performs a complete app reset. Import can replace protected-app rules and profiles, so allowing it during Commitment would either bypass the lock or create a misleading partial restore.
+
+The central commitment guard therefore rejects full-state replacements atomically while active, and the release privacy surface disables the file input. It must never report a partial imported state as a successful restore.
 
 ## Persistence and backup behavior
 
@@ -94,4 +102,5 @@ Before calling Commitment Mode release-verified, evidence must cover:
 6. no normal cancel action during the active lock;
 7. complete reset clearing the commitment key;
 8. emergency/home safety exits remaining reachable in native protection;
-9. manual-clock behavior documented rather than represented as tamper-proof.
+9. export remaining available while full backup import is disabled and atomically rejected;
+10. manual-clock behavior documented rather than represented as tamper-proof.
