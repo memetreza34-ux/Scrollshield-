@@ -28,7 +28,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Loslegen' }));
 
-    expect(await screen.findByRole('heading', { name: 'Ziele auswählen' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Apps auswählen' })).toBeInTheDocument();
     await waitFor(() => expect(scrollArea.scrollTop).toBe(0));
   });
 
