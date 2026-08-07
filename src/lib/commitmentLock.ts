@@ -77,11 +77,21 @@ export const clearCommitmentLock = () => localStorage.removeItem(STORAGE_KEY);
 const hasOwn = <T extends object>(value: T, key: PropertyKey): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
 
+const looksLikeFullStateReplacement = (updates: Partial<AppState>): boolean =>
+  hasOwn(updates, 'appsConfig') &&
+  (hasOwn(updates, 'history') ||
+    hasOwn(updates, 'dailyStats') ||
+    hasOwn(updates, 'settings') ||
+    hasOwn(updates, 'stats') ||
+    hasOwn(updates, 'focusSessions'));
+
 /**
  * While commitment is active, every protection-configuration write is frozen.
  * Non-protection state (history, statistics, focus runtime, permissions, etc.)
- * continues to update normally. A full app reset deliberately bypasses this
- * helper so the user always retains a destructive safety exit.
+ * continues to update normally. A full state replacement such as backup import
+ * is rejected atomically so it cannot become a misleading partial import.
+ * A full app reset deliberately bypasses this helper so the user always retains
+ * a destructive safety exit.
  */
 export const applyCommitmentGuard = (
   previousState: AppState,
@@ -90,6 +100,7 @@ export const applyCommitmentGuard = (
   now = Date.now(),
 ): Partial<AppState> => {
   if (!isCommitmentLockActive(lock, now)) return updates;
+  if (looksLikeFullStateReplacement(updates)) return {};
 
   const guarded: Partial<AppState> = { ...updates };
   if (hasOwn(updates, 'appsConfig')) guarded.appsConfig = previousState.appsConfig;
