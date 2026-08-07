@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { expectNoA11yViolations } from './test/a11y';
+import { createCommitmentLock, saveCommitmentLock } from './lib/commitmentLock';
 import { StorageService } from './lib/storage';
 import { DEFAULT_STATE } from './types';
 
@@ -19,6 +20,14 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: 'ScrollShield' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Loslegen' })).toBeInTheDocument();
+  });
+
+  it('keeps release help reachable before onboarding is completed', async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Was kann Version 1?' }));
+
+    expect(await screen.findByRole('heading', { name: 'Hilfe' })).toBeInTheDocument();
+    expect(screen.getByText('Was ScrollShield v1 schützt')).toBeInTheDocument();
   });
 
   it('returns the shared scroll area to the top when changing screens', async () => {
@@ -66,12 +75,13 @@ describe('App', () => {
     expect(screen.getByLabelText('Noch 15 Minuten')).toBeInTheDocument();
   });
 
-  it('clears persisted data and returns to onboarding after a confirmed reset', async () => {
+  it('clears persisted data and the device-local commitment lock after a confirmed reset', async () => {
     StorageService.saveState({
       ...DEFAULT_STATE,
       hasCompletedOnboarding: true,
       stats: { ...DEFAULT_STATE.stats, totalSavedTime: 120 },
     });
+    expect(saveCommitmentLock(createCommitmentLock(60, Date.now()))).toBe(true);
 
     render(<App />);
 
