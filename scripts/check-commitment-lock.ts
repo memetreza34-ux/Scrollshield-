@@ -4,6 +4,8 @@ const files = {
   app: 'src/App.tsx',
   policy: 'src/lib/commitmentLock.ts',
   policyTest: 'src/lib/commitmentLock.test.ts',
+  dashboard: 'src/screens/DashboardScreen.tsx',
+  dashboardTest: 'src/screens/DashboardScreen.test.tsx',
   appList: 'src/screens/AppListScreen.tsx',
   appListTest: 'src/screens/AppListScreen.test.tsx',
   profiles: 'src/screens/ProfilesScreen.tsx',
@@ -61,6 +63,11 @@ requirePattern(
 );
 requirePattern(
   'app',
+  /DashboardScreen[\s\S]*commitmentLock=\{commitmentLock\}/,
+  'Dashboard must receive the live commitment state from App.tsx.',
+);
+requirePattern(
+  'app',
   /isCommitmentLockActive\(commitmentLock\)[\s\S]*currentScreen === 'app_detail'[\s\S]*setCurrentScreen\('apps'\)/,
   'App detail must not stay reachable after commitment becomes active.',
 );
@@ -73,6 +80,17 @@ requirePattern(
   'app',
   /\['welcome', 'onboarding', 'permissions', 'help'\]\.includes\(currentScreen\)/,
   'Pre-onboarding help must remain reachable.',
+);
+
+requirePattern(
+  'dashboard',
+  /Commitment aktiv · Regeln eingefroren[\s\S]*commitmentLock\.lockedUntil[\s\S]*navigate\('rules'\)/,
+  'Dashboard must immediately surface an active commitment and link to its details.',
+);
+requirePattern(
+  'dashboardTest',
+  /surfaces an active commitment immediately and routes to its details/,
+  'Dashboard tests must guard commitment visibility after restart/navigation.',
 );
 
 requirePattern(
@@ -157,5 +175,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Commitment lock check passed. The bounded device-local lock requires deliberate confirmation, freezes protection configuration centrally and visibly, rejects full-state imports atomically, expires automatically, preserves safety exits, and is documented as anti-impulse rather than tamper-proof enforcement.',
+  'Commitment lock check passed. The bounded device-local lock requires deliberate confirmation, freezes protection configuration centrally and visibly, remains visible on the dashboard, rejects full-state imports atomically, expires automatically, preserves safety exits, and is documented as anti-impulse rather than tamper-proof enforcement.',
 );
