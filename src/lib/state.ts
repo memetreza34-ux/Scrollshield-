@@ -7,6 +7,7 @@ import {
   Profile,
   SUPPORTED_APPS,
 } from '../types';
+import { normalizeProtectionConfig } from './protectionConfig';
 
 type AppConfigPatch = Partial<
   Omit<AppConfig, 'reelsProtection' | 'singleContent' | 'emergencyUnlock' | 'timeWindows' | 'antiBinge'>
@@ -18,31 +19,32 @@ type AppConfigPatch = Partial<
   antiBinge?: Partial<AppConfig['antiBinge']>;
 };
 
-export const normalizeAppConfig = (appId: string, config?: AppConfigPatch): AppConfig => ({
-  ...DEFAULT_APP_CONFIG,
-  ...config,
-  id: appId,
-  reelsProtection: {
-    ...DEFAULT_APP_CONFIG.reelsProtection,
-    ...config?.reelsProtection,
-  },
-  singleContent: {
-    ...DEFAULT_APP_CONFIG.singleContent,
-    ...config?.singleContent,
-  },
-  emergencyUnlock: {
-    ...DEFAULT_APP_CONFIG.emergencyUnlock,
-    ...config?.emergencyUnlock,
-  },
-  timeWindows: {
-    ...DEFAULT_APP_CONFIG.timeWindows,
-    ...config?.timeWindows,
-  },
-  antiBinge: {
-    ...DEFAULT_APP_CONFIG.antiBinge,
-    ...config?.antiBinge,
-  },
-});
+export const normalizeAppConfig = (appId: string, config?: AppConfigPatch): AppConfig =>
+  normalizeProtectionConfig({
+    ...DEFAULT_APP_CONFIG,
+    ...config,
+    id: appId,
+    reelsProtection: {
+      ...DEFAULT_APP_CONFIG.reelsProtection,
+      ...config?.reelsProtection,
+    },
+    singleContent: {
+      ...DEFAULT_APP_CONFIG.singleContent,
+      ...config?.singleContent,
+    },
+    emergencyUnlock: {
+      ...DEFAULT_APP_CONFIG.emergencyUnlock,
+      ...config?.emergencyUnlock,
+    },
+    timeWindows: {
+      ...DEFAULT_APP_CONFIG.timeWindows,
+      ...config?.timeWindows,
+    },
+    antiBinge: {
+      ...DEFAULT_APP_CONFIG.antiBinge,
+      ...config?.antiBinge,
+    },
+  });
 
 export const normalizeAppsConfig = (appsConfig: Partial<AppState['appsConfig']> = {}) => {
   const normalized: Record<string, AppConfig> = {};
