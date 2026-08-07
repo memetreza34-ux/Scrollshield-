@@ -879,9 +879,10 @@ public class ScrollShieldProtectionService extends Service {
             long existing = preferences.getLong(key, 0L);
             editor.putLong(key, existing + entry.getValue());
         }
-        editor.apply();
-        pendingUsageMs.clear();
-        lastUsageFlushMs = now;
+        if (editor.commit()) {
+            pendingUsageMs.clear();
+            lastUsageFlushMs = now;
+        }
     }
 
     private long getDailyUsageMs(String appId, long now) {
@@ -916,10 +917,27 @@ public class ScrollShieldProtectionService extends Service {
 
     private int countRecentOpens(String appId, int windowMinutes, long now) {
         SharedPreferences preferences = getNativePreferences();
-        String key = OPEN_KEY_PREFIX + getDayKey(now) + "_" + appId;
-        long cutoff = now - windowMinutes * 60_000L;
-        int count = 0;
+        long cutoff = now - Math.max(1, windowMinutes) * 60_000L;
+        String currentDay = getDayKey(now);
+        String previousDay = getPreviousDayKey(now);
 
+        int count = countRecentOpensForKey(
+            preferences,
+            OPEN_KEY_PREFIX + currentDay + "_" + appId,
+            cutoff
+        );
+        if (!previousDay.equals(currentDay)) {
+            count += countRecentOpensForKey(
+                preferences,
+                OPEN_KEY_PREFIX + previousDay + "_" + appId,
+                cutoff
+            );
+        }
+        return count;
+    }
+
+    private int countRecentOpensForKey(SharedPreferences preferences, String key, long cutoff) {
+        int count = 0;
         try {
             String raw = preferences.getString(key, "[]");
             JSONArray events = new JSONArray(raw == null ? "[]" : raw);
@@ -956,6 +974,13 @@ public class ScrollShieldProtectionService extends Service {
         calendar.setTimeInMillis(now);
         int minuteOfDay = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE);
         return ProtectionRulePolicy.isInsideBlockedHours(blockHours, minuteOfDay);
+    }
+
+    private String getPreviousDayKey(long timestamp) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(timestamp);
+        calendar.add(Calendar.DAY_OF_YEAR, -1);
+        return getDayKey(calendar.getTimeInMillis());
     }
 
     private String getDayKey(long timestamp) {
