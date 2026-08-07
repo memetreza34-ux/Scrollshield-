@@ -70,6 +70,17 @@ const grantedAndroidStatus = {
   notifications: true,
 };
 
+const neverStartedProtectionStatus = {
+  running: false,
+  enabled: false,
+  unavailableAppIds: [],
+  lastStartAt: 0,
+  lastStopAt: 0,
+  lastStopCode: '',
+  lastStopMessage: '',
+  health: 'never-started' as const,
+};
+
 describe('PermissionsScreen', () => {
   beforeEach(() => {
     isAndroidNativeMock.mockReset();
@@ -83,7 +94,7 @@ describe('PermissionsScreen', () => {
     isAndroidNativeMock.mockReturnValue(false);
     protectionAvailableMock.mockReturnValue(false);
     getAndroidStatusMock.mockResolvedValue(null);
-    getProtectionStatusMock.mockResolvedValue({ running: false });
+    getProtectionStatusMock.mockResolvedValue(neverStartedProtectionStatus);
     requestAndroidNotificationsMock.mockResolvedValue(false);
     openAndroidSettingsMock.mockResolvedValue(undefined);
   });
@@ -140,12 +151,36 @@ describe('PermissionsScreen', () => {
     expect(within(notificationSection!).getByText('FEHLT')).toBeInTheDocument();
     expect(within(notificationSection!).queryByText('OPTIONAL')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Schutzdienst starten' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Schutzdienst starten' }));
 
     await waitFor(() => {
       expect(screen.getByText(/Aktiviere zuerst App-Nutzungszugriff/)).toBeInTheDocument();
     });
     expect(startProtectionMock).not.toHaveBeenCalled();
+  });
+
+  it('shows stale activation, exact stop code, and stop message from Android', async () => {
+    isAndroidNativeMock.mockReturnValue(true);
+    protectionAvailableMock.mockReturnValue(true);
+    getAndroidStatusMock.mockResolvedValue(grantedAndroidStatus);
+    getProtectionStatusMock.mockResolvedValue({
+      running: false,
+      enabled: true,
+      unavailableAppIds: [],
+      lastStartAt: 1_786_000_000_000,
+      lastStopAt: 1_786_000_100_000,
+      lastStopCode: 'notifications_missing',
+      lastStopMessage: 'Benachrichtigungen wurden entzogen',
+      health: 'stale-activation',
+    });
+
+    render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    expect(await screen.findByText('NEUSTART NÖTIG')).toBeInTheDocument();
+    expect(screen.getByText('Schutz ist gespeichert, aber der Dienst läuft nicht')).toBeInTheDocument();
+    expect(screen.getByText('notifications_missing')).toBeInTheDocument();
+    expect(screen.getByText('Benachrichtigungen wurden entzogen')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Schutzdienst starten' })).toBeInTheDocument();
   });
 
   it('uses the native Android notification prompt before opening settings', async () => {
