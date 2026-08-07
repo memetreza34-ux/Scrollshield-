@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { createCommitmentLock } from '../lib/commitmentLock';
 import { DEFAULT_STATE } from '../types';
 import { ProfilesScreen } from './ProfilesScreen';
 
@@ -66,5 +67,41 @@ describe('ProfilesScreen', () => {
     expect(custom.appsConfig.instagram.reelsProtection.enabled).toBe(false);
     expect(custom.appsConfig.instagram.singleContent.allowOnlyOne).toBe(false);
     expect(custom.appsConfig.instagram.mode).toBe('standard');
+  });
+
+  it('requires an explicit second confirmation before starting commitment', () => {
+    const onStartCommitment = vi.fn(() => true);
+    render(
+      <ProfilesScreen
+        state={makeState()}
+        updateState={vi.fn()}
+        navigate={vi.fn()}
+        onStartCommitment={onStartCommitment}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '1 Stunde' }));
+    expect(onStartCommitment).not.toHaveBeenCalled();
+    expect(screen.getByText(/1 Stunde verbindlich einfrieren/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verbindlich starten' }));
+    expect(onStartCommitment).toHaveBeenCalledWith(60);
+  });
+
+  it('makes profile configuration read-only while commitment is active', () => {
+    const lock = createCommitmentLock(480, Date.now());
+    render(
+      <ProfilesScreen
+        state={makeState()}
+        updateState={vi.fn()}
+        navigate={vi.fn()}
+        commitmentLock={lock}
+        onStartCommitment={vi.fn(() => true)}
+      />,
+    );
+
+    expect(screen.getByText(/Regeln sind eingefroren/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Eigenes Profil' })).toBeDisabled();
+    expect(screen.getByRole('radio', { name: /Balance/ })).toBeDisabled();
   });
 });
