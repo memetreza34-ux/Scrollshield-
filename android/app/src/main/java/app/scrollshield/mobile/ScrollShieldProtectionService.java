@@ -29,6 +29,7 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
@@ -473,14 +474,21 @@ public class ScrollShieldProtectionService extends Service {
 
         boolean strict = strictReason != null;
         overlayPackage = packageName;
+
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+        scrollView.setSmoothScrollingEnabled(true);
+        scrollView.setVerticalScrollBarEnabled(true);
+
         LinearLayout container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
         container.setGravity(Gravity.CENTER);
         container.setPadding(dp(28), dp(40), dp(28), dp(40));
+        container.setMinimumHeight(getResources().getDisplayMetrics().heightPixels);
 
         GradientDrawable background = new GradientDrawable();
         background.setColor(Color.rgb(9, 9, 11));
-        container.setBackground(background);
+        scrollView.setBackground(background);
 
         TextView badge = createText("SCROLLSHIELD", 12, Color.rgb(52, 211, 153));
         badge.setLetterSpacing(0.18f);
@@ -655,19 +663,37 @@ public class ScrollShieldProtectionService extends Service {
         continueParams.topMargin = dp(12);
         container.addView(continueButton, continueParams);
 
+        scrollView.addView(
+            container,
+            new ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT,
+                ScrollView.LayoutParams.WRAP_CONTENT
+            )
+        );
+
+        if (emergencyReasonInput != null) {
+            emergencyReasonInput.setOnFocusChangeListener((view, hasFocus) -> {
+                if (!hasFocus) return;
+                view.postDelayed(
+                    () -> scrollView.smoothScrollTo(0, continueButton.getBottom() + dp(24)),
+                    150L
+                );
+            });
+        }
+
         WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 : WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         );
         layoutParams.gravity = Gravity.TOP | Gravity.START;
+        layoutParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
 
-        overlayView = container;
+        overlayView = scrollView;
         try {
             windowManager.addView(overlayView, layoutParams);
             ScrollShieldNativePlugin.appendProtectionEvent(
