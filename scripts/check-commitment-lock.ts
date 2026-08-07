@@ -8,6 +8,8 @@ const files = {
   appListTest: 'src/screens/AppListScreen.test.tsx',
   profiles: 'src/screens/ProfilesScreen.tsx',
   profilesTest: 'src/screens/ProfilesScreen.test.tsx',
+  privacy: 'src/screens/ReleasePrivacyScreen.tsx',
+  privacyTest: 'src/screens/ReleasePrivacyScreen.test.tsx',
   storage: 'src/lib/storage.ts',
   contract: 'docs/COMMITMENT_MODE.md',
 };
@@ -38,13 +40,18 @@ requirePattern(
 );
 requirePattern(
   'policy',
+  /applyCommitmentGuard[\s\S]*looksLikeFullStateReplacement[\s\S]*return \{\}/,
+  'Central guard must reject full-state replacements atomically while commitment is active.',
+);
+requirePattern(
+  'policy',
   /applyCommitmentGuard[\s\S]*appsConfig[\s\S]*profiles[\s\S]*activeProfileId[\s\S]*activeProtectionLevel/,
   'Central guard must freeze every protection-configuration surface.',
 );
 requirePattern(
   'policyTest',
-  /expires automatically[\s\S]*persists the short-lived lock locally[\s\S]*freezes protection configuration[\s\S]*stops guarding configuration after the deadline/,
-  'Policy tests must cover expiry, persistence, guarded writes, and release after expiry.',
+  /expires automatically[\s\S]*persists the short-lived lock locally[\s\S]*freezes protection configuration[\s\S]*full-state replacement atomically[\s\S]*stops guarding configuration after the deadline/,
+  'Policy tests must cover expiry, persistence, guarded writes, atomic import rejection, and release after expiry.',
 );
 
 requirePattern(
@@ -56,6 +63,11 @@ requirePattern(
   'app',
   /isCommitmentLockActive\(commitmentLock\)[\s\S]*currentScreen === 'app_detail'[\s\S]*setCurrentScreen\('apps'\)/,
   'App detail must not stay reachable after commitment becomes active.',
+);
+requirePattern(
+  'app',
+  /ReleasePrivacyScreen[\s\S]*commitmentLock=\{commitmentLock\}/,
+  'Production privacy routing must use the commitment-aware wrapper.',
 );
 requirePattern(
   'app',
@@ -96,6 +108,22 @@ requirePattern(
 );
 
 requirePattern(
+  'privacy',
+  /Backup-Import ist während Commitment gesperrt[\s\S]*MutationObserver[\s\S]*onChangeCapture=\{blockImportEvent\}/,
+  'Privacy wrapper must keep backup import visibly and behaviorally disabled across rerenders.',
+);
+requirePattern(
+  'privacy',
+  /Export, Datenlöschung und ein[\s\S]*kompletter Reset bleiben verfügbar/,
+  'Privacy wrapper must preserve export and destructive safety exits.',
+);
+requirePattern(
+  'privacyTest',
+  /disables full backup import during commitment[\s\S]*reapplies the import lock[\s\S]*keeps import available when commitment is inactive/,
+  'Privacy tests must cover lock, rerender persistence, and normal import availability.',
+);
+
+requirePattern(
   'storage',
   /startsWith\(STORAGE_PREFIX\)[\s\S]*localStorage\.removeItem/,
   'Full app reset must still delete every ScrollShield-owned key, including commitment.',
@@ -105,6 +133,11 @@ requirePattern(
   'contract',
   /not a tamper-proof parental-control lock[\s\S]*full ScrollShield reset[\s\S]*clearing ScrollShield app data[\s\S]*uninstalling ScrollShield[\s\S]*wall-clock time/,
   'Commitment documentation must disclose the current anti-bypass limits.',
+);
+requirePattern(
+  'contract',
+  /export stays available[\s\S]*import is temporarily disabled[\s\S]*rejects full-state replacements atomically/,
+  'Commitment documentation must define atomic backup behavior while active.',
 );
 requirePattern(
   'contract',
@@ -124,5 +157,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Commitment lock check passed. The bounded device-local lock requires deliberate confirmation, freezes protection configuration centrally and visibly, expires automatically, preserves safety exits, and is documented as anti-impulse rather than tamper-proof enforcement.',
+  'Commitment lock check passed. The bounded device-local lock requires deliberate confirmation, freezes protection configuration centrally and visibly, rejects full-state imports atomically, expires automatically, preserves safety exits, and is documented as anti-impulse rather than tamper-proof enforcement.',
 );
