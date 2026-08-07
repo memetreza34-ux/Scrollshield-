@@ -8,6 +8,7 @@ interface ReleaseApproval {
   androidUnitTestsPassed: boolean;
   debugApkCompiled: boolean;
   physicalDeviceMatrixPassed: boolean;
+  terminalLifecycleValidationPassed: boolean;
   batteryReliabilityPassed: boolean;
   migrationValidationPassed: boolean;
   playDeclarationsFinal: boolean;
@@ -65,12 +66,20 @@ requireCondition(
   approval.candidateVersionCode === androidVersionCode,
   `candidateVersionCode (${approval.candidateVersionCode}) must match Android versionCode (${Number.isFinite(androidVersionCode) ? androidVersionCode : 'missing'}).`,
 );
+requireCondition(
+  typeof approval.terminalLifecycleValidationPassed === 'boolean',
+  'terminalLifecycleValidationPassed must be an explicit boolean.',
+);
 
 const approvalFlags: Array<[keyof ReleaseApproval, string]> = [
   ['webVerificationPassed', 'Complete npm run verify in a working environment.'],
   ['androidUnitTestsPassed', 'Run Android JUnit tests successfully.'],
   ['debugApkCompiled', 'Compile and inspect the debug APK.'],
   ['physicalDeviceMatrixPassed', 'Complete the mandatory Android physical-device matrix.'],
+  [
+    'terminalLifecycleValidationPassed',
+    'Validate notification-action, unexpected-destroy, stop-reason persistence, and stale-activation lifecycle scenarios on the exact candidate.',
+  ],
   ['batteryReliabilityPassed', 'Complete long-run battery and process-reliability testing.'],
   ['migrationValidationPassed', 'Validate V0.7 and previous-candidate data migration.'],
   ['playDeclarationsFinal', 'Finalize Play Console permission and foreground-service declarations.'],
