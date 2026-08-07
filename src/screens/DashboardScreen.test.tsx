@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { createCommitmentLock } from '../lib/commitmentLock';
 import { DEFAULT_APP_CONFIG, DEFAULT_STATE } from '../types';
 import { DashboardScreen } from './DashboardScreen';
 
@@ -55,5 +56,20 @@ describe('DashboardScreen', () => {
     );
 
     expect(screen.getByText(/native iOS-Schutz ist noch nicht Bestandteil des Release-Kandidaten/)).toBeInTheDocument();
+  });
+
+  it('surfaces an active commitment immediately and routes to its details', () => {
+    const navigate = vi.fn();
+    render(
+      <DashboardScreen
+        state={makeAndroidState()}
+        updateState={vi.fn()}
+        navigate={navigate}
+        commitmentLock={createCommitmentLock(480, Date.now())}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Commitment aktiv · Regeln eingefroren/ }));
+    expect(navigate).toHaveBeenCalledWith('rules');
   });
 });
