@@ -116,6 +116,7 @@ for (const requiredScenario of [
   'LIFE-07',
   'LIFE-08',
   'LIFE-09',
+  'LIFE-10',
   'TIME-01',
   'TIME-02',
   'TIME-03',
@@ -139,6 +140,8 @@ for (const evidenceField of [
   'byte-for-byte',
   'lastProtectionStopCode',
   'lastProtectionStopMessage',
+  'notification_action_stop',
+  'unexpected_service_destroy',
   'NEUSTART NÖTIG',
   'INKONSISTENT',
   'PASS',
@@ -160,5 +163,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android device-matrix check passed. Build identity, channel and lifecycle diagnostics, stale-activation UI, OEM coverage, migration recovery, lifecycle scenarios, and evidence requirements are guarded.',
+  'Android device-matrix check passed. Build identity, channel/lifecycle diagnostics, stale activation, terminal service reasons, OEM coverage, migration recovery, and evidence requirements are guarded.',
 );
