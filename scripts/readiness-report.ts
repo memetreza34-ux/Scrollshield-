@@ -16,6 +16,8 @@ const steps: Step[] = [
   { command: 'npm', args: ['run', 'check:usage-accounting'], required: true },
   { command: 'npm', args: ['run', 'check:protection-config'], required: true },
   { command: 'npm', args: ['run', 'check:release-surface'], required: true },
+  { command: 'npm', args: ['run', 'check:commitment'], required: true },
+  { command: 'npm', args: ['run', 'check:subscription-safety'], required: true },
   { command: 'npm', args: ['run', 'check:migration'], required: true },
   { command: 'npm', args: ['run', 'check:release-approval'], required: true },
   { command: 'npm', args: ['run', 'check:transparency'], required: true },
