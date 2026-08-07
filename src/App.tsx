@@ -6,6 +6,16 @@ import { normalizeAppState } from './lib/state';
 import { reconcileFocusRuntime } from './lib/focus';
 import { NativeProtection } from './lib/nativeProtection';
 import { getRuntimeOperatingSystem } from './lib/runtimePlatform';
+import {
+  applyCommitmentGuard,
+  clearCommitmentLock,
+  createCommitmentLock,
+  isCommitmentLockActive,
+  loadCommitmentLock,
+  saveCommitmentLock,
+  type CommitmentDurationMinutes,
+  type CommitmentLock,
+} from './lib/commitmentLock';
 import { createEventId } from './lib/appUtils';
 import { recordProtectionEventStats } from './lib/session';
 import { BottomNav } from './components/ui';
@@ -39,6 +49,7 @@ const createRuntimeDefaultState = (): AppState => {
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
   const [appState, setAppState] = useState<AppState>(createRuntimeDefaultState);
+  const [commitmentLock, setCommitmentLock] = useState<CommitmentLock | null>(() => loadCommitmentLock());
   const [isLoaded, setIsLoaded] = useState(false);
   const [migrationBlocked, setMigrationBlocked] = useState(false);
   const skipNextSaveRef = useRef(false);
@@ -75,8 +86,25 @@ export default function App() {
     } else if (legacyPending) {
       setMigrationBlocked(true);
     }
+    setCommitmentLock(loadCommitmentLock());
     setIsLoaded(true);
   }, [applyLoadedState]);
+
+  useEffect(() => {
+    if (!commitmentLock) return;
+    const remaining = commitmentLock.lockedUntil - Date.now();
+    if (remaining <= 0) {
+      clearCommitmentLock();
+      setCommitmentLock(null);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      clearCommitmentLock();
+      setCommitmentLock(null);
+    }, remaining);
+    return () => window.clearTimeout(timeout);
+  }, [commitmentLock]);
 
   useEffect(() => {
     if (!migrationBlocked || !NativeProtection.isAvailable()) return;
@@ -114,17 +142,19 @@ export default function App() {
 
     if (['reels_protection', 'protection_flow', 'active_session'].includes(currentScreen)) {
       setCurrentScreen(appState.hasCompletedOnboarding ? 'apps' : 'welcome');
+    } else if (isCommitmentLockActive(commitmentLock) && currentScreen === 'app_detail') {
+      setCurrentScreen('apps');
     } else if (import.meta.env.PROD && currentScreen === 'debug') {
       setCurrentScreen('dashboard');
     } else if (
       !appState.hasCompletedOnboarding &&
-      !['welcome', 'onboarding', 'permissions'].includes(currentScreen)
+      !['welcome', 'onboarding', 'permissions', 'help'].includes(currentScreen)
     ) {
       setCurrentScreen('welcome');
     } else if (appState.hasCompletedOnboarding && ['welcome', 'onboarding'].includes(currentScreen)) {
       setCurrentScreen('dashboard');
     }
-  }, [isLoaded, migrationBlocked, currentScreen, appState.hasCompletedOnboarding]);
+  }, [isLoaded, migrationBlocked, currentScreen, appState.hasCompletedOnboarding, commitmentLock]);
 
   useEffect(() => {
     if (isLoaded && !migrationBlocked) {
@@ -237,12 +267,25 @@ export default function App() {
   }
 
   const updateState = (updates: Partial<AppState>) => {
-    setAppState((prev) => ({ ...prev, ...updates }));
+    setAppState((previousState) => ({
+      ...previousState,
+      ...applyCommitmentGuard(previousState, updates, commitmentLock),
+    }));
+  };
+
+  const startCommitment = (durationMinutes: CommitmentDurationMinutes): boolean => {
+    if (isCommitmentLockActive(commitmentLock)) return false;
+    const nextLock = createCommitmentLock(durationMinutes);
+    if (!saveCommitmentLock(nextLock)) return false;
+    setCommitmentLock(nextLock);
+    return true;
   };
 
   const resetApp = () => {
     skipNextSaveRef.current = true;
     StorageService.clearState();
+    clearCommitmentLock();
+    setCommitmentLock(null);
     setAppState(createRuntimeDefaultState());
     setCurrentScreen('welcome');
   };
@@ -283,7 +326,13 @@ export default function App() {
                 <DashboardScreen key="dashboard" state={appState} updateState={updateState} navigate={navigate} />
               )}
               {currentScreen === 'apps' && (
-                <AppList key="apps" state={appState} updateState={updateState} navigate={navigate} />
+                <AppList
+                  key="apps"
+                  state={appState}
+                  updateState={updateState}
+                  navigate={navigate}
+                  commitmentLock={commitmentLock}
+                />
               )}
               {currentScreen === 'app_detail' && (
                 <ReleaseAppDetailScreen
@@ -294,7 +343,14 @@ export default function App() {
                 />
               )}
               {currentScreen === 'rules' && (
-                <ProfilesScreen key="rules" state={appState} updateState={updateState} navigate={navigate} />
+                <ProfilesScreen
+                  key="rules"
+                  state={appState}
+                  updateState={updateState}
+                  navigate={navigate}
+                  commitmentLock={commitmentLock}
+                  onStartCommitment={startCommitment}
+                />
               )}
               {currentScreen === 'focus' && (
                 <FocusScreen key="focus" state={appState} updateState={updateState} navigate={navigate} />
