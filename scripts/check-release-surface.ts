@@ -1,317 +1,322 @@
 import { readFile } from 'node:fs/promises';
 
-const appPath = 'src/App.tsx';
-const dashboardPath = 'src/screens/DashboardScreen.tsx';
-const dashboardTestPath = 'src/screens/DashboardScreen.test.tsx';
-const appDetailPath = 'src/screens/AppDetailScreen.tsx';
-const appDetailTestPath = 'src/screens/AppDetailScreen.test.tsx';
-const focusPath = 'src/screens/FocusScreen.tsx';
-const focusTestPath = 'src/screens/FocusScreen.test.tsx';
-const permissionsPath = 'src/screens/ReleasePermissionsScreen.tsx';
-const permissionsTestPath = 'src/screens/ReleasePermissionsScreen.test.tsx';
-const settingsPath = 'src/screens/SettingsScreen.tsx';
-const helpPath = 'src/screens/HelpScreen.tsx';
-const historyPath = 'src/screens/HistoryScreen.tsx';
-const supportPath = 'src/screens/ReleaseSupportScreen.tsx';
-const releaseInfoTestPath = 'src/screens/ReleaseInformationScreens.test.tsx';
-const competitiveStrategyPath = 'docs/COMPETITIVE_PRODUCT_STRATEGY.md';
+const paths = {
+  app: 'src/App.tsx',
+  runtimePlatform: 'src/lib/runtimePlatform.ts',
+  runtimePlatformTest: 'src/lib/runtimePlatform.test.ts',
+  releaseProfiles: 'src/lib/releaseProfiles.ts',
+  releaseProfilesTest: 'src/lib/releaseProfiles.test.ts',
+  onboarding: 'src/screens/ReleaseOnboardingScreens.tsx',
+  onboardingTest: 'src/screens/ReleaseOnboardingScreens.test.tsx',
+  permissions: 'src/screens/ReleasePermissionsScreen.tsx',
+  permissionsTest: 'src/screens/ReleasePermissionsScreen.test.tsx',
+  appList: 'src/screens/AppListScreen.tsx',
+  appListTest: 'src/screens/AppListScreen.test.tsx',
+  appDetail: 'src/screens/AppDetailScreen.tsx',
+  appDetailTest: 'src/screens/AppDetailScreen.test.tsx',
+  releaseAppDetail: 'src/screens/ReleaseAppDetailScreen.tsx',
+  releaseAppDetailTest: 'src/screens/ReleaseAppDetailScreen.test.tsx',
+  profiles: 'src/screens/ProfilesScreen.tsx',
+  profilesTest: 'src/screens/ProfilesScreen.test.tsx',
+  dashboard: 'src/screens/DashboardScreen.tsx',
+  dashboardTest: 'src/screens/DashboardScreen.test.tsx',
+  focus: 'src/screens/FocusScreen.tsx',
+  focusTest: 'src/screens/FocusScreen.test.tsx',
+  settings: 'src/screens/SettingsScreen.tsx',
+  help: 'src/screens/HelpScreen.tsx',
+  history: 'src/screens/HistoryScreen.tsx',
+  support: 'src/screens/ReleaseSupportScreen.tsx',
+  releaseInfoTest: 'src/screens/ReleaseInformationScreens.test.tsx',
+  competitiveStrategy: 'docs/COMPETITIVE_PRODUCT_STRATEGY.md',
+} as const;
 
-const [
-  app,
-  dashboard,
-  dashboardTest,
-  appDetail,
-  appDetailTest,
-  focus,
-  focusTest,
-  permissions,
-  permissionsTest,
-  settings,
-  help,
-  history,
-  support,
-  releaseInfoTest,
-  competitiveStrategy,
-] = await Promise.all([
-  readFile(appPath, 'utf8'),
-  readFile(dashboardPath, 'utf8'),
-  readFile(dashboardTestPath, 'utf8'),
-  readFile(appDetailPath, 'utf8'),
-  readFile(appDetailTestPath, 'utf8'),
-  readFile(focusPath, 'utf8'),
-  readFile(focusTestPath, 'utf8'),
-  readFile(permissionsPath, 'utf8'),
-  readFile(permissionsTestPath, 'utf8'),
-  readFile(settingsPath, 'utf8'),
-  readFile(helpPath, 'utf8'),
-  readFile(historyPath, 'utf8'),
-  readFile(supportPath, 'utf8'),
-  readFile(releaseInfoTestPath, 'utf8'),
-  readFile(competitiveStrategyPath, 'utf8'),
-]);
-
+const entries = await Promise.all(
+  Object.entries(paths).map(async ([key, path]) => [key, await readFile(path, 'utf8')] as const),
+);
+const files = Object.fromEntries(entries) as Record<keyof typeof paths, string>;
 const findings: string[] = [];
 
-function requirePattern(file: string, content: string, pattern: RegExp, message: string) {
-  if (pattern.test(content)) return;
-  findings.push(`${file}: ${message}`);
+function requirePattern(fileKey: keyof typeof paths, pattern: RegExp, message: string) {
+  if (pattern.test(files[fileKey])) return;
+  findings.push(`${paths[fileKey]}: ${message}`);
 }
 
-function rejectPattern(file: string, content: string, pattern: RegExp, message: string) {
-  if (!pattern.test(content)) return;
-  findings.push(`${file}: ${message}`);
+function rejectPattern(fileKey: keyof typeof paths, pattern: RegExp, message: string) {
+  if (!pattern.test(files[fileKey])) return;
+  findings.push(`${paths[fileKey]}: ${message}`);
 }
 
-requirePattern(
-  appPath,
-  app,
-  /DashboardScreen[\s\S]*HistoryScreen[\s\S]*AppDetailScreen[\s\S]*SettingsScreen[\s\S]*HelpScreen[\s\S]*ReleaseSupportScreen[\s\S]*FocusScreen[\s\S]*ReleasePermissionsScreen/,
-  'The production route must import every release-safe screen.',
+function requireText(fileKey: keyof typeof paths, values: string[], message: string) {
+  for (const value of values) {
+    if (!files[fileKey].includes(value)) {
+      findings.push(`${paths[fileKey]}: ${message} Missing: ${value}`);
+    }
+  }
+}
+
+// Production routing must stay on release-safe surfaces.
+requireText(
+  'app',
+  [
+    'ReleaseWelcome',
+    'ReleaseOnboarding',
+    'ReleasePermissionsScreen',
+    'ReleaseAppDetailScreen',
+    'ProfilesScreen',
+    'DashboardScreen',
+    'HistoryScreen',
+    'FocusScreen',
+    'SettingsScreen',
+    'HelpScreen',
+    'ReleaseSupportScreen',
+    'getRuntimeOperatingSystem',
+  ],
+  'Production App route is missing a release-safe surface or runtime-platform guard.',
 );
 requirePattern(
-  appPath,
-  app,
-  /currentScreen === 'permissions'[\s\S]*<ReleasePermissionsScreen/,
-  'The production permissions route must use ReleasePermissionsScreen.',
-);
-requirePattern(
-  appPath,
-  app,
-  /\['reels_protection', 'protection_flow', 'active_session'\]\.includes\(currentScreen\)[\s\S]*setCurrentScreen\(appState\.hasCompletedOnboarding \? 'apps' : 'welcome'\)/,
-  'Legacy reels, simulation, and web-session routes must redirect away from production surfaces.',
-);
-requirePattern(
-  appPath,
-  app,
+  'app',
   /releaseState:[\s\S]*activeSession: null[\s\S]*simulatedAppToOpen: null/,
-  'Loaded demo/runtime session state must be cleared before entering the release UI.',
+  'Loaded demo runtime state must be cleared before entering the release UI.',
+);
+requirePattern(
+  'app',
+  /\['reels_protection', 'protection_flow', 'active_session'\]\.includes\(currentScreen\)/,
+  'Legacy demo routes must remain redirected away from production surfaces.',
 );
 for (const forbidden of [
+  /from '\.\/screens\/OnboardingScreens'/,
+  /from '\.\/screens\/PermissionsScreen'/,
+  /from '\.\/screens\/FocusScreens'/,
+  /from '\.\/screens\/MainScreens'/,
   /ReelsProtectionScreen/,
   /ProtectionFlow/,
   /ActiveSessionScreen/,
-  /import \{ PermissionsScreen \} from '\.\/screens\/PermissionsScreen'/,
-  /import \{ Focus \} from '\.\/screens\/FocusScreens'/,
-  /import \{ History \} from '\.\/screens\/MainScreens'/,
-  /import \{[^}]*Settings[^}]*Help[^}]*\} from '\.\/screens\/ConfigScreens'/,
-  /import \{ SupportScreen[,}]/,
-  /<PermissionsScreen\b/,
-  /<AppDetail\b/,
-  /<Settings\b/,
-  /<Help\b/,
-  /<History\b/,
-  /<Focus\b/,
+  /import \{[^}]*Rules[^}]*\} from '\.\/screens\/ConfigScreens'/,
 ]) {
-  rejectPattern(appPath, app, forbidden, 'A legacy/demo production route has returned to App.tsx.');
+  rejectPattern('app', forbidden, 'A legacy/demo production import has returned.');
 }
 
+// Native runtime must override stale demo OS state on installed builds.
 requirePattern(
-  appDetailPath,
-  appDetail,
+  'runtimePlatform',
+  /nativePlatform[\s\S]*runtimePlatform === 'android'[\s\S]*return 'android'[\s\S]*runtimePlatform === 'ios'[\s\S]*return 'ios'/,
+  'Native runtime platform must override a stale saved/demo operating system.',
+);
+requirePattern(
+  'runtimePlatformTest',
+  /installed Android runtime even when old state says iOS[\s\S]*installed iOS runtime even when old state says Android/,
+  'Runtime-platform tests must cover stale opposite-platform state.',
+);
+
+// Onboarding/store-facing first-run copy must be whole-app-only and explicit.
+requireText(
+  'onboarding',
+  [
+    'Ganze Apps bewusst öffnen',
+    'Version 1 schützt die gesamte ausgewählte App',
+    'einzelne Reels, Shorts oder Feed-Bereiche werden nicht separat erkannt',
+    'getReleaseProfileConfig',
+    'updatedAt',
+  ],
+  'Release onboarding is missing whole-app scope or safe preset application.',
+);
+rejectPattern(
+  'onboarding',
+  /Kurzvideo-Sog stoppen|Die 2 Schutzebenen|Reels.*automatisch erkannt|Shorts.*automatisch erkannt/i,
+  'Release onboarding must not reintroduce a fake short-video protection layer.',
+);
+requirePattern(
+  'onboardingTest',
+  /whole-app protection instead of a fake short-video layer[\s\S]*requires an app and applies a release-safe normalized profile/,
+  'Onboarding tests must protect whole-app scope and safe preset application.',
+);
+
+// Old untouched defaults may be translated; explicit edits must remain preserved.
+requireText(
+  'releaseProfiles',
+  [
+    'createReleaseDefaultAppConfig',
+    'isLegacyUntouchedDefaultConfig',
+    'getReleaseProfileConfig',
+    "workRules: 'normal'",
+    "nightRules: 'normal'",
+    'updatedAt !== undefined',
+  ],
+  'Release profile helpers are missing neutral defaults or edit-preservation logic.',
+);
+requirePattern(
+  'releaseProfiles',
+  /createReleaseDefaultAppConfig[\s\S]*antiBinge:[\s\S]*enabled: false/,
+  'A newly activated release app must not silently start Anti-Binge.',
+);
+requirePattern(
+  'releaseProfilesTest',
+  /neutral defaults for a newly activated release app[\s\S]*only the untouched legacy default[\s\S]*preserves explicit user-edited weekly rules/,
+  'Release-profile tests must distinguish untouched defaults from deliberate edits.',
+);
+
+// App list and detail must use the same first-activation contract.
+requirePattern(
+  'appList',
+  /isLegacyUntouchedDefaultConfig\(existing\)[\s\S]*createReleaseDefaultAppConfig\(id, true\)[\s\S]*updatedAt/,
+  'App-list first activation must translate only an untouched legacy default and mark the edit.',
+);
+requirePattern(
+  'appList',
+  /timeWindows: \{ \.\.\.preset\.windows \}[\s\S]*updatedAt/,
+  'Weekly-plan changes must receive an explicit edit marker.',
+);
+requirePattern(
+  'appListTest',
+  /neutral release default on first activation[\s\S]*weekly preset[\s\S]*explicit edit/,
+  'App-list tests must cover neutral activation and weekly edit markers.',
+);
+requirePattern(
+  'releaseAppDetail',
+  /isLegacyUntouchedDefaultConfig[\s\S]*createReleaseDefaultAppConfig[\s\S]*updatedAt: Date\.now\(\)/,
+  'App-detail release wrapper must normalize untouched defaults and mark deliberate edits.',
+);
+requirePattern(
+  'releaseAppDetailTest',
+  /neutral release config before activation[\s\S]*preserves explicitly edited rules/,
+  'App-detail release tests must cover untouched defaults and edit preservation.',
+);
+
+// App detail itself must only expose Android-v1 controls.
+requirePattern(
+  'appDetail',
   /Version 1 schützt die gesamte ausgewählte App[\s\S]*Einzelne Reels-, Shorts- oder Feed-Bereiche werden nicht separat erkannt/,
-  'The app detail screen must disclose whole-app-only v1 enforcement.',
+  'App detail must disclose whole-app-only v1 enforcement.',
 );
-for (const requiredControl of [
-  'Notfall-Countdown verlangen',
-  'Notfall-Begründung verlangen',
-  'Anti-Binge aktivieren',
-  'Fokus-Modus Verhalten',
-]) {
-  requirePattern(
-    appDetailPath,
-    appDetail,
-    new RegExp(requiredControl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
-    `Release app detail is missing supported control: ${requiredControl}.`,
-  );
-}
-for (const unsupportedControl of [
-  'ariaLabel="Reels-Schutz aktivieren"',
-  'ariaLabel="Swipe-Unterbrecher aktivieren"',
-  'ariaLabel="Einzelinhalt-Erlaubnis"',
-]) {
-  rejectPattern(
-    appDetailPath,
-    appDetail,
-    new RegExp(unsupportedControl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
-    `Unsupported release control returned: ${unsupportedControl}.`,
-  );
-}
-requirePattern(
-  appDetailTestPath,
-  appDetailTest,
-  /exposes only release-supported whole-app controls[\s\S]*Reels-Schutz aktivieren[\s\S]*Notfall-Countdown verlangen[\s\S]*Notfall-Begründung verlangen/,
-  'App-detail tests must guard supported emergency controls and absence of legacy reels controls.',
-);
-
-rejectPattern(
-  dashboardPath,
-  dashboard,
-  /getReelsStatsForDate|REELS_PLATFORM_IDS|getActiveReelsCount|Kurzvideo-Schutz|Heute im Feed|Erlaubte Videos/,
-  'The production dashboard must not derive or display unsupported short-video metrics.',
-);
-requirePattern(
-  dashboardPath,
-  dashboard,
-  /Geschützte Apps[\s\S]*Interventionen[\s\S]*Gemessene Freigabezeit[\s\S]*Notfallfreigaben/,
-  'The production dashboard must expose whole-app native protection metrics.',
-);
-requirePattern(
-  dashboardPath,
-  dashboard,
-  /native iOS-Schutz ist noch nicht Bestandteil des Release-Kandidaten/,
-  'The production dashboard must not imply that the unfinished iOS native engine is available.',
-);
-requirePattern(
-  dashboardTestPath,
-  dashboardTest,
-  /whole-app release metrics instead of unsupported reel statistics[\s\S]*Kurzvideo-Schutz[\s\S]*iOS as preview/,
-  'Dashboard tests must guard truthful whole-app and iOS-preview messaging.',
-);
-
-requirePattern(
-  focusPath,
-  focus,
-  /Fokusregeln aktiv[\s\S]*konfigurierte Fokusverhalten[\s\S]*Blockieren[\s\S]*Warnen/,
-  'Focus must describe the actual per-app focus behavior instead of universal strict blocking.',
-);
-requirePattern(
-  focusPath,
-  focus,
-  /Wiederkehrende Fokus-Zeitpläne werden erst angeboten[\s\S]*alten Demo-Zeitpläne sind aus dem Release-Pfad entfernt/,
-  'Focus must not expose non-persistent demo schedules.',
+requireText(
+  'appDetail',
+  ['Notfall-Countdown verlangen', 'Notfall-Begründung verlangen', 'Anti-Binge aktivieren', 'Fokus-Modus Verhalten'],
+  'App detail is missing a supported protection control.',
 );
 rejectPattern(
-  focusPath,
-  focus,
-  /setSchedules|Arbeit \/ Deep Work|Digital Detox \/ Schlaf|>Zeitpläne</,
-  'The release focus screen must not contain local-only demo schedule state.',
+  'appDetail',
+  /ariaLabel="Reels-Schutz aktivieren"|ariaLabel="Swipe-Unterbrecher aktivieren"|ariaLabel="Einzelinhalt-Erlaubnis"/,
+  'Unsupported Reels/swipe/single-content controls must remain absent.',
 );
 requirePattern(
-  focusTestPath,
-  focusTest,
-  /persistent focus timer and no demo schedule tab[\s\S]*starts the actual global focus state[\s\S]*instead of universal strict blocking/,
-  'Focus tests must protect persistent state and truthful per-app behavior.',
+  'appDetailTest',
+  /release-supported whole-app controls[\s\S]*Notfall-Countdown verlangen[\s\S]*Notfall-Begründung verlangen/,
+  'App-detail tests must protect supported whole-app controls.',
 );
 
+// Profiles must represent full protection state, not a cosmetic/focus-only preset.
+requireText(
+  'profiles',
+  ['Schutzprofile', 'Ein Profil wechselt die gesamte App-Konfiguration', 'getReleaseProfileConfig', 'updatedAt'],
+  'Profiles screen must switch complete release-safe protection configurations.',
+);
+rejectPattern('profiles', /Fokus-Profile|Kurzvideos|Endlos-Feeds/, 'Profiles must not revive legacy product claims.');
 requirePattern(
-  permissionsPath,
-  permissions,
+  'profilesTest',
+  /protection profiles without legacy focus-only or Reels claims[\s\S]*normalizes unsupported legacy values when switching profiles[\s\S]*custom snapshot/,
+  'Profile tests must cover release-safe switching and custom snapshots.',
+);
+
+// Real Android permissions and installed-target checks are mandatory before service start.
+requirePattern(
+  'permissions',
   /REQUIRED_ANDROID_PERMISSIONS[\s\S]*usageAccess[\s\S]*overlay[\s\S]*notifications/,
-  'Release permissions must explicitly define the three required Android protection permissions.',
+  'Release permissions must explicitly define the three required Android accesses.',
 );
 requirePattern(
-  permissionsPath,
-  permissions,
+  'permissions',
   /NativeProtection\.sync[\s\S]*installedActiveAppIds[\s\S]*installedActiveAppIds\.length === 0/,
-  'Service startup must verify that at least one selected active app is actually available on the device.',
+  'Service startup must confirm at least one installed active target.',
 );
-requirePattern(
-  permissionsPath,
-  permissions,
-  /Setup später abschließen[\s\S]*behauptet bis dahin nicht, dass der Android-Schutz aktiv ist/,
-  'Onboarding must not claim protection readiness while required setup is missing.',
-);
-requirePattern(
-  permissionsPath,
-  permissions,
-  /iOS-Schutz noch nicht freigegeben[\s\S]*keine künstlichen Berechtigungsschalter/,
-  'iOS permissions must remain an honest unreleased state instead of simulated toggles.',
+requireText(
+  'permissions',
+  ['Setup später abschließen', 'behauptet bis dahin nicht, dass der Android-Schutz aktiv ist', 'iOS-Schutz noch nicht freigegeben'],
+  'Permission flow must remain truthful when protection is not ready or iOS is unreleased.',
 );
 rejectPattern(
-  permissionsPath,
-  permissions,
+  'permissions',
   /Schutzschirm ist bereit|Fokus-Erinnerungen|Tageszusammenfassungen|Zeitpläne und aktive Sitzungen/,
-  'Release permissions must not contain false readiness or unimplemented reminder/schedule claims.',
+  'Permission flow must not contain false readiness or unimplemented reminder/schedule claims.',
 );
 requirePattern(
-  permissionsTestPath,
-  permissionsTest,
-  /never claims onboarding protection is ready[\s\S]*does not expose fake reminder or schedule promises[\s\S]*blocks service start when every selected active app is unavailable[\s\S]*starts only after native permissions and an installed active target are verified/,
-  'Release permission tests must guard truthfulness and installed-target startup checks.',
+  'permissionsTest',
+  /never claims onboarding protection is ready[\s\S]*blocks service start when every selected active app is unavailable[\s\S]*installed active target/,
+  'Permission tests must guard readiness and installed-target startup checks.',
 );
 
+// Remaining production surfaces must stay honest.
+rejectPattern(
+  'dashboard',
+  /getReelsStatsForDate|REELS_PLATFORM_IDS|getActiveReelsCount|Kurzvideo-Schutz|Heute im Feed|Erlaubte Videos/,
+  'Dashboard must not derive unsupported short-video metrics.',
+);
+requireText(
+  'dashboard',
+  ['Geschützte Apps', 'Interventionen', 'Gemessene Freigabezeit', 'Notfallfreigaben'],
+  'Dashboard must expose whole-app native protection metrics.',
+);
 requirePattern(
-  settingsPath,
-  settings,
-  /Schutzstatus & Berechtigungen[\s\S]*Geschützte Apps[\s\S]*Profile & Regeln[\s\S]*Statistiken & Verlauf[\s\S]*Datenschutz & lokale Daten/,
-  'Settings must route to real protection and local-data functions.',
+  'dashboardTest',
+  /whole-app release metrics instead of unsupported reel statistics/,
+  'Dashboard tests must guard whole-app release metrics.',
+);
+requirePattern(
+  'focus',
+  /Fokusregeln aktiv[\s\S]*konfigurierte Fokusverhalten[\s\S]*Wiederkehrende Fokus-Zeitpläne werden erst angeboten/,
+  'Focus must describe real per-app behavior and keep demo schedules unavailable.',
+);
+rejectPattern('focus', /setSchedules|Arbeit \/ Deep Work|Digital Detox \/ Schlaf/, 'Demo focus schedules must remain absent.');
+requirePattern(
+  'focusTest',
+  /persistent focus timer and no demo schedule tab[\s\S]*actual global focus state/,
+  'Focus tests must protect the real timer path.',
 );
 rejectPattern(
-  settingsPath,
-  settings,
+  'settings',
   /Tageszusammenfassung|Wochenrückblick|Rückfall-Warnung|Fokus-Erinnerungen|Abend-Erinnerung/,
-  'Unimplemented reminder toggles must not be presented as active release settings.',
+  'Unimplemented reminder toggles must not appear in release settings.',
+);
+requireText(
+  'settings',
+  ['Schutzstatus & Berechtigungen', 'Geschützte Apps', 'Profile & Regeln', 'Statistiken & Verlauf', 'Datenschutz & lokale Daten'],
+  'Settings must route only to real release functions.',
 );
 requirePattern(
-  settingsPath,
-  settings,
-  /Abo-Funktionen werden hier bewusst nicht als aktive Einstellungen angeboten/,
-  'Settings must not imply that unfinished subscription functionality is live.',
-);
-
-requirePattern(
-  helpPath,
-  help,
+  'help',
   /gesamte ausgewählte App[\s\S]*Reels-, Shorts-, Feed-Elemente oder Swipe-Bewegungen werden in Version 1 nicht separat erkannt/,
-  'Help must explain whole-app-only v1 protection.',
+  'Help must explain whole-app-only scope.',
 );
 requirePattern(
-  helpPath,
-  help,
-  /iOS-Oberfläche ist derzeit nur Produktvorschau[\s\S]*nicht Teil des freigabefähigen Kandidaten/,
-  'Help must describe unfinished iOS enforcement honestly.',
-);
-requirePattern(
-  helpPath,
-  help,
-  /mindestens drei Zeichen[\s\S]*160 Zeichen[\s\S]*lokalen Verlauf/,
-  'Help must explain emergency-reason friction and local storage.',
-);
-
-requirePattern(
-  historyPath,
-  history,
+  'history',
   /Gemessene Freigabezeit[\s\S]*Geschätzt gespart[\s\S]*fünf Minuten pro Block-\/Warnintervention als Produktschätzung/,
-  'History must distinguish measured usage from estimated saved time.',
+  'History must distinguish measured time from estimated saved time.',
 );
-rejectPattern(
-  historyPath,
-  history,
-  /Heute im Feed|Erlaubte Videos|Kurzvideo-Schutz|Größter Zeitfresser/,
-  'History must not surface unsupported or overclaimed short-video analytics.',
-);
-
 requirePattern(
-  supportPath,
-  support,
+  'support',
   /keinen ScrollShield-Account und keinen Cloud-Sync[\s\S]*Lokale Daten verwalten/,
   'Support must direct local usage-data deletion to local controls.',
 );
 rejectPattern(
-  supportPath,
-  support,
+  'support',
   /Serverseitige Daten prüfen und löschen lassen|Nutzungsdaten.*Server/,
-  'Support must not invent server-side usage data for the local-first release.',
+  'Support must not invent server-side usage data.',
 );
-
 requirePattern(
-  releaseInfoTestPath,
-  releaseInfoTest,
+  'releaseInfoTest',
   /settings exposes real destinations without demo reminder toggles[\s\S]*help states whole-app Android scope[\s\S]*history separates measured usage from estimated saved time[\s\S]*support directs local data deletion to local controls/,
-  'Release information-screen tests must cover settings, help, history, and support truthfulness.',
+  'Release information tests must cover the main truthfulness surfaces.',
 );
 
+// Roadmap/subscription planning must never become unverified store copy.
 requirePattern(
-  competitiveStrategyPath,
-  competitiveStrategy,
+  'competitiveStrategy',
   /product-planning reference, not store copy[\s\S]*A roadmap feature is never a store-listing feature/,
-  'Competitive strategy must remain explicitly separate from release/store claims.',
+  'Competitive strategy must remain explicitly separate from store claims.',
 );
 requirePattern(
-  competitiveStrategyPath,
-  competitiveStrategy,
+  'competitiveStrategy',
   /No subscription expiry may delete configurations, history, statistics, exports, migration archives or recovery data/,
-  'Subscription strategy must preserve user-owned data after downgrade.',
+  'Future subscription downgrade must preserve user-owned data.',
 );
 
 if (findings.length > 0) {
@@ -321,5 +326,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Release surface check passed. Production routing is whole-app-only; demo reels, sessions, schedules and permission claims stay unreachable; Android startup verifies real permissions and installed targets; roadmap claims remain separated from store claims.',
+  'Release surface check passed. Native runtime platform, whole-app onboarding, real Android permissions, neutral first activation, edit-preserving profiles and truthful production surfaces remain guarded.',
 );
