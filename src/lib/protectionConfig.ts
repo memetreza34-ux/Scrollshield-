@@ -42,6 +42,7 @@ export const normalizeProtectionConfig = (config: AppConfig): AppConfig => {
 
   return {
     ...config,
+    mode: config.mode === 'soft' ? 'standard' : config.mode,
     openDelay: clampInteger(
       config.openDelay,
       PROTECTION_BOUNDS.openDelaySeconds.min,
