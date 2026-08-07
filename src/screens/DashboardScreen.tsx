@@ -1,5 +1,15 @@
-import { AlertTriangle, Clock, Focus, History as HistoryIcon, Settings, Shield, Smartphone } from 'lucide-react';
+import {
+  AlertTriangle,
+  Clock,
+  Focus,
+  History as HistoryIcon,
+  LockKeyhole,
+  Settings,
+  Shield,
+  Smartphone,
+} from 'lucide-react';
 import { motion } from 'motion/react';
+import { isCommitmentLockActive, type CommitmentLock } from '../lib/commitmentLock';
 import { createFocusEndUpdate } from '../lib/focus';
 import type { AppState, Screen } from '../types';
 
@@ -21,10 +31,12 @@ export function DashboardScreen({
   state,
   updateState,
   navigate,
+  commitmentLock = null,
 }: {
   state: AppState;
   updateState: (updates: Partial<AppState>) => void;
   navigate: (screen: Screen) => void;
+  commitmentLock?: CommitmentLock | null;
 }) {
   const protectedApps = Object.values(state.appsConfig).filter((config) => config.active);
   const todayStart = new Date();
@@ -36,6 +48,7 @@ export function DashboardScreen({
   const trackedUsageMinutes = Object.values(todayStats?.usageMinutes ?? {}).reduce((sum, value) => sum + value, 0);
   const estimatedSavedMinutes = todayStats?.savedTimeMinutes ?? 0;
   const activeProfile = state.profiles?.find((profile) => profile.id === state.activeProfileId);
+  const commitmentActive = isCommitmentLockActive(commitmentLock);
 
   const missingAndroidProtection =
     state.operatingSystem === 'android' &&
@@ -69,6 +82,22 @@ export function DashboardScreen({
             : `${protectedApps.length} App${protectedApps.length === 1 ? '' : 's'} im aktuellen Profil geschützt.`}
         </p>
       </header>
+
+      {commitmentActive && commitmentLock && (
+        <button
+          type="button"
+          onClick={() => navigate('rules')}
+          className="flex w-full gap-3 rounded-[1.5rem] border border-indigo-500/30 bg-indigo-500/10 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+        >
+          <LockKeyhole size={20} className="mt-0.5 flex-shrink-0 text-indigo-200" aria-hidden="true" />
+          <div>
+            <div className="text-sm font-bold text-indigo-100">Commitment aktiv · Regeln eingefroren</div>
+            <p className="mt-1 text-xs leading-relaxed text-indigo-200/70">
+              Bis {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} bleiben Apps, Profile, Limits und Zeitpläne unverändert. Tippe für Details und Sicherheitsausgänge.
+            </p>
+          </div>
+        </button>
+      )}
 
       {missingAndroidProtection && (
         <button
