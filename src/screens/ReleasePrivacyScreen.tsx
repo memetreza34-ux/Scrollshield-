@@ -4,6 +4,8 @@ import { isCommitmentLockActive, type CommitmentLock } from '../lib/commitmentLo
 import type { AppState, Screen } from '../types';
 import { PrivacyScreen } from './ConfigScreens';
 
+const IMPORT_SELECTOR = 'input[type="file"][aria-label="ScrollShield JSON-Export importieren"]';
+
 export function ReleasePrivacyScreen({
   state,
   updateState,
@@ -21,16 +23,33 @@ export function ReleasePrivacyScreen({
   const commitmentActive = isCommitmentLockActive(commitmentLock);
 
   useEffect(() => {
-    const input = rootRef.current?.querySelector<HTMLInputElement>(
-      'input[type="file"][aria-label="ScrollShield JSON-Export importieren"]',
-    );
-    if (!input) return;
-    input.disabled = commitmentActive;
-    input.setAttribute('aria-disabled', commitmentActive ? 'true' : 'false');
+    const root = rootRef.current;
+    if (!root) return;
+
+    const syncImportState = () => {
+      const input = root.querySelector<HTMLInputElement>(IMPORT_SELECTOR);
+      if (!input) return;
+      input.disabled = commitmentActive;
+      input.setAttribute('aria-disabled', commitmentActive ? 'true' : 'false');
+    };
+
+    syncImportState();
+    const observer = new MutationObserver(syncImportState);
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
   }, [commitmentActive]);
 
+  const blockImportEvent = (event: React.SyntheticEvent<HTMLDivElement>) => {
+    if (!commitmentActive) return;
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || !target.matches(IMPORT_SELECTOR)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    target.value = '';
+  };
+
   return (
-    <div ref={rootRef}>
+    <div ref={rootRef} onClickCapture={blockImportEvent} onChangeCapture={blockImportEvent}>
       {commitmentActive && commitmentLock && (
         <div
           role="status"
