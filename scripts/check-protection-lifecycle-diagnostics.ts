@@ -12,6 +12,8 @@ const policyPath = `${javaRoot}/ProtectionStopReasonPolicy.java`;
 const policyTestPath = `${javaTestRoot}/ProtectionStopReasonPolicyTest.java`;
 const serviceLifecyclePolicyPath = `${javaRoot}/ProtectionServiceLifecyclePolicy.java`;
 const serviceLifecyclePolicyTestPath = `${javaTestRoot}/ProtectionServiceLifecyclePolicyTest.java`;
+const emergencyPolicyPath = `${javaRoot}/EmergencyUnlockPolicy.java`;
+const emergencyPolicyTestPath = `${javaTestRoot}/EmergencyUnlockPolicyTest.java`;
 const bridgePath = 'src/lib/nativeProtection.ts';
 const bridgeTestPath = 'src/lib/nativeProtection.test.ts';
 const healthPath = 'src/lib/nativeProtectionHealth.ts';
@@ -38,6 +40,8 @@ const [
   policyTest,
   serviceLifecyclePolicy,
   serviceLifecyclePolicyTest,
+  emergencyPolicy,
+  emergencyPolicyTest,
   bridge,
   bridgeTest,
   health,
@@ -63,6 +67,8 @@ const [
   readFile(policyTestPath, 'utf8'),
   readFile(serviceLifecyclePolicyPath, 'utf8'),
   readFile(serviceLifecyclePolicyTestPath, 'utf8'),
+  readFile(emergencyPolicyPath, 'utf8'),
+  readFile(emergencyPolicyTestPath, 'utf8'),
   readFile(bridgePath, 'utf8'),
   readFile(bridgeTestPath, 'utf8'),
   readFile(healthPath, 'utf8'),
@@ -192,6 +198,55 @@ requirePattern(
   service,
   /stopForMissingPermission[\s\S]*explicitStopRequested = true[\s\S]*setProtectionEnabled\(this, false\)[\s\S]*appendProtectionEvent/,
   'Controlled permission and configuration shutdowns must not be overwritten as unexpected destruction.',
+);
+
+requirePattern(
+  emergencyPolicyPath,
+  emergencyPolicy,
+  /MIN_REASON_CHARACTERS = 3[\s\S]*MAX_REASON_CHARACTERS = 160[\s\S]*resolveCountdownSeconds[\s\S]*normalizeReason[\s\S]*isReasonSatisfied[\s\S]*canEmergencyUnlock/,
+  'Emergency unlock policy must guard countdown, reason normalization, and final unlock eligibility.',
+);
+requirePattern(
+  emergencyPolicyTestPath,
+  emergencyPolicyTest,
+  /requiresIntentionalReasonOnlyWhenConfigured[\s\S]*normalizesAndBoundsLocalReasonText[\s\S]*strictEmergencyUsesExtraCountdownOnlyWhenRequested[\s\S]*unlockRequiresAvailabilityCountdownAndOptionalReason/,
+  'Emergency unlock JUnit tests must cover reason, bounds, countdown, and unlock boundaries.',
+);
+requirePattern(
+  bridgePath,
+  bridge,
+  /emergencyUnlock:[\s\S]*requireCountdown:\s*boolean[\s\S]*requireReason:\s*boolean/,
+  'The TypeScript Android config contract must include emergency countdown and reason requirements.',
+);
+requirePattern(
+  bridgePath,
+  bridge,
+  /requireCountdown:\s*appConfig\?\.emergencyUnlock\.requireCountdown \?\? true[\s\S]*requireReason:\s*appConfig\?\.emergencyUnlock\.requireReason \?\? true/,
+  'Emergency friction settings must default safely and be serialized to Android.',
+);
+requirePattern(
+  bridgeTestPath,
+  bridgeTest,
+  /syncs emergency countdown and reason requirements to Android[\s\S]*requireCountdown: false[\s\S]*requireReason: true/,
+  'Bridge tests must prove emergency friction settings reach native JSON.',
+);
+requirePattern(
+  servicePath,
+  service,
+  /optBoolean\("requireCountdown", true\)[\s\S]*optBoolean\("requireReason", true\)/,
+  'The Android service must parse emergency countdown and reason requirements.',
+);
+requirePattern(
+  servicePath,
+  service,
+  /EmergencyUnlockPolicy\.resolveCountdownSeconds[\s\S]*createEmergencyReasonInput[\s\S]*LengthFilter\(EmergencyUnlockPolicy\.MAX_REASON_CHARACTERS\)[\s\S]*EmergencyUnlockPolicy\.canEmergencyUnlock/,
+  'The Android overlay must enforce the emergency countdown, bounded reason input, and final eligibility policy.',
+);
+requirePattern(
+  servicePath,
+  service,
+  /eventDescription \+= " · Grund: " \+ emergencyReason/,
+  'Accepted emergency reasons must be retained in the local protection event for user-visible history.',
 );
 
 requirePattern(
@@ -338,6 +393,7 @@ for (const requiredMatrixText of [
   'LIFE-08',
   'LIFE-09',
   'LIFE-10',
+  'LIFE-11',
   'notification_action_stop',
   'unexpected_service_destroy',
   'lastProtectionStartAt',
@@ -360,5 +416,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection lifecycle diagnostics check passed. Native fields remain preserved, terminal notification/unexpected stops are classified, inconsistent service states are visible, and verification/device evidence remains guarded.',
+  'Protection lifecycle diagnostics check passed. Native fields, terminal stops, emergency friction, inconsistent service states, and physical evidence requirements remain guarded.',
 );
