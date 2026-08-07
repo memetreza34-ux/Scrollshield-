@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createCommitmentLock } from '../lib/commitmentLock';
 import { DEFAULT_APP_CONFIG, DEFAULT_STATE } from '../types';
 import { AppList } from './AppListScreen';
 
@@ -120,5 +121,42 @@ describe('AppList', () => {
         }),
       },
     });
+  });
+
+  it('makes app switches, details, and weekly plans read-only during commitment', async () => {
+    syncMock.mockResolvedValue([]);
+    const updateState = vi.fn();
+    const navigate = vi.fn();
+    const state = {
+      ...DEFAULT_STATE,
+      appsConfig: {
+        youtube: {
+          id: 'youtube',
+          ...DEFAULT_APP_CONFIG,
+          active: true,
+        },
+      },
+    };
+
+    render(
+      <AppList
+        state={state}
+        updateState={updateState}
+        navigate={navigate}
+        commitmentLock={createCommitmentLock(60, Date.now())}
+      />,
+    );
+    await waitFor(() => expect(syncMock).toHaveBeenCalled());
+
+    expect(screen.getByText(/Commitment aktiv – Regeln sind eingefroren/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Plan auswählen')).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'YouTube ist während des Commitments gesperrt' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', {
+        name: 'YouTube Details. Status: Commitment aktiv – Regeln eingefroren',
+      }),
+    ).toBeDisabled();
+    expect(updateState).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
   });
 });
