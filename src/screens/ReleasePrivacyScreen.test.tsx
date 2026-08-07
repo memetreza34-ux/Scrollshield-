@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { createCommitmentLock } from '../lib/commitmentLock';
 import { DEFAULT_STATE } from '../types';
@@ -22,6 +22,25 @@ describe('ReleasePrivacyScreen', () => {
 
     expect(screen.getByRole('button', { name: /Lokale Daten exportieren/ })).toBeEnabled();
     expect(screen.getByRole('button', { name: /App zurücksetzen/ })).toBeEnabled();
+  });
+
+  it('reapplies the import lock after switching into and out of the detailed privacy view', async () => {
+    render(
+      <ReleasePrivacyScreen
+        state={{ ...DEFAULT_STATE, hasCompletedOnboarding: true }}
+        updateState={vi.fn()}
+        resetApp={vi.fn()}
+        navigate={vi.fn()}
+        commitmentLock={createCommitmentLock(480, Date.now())}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByLabelText('ScrollShield JSON-Export importieren')).toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: /Ausführliche Datenschutzerklärung/ }));
+    expect(screen.getByRole('heading', { name: 'Datenschutzerklärung' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Zurück' }));
+
+    await waitFor(() => expect(screen.getByLabelText('ScrollShield JSON-Export importieren')).toBeDisabled());
   });
 
   it('keeps import available when commitment is inactive', async () => {
