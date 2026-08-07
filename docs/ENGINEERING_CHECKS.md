@@ -89,11 +89,17 @@ The implementation is in `src/lib/storage.ts`, `src/lib/dataExport.ts`, and `src
 - blocked data migration uses `migration_recovery`
 - failed boot or app-update recovery clears persisted activation and records the exact `recovery_*` reason
 - the native diagnostic snapshot exposes all lifecycle fields
-- the TypeScript bridge preserves those fields
+- `NativeProtection.getStatus()` preserves and normalizes start time, stop time, stop code, and stop message instead of discarding them
+- the TypeScript bridge classifies `active`, `running-without-activation`, `stale-activation`, `stopped-with-reason`, `stopped-without-reason`, and `never-started`
+- malformed lifecycle values are normalized to safe empty values
+- the Permissions screen derives its status from both persisted activation and live service state
+- stale activation displays `NEUSTART NÖTIG` together with the exact stop code and reason
+- a running service without persisted activation displays `INKONSISTENT` and offers a stop action
+- deliberate manual, notification, and migration stops remain visually distinguishable from permission or system failures
 - the Debug screen displays start time, stop time, stop code, and stop message
-- bridge, App-integration, and Debug-component tests protect the full route
-- the physical-device matrix requires persistence evidence after reopening ScrollShield
-- the reviewer flow must show the matching code and message in both the Debug rows and copied diagnostic JSON
+- bridge, health-presentation, status-panel, Permissions, App-integration, and Debug tests protect the full route
+- the physical-device matrix requires persistence evidence after reopening ScrollShield and explicit stale-state validation
+- the reviewer flow must show the matching code and message in both the visible UI and copied diagnostic JSON
 
 The executable source contract is in `scripts/check-protection-lifecycle-diagnostics.ts`.
 
@@ -105,9 +111,10 @@ The executable source contract is in `scripts/check-protection-lifecycle-diagnos
 - app-wide notification status and protection-channel status remain separately visible
 - protection start/stop timestamps, stop code, and stop message remain visible and copyable
 - the debug screen displays build identity, channel creation, channel enabled state, combined notification readiness, and lifecycle state
+- the Permissions screen must distinguish persisted activation from the actual running service
 - the diagnostic component test covers a disabled-channel failure case and a stored stop reason
 - required coverage includes Pixel, Samsung, Xiaomi/Redmi, OnePlus, Motorola, a tablet, Android 7, Android 8, and Android 13+
-- mandatory scenarios include migration, runtime notification permission, channel revocation, permission loss, app uninstall, final-rule removal, reason persistence, reboot, long-run battery behavior, time-zone and daylight-saving changes, font scaling, tablet layout, and TalkBack
+- mandatory scenarios include migration, runtime notification permission, channel revocation, permission loss, app uninstall, final-rule removal, reason persistence, stale activation, reboot, long-run battery behavior, time-zone and daylight-saving changes, font scaling, tablet layout, and TalkBack
 - every real-device result requires build identity, copied diagnostic JSON, screen evidence, logs for failures, and `PASS`, `FAIL`, or `BLOCKED` status
 
 The executable source contract is in `scripts/check-android-device-matrix.ts`. The manual test plan is in `docs/ANDROID_DEVICE_TEST_MATRIX.md`.
@@ -152,7 +159,7 @@ This non-strict check is included in `npm run verify` and reports the number of 
 - Android JUnit tests
 - debug APK compilation and inspection
 - physical-device matrix
-- lifecycle reason persistence
+- lifecycle reason persistence and stale-state UI validation
 - battery and process reliability
 - V0.7 and previous-candidate migration
 - final Play declarations
@@ -183,7 +190,7 @@ All external GitHub Actions are pinned to immutable 40-character commit SHAs. De
 
 The workflow is configured but the repository account currently prevents GitHub-hosted runners from starting because of a billing or spending-limit restriction. Until a runner or local Android environment executes the commands above, compilation and test success remain unverified.
 
-The new lifecycle source checker, JUnit policy test, TypeScript bridge test, App integration test, Debug component test, full TypeScript check, formatting check, and Android compilation have not executed successfully yet.
+The lifecycle source checker, health-classification tests, status-panel tests, Permissions integration test, JUnit policy test, App integration test, Debug component test, full TypeScript check, formatting check, and Android compilation have not executed successfully yet.
 
 The lifecycle source and documentation block is frozen pending execution. Further source claims must not be treated as verified until the exact branch head completes the full verification chain and physical-device evidence.
 
