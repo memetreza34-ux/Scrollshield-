@@ -48,6 +48,21 @@ describe('describeNativeProtectionHealth', () => {
     expect(presentation.showLastStop).toBe(true);
   });
 
+  it('treats the persistent notification stop action as deliberate', () => {
+    const presentation = describeNativeProtectionHealth(
+      makeStatus({
+        health: 'stopped-with-reason',
+        lastStopAt: 1_786_000_000_000,
+        lastStopCode: 'notification_action_stop',
+        lastStopMessage: 'Der Android-Schutz wurde über die Dauerbenachrichtigung manuell gestoppt',
+      }),
+    );
+
+    expect(presentation.badge).toBe('GESTOPPT');
+    expect(presentation.tone).toBe('neutral');
+    expect(presentation.message).toContain('Dauerbenachrichtigung');
+  });
+
   it('marks permission and system stops as requiring attention', () => {
     const presentation = describeNativeProtectionHealth(
       makeStatus({
@@ -61,6 +76,21 @@ describe('describeNativeProtectionHealth', () => {
     expect(presentation.badge).toBe('PRÜFEN');
     expect(presentation.tone).toBe('warning');
     expect(presentation.message).toContain('Nutzungszugriff');
+  });
+
+  it('marks unexpected service destruction as requiring attention', () => {
+    const presentation = describeNativeProtectionHealth(
+      makeStatus({
+        health: 'stopped-with-reason',
+        lastStopAt: 1_786_000_000_000,
+        lastStopCode: 'unexpected_service_destroy',
+        lastStopMessage: 'Android hat den Schutzdienst unerwartet beendet',
+      }),
+    );
+
+    expect(presentation.badge).toBe('PRÜFEN');
+    expect(presentation.tone).toBe('warning');
+    expect(presentation.message).toContain('unerwartet beendet');
   });
 
   it('distinguishes a running service without saved activation', () => {
