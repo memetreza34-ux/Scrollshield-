@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Check, Lock, Shield, Smartphone } from 'lucide-react';
 import { motion } from 'motion/react';
-import { getReleaseProfilePresentation, getReleaseSafeProfileConfig } from '../lib/releaseProfiles';
+import { getReleaseProfileConfig, getReleaseProfilePresentation } from '../lib/releaseProfiles';
 import type { AppState, Screen } from '../types';
 import { DEFAULT_APP_CONFIG, SUPPORTED_APPS } from '../types';
 
@@ -78,13 +78,18 @@ export function ReleaseOnboarding({
   const applySelection = () => {
     const selectedProfile = state.profiles?.find((profile) => profile.id === selectedProfileId);
     const appsConfig = { ...state.appsConfig };
+    const updatedAt = Date.now();
 
     for (const appId of selectedApps) {
       const source = selectedProfile?.appsConfig[appId] || {
         id: appId,
         ...DEFAULT_APP_CONFIG,
       };
-      appsConfig[appId] = getReleaseSafeProfileConfig({ ...source, id: appId, active: true });
+      appsConfig[appId] = {
+        ...getReleaseProfileConfig(selectedProfileId, { ...source, id: appId, active: true }),
+        active: true,
+        updatedAt,
+      };
     }
 
     updateState({ appsConfig, activeProfileId: selectedProfileId });
