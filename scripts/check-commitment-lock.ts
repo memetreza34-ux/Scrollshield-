@@ -9,6 +9,7 @@ const files = {
   profiles: 'src/screens/ProfilesScreen.tsx',
   profilesTest: 'src/screens/ProfilesScreen.test.tsx',
   storage: 'src/lib/storage.ts',
+  contract: 'docs/COMMITMENT_MODE.md',
 };
 
 const entries = await Promise.all(
@@ -100,6 +101,22 @@ requirePattern(
   'Full app reset must still delete every ScrollShield-owned key, including commitment.',
 );
 
+requirePattern(
+  'contract',
+  /not a tamper-proof parental-control lock[\s\S]*full ScrollShield reset[\s\S]*clearing ScrollShield app data[\s\S]*uninstalling ScrollShield[\s\S]*wall-clock time/,
+  'Commitment documentation must disclose the current anti-bypass limits.',
+);
+requirePattern(
+  'contract',
+  /not part of a normal long-term ScrollShield backup[\s\S]*must not resurrect a historical temporary lock/,
+  'Commitment documentation must explain why the ephemeral lock is not restored from normal backups.',
+);
+requirePattern(
+  'contract',
+  /purchase, restore, refund\/revocation, offline entitlement, and downgrade behavior/,
+  'Commitment must not be positioned as paid until the full billing lifecycle is implemented.',
+);
+
 if (findings.length > 0) {
   console.log('Commitment lock check failed:\n');
   for (const finding of findings) console.log(`- ${finding}`);
@@ -107,5 +124,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Commitment lock check passed. The bounded device-local lock requires deliberate confirmation, freezes protection configuration centrally and visibly, expires automatically, and preserves emergency/help/export/reset safety exits.',
+  'Commitment lock check passed. The bounded device-local lock requires deliberate confirmation, freezes protection configuration centrally and visibly, expires automatically, preserves safety exits, and is documented as anti-impulse rather than tamper-proof enforcement.',
 );
