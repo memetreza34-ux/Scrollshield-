@@ -11,11 +11,17 @@ const policyPath = `${javaRoot}/ProtectionStopReasonPolicy.java`;
 const policyTestPath = `${javaTestRoot}/ProtectionStopReasonPolicyTest.java`;
 const bridgePath = 'src/lib/nativeProtection.ts';
 const bridgeTestPath = 'src/lib/nativeProtection.test.ts';
+const healthPath = 'src/lib/nativeProtectionHealth.ts';
+const healthTestPath = 'src/lib/nativeProtectionHealth.test.ts';
 const diagnosticsBridgePath = 'src/lib/nativeDiagnostics.ts';
 const appPath = 'src/App.tsx';
 const appTestPath = 'src/App.migration.test.tsx';
 const debugPath = 'src/screens/DebugScreen.tsx';
 const debugTestPath = 'src/screens/DebugScreen.test.tsx';
+const permissionsPath = 'src/screens/PermissionsScreen.tsx';
+const permissionsTestPath = 'src/screens/PermissionsScreen.test.tsx';
+const statusPanelPath = 'src/components/NativeProtectionStatusPanel.tsx';
+const statusPanelTestPath = 'src/components/NativeProtectionStatusPanel.test.tsx';
 const matrixPath = 'docs/ANDROID_DEVICE_TEST_MATRIX.md';
 
 const [
@@ -28,11 +34,17 @@ const [
   policyTest,
   bridge,
   bridgeTest,
+  health,
+  healthTest,
   diagnosticsBridge,
   app,
   appTest,
   debug,
   debugTest,
+  permissions,
+  permissionsTest,
+  statusPanel,
+  statusPanelTest,
   matrix,
 ] = await Promise.all([
   readFile(packagePath, 'utf8'),
@@ -44,11 +56,17 @@ const [
   readFile(policyTestPath, 'utf8'),
   readFile(bridgePath, 'utf8'),
   readFile(bridgeTestPath, 'utf8'),
+  readFile(healthPath, 'utf8'),
+  readFile(healthTestPath, 'utf8'),
   readFile(diagnosticsBridgePath, 'utf8'),
   readFile(appPath, 'utf8'),
   readFile(appTestPath, 'utf8'),
   readFile(debugPath, 'utf8'),
   readFile(debugTestPath, 'utf8'),
+  readFile(permissionsPath, 'utf8'),
+  readFile(permissionsTestPath, 'utf8'),
+  readFile(statusPanelPath, 'utf8'),
+  readFile(statusPanelTestPath, 'utf8'),
   readFile(matrixPath, 'utf8'),
 ]);
 
@@ -161,10 +179,79 @@ requirePattern(
   'Normal manual stops must retain a stable fallback code and message.',
 );
 requirePattern(
+  bridgePath,
+  bridge,
+  /NativeProtectionHealth[\s\S]*running-without-activation[\s\S]*stale-activation[\s\S]*stopped-with-reason[\s\S]*never-started/,
+  'The bridge must model active, stopped, and inconsistent native states explicitly.',
+);
+requirePattern(
+  bridgePath,
+  bridge,
+  /getStatus\(\)[\s\S]*lastStartAt: normalizeTimestamp\(result\.lastStartAt\)[\s\S]*lastStopAt: normalizeTimestamp\(result\.lastStopAt\)[\s\S]*lastStopCode: normalizeDiagnosticText\(result\.lastStopCode\)[\s\S]*lastStopMessage: normalizeDiagnosticText\(result\.lastStopMessage\)[\s\S]*assessNativeProtectionHealth/,
+  'NativeProtection.getStatus must preserve and normalize every lifecycle field instead of discarding it.',
+);
+requirePattern(
   bridgeTestPath,
   bridgeTest,
-  /passes an explicit migration recovery reason to Android[\s\S]*uses a stable manual-stop fallback/,
-  'Bridge tests must cover explicit and fallback stop reasons.',
+  /preserves lifecycle diagnostics and detects stale activation[\s\S]*normalizes malformed lifecycle values[\s\S]*distinguishes active, inconsistent, and stopped states deterministically/,
+  'Bridge tests must cover lifecycle preservation, normalization, and deterministic health classification.',
+);
+
+requirePattern(
+  healthPath,
+  health,
+  /NEUSTART NÖTIG[\s\S]*Schutz ist gespeichert, aber der Dienst läuft nicht[\s\S]*lastStopMessage/,
+  'Health presentation must explain stale activation with the exact native stop message.',
+);
+requirePattern(
+  healthPath,
+  health,
+  /USER_STOP_CODES[\s\S]*manual_app_stop[\s\S]*notification_action_stop[\s\S]*migration_recovery/,
+  'Deliberate user and recovery stops must remain distinguishable from permission or system failures.',
+);
+requirePattern(
+  healthTestPath,
+  healthTest,
+  /explicit warning for stale native activation[\s\S]*deliberate user stops neutral[\s\S]*permission and system stops as requiring attention/,
+  'Health presentation tests must cover stale, deliberate, and system stop states.',
+);
+
+requirePattern(
+  permissionsPath,
+  permissions,
+  /serviceStatus[\s\S]*NativeProtection\.getStatus\(\)[\s\S]*setServiceStatus/,
+  'The permissions screen must retain the complete native service status.',
+);
+requirePattern(
+  permissionsPath,
+  permissions,
+  /NativeProtectionStatusPanel[\s\S]*status=\{serviceStatus\}/,
+  'The permissions screen must render the dedicated lifecycle health panel.',
+);
+requirePattern(
+  permissionsPath,
+  permissions,
+  /await NativeProtection\.start[\s\S]*await NativeProtection\.getStatus\(\)[\s\S]*Dienst läuft aber noch nicht/,
+  'After a start request, the UI must re-read the actual native state instead of claiming success optimistically.',
+);
+requirePattern(
+  permissionsTestPath,
+  permissionsTest,
+  /shows stale activation, exact stop code, and stop message from Android[\s\S]*notifications_missing[\s\S]*NEUSTART NÖTIG/,
+  'Permissions integration tests must protect visible stale-activation diagnostics.',
+);
+
+requirePattern(
+  statusPanelPath,
+  statusPanel,
+  /describeNativeProtectionHealth[\s\S]*Stoppcode[\s\S]*lastStopCode[\s\S]*Schutzdienst starten/,
+  'The status panel must show health messaging, exact stop code, and a recovery action.',
+);
+requirePattern(
+  statusPanelTestPath,
+  statusPanelTest,
+  /stale activation with exact stop diagnostics[\s\S]*notifications_missing[\s\S]*active state and a stop action/,
+  'Status-panel tests must cover warning and active states.',
 );
 
 requirePattern(
@@ -215,5 +302,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection lifecycle diagnostics check passed. Verify/readiness wiring, start/stop timestamps, stable reason codes, recovery failures, explicit migration stops, UI visibility, tests, and device evidence remain guarded.',
+  'Protection lifecycle diagnostics check passed. Native fields remain preserved, inconsistent service states are classified, stop reasons stay visible in Debug and Permissions, and verification/device evidence remains guarded.',
 );
