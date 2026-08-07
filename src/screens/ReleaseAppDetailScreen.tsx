@@ -15,13 +15,32 @@ export function ReleaseAppDetailScreen({
   navigate: (screen: Screen) => void;
 }) {
   const appId = state.selectedAppId;
+
+  const updateReleaseState = (updates: Partial<AppState>) => {
+    if (!appId || !updates.appsConfig?.[appId]) {
+      updateState(updates);
+      return;
+    }
+
+    updateState({
+      ...updates,
+      appsConfig: {
+        ...updates.appsConfig,
+        [appId]: {
+          ...updates.appsConfig[appId],
+          updatedAt: Date.now(),
+        },
+      },
+    });
+  };
+
   if (!appId) {
-    return <AppDetailScreen state={state} updateState={updateState} navigate={navigate} />;
+    return <AppDetailScreen state={state} updateState={updateReleaseState} navigate={navigate} />;
   }
 
   const existing = state.appsConfig[appId];
   if (existing && !isLegacyUntouchedDefaultConfig(existing)) {
-    return <AppDetailScreen state={state} updateState={updateState} navigate={navigate} />;
+    return <AppDetailScreen state={state} updateState={updateReleaseState} navigate={navigate} />;
   }
 
   const releaseState: AppState = {
@@ -32,5 +51,5 @@ export function ReleaseAppDetailScreen({
     },
   };
 
-  return <AppDetailScreen state={releaseState} updateState={updateState} navigate={navigate} />;
+  return <AppDetailScreen state={releaseState} updateState={updateReleaseState} navigate={navigate} />;
 }
