@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type SyntheticEvent } from 'react';
 import { LockKeyhole } from 'lucide-react';
 import { isCommitmentLockActive, type CommitmentLock } from '../lib/commitmentLock';
 import type { AppState, Screen } from '../types';
@@ -39,7 +39,7 @@ export function ReleasePrivacyScreen({
     return () => observer.disconnect();
   }, [commitmentActive]);
 
-  const blockImportEvent = (event: React.SyntheticEvent<HTMLDivElement>) => {
+  const blockImportEvent = (event: SyntheticEvent<HTMLDivElement>) => {
     if (!commitmentActive) return;
     const target = event.target;
     if (!(target instanceof HTMLInputElement) || !target.matches(IMPORT_SELECTOR)) return;
