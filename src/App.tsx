@@ -323,7 +323,13 @@ export default function App() {
                 />
               )}
               {currentScreen === 'dashboard' && (
-                <DashboardScreen key="dashboard" state={appState} updateState={updateState} navigate={navigate} />
+                <DashboardScreen
+                  key="dashboard"
+                  state={appState}
+                  updateState={updateState}
+                  navigate={navigate}
+                  commitmentLock={commitmentLock}
+                />
               )}
               {currentScreen === 'apps' && (
                 <AppList
