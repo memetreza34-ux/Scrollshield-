@@ -108,6 +108,7 @@ Do not reuse evidence from a different build number.
 | LIFE-08 | Protection lifecycle reason persistence | Trigger a manual app stop, migration-recovery stop, notification loss, Usage Access loss, Overlay loss, final-target removal, final-rule removal, notification-action stop, unexpected service destruction, and failed boot/app-update recovery. After each case and after reopening ScrollShield, `lastProtectionStartAt`, `lastProtectionStopAt`, `lastProtectionStopCode`, and `lastProtectionStopMessage` remain accurate and visible in both the debug report and copied JSON. |
 | LIFE-09 | Stored activation without running service | Create or reproduce `enabled=true` with `running=false`. The Permissions screen must show `NEUSTART NÖTIG`, must display the exact last stop code and message when present, must offer `Schutzdienst starten`, and must never label the service `AKTIV`. A running service with `enabled=false` must be labeled `INKONSISTENT` and offer a stop action. |
 | LIFE-10 | Notification action and unexpected service destroy | Stop protection with the persistent notification action and verify `lastProtectionStopCode=notification_action_stop`, activation clears, overlay disappears, and reopening the app shows a deliberate stop. Separately terminate the service through a path that invokes `onDestroy()` while protection is still enabled and no controlled stop was requested; verify activation clears, a local system warning is queued, and `lastProtectionStopCode=unexpected_service_destroy`. Controlled app, migration, permission, target, and rule shutdowns must retain their original codes and must never be overwritten by `unexpected_service_destroy`. |
+| LIFE-11 | Emergency unlock friction and reason privacy | With a strict protected app and emergency access enabled, verify `requireCountdown=true` enforces the additional strict countdown before unlock; `requireReason=true` keeps the emergency action disabled for empty or two-character input and permits it only after a normalized reason of at least three characters. Verify the reason is bounded to 160 characters, appears only in the local emergency history event, and is not transmitted to a developer server. With `requireCountdown=false`, only the configured normal opening delay applies rather than a forced 30-second emergency delay. With `requireReason=false`, a reason is not required. The configured daily emergency maximum must still be enforced exactly, and returning home must always remain available instead of forcing an unlock. |
 
 ## Time and Calendar Boundaries
 
@@ -152,6 +153,8 @@ Every copied diagnostic JSON must contain at least:
 
 The in-app Permissions status panel must derive its label from both persisted activation and live service state. It must not collapse `enabled` and `running` into one boolean.
 
+Emergency-friction evidence must additionally prove the exact candidate honors `requireCountdown` and `requireReason`, keeps the normalized reason local, bounds it to 160 characters, and never bypasses the daily emergency maximum.
+
 Migration evidence must additionally include:
 
 - exact list of source keys or the former backup filename;
@@ -173,6 +176,7 @@ The Android release candidate remains blocked until:
 6. Lifecycle stop codes and timestamps persist correctly for manual, migration, notification-action, unexpected-destroy, permission, configuration, and recovery failures.
 7. Controlled shutdown paths retain their specific reason instead of being overwritten by `unexpected_service_destroy`.
 8. The Permissions screen correctly distinguishes active, deliberately stopped, stale-activation, and running-without-activation states.
-9. The copied diagnostic JSON matches the installed version and build under test.
-10. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, and `assembleDebug`.
-11. Play reviewer videos demonstrate the same tested build.
+9. Emergency unlock countdown/reason friction and the daily maximum pass `LIFE-11` on the exact candidate without network transmission of the local reason.
+10. The copied diagnostic JSON matches the installed version and build under test.
+11. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, and `assembleDebug`.
+12. Play reviewer videos demonstrate the same tested build.
