@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Edit3, Plus, Save, Shield, Trash2, X } from 'lucide-react';
+import { Check, Clock3, Edit3, LockKeyhole, Plus, Save, Shield, Trash2, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Header } from '../components/ui';
 import {
@@ -7,6 +7,11 @@ import {
   getReleaseProfilePresentation,
   getReleaseSafeProfileConfig,
 } from '../lib/releaseProfiles';
+import {
+  isCommitmentLockActive,
+  type CommitmentDurationMinutes,
+  type CommitmentLock,
+} from '../lib/commitmentLock';
 import type { AppConfig, AppState, Profile, Screen } from '../types';
 import { DEFAULT_APP_CONFIG, SUPPORTED_APPS } from '../types';
 
@@ -59,21 +64,31 @@ const countProfileRules = (appsConfig: Record<string, AppConfig>) => {
   };
 };
 
+const durationLabel = (minutes: CommitmentDurationMinutes) =>
+  minutes === 60 ? '1 Stunde' : minutes === 480 ? '8 Stunden' : '24 Stunden';
+
 export function ProfilesScreen({
   state,
   updateState,
   navigate,
+  commitmentLock = null,
+  onStartCommitment,
 }: {
   state: AppState;
   updateState: (updates: Partial<AppState>) => void;
   navigate: (screen: Screen) => void;
+  commitmentLock?: CommitmentLock | null;
+  onStartCommitment?: (durationMinutes: CommitmentDurationMinutes) => boolean;
 }) {
   const profiles = state.profiles || [];
   const activeProfileId = state.activeProfileId || profiles[0]?.id || 'gentle';
+  const commitmentActive = isCommitmentLockActive(commitmentLock);
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [pendingCommitment, setPendingCommitment] = useState<CommitmentDurationMinutes | null>(null);
+  const [commitmentError, setCommitmentError] = useState<string | null>(null);
 
   const saveCurrentIntoProfiles = () =>
     profiles.map((profile) =>
@@ -86,7 +101,7 @@ export function ProfilesScreen({
     );
 
   const switchProfile = (profileId: string) => {
-    if (profileId === activeProfileId) return;
+    if (commitmentActive || profileId === activeProfileId) return;
     const updatedProfiles = saveCurrentIntoProfiles();
     const target = updatedProfiles.find((profile) => profile.id === profileId);
     if (!target) return;
@@ -99,6 +114,7 @@ export function ProfilesScreen({
   };
 
   const startCreate = () => {
+    if (commitmentActive) return;
     setCreating(true);
     setEditingProfileId(null);
     setName('');
@@ -106,7 +122,7 @@ export function ProfilesScreen({
   };
 
   const startEdit = (profile: Profile) => {
-    if (!profile.isCustom) return;
+    if (commitmentActive || !profile.isCustom) return;
     setCreating(false);
     setEditingProfileId(profile.id);
     setName(profile.name);
@@ -121,6 +137,7 @@ export function ProfilesScreen({
   };
 
   const saveProfile = () => {
+    if (commitmentActive) return;
     const cleanName = name.trim().slice(0, 40);
     const cleanDescription = description.trim().slice(0, 160);
     if (!cleanName) return;
@@ -155,6 +172,7 @@ export function ProfilesScreen({
   };
 
   const deleteProfile = (profileId: string) => {
+    if (commitmentActive) return;
     const target = profiles.find((profile) => profile.id === profileId);
     if (!target?.isCustom) return;
 
@@ -174,6 +192,16 @@ export function ProfilesScreen({
         : createCurrentSnapshot({}, state.appsConfig),
     });
     cancelEdit();
+  };
+
+  const confirmCommitment = () => {
+    if (!pendingCommitment || !onStartCommitment) return;
+    setCommitmentError(null);
+    if (!onStartCommitment(pendingCommitment)) {
+      setCommitmentError('Commitment konnte nicht sicher lokal gespeichert werden. Es wurde nicht aktiviert.');
+      return;
+    }
+    setPendingCommitment(null);
   };
 
   if (creating || editingProfileId) {
@@ -244,8 +272,65 @@ export function ProfilesScreen({
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="p-6 pb-32">
       <Header title="Schutzprofile" onBack={() => navigate('dashboard')} />
 
+      <section className={`mb-6 rounded-[1.5rem] border p-5 ${commitmentActive ? 'border-indigo-500/35 bg-indigo-500/10' : 'border-zinc-800 bg-zinc-900/70'}`} aria-labelledby="commitment-title">
+        <div className="flex items-start gap-3">
+          <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${commitmentActive ? 'bg-indigo-500/15 text-indigo-200' : 'bg-zinc-800 text-zinc-400'}`}>
+            {commitmentActive ? <LockKeyhole size={19} aria-hidden="true" /> : <Clock3 size={19} aria-hidden="true" />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 id="commitment-title" className="font-semibold text-zinc-100">Commitment-Modus</h1>
+            {commitmentActive && commitmentLock ? (
+              <>
+                <p className="mt-2 text-sm leading-relaxed text-indigo-100/80">
+                  Deine aktuelle Schutzkonfiguration ist bis {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} eingefroren. Apps, Profile, Limits und Zeitpläne können bis dahin nicht geändert werden.
+                </p>
+                <p className="mt-3 text-xs leading-relaxed text-zinc-400">
+                  Notfallfreigabe, Hilfe, Datenexport und ein vollständiger App-Reset bleiben verfügbar. Der Reset löscht bewusst auch den Commitment-Lock.
+                </p>
+              </>
+            ) : pendingCommitment ? (
+              <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
+                <p className="text-sm font-semibold text-amber-200">
+                  {durationLabel(pendingCommitment)} verbindlich einfrieren?
+                </p>
+                <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+                  Während dieser Zeit kannst du Schutzregeln nicht abschwächen oder umkonfigurieren. Es gibt keinen normalen Abbrechen-Schalter nach der Aktivierung. Ein kompletter Reset bleibt als Sicherheitsausstieg möglich.
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <button type="button" onClick={() => setPendingCommitment(null)} className="min-h-[44px] rounded-xl border border-zinc-700 px-4 text-sm font-bold text-zinc-300">
+                    Abbrechen
+                  </button>
+                  <button type="button" onClick={confirmCommitment} className="min-h-[44px] flex-1 rounded-xl bg-indigo-200 px-4 text-sm font-bold text-indigo-950">
+                    Verbindlich starten
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                  Friere deine aktuelle Konfiguration bewusst für eine begrenzte Zeit ein. Das erschwert impulsives Deaktivieren, ohne den sicheren Notfallweg zu entfernen.
+                </p>
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  {([60, 480, 1440] as CommitmentDurationMinutes[]).map((minutes) => (
+                    <button
+                      key={minutes}
+                      type="button"
+                      onClick={() => setPendingCommitment(minutes)}
+                      className="min-h-[44px] rounded-xl border border-zinc-700 bg-zinc-800 px-2 text-xs font-bold text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                    >
+                      {durationLabel(minutes)}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {commitmentError && <p role="alert" className="mt-3 text-xs text-red-300">{commitmentError}</p>}
+          </div>
+        </div>
+      </section>
+
       <section className="mb-6 rounded-[1.5rem] border border-blue-500/25 bg-blue-500/5 p-5">
-        <h1 className="font-semibold text-blue-100">Ein Profil wechselt die gesamte App-Konfiguration</h1>
+        <h2 className="font-semibold text-blue-100">Ein Profil wechselt die gesamte App-Konfiguration</h2>
         <p className="mt-2 text-sm leading-relaxed text-zinc-400">
           Beim Wechsel werden Tageslimits, Session-Längen, Öffnungspausen, Fokusregeln, Sperrfenster, Anti-Binge und Notfallregeln gemeinsam übernommen und danach mit Android synchronisiert.
         </p>
@@ -256,7 +341,8 @@ export function ProfilesScreen({
         <button
           type="button"
           onClick={startCreate}
-          className="flex min-h-[44px] items-center gap-2 rounded-xl bg-emerald-500/10 px-3 text-sm font-bold text-emerald-300"
+          disabled={commitmentActive}
+          className="flex min-h-[44px] items-center gap-2 rounded-xl bg-emerald-500/10 px-3 text-sm font-bold text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Plus size={16} aria-hidden="true" /> Eigenes Profil
         </button>
@@ -276,7 +362,8 @@ export function ProfilesScreen({
                   role="radio"
                   aria-checked={active}
                   onClick={() => switchProfile(profile.id)}
-                  className="flex min-h-[92px] min-w-0 flex-1 items-center gap-4 p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
+                  disabled={commitmentActive}
+                  className="flex min-h-[92px] min-w-0 flex-1 items-center gap-4 p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-zinc-800 ${profile.color}`} aria-hidden="true">
                     <Shield size={21} />
@@ -298,8 +385,9 @@ export function ProfilesScreen({
                   <button
                     type="button"
                     onClick={() => startEdit(profile)}
+                    disabled={commitmentActive}
                     aria-label={`${presentation.name} bearbeiten`}
-                    className="m-3 flex w-11 flex-shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                    className="m-3 flex w-11 flex-shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Edit3 size={17} aria-hidden="true" />
                   </button>
