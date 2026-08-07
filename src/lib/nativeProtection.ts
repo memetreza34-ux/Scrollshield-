@@ -1,5 +1,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { DEFAULT_APP_CONFIG } from '../types';
 import type { AppConfig } from '../types';
+import { normalizeProtectionConfig } from './protectionConfig';
 
 export interface NativeProtectionEvent {
   timestamp: number;
@@ -124,14 +126,6 @@ const APP_NAMES: Record<string, string> = {
   discord: 'Discord',
 };
 
-const DEFAULT_TIME_WINDOWS: AppConfig['timeWindows'] = {
-  morningRules: 'normal',
-  workRules: 'normal',
-  eveningRules: 'normal',
-  nightRules: 'normal',
-  weekendRules: 'normal',
-};
-
 const DEFAULT_STOP_REASON: NativeProtectionStopReason = {
   code: 'manual_app_stop',
   message: 'Der Android-Schutz wurde in ScrollShield manuell gestoppt',
@@ -226,35 +220,33 @@ export const assessNativeProtectionHealth = (status: {
 const buildConfig = (appsConfig: Record<string, AppConfig>, focusMode: boolean): NativeProtectionConfig => ({
   focusMode,
   apps: Object.entries(ANDROID_PACKAGES).map(([appId, packages]) => {
-    const appConfig = appsConfig[appId];
+    const rawConfig = appsConfig[appId] ?? { id: appId, ...DEFAULT_APP_CONFIG };
+    const appConfig = normalizeProtectionConfig(rawConfig);
     return {
       id: appId,
       name: APP_NAMES[appId] ?? appId,
       packages,
-      active: appConfig?.active ?? false,
-      mode: appConfig?.mode ?? 'standard',
-      delaySeconds: Math.max(0, appConfig?.openDelay ?? 10),
-      dailyLimitMinutes: Math.max(0, appConfig?.dailyLimit ?? 0),
-      sessionMinutes: Math.max(1, appConfig?.sessionLimit ?? 5),
-      blockHours: appConfig?.blockHours?.trim() ?? '',
-      focusModeBehavior: appConfig?.focusModeBehavior ?? 'warn',
-      timeWindows: {
-        ...DEFAULT_TIME_WINDOWS,
-        ...appConfig?.timeWindows,
-      },
+      active: appConfig.active,
+      mode: appConfig.mode,
+      delaySeconds: appConfig.openDelay,
+      dailyLimitMinutes: appConfig.dailyLimit,
+      sessionMinutes: appConfig.sessionLimit,
+      blockHours: appConfig.blockHours.trim(),
+      focusModeBehavior: appConfig.focusModeBehavior,
+      timeWindows: appConfig.timeWindows,
       antiBinge: {
-        enabled: appConfig?.antiBinge.enabled ?? false,
-        warningThreshold: Math.max(1, appConfig?.antiBinge.warningThreshold ?? 3),
-        warningWindowMinutes: Math.max(1, appConfig?.antiBinge.warningTimeframe ?? 10),
-        blockThreshold: Math.max(1, appConfig?.antiBinge.blockThreshold ?? 5),
-        blockWindowMinutes: Math.max(1, appConfig?.antiBinge.blockTimeframe ?? 20),
+        enabled: appConfig.antiBinge.enabled,
+        warningThreshold: appConfig.antiBinge.warningThreshold,
+        warningWindowMinutes: appConfig.antiBinge.warningTimeframe,
+        blockThreshold: appConfig.antiBinge.blockThreshold,
+        blockWindowMinutes: appConfig.antiBinge.blockTimeframe,
       },
       emergencyUnlock: {
-        enabled: appConfig?.emergencyUnlock.enabled ?? false,
-        durationMinutes: Math.max(1, appConfig?.emergencyUnlock.durationMinutes ?? 5),
-        maxPerDay: Math.max(0, appConfig?.emergencyUnlock.maxPerDay ?? 0),
-        requireCountdown: appConfig?.emergencyUnlock.requireCountdown ?? true,
-        requireReason: appConfig?.emergencyUnlock.requireReason ?? true,
+        enabled: appConfig.emergencyUnlock.enabled,
+        durationMinutes: appConfig.emergencyUnlock.durationMinutes,
+        maxPerDay: appConfig.emergencyUnlock.maxPerDay,
+        requireCountdown: appConfig.emergencyUnlock.requireCountdown,
+        requireReason: appConfig.emergencyUnlock.requireReason,
       },
     };
   }),
