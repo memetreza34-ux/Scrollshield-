@@ -82,6 +82,30 @@ describe('commitment lock', () => {
     expect(guarded.focusTimeRemaining).toBe(25);
   });
 
+  it('rejects a full-state replacement atomically instead of partially importing it', () => {
+    const lock = createCommitmentLock(480, now);
+    const importedState = {
+      ...DEFAULT_STATE,
+      appsConfig: {
+        youtube: {
+          id: 'youtube',
+          ...DEFAULT_APP_CONFIG,
+          active: true,
+        },
+      },
+      history: [
+        {
+          id: 'imported',
+          timestamp: now,
+          type: 'open' as const,
+          desc: 'Imported event',
+        },
+      ],
+    };
+
+    expect(applyCommitmentGuard(DEFAULT_STATE, importedState, lock, now + 1_000)).toEqual({});
+  });
+
   it('stops guarding configuration after the deadline', () => {
     const lock = createCommitmentLock(60, now);
     const replacement = { youtube: { id: 'youtube', ...DEFAULT_APP_CONFIG, active: true } };
