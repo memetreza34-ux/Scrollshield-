@@ -3,7 +3,11 @@ import { AlertTriangle, CalendarDays, ChevronRight, RefreshCw } from 'lucide-rea
 import { motion } from 'motion/react';
 import { Header, Switch } from '../components/ui';
 import { NativeProtection } from '../lib/nativeProtection';
-import { DEFAULT_APP_CONFIG, SUPPORTED_APPS } from '../types';
+import {
+  createReleaseDefaultAppConfig,
+  isLegacyUntouchedDefaultConfig,
+} from '../lib/releaseProfiles';
+import { SUPPORTED_APPS } from '../types';
 import type { AppConfig, AppState, Screen } from '../types';
 
 type WeeklyPresetId = 'off' | 'balanced' | 'work' | 'sleep' | 'strict';
@@ -73,6 +77,8 @@ const matchesWindows = (left: AppConfig['timeWindows'], right: AppConfig['timeWi
   left.nightRules === right.nightRules &&
   left.weekendRules === right.weekendRules;
 
+const releaseModeLabel = (mode: AppConfig['mode']) => (mode === 'strict' ? 'Strikt' : 'Bewusste Pause');
+
 export function AppList({
   state,
   updateState,
@@ -126,13 +132,18 @@ export function AppList({
     if (checkingApps || (nativeAndroid && unavailableSet.has(id))) return;
 
     const appsConfig = { ...state.appsConfig };
-    if (appsConfig[id]) {
-      appsConfig[id] = {
-        ...appsConfig[id],
-        active: !appsConfig[id].active,
-      };
+    const existing = appsConfig[id];
+    const now = Date.now();
+    if (!existing) {
+      appsConfig[id] = { ...createReleaseDefaultAppConfig(id, true), updatedAt: now };
+    } else if (!existing.active && isLegacyUntouchedDefaultConfig(existing)) {
+      appsConfig[id] = { ...createReleaseDefaultAppConfig(id, true), updatedAt: now };
     } else {
-      appsConfig[id] = { id, ...DEFAULT_APP_CONFIG, active: true };
+      appsConfig[id] = {
+        ...existing,
+        active: !existing.active,
+        updatedAt: now,
+      };
     }
     updateState({ appsConfig });
   };
@@ -142,7 +153,7 @@ export function AppList({
 
     const appsConfig = { ...state.appsConfig };
     if (!appsConfig[id]) {
-      appsConfig[id] = { id, ...DEFAULT_APP_CONFIG, active: false };
+      appsConfig[id] = createReleaseDefaultAppConfig(id, false);
       updateState({ appsConfig });
     }
     updateState({ selectedAppId: id });
@@ -151,6 +162,7 @@ export function AppList({
 
   const applyWeeklyPreset = (presetId: WeeklyPresetId) => {
     const preset = WEEKLY_PRESETS[presetId];
+    const updatedAt = Date.now();
     const appsConfig = Object.fromEntries(
       Object.entries(state.appsConfig).map(([appId, config]) => [
         appId,
@@ -158,6 +170,7 @@ export function AppList({
           ? {
               ...config,
               timeWindows: { ...preset.windows },
+              updatedAt,
             }
           : config,
       ]),
@@ -200,7 +213,7 @@ export function AppList({
         }
       />
       <p className="text-zinc-400 text-sm mb-4 leading-relaxed">
-        Wähle die Apps aus, bei denen du impulsives Öffnen und lange Sitzungen einschränken möchtest.
+        Wähle die Apps aus, bei denen du impulsives Öffnen und lange Sitzungen einschränken möchtest. Neu aktivierte Apps starten neutral: ohne versteckten Wochenplan und mit Anti-Binge zunächst aus.
       </p>
 
       {nativeAndroid && (
@@ -274,7 +287,7 @@ export function AppList({
                 ? 'Konfiguriert, aber nicht installiert'
                 : 'Nicht installiert'
               : isActive
-                ? `Modus: ${config.mode}`
+                ? `Modus: ${releaseModeLabel(config.mode)}`
                 : 'Inaktiv';
 
           return (
