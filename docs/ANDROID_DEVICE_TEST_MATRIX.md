@@ -106,6 +106,7 @@ Do not reuse evidence from a different build number.
 | LIFE-06 | Extreme battery saver / restricted background mode | App reports degraded or stopped protection instead of showing a false active state. |
 | LIFE-07 | Twelve-hour active run | No runaway battery use, repeated overlays, duplicated notifications, or unbounded event growth. |
 | LIFE-08 | Protection lifecycle reason persistence | Trigger a manual app stop, migration-recovery stop, notification loss, Usage Access loss, Overlay loss, final-target removal, final-rule removal, and failed boot/app-update recovery. After each case and after reopening ScrollShield, `lastProtectionStartAt`, `lastProtectionStopAt`, `lastProtectionStopCode`, and `lastProtectionStopMessage` remain accurate and visible in both the debug report and copied JSON. |
+| LIFE-09 | Stored activation without running service | Create or reproduce `enabled=true` with `running=false`. The Permissions screen must show `NEUSTART NÖTIG`, must display the exact last stop code and message when present, must offer `Schutzdienst starten`, and must never label the service `AKTIV`. A running service with `enabled=false` must be labeled `INKONSISTENT` and offer a stop action. |
 
 ## Time and Calendar Boundaries
 
@@ -148,6 +149,8 @@ Every copied diagnostic JSON must contain at least:
 - `lastProtectionStopCode`
 - `lastProtectionStopMessage`
 
+The in-app Permissions status panel must derive its label from both persisted activation and live service state. It must not collapse `enabled` and `running` into one boolean.
+
 Migration evidence must additionally include:
 
 - exact list of source keys or the former backup filename;
@@ -167,6 +170,7 @@ The Android release candidate remains blocked until:
 4. Battery behavior has been measured on physical devices.
 5. Installed V0.7 upgrade, direct former-backup import, write-failure retention, pending recovery, and export/import archive round trip have passed.
 6. Lifecycle stop codes and timestamps persist correctly for manual, migration, permission, configuration, and recovery failures.
-7. The copied diagnostic JSON matches the installed version and build under test.
-8. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, and `assembleDebug`.
-9. Play reviewer videos demonstrate the same tested build.
+7. The Permissions screen correctly distinguishes active, deliberately stopped, stale-activation, and running-without-activation states.
+8. The copied diagnostic JSON matches the installed version and build under test.
+9. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, and `assembleDebug`.
+10. Play reviewer videos demonstrate the same tested build.
