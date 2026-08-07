@@ -87,6 +87,10 @@ The implementation is in `src/lib/storage.ts`, `src/lib/dataExport.ts`, and `src
 - React may pass explicit stop reasons to Android
 - normal manual stops retain `manual_app_stop`
 - blocked data migration uses `migration_recovery`
+- the persistent foreground-notification stop action records `notification_action_stop`
+- controlled shutdown paths mark the service before `stopSelf()` so their exact reasons are not overwritten
+- `ProtectionServiceLifecyclePolicy` records `unexpected_service_destroy` only when the service is destroyed while protection is still enabled and no controlled stop was requested
+- unexpected destruction clears stale activation, queues a local system warning, and preserves the exact terminal reason
 - failed boot or app-update recovery clears persisted activation and records the exact `recovery_*` reason
 - the native diagnostic snapshot exposes all lifecycle fields
 - `NativeProtection.getStatus()` preserves and normalizes start time, stop time, stop code, and stop message instead of discarding them
@@ -95,10 +99,10 @@ The implementation is in `src/lib/storage.ts`, `src/lib/dataExport.ts`, and `src
 - the Permissions screen derives its status from both persisted activation and live service state
 - stale activation displays `NEUSTART NÖTIG` together with the exact stop code and reason
 - a running service without persisted activation displays `INKONSISTENT` and offers a stop action
-- deliberate manual, notification, and migration stops remain visually distinguishable from permission or system failures
+- deliberate app, notification, and migration stops remain visually distinguishable from permission, unexpected-service, or other system failures
 - the Debug screen displays start time, stop time, stop code, and stop message
-- bridge, health-presentation, status-panel, Permissions, App-integration, and Debug tests protect the full route
-- the physical-device matrix requires persistence evidence after reopening ScrollShield and explicit stale-state validation
+- bridge, health-presentation, status-panel, Permissions, App-integration, Java lifecycle-policy, and Debug tests protect the full route
+- the physical-device matrix requires persistence evidence after reopening ScrollShield, explicit stale-state validation, notification-action validation, and unexpected-destroy validation
 - the reviewer flow must show the matching code and message in both the visible UI and copied diagnostic JSON
 
 The executable source contract is in `scripts/check-protection-lifecycle-diagnostics.ts`.
@@ -114,7 +118,7 @@ The executable source contract is in `scripts/check-protection-lifecycle-diagnos
 - the Permissions screen must distinguish persisted activation from the actual running service
 - the diagnostic component test covers a disabled-channel failure case and a stored stop reason
 - required coverage includes Pixel, Samsung, Xiaomi/Redmi, OnePlus, Motorola, a tablet, Android 7, Android 8, and Android 13+
-- mandatory scenarios include migration, runtime notification permission, channel revocation, permission loss, app uninstall, final-rule removal, reason persistence, stale activation, reboot, long-run battery behavior, time-zone and daylight-saving changes, font scaling, tablet layout, and TalkBack
+- mandatory scenarios include migration, runtime notification permission, channel revocation, permission loss, app uninstall, final-rule removal, reason persistence, stale activation, notification-action stop, unexpected service destruction, reboot, long-run battery behavior, time-zone and daylight-saving changes, font scaling, tablet layout, and TalkBack
 - every real-device result requires build identity, copied diagnostic JSON, screen evidence, logs for failures, and `PASS`, `FAIL`, or `BLOCKED` status
 
 The executable source contract is in `scripts/check-android-device-matrix.ts`. The manual test plan is in `docs/ANDROID_DEVICE_TEST_MATRIX.md`.
@@ -135,6 +139,7 @@ The executable source contract is in `scripts/check-android-device-matrix.ts`. T
 - a running service stops, clears activation, records a warning, and preserves a diagnostic reason after notification revocation
 - the foreground notification is removed when the service ends
 - the ongoing foreground-service notification retains its direct `Schutz stoppen` action
+- using that direct action records `notification_action_stop` before the service terminates
 - the permission screen marks notifications as required on Android
 - the React start action blocks before native startup when the permission is absent
 - the TypeScript bridge routes notification prompts and channel settings to the dedicated plugin
@@ -150,6 +155,7 @@ The executable source contract is in `scripts/check-android-device-matrix.ts`. T
 - candidate version against `package.json`
 - candidate version against Android `versionName`
 - candidate build against Android `versionCode`
+- explicit Boolean presence of `terminalLifecycleValidationPassed`
 
 This non-strict check is included in `npm run verify` and reports the number of incomplete evidence items without pretending the release is approved.
 
@@ -159,7 +165,7 @@ This non-strict check is included in `npm run verify` and reports the number of 
 - Android JUnit tests
 - debug APK compilation and inspection
 - physical-device matrix
-- lifecycle reason persistence and stale-state UI validation
+- `terminalLifecycleValidationPassed=true` after `LIFE-08`, `LIFE-09`, and `LIFE-10` pass on the exact candidate
 - battery and process reliability
 - V0.7 and previous-candidate migration
 - final Play declarations
@@ -168,7 +174,7 @@ This non-strict check is included in `npm run verify` and reports the number of 
 - signed-binary inspection
 - named approver and valid approval date
 
-Both `npm run android:release` and `npm run android:bundle` execute this gate before Gradle. The current `config/release-approval.json` intentionally blocks release output.
+Both `npm run android:release` and `npm run android:bundle` execute this gate before Gradle. The current `config/release-approval.json` intentionally keeps `terminalLifecycleValidationPassed` and the other evidence fields false, so release output remains blocked.
 
 ## Android CI Stage
 
@@ -190,7 +196,7 @@ All external GitHub Actions are pinned to immutable 40-character commit SHAs. De
 
 The workflow is configured but the repository account currently prevents GitHub-hosted runners from starting because of a billing or spending-limit restriction. Until a runner or local Android environment executes the commands above, compilation and test success remain unverified.
 
-The lifecycle source checker, health-classification tests, status-panel tests, Permissions integration test, JUnit policy test, App integration test, Debug component test, full TypeScript check, formatting check, and Android compilation have not executed successfully yet.
+The lifecycle source checker, terminal-service Java policy test, health-classification tests, status-panel tests, Permissions integration test, App integration test, Debug component test, full TypeScript check, formatting check, and Android compilation have not executed successfully yet.
 
 The lifecycle source and documentation block is frozen pending execution. Further source claims must not be treated as verified until the exact branch head completes the full verification chain and physical-device evidence.
 
