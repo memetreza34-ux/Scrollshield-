@@ -9,10 +9,11 @@ import { createEventId } from './lib/appUtils';
 import { recordProtectionEventStats } from './lib/session';
 import { BottomNav } from './components/ui';
 import { Welcome, Onboarding } from './screens/OnboardingScreens';
-import { Dashboard, History } from './screens/MainScreens';
+import { History } from './screens/MainScreens';
+import { DashboardScreen } from './screens/DashboardScreen';
 import { AppList } from './screens/AppListScreen';
-import { AppDetail, Rules, Settings, Help, PrivacyScreen } from './screens/ConfigScreens';
-import { ReelsProtectionScreen } from './screens/ReelsProtectionScreen';
+import { AppDetailScreen } from './screens/AppDetailScreen';
+import { Rules, Settings, Help, PrivacyScreen } from './screens/ConfigScreens';
 import { Focus } from './screens/FocusScreens';
 import { ProtectionFlow } from './screens/ProtectionFlow';
 import { PermissionsScreen } from './screens/PermissionsScreen';
@@ -94,7 +95,9 @@ export default function App() {
 
   useEffect(() => {
     if (isLoaded && !migrationBlocked) {
-      if (import.meta.env.PROD && currentScreen === 'debug') {
+      if (currentScreen === 'reels_protection') {
+        setCurrentScreen('apps');
+      } else if (import.meta.env.PROD && currentScreen === 'debug') {
         setCurrentScreen('dashboard');
       } else if (
         !appState.hasCompletedOnboarding &&
@@ -256,24 +259,16 @@ export default function App() {
                 />
               )}
               {currentScreen === 'dashboard' && (
-                <Dashboard key="dashboard" state={appState} updateState={updateState} navigate={navigate} />
+                <DashboardScreen key="dashboard" state={appState} updateState={updateState} navigate={navigate} />
               )}
               {currentScreen === 'apps' && (
                 <AppList key="apps" state={appState} updateState={updateState} navigate={navigate} />
               )}
               {currentScreen === 'app_detail' && (
-                <AppDetail key="app_detail" state={appState} updateState={updateState} navigate={navigate} />
+                <AppDetailScreen key="app_detail" state={appState} updateState={updateState} navigate={navigate} />
               )}
               {currentScreen === 'rules' && (
                 <Rules key="rules" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-              {currentScreen === 'reels_protection' && (
-                <ReelsProtectionScreen
-                  key="reels_protection"
-                  state={appState}
-                  updateState={updateState}
-                  navigate={navigate}
-                />
               )}
               {currentScreen === 'focus' && (
                 <Focus key="focus" state={appState} updateState={updateState} navigate={navigate} />
