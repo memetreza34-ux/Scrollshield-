@@ -64,6 +64,7 @@ public class ScrollShieldProtectionService extends Service {
     private String cachedConfigJson = "";
     private boolean focusMode;
     private boolean hasActiveConfiguredRule;
+    private boolean explicitStopRequested;
     private Runnable countdownRunnable;
     private String lastDetectedForegroundPackage;
     private String lastUsagePackage;
@@ -106,12 +107,19 @@ public class ScrollShieldProtectionService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
+            explicitStopRequested = true;
             ScrollShieldNativePlugin.setProtectionEnabled(this, false);
+            ScrollShieldNativePlugin.recordProtectionStop(
+                this,
+                ProtectionServiceLifecyclePolicy.NOTIFICATION_ACTION_STOP_CODE,
+                "Der Android-Schutz wurde über die Dauerbenachrichtigung manuell gestoppt"
+            );
             stopSelf();
             return START_NOT_STICKY;
         }
 
         if (!ScrollShieldNativePlugin.isProtectionEnabled(this)) {
+            explicitStopRequested = true;
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -140,6 +148,22 @@ public class ScrollShieldProtectionService extends Service {
 
     @Override
     public void onDestroy() {
+        boolean unexpectedDestroy = ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(
+            ScrollShieldNativePlugin.isProtectionEnabled(this),
+            explicitStopRequested
+        );
+        if (unexpectedDestroy) {
+            String description =
+                "Android hat den Schutzdienst unerwartet beendet; die gespeicherte Aktivierung wurde aus Sicherheitsgründen zurückgesetzt";
+            ScrollShieldNativePlugin.setProtectionEnabled(this, false);
+            ScrollShieldNativePlugin.appendProtectionEvent(this, "warning", "system", description);
+            ScrollShieldNativePlugin.recordProtectionStop(
+                this,
+                ProtectionServiceLifecyclePolicy.UNEXPECTED_SERVICE_DESTROY_CODE,
+                description
+            );
+        }
+
         handler.removeCallbacksAndMessages(null);
         flushPendingUsage(System.currentTimeMillis(), true);
         hideOverlay();
@@ -160,6 +184,7 @@ public class ScrollShieldProtectionService extends Service {
 
     private void enforceCurrentApp() {
         if (!ScrollShieldNativePlugin.isProtectionEnabled(this)) {
+            explicitStopRequested = true;
             stopSelf();
             return;
         }
@@ -233,6 +258,7 @@ public class ScrollShieldProtectionService extends Service {
     }
 
     private void stopForMissingPermission(String description) {
+        explicitStopRequested = true;
         hideOverlay();
         ScrollShieldNativePlugin.setProtectionEnabled(this, false);
         ScrollShieldNativePlugin.appendProtectionEvent(this, "warning", "system", description);
