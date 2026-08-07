@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CalendarDays, ChevronRight, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CalendarDays, ChevronRight, LockKeyhole, RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Header, Switch } from '../components/ui';
 import { NativeProtection } from '../lib/nativeProtection';
+import { isCommitmentLockActive, type CommitmentLock } from '../lib/commitmentLock';
 import {
   createReleaseDefaultAppConfig,
   isLegacyUntouchedDefaultConfig,
@@ -83,12 +84,15 @@ export function AppList({
   state,
   updateState,
   navigate,
+  commitmentLock = null,
 }: {
   state: AppState;
   updateState: (updates: Partial<AppState>) => void;
   navigate: (screen: Screen) => void;
+  commitmentLock?: CommitmentLock | null;
 }) {
   const nativeAndroid = NativeProtection.isAvailable();
+  const configurationLocked = isCommitmentLockActive(commitmentLock);
   const [unavailableAppIds, setUnavailableAppIds] = useState<string[]>([]);
   const [checkingApps, setCheckingApps] = useState(nativeAndroid);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
@@ -129,7 +133,7 @@ export function AppList({
   }, [nativeAndroid]);
 
   const toggleApp = (id: string) => {
-    if (checkingApps || (nativeAndroid && unavailableSet.has(id))) return;
+    if (configurationLocked || checkingApps || (nativeAndroid && unavailableSet.has(id))) return;
 
     const appsConfig = { ...state.appsConfig };
     const existing = appsConfig[id];
@@ -149,7 +153,7 @@ export function AppList({
   };
 
   const openDetail = (id: string) => {
-    if (checkingApps || (nativeAndroid && unavailableSet.has(id))) return;
+    if (configurationLocked || checkingApps || (nativeAndroid && unavailableSet.has(id))) return;
 
     const appsConfig = { ...state.appsConfig };
     if (!appsConfig[id]) {
@@ -161,6 +165,7 @@ export function AppList({
   };
 
   const applyWeeklyPreset = (presetId: WeeklyPresetId) => {
+    if (configurationLocked) return;
     const preset = WEEKLY_PRESETS[presetId];
     const updatedAt = Date.now();
     const appsConfig = Object.fromEntries(
@@ -216,6 +221,20 @@ export function AppList({
         Wähle die Apps aus, bei denen du impulsives Öffnen und lange Sitzungen einschränken möchtest. Neu aktivierte Apps starten neutral: ohne versteckten Wochenplan und mit Anti-Binge zunächst aus.
       </p>
 
+      {configurationLocked && commitmentLock && (
+        <div role="status" className="mb-5 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-4 text-xs leading-relaxed text-indigo-100">
+          <div className="flex items-start gap-3">
+            <LockKeyhole size={17} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
+            <div>
+              <strong className="block">Commitment aktiv – Regeln sind eingefroren</strong>
+              <span className="mt-1 block text-indigo-200/75">
+                Änderungen bleiben bis {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} gesperrt. Statusprüfung und laufender Schutz funktionieren weiter.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {nativeAndroid && (
         <div className="mb-5 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 text-xs text-zinc-400 leading-relaxed">
           {checkingApps
@@ -252,7 +271,7 @@ export function AppList({
         <select
           id="weekly-preset"
           value={activePreset}
-          disabled={activeAppConfigs.length === 0}
+          disabled={activeAppConfigs.length === 0 || configurationLocked}
           onChange={(event) => applyWeeklyPreset(event.target.value as WeeklyPresetId)}
           className="w-full min-h-[44px] rounded-xl border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-50"
         >
@@ -266,11 +285,13 @@ export function AppList({
           )}
         </select>
         <p className="text-xs text-zinc-500 mt-3 leading-relaxed">
-          {activeAppConfigs.length === 0
-            ? 'Aktiviere zuerst mindestens eine installierte App.'
-            : activePreset === 'custom'
-              ? 'Die geschützten Apps verwenden unterschiedliche Zeitfenster.'
-              : WEEKLY_PRESETS[activePreset].description}
+          {configurationLocked
+            ? 'Der Wochenplan bleibt während des Commitments unverändert.'
+            : activeAppConfigs.length === 0
+              ? 'Aktiviere zuerst mindestens eine installierte App.'
+              : activePreset === 'custom'
+                ? 'Die geschützten Apps verwenden unterschiedliche Zeitfenster.'
+                : WEEKLY_PRESETS[activePreset].description}
         </p>
       </section>
 
@@ -279,16 +300,18 @@ export function AppList({
           const config = state.appsConfig[app.id];
           const isActive = config?.active || false;
           const isUnavailable = nativeAndroid && unavailableSet.has(app.id);
-          const controlsDisabled = checkingApps || isUnavailable;
-          const statusText = checkingApps
-            ? 'Installationsstatus wird geprüft'
-            : isUnavailable
-              ? isActive
-                ? 'Konfiguriert, aber nicht installiert'
-                : 'Nicht installiert'
-              : isActive
-                ? `Modus: ${releaseModeLabel(config.mode)}`
-                : 'Inaktiv';
+          const controlsDisabled = configurationLocked || checkingApps || isUnavailable;
+          const statusText = configurationLocked
+            ? 'Commitment aktiv – Regeln eingefroren'
+            : checkingApps
+              ? 'Installationsstatus wird geprüft'
+              : isUnavailable
+                ? isActive
+                  ? 'Konfiguriert, aber nicht installiert'
+                  : 'Nicht installiert'
+                : isActive
+                  ? `Modus: ${releaseModeLabel(config.mode)}`
+                  : 'Inaktiv';
 
           return (
             <li key={app.id}>
@@ -332,11 +355,13 @@ export function AppList({
                   disabled={controlsDisabled}
                   onChange={() => toggleApp(app.id)}
                   ariaLabel={
-                    checkingApps
-                      ? `${app.name} wird noch geprüft`
-                      : isUnavailable
-                        ? `${app.name} ist nicht installiert und kann nicht geschützt werden`
-                        : `${app.name} Schutz umschalten`
+                    configurationLocked
+                      ? `${app.name} ist während des Commitments gesperrt`
+                      : checkingApps
+                        ? `${app.name} wird noch geprüft`
+                        : isUnavailable
+                          ? `${app.name} ist nicht installiert und kann nicht geschützt werden`
+                          : `${app.name} Schutz umschalten`
                   }
                 />
               </div>
