@@ -6,6 +6,10 @@ import type { AppConfig, AppState, Screen } from '../types';
 import { DEFAULT_APP_CONFIG, SUPPORTED_APPS } from '../types';
 
 const BLOCK_RANGE_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)$/;
+const RELEASE_MODES: Array<{ value: 'standard' | 'strict'; label: string }> = [
+  { value: 'standard', label: 'Bewusste Pause' },
+  { value: 'strict', label: 'Strikt' },
+];
 
 const parseBlockRange = (value: string): [string, string] | null => {
   const match = BLOCK_RANGE_PATTERN.exec(value.trim());
@@ -103,8 +107,8 @@ export function AppDetailScreen({
         </section>
 
         <div
-          className={`space-y-6 transition-opacity duration-300 ${!config.active ? 'opacity-40 pointer-events-none grayscale' : ''}`}
-          aria-hidden={!config.active}
+          className={`space-y-6 transition-opacity duration-300 ${!config.active ? 'opacity-40 grayscale' : ''}`}
+          inert={!config.active}
         >
           <section aria-labelledby="app-detail-mode-title">
             <h2 id="app-detail-mode-title" className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">
@@ -115,21 +119,26 @@ export function AppDetailScreen({
               role="radiogroup"
               aria-labelledby="app-detail-mode-title"
             >
-              {(['soft', 'standard', 'strict'] as const).map((mode) => (
+              {RELEASE_MODES.map((mode) => (
                 <button
-                  key={mode}
+                  key={mode.value}
                   type="button"
                   role="radio"
-                  aria-checked={config.mode === mode}
-                  onClick={() => updateConfig({ mode })}
-                  className={`min-h-[44px] flex-1 rounded-xl py-3 text-sm font-semibold capitalize transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
-                    config.mode === mode ? 'bg-zinc-100 text-zinc-950 shadow-md' : 'text-zinc-400 hover:text-zinc-200'
+                  aria-checked={config.mode === mode.value}
+                  onClick={() => updateConfig({ mode: mode.value })}
+                  className={`min-h-[44px] flex-1 rounded-xl py-3 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                    config.mode === mode.value
+                      ? 'bg-zinc-100 text-zinc-950 shadow-md'
+                      : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
-                  {mode}
+                  {mode.label}
                 </button>
               ))}
             </div>
+            <p className="mt-2 px-2 text-xs leading-relaxed text-zinc-600">
+              „Bewusste Pause“ zeigt den konfigurierten Öffnungsdialog. „Strikt“ erlaubt normale Freigaben nicht und nutzt nur den begrenzten Notfallweg.
+            </p>
           </section>
 
           <section aria-labelledby="app-detail-limits-title">
