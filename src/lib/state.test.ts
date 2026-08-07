@@ -20,6 +20,38 @@ describe('normalizeAppConfig', () => {
     expect(config.emergencyUnlock.maxPerDay).toBe(7);
     expect(config.emergencyUnlock.requireReason).toBe(true);
   });
+
+  it('normalizes unsafe restored protection values before UI or native sync', () => {
+    const config = normalizeAppConfig('instagram', {
+      openDelay: 50_000,
+      dailyLimit: 50_000,
+      sessionLimit: 0,
+      antiBinge: {
+        enabled: true,
+        warningThreshold: 8,
+        warningTimeframe: 50_000,
+        blockThreshold: 3,
+        blockTimeframe: 50_000,
+      },
+      emergencyUnlock: {
+        enabled: true,
+        durationMinutes: 50_000,
+        maxPerDay: 0,
+      },
+    });
+
+    expect(config.openDelay).toBe(120);
+    expect(config.dailyLimit).toBe(1440);
+    expect(config.sessionLimit).toBe(1);
+    expect(config.antiBinge.warningThreshold).toBe(8);
+    expect(config.antiBinge.blockThreshold).toBe(9);
+    expect(config.antiBinge.warningTimeframe).toBe(180);
+    expect(config.antiBinge.blockTimeframe).toBe(180);
+    expect(config.emergencyUnlock.durationMinutes).toBe(60);
+    expect(config.emergencyUnlock.maxPerDay).toBe(1);
+    expect(config.emergencyUnlock.requireCountdown).toBe(true);
+    expect(config.emergencyUnlock.requireReason).toBe(true);
+  });
 });
 
 describe('normalizeAppsConfig', () => {
