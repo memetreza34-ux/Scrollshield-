@@ -1,5 +1,6 @@
 import { AlertTriangle, Clock, Lock, Shield, Smartphone } from 'lucide-react';
 import { motion } from 'motion/react';
+import type { ReactNode } from 'react';
 import { Header } from '../components/ui';
 import type { AppState, Screen } from '../types';
 
@@ -10,7 +11,7 @@ function HelpCard({
 }: {
   icon: typeof Shield;
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section className="rounded-[1.5rem] border border-zinc-800/50 bg-zinc-900/70 p-5">
