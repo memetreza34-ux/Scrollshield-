@@ -1,14 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_APP_CONFIG, DEFAULT_STATE } from '../types';
 import {
   applyCommitmentGuard,
+  clearCommitmentLock,
   createCommitmentLock,
   isCommitmentLockActive,
+  loadCommitmentLock,
   normalizeCommitmentLock,
+  saveCommitmentLock,
 } from './commitmentLock';
 
 describe('commitment lock', () => {
   const now = new Date(2030, 0, 1, 12).getTime();
+
+  beforeEach(() => localStorage.clear());
 
   it('creates only a bounded future lock and expires automatically', () => {
     const lock = createCommitmentLock(60, now);
@@ -22,10 +27,24 @@ describe('commitment lock', () => {
     expect(normalizeCommitmentLock(lock, now + 60 * 60_000)).toBeNull();
   });
 
+  it('persists the short-lived lock locally and removes it after expiry', () => {
+    const lock = createCommitmentLock(480, now);
+    expect(saveCommitmentLock(lock)).toBe(true);
+    expect(loadCommitmentLock(now + 1_000)).toEqual(lock);
+    expect(loadCommitmentLock(lock.lockedUntil)).toBeNull();
+    expect(localStorage.getItem('scrollshield_commitment_lock_v1')).toBeNull();
+  });
+
+  it('clears the device-local lock explicitly', () => {
+    expect(saveCommitmentLock(createCommitmentLock(60, now))).toBe(true);
+    clearCommitmentLock();
+    expect(loadCommitmentLock(now)).toBeNull();
+  });
+
   it('freezes protection configuration but permits unrelated runtime updates', () => {
+    const lock = createCommitmentLock(480, now);
     const previous = {
       ...DEFAULT_STATE,
-      commitmentLock: createCommitmentLock(480, now),
       appsConfig: {
         instagram: {
           id: 'instagram',
@@ -48,10 +67,10 @@ describe('commitment lock', () => {
         profiles: [],
         activeProfileId: 'strict',
         activeProtectionLevel: 'strict',
-        commitmentLock: null,
         isFocusModeActive: true,
         focusTimeRemaining: 25,
       },
+      lock,
       now + 1_000,
     );
 
@@ -59,25 +78,21 @@ describe('commitment lock', () => {
     expect(guarded.profiles).toBe(previous.profiles);
     expect(guarded.activeProfileId).toBe(previous.activeProfileId);
     expect(guarded.activeProtectionLevel).toBe(previous.activeProtectionLevel);
-    expect(guarded.commitmentLock).toBe(previous.commitmentLock);
     expect(guarded.isFocusModeActive).toBe(true);
     expect(guarded.focusTimeRemaining).toBe(25);
   });
 
   it('stops guarding configuration after the deadline', () => {
-    const previous = {
-      ...DEFAULT_STATE,
-      commitmentLock: createCommitmentLock(60, now),
-    };
+    const lock = createCommitmentLock(60, now);
     const replacement = { youtube: { id: 'youtube', ...DEFAULT_APP_CONFIG, active: true } };
 
     const guarded = applyCommitmentGuard(
-      previous,
-      { appsConfig: replacement, commitmentLock: null },
+      DEFAULT_STATE,
+      { appsConfig: replacement },
+      lock,
       now + 60 * 60_000,
     );
 
     expect(guarded.appsConfig).toBe(replacement);
-    expect(guarded.commitmentLock).toBeNull();
   });
 });
