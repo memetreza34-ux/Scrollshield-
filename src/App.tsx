@@ -18,7 +18,7 @@ import { SettingsScreen } from './screens/SettingsScreen';
 import { HelpScreen } from './screens/HelpScreen';
 import { ReleaseSupportScreen } from './screens/ReleaseSupportScreen';
 import { FocusScreen } from './screens/FocusScreen';
-import { PermissionsScreen } from './screens/PermissionsScreen';
+import { ReleasePermissionsScreen } from './screens/ReleasePermissionsScreen';
 import { DebugScreen } from './screens/DebugScreen';
 import { MigrationRecoveryScreen } from './screens/MigrationRecoveryScreen';
 import { ImprintScreen } from './screens/SupportScreen';
@@ -250,7 +250,7 @@ export default function App() {
                 <Onboarding key="onboarding" state={appState} updateState={updateState} navigate={navigate} />
               )}
               {currentScreen === 'permissions' && (
-                <PermissionsScreen
+                <ReleasePermissionsScreen
                   key="permissions"
                   state={appState}
                   updateState={updateState}
@@ -273,12 +273,8 @@ export default function App() {
               {currentScreen === 'focus' && (
                 <FocusScreen key="focus" state={appState} updateState={updateState} navigate={navigate} />
               )}
-              {currentScreen === 'history' && (
-                <HistoryScreen key="history" state={appState} navigate={navigate} />
-              )}
-              {currentScreen === 'settings' && (
-                <SettingsScreen key="settings" state={appState} navigate={navigate} />
-              )}
+              {currentScreen === 'history' && <HistoryScreen key="history" state={appState} navigate={navigate} />}
+              {currentScreen === 'settings' && <SettingsScreen key="settings" state={appState} navigate={navigate} />}
               {currentScreen === 'privacy' && (
                 <PrivacyScreen
                   key="privacy"
@@ -288,9 +284,7 @@ export default function App() {
                   navigate={navigate}
                 />
               )}
-              {currentScreen === 'help' && (
-                <HelpScreen key="help" state={appState} navigate={navigate} />
-              )}
+              {currentScreen === 'help' && <HelpScreen key="help" state={appState} navigate={navigate} />}
               {currentScreen === 'support' && <ReleaseSupportScreen key="support" navigate={navigate} />}
               {currentScreen === 'imprint' && <ImprintScreen key="imprint" navigate={navigate} />}
               {currentScreen === 'debug' && !import.meta.env.PROD && (
