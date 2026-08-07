@@ -21,10 +21,13 @@ const makeState = () => ({
 });
 
 describe('AppDetailScreen', () => {
-  it('exposes only release-supported whole-app controls', () => {
+  it('exposes only release-supported whole-app controls and distinct modes', () => {
     render(<AppDetailScreen state={makeState()} updateState={vi.fn()} navigate={vi.fn()} />);
 
     expect(screen.getByText(/Version 1 schützt die gesamte ausgewählte App/)).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Bewusste Pause' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Strikt' })).toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'soft' })).not.toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Tägliches Sperrfenster aktivieren' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Notfall-Countdown verlangen' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Notfall-Begründung verlangen' })).toBeInTheDocument();
@@ -102,5 +105,14 @@ describe('AppDetailScreen', () => {
         }),
       }),
     });
+  });
+
+  it('removes inactive controls from keyboard and assistive-technology navigation', () => {
+    const state = makeState();
+    state.appsConfig.instagram.active = false;
+    const { container } = render(<AppDetailScreen state={state} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    const inertSection = container.querySelector('[inert]');
+    expect(inertSection).not.toBeNull();
   });
 });
