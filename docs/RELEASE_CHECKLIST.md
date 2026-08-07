@@ -9,6 +9,7 @@ Diese Checkliste gilt für den ersten öffentlichen Android-Release. Ein Haken d
 - [x] `npm run check:release-approval` prüft Schema und Versionsgleichheit.
 - [x] `npm run android:release` und `npm run android:bundle` rufen zuerst `npm run release:gate` auf.
 - [ ] Alle Nachweise in `config/release-approval.json` sind für den aktuellen Kandidaten auf `true` gesetzt.
+- [ ] `terminalLifecycleValidationPassed` ist erst nach real bestandenen `LIFE-08`, `LIFE-09` und `LIFE-10` für exakt diesen Kandidaten auf `true` gesetzt.
 - [ ] `approvedBy` benennt die verantwortliche freigebende Person.
 - [ ] `approvedAt` enthält den tatsächlichen Freigabezeitpunkt.
 
@@ -23,10 +24,10 @@ Solange ein Punkt offen ist, dürfen weder Release-APK noch AAB als veröffentli
 - [ ] `npm run check:lifecycle` besteht.
 - [ ] `npm run check:migration` besteht.
 - [ ] Alle Lifecycle-, Storage-, V0.7-, Export- und Import-Regressionstests bestehen.
-- [ ] Android `testDebugUnitTest` besteht, einschließlich `ProtectionStopReasonPolicyTest`.
+- [ ] Android `testDebugUnitTest` besteht, einschließlich `ProtectionStopReasonPolicyTest` und `ProtectionServiceLifecyclePolicyTest`.
 - [ ] Android `assembleDebug` erstellt eine installierbare Debug-APK.
 - [ ] APK und Android-Testbericht wurden als Workflow-Artefakte oder lokal archiviert.
-- [ ] Ein tatsächlicher Android-/Gradle-Build bestätigt die Kompilierbarkeit aller nativen Plugins und des Schutzdienstes.
+- [ ] Ein tatsächlicher Android-/Gradle-Build bestätigt die Kompilierbarkeit aller nativen Plugins, Lifecycle-Policies und des Schutzdienstes.
 
 GitHub Actions ist derzeit durch die Kontoabrechnung beziehungsweise das Spending-Limit blockiert. Ein Workflow mit `steps: []` ist kein bestandener oder fehlgeschlagener Code-Test.
 
@@ -52,9 +53,13 @@ GitHub Actions ist derzeit durch die Kontoabrechnung beziehungsweise das Spendin
 - [x] App-weite Benachrichtigungen und der einzelne Schutzkanal werden getrennt diagnostiziert.
 - [x] Schutz startet nicht ohne Usage Access, Overlay, sichtbare Benachrichtigung und installierte aktive Ziel-App.
 - [x] Die laufende Benachrichtigung zeigt den aktiven Schutz und enthält `Schutz stoppen`.
+- [x] Die direkte Stop-Aktion speichert `notification_action_stop`, bevor der Dienst beendet wird.
 - [x] Der Dienst beendet sich bei Entzug von Benachrichtigungen, Schutzkanal, Usage Access oder Overlay.
 - [x] Der Dienst beendet sich, wenn alle aktiven Regeln oder die letzte installierte Ziel-App verschwinden.
-- [x] Beim Dienstende werden Overlay, Aktivierungsstatus und Foreground-Benachrichtigung entfernt und ein lokaler Warnhinweis gespeichert.
+- [x] Kontrollierte Stopppfade markieren den Dienst vor `stopSelf()`, damit ihr genauer Grund nicht überschrieben wird.
+- [x] `onDestroy()` speichert `unexpected_service_destroy` nur dann, wenn Schutz noch aktiviert war und kein kontrollierter Stopp angefordert wurde.
+- [x] Ein unerwarteter Dienstabbruch entfernt einen falschen Aktivstatus und schreibt zusätzlich einen lokalen Systemhinweis.
+- [x] Beim Dienstende werden Overlay, Aktivierungsstatus und Foreground-Benachrichtigung entfernt.
 - [x] Native Einstellungen speichern `lastProtectionStartAt`, `lastProtectionStopAt`, `lastProtectionStopCode` und `lastProtectionStopMessage`.
 - [x] Berechtigungs- und Konfigurationsabbrüche erhalten stabile Codes wie `notifications_missing`, `usage_access_missing`, `overlay_permission_missing`, `no_active_rules` und `target_app_missing`.
 - [x] Ein blockierter V0.7-Recovery-Start stoppt den Dienst mit `migration_recovery`.
@@ -87,10 +92,14 @@ GitHub Actions ist derzeit durch die Kontoabrechnung beziehungsweise das Spendin
 - [ ] Android 8 / API 26 Kanal- und Foreground-Service-Verhalten besteht.
 - [ ] Android 13+ Runtime-Benachrichtigungsdialog besteht.
 - [ ] Reboot, App-Update, Prozessende, Force-Stop und Herstellersparmodi sind dokumentiert.
-- [ ] `LIFE-08` bestätigt manuelle, Migrations-, Berechtigungs-, Konfigurations- und Recovery-Stoppgründe.
+- [ ] `LIFE-08` bestätigt manuelle, Migrations-, Berechtigungs-, Konfigurations-, Notification- und Recovery-Stoppgründe.
+- [ ] `LIFE-09` bestätigt `enabled/running`-Inkonsistenzen und die Anzeigen `NEUSTART NÖTIG` beziehungsweise `INKONSISTENT`.
+- [ ] `LIFE-10` bestätigt `notification_action_stop`, `unexpected_service_destroy` und dass kontrollierte Stopps ihren ursprünglichen Code behalten.
 - [ ] Ein mindestens zwölfstündiger Lauf zeigt keinen Benachrichtigungs-, Overlay-, Event- oder Batteriefehler.
 - [ ] Mitternacht, Zeitzonenwechsel, Sommerzeit und manuelle Uhränderung bestehen.
 - [ ] Für jeden Lauf liegen Version, Build, Diagnose-JSON, Ergebnis und Fehlernachweise vor.
+
+`terminalLifecycleValidationPassed` bleibt auf `false`, bis `LIFE-08`, `LIFE-09` und `LIFE-10` für denselben Kandidaten bestanden und dokumentiert sind.
 
 ## 7. Installation und Datenmigration
 
@@ -142,6 +151,7 @@ Die genaue Spezifikation steht in `docs/DATA_MIGRATION.md`. `migrationValidation
 - [ ] Foreground-Service-Special-Use-Deklaration wurde final eingereicht.
 - [ ] USK-/PEGI-Fragebogen wurde final ausgefüllt.
 - [ ] Reviewer-Video zeigt Runtime-Prompt, Schutzkanal, sichtbaren Dienst, direkte Stop-Aktion, Overlay und sicheren Entzug.
+- [ ] Reviewer-Video zeigt für die direkte Stop-Aktion `notification_action_stop` und für einen sicheren Systemabbruch den dazugehörigen Diagnosecode.
 - [ ] Reviewer-Video zeigt im Debug-Bericht und kopierten Diagnose-JSON den zum Entzug passenden Stoppcode.
 - [ ] Reviewer-Video verwendet exakt denselben Build wie der hochgeladene AAB.
 - [ ] Interner oder geschlossener Testtrack wurde vor Produktion erfolgreich abgeschlossen.
@@ -160,10 +170,11 @@ Der aktuelle iOS-Stand ist nicht einreichbar. Eine Web-/PWA-Vorschau ersetzt kei
 - [ ] Keine offenen Blocker oder kritischen Defekte.
 - [ ] Alle Herstellerabweichungen sind behoben oder ausdrücklich aus dem Release ausgeschlossen.
 - [ ] Freigabemanifest ist vollständig und gehört zur exakten Version und Build-Nummer.
+- [ ] `terminalLifecycleValidationPassed` ist durch reale Gerätebelege nachvollziehbar.
 - [ ] Signierter AAB wurde installiert und erneut einem Smoke-Test unterzogen.
 - [ ] Store-Texte, Screenshots, Reviewer-Video und Binärdatei zeigen dieselbe Funktionalität.
 - [ ] Rollback-, Support- und Staged-Rollout-Verantwortung sind festgelegt.
 
-Der Lifecycle-Block bleibt unverifiziert, bis `npm run verify`, Android JUnit, `assembleDebug` und `LIFE-08` für denselben Kandidaten bestanden sind.
+Der Lifecycle-Block bleibt unverifiziert, bis `npm run verify`, Android JUnit, `assembleDebug` sowie `LIFE-08`, `LIFE-09` und `LIFE-10` für denselben Kandidaten bestanden sind.
 
 Erst danach darf `npm run android:bundle` erfolgreich durch das Release-Gate laufen.
