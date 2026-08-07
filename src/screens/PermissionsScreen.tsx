@@ -8,14 +8,15 @@ import {
   Eye,
   Info,
   Layers,
-  Power,
   RefreshCw,
   Settings,
   ShieldCheck,
 } from 'lucide-react';
+import { NativeProtectionStatusPanel } from '../components/NativeProtectionStatusPanel';
 import { Header } from '../components/ui';
 import { NativePermissions } from '../lib/nativePermissions';
 import { NativeProtection } from '../lib/nativeProtection';
+import type { NativeProtectionStatus } from '../lib/nativeProtection';
 import type { AppPermissions, AppState, Screen } from '../types';
 
 type AndroidSettingKey =
@@ -55,10 +56,11 @@ export function PermissionsScreen({
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [openingSetting, setOpeningSetting] = useState<keyof AppPermissions | null>(null);
   const [serviceBusy, setServiceBusy] = useState(false);
-  const [serviceRunning, setServiceRunning] = useState(false);
+  const [serviceStatus, setServiceStatus] = useState<NativeProtectionStatus | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const updateStateRef = useRef(updateState);
   const permissionsRef = useRef(permissions);
+  const serviceRunning = serviceStatus?.running ?? false;
 
   updateStateRef.current = updateState;
   permissionsRef.current = permissions;
@@ -79,12 +81,12 @@ export function PermissionsScreen({
     setCheckingStatus(true);
     setStatusMessage(null);
     try {
-      const [nativeStatus, serviceStatus] = await Promise.all([
+      const [nativeStatus, nextServiceStatus] = await Promise.all([
         NativePermissions.getAndroidStatus(),
         NativeProtection.getStatus(),
       ]);
       applyNativePermissionStatus(nativeStatus);
-      setServiceRunning(serviceStatus.running);
+      setServiceStatus(nextServiceStatus);
       setStatusMessage('Android-Status wurde aktualisiert.');
     } catch (error) {
       console.error('Could not read Android protection status', error);
@@ -153,7 +155,7 @@ export function PermissionsScreen({
     try {
       if (serviceRunning) {
         await NativeProtection.stop();
-        setServiceRunning(false);
+        setServiceStatus(await NativeProtection.getStatus());
         setStatusMessage('Der Android-Schutzdienst wurde gestoppt.');
         return;
       }
@@ -173,8 +175,13 @@ export function PermissionsScreen({
       }
 
       await NativeProtection.start(state.appsConfig, state.isFocusModeActive);
-      setServiceRunning(true);
-      setStatusMessage(`Android-Schutz ist für ${activeApps} App${activeApps === 1 ? '' : 's'} aktiv.`);
+      const nextStatus = await NativeProtection.getStatus();
+      setServiceStatus(nextStatus);
+      setStatusMessage(
+        nextStatus.running
+          ? `Android-Schutz ist für ${activeApps} App${activeApps === 1 ? '' : 's'} aktiv.`
+          : 'Android hat den Start angenommen, der Dienst läuft aber noch nicht. Prüfe den Status erneut.',
+      );
     } catch (error) {
       console.error('Could not change Android protection service', error);
       setStatusMessage('Der Android-Schutzdienst konnte nicht geändert werden. Prüfe die erforderlichen Zugriffe.');
@@ -339,48 +346,11 @@ export function PermissionsScreen({
               {checkingStatus ? 'Android-Status wird geprüft' : 'Status neu prüfen'}
             </button>
 
-            <section
-              aria-labelledby="protection-service-title"
-              className={`rounded-[1.75rem] border p-5 ${
-                serviceRunning
-                  ? 'border-emerald-500/30 bg-emerald-500/5'
-                  : 'border-zinc-800 bg-zinc-900/70'
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <Power size={20} className={serviceRunning ? 'text-emerald-400' : 'text-zinc-500'} />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <h2 id="protection-service-title" className="font-bold text-zinc-100">
-                      Android-Schutzdienst
-                    </h2>
-                    <span className={serviceRunning ? 'text-xs font-bold text-emerald-400' : 'text-xs text-zinc-500'}>
-                      {serviceRunning ? 'AKTIV' : 'GESTOPPT'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
-                    Läuft lokal als sichtbarer Hintergrunddienst. Benachrichtigungen müssen aktiv bleiben; über die
-                    Dauerbenachrichtigung kann der Schutz jederzeit gestoppt werden.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void toggleProtectionService()}
-                    disabled={serviceBusy}
-                    className={`w-full mt-4 py-3 rounded-xl text-sm font-bold disabled:opacity-50 ${
-                      serviceRunning
-                        ? 'bg-zinc-800 text-zinc-200'
-                        : 'bg-emerald-500 text-emerald-950'
-                    }`}
-                  >
-                    {serviceBusy
-                      ? 'Wird geändert…'
-                      : serviceRunning
-                        ? 'Schutzdienst stoppen'
-                        : 'Schutzdienst starten'}
-                  </button>
-                </div>
-              </div>
-            </section>
+            <NativeProtectionStatusPanel
+              status={serviceStatus}
+              busy={serviceBusy}
+              onToggle={() => void toggleProtectionService()}
+            />
 
             {statusMessage && (
               <p role="status" className="text-center text-xs text-zinc-400">
