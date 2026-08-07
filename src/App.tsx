@@ -9,18 +9,19 @@ import { createEventId } from './lib/appUtils';
 import { recordProtectionEventStats } from './lib/session';
 import { BottomNav } from './components/ui';
 import { Welcome, Onboarding } from './screens/OnboardingScreens';
-import { History } from './screens/MainScreens';
 import { DashboardScreen } from './screens/DashboardScreen';
+import { HistoryScreen } from './screens/HistoryScreen';
 import { AppList } from './screens/AppListScreen';
 import { AppDetailScreen } from './screens/AppDetailScreen';
-import { Rules, Settings, Help, PrivacyScreen } from './screens/ConfigScreens';
+import { Rules, PrivacyScreen } from './screens/ConfigScreens';
+import { SettingsScreen } from './screens/SettingsScreen';
+import { HelpScreen } from './screens/HelpScreen';
+import { ReleaseSupportScreen } from './screens/ReleaseSupportScreen';
 import { Focus } from './screens/FocusScreens';
-import { ProtectionFlow } from './screens/ProtectionFlow';
 import { PermissionsScreen } from './screens/PermissionsScreen';
 import { DebugScreen } from './screens/DebugScreen';
-import { ActiveSessionScreen } from './screens/ActiveSessionScreen';
 import { MigrationRecoveryScreen } from './screens/MigrationRecoveryScreen';
-import { SupportScreen, ImprintScreen } from './screens/SupportScreen';
+import { ImprintScreen } from './screens/SupportScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
@@ -36,14 +37,13 @@ export default function App() {
       const normalizedState = normalizeAppState(saved);
       const focusUpdate = reconcileFocusRuntime(normalizedState);
       const restoredState = focusUpdate ? { ...normalizedState, ...focusUpdate } : normalizedState;
-      setAppState(restoredState);
-      setCurrentScreen(
-        restoredState.hasCompletedOnboarding
-          ? restoredState.activeSession
-            ? 'active_session'
-            : 'dashboard'
-          : 'welcome',
-      );
+      const releaseState: AppState = {
+        ...restoredState,
+        activeSession: null,
+        simulatedAppToOpen: null,
+      };
+      setAppState(releaseState);
+      setCurrentScreen(releaseState.hasCompletedOnboarding ? 'dashboard' : 'welcome');
       return true;
     } catch (error) {
       console.error('Failed to parse saved state', error);
@@ -94,19 +94,19 @@ export default function App() {
   }, [currentScreen]);
 
   useEffect(() => {
-    if (isLoaded && !migrationBlocked) {
-      if (currentScreen === 'reels_protection') {
-        setCurrentScreen('apps');
-      } else if (import.meta.env.PROD && currentScreen === 'debug') {
-        setCurrentScreen('dashboard');
-      } else if (
-        !appState.hasCompletedOnboarding &&
-        !['welcome', 'onboarding', 'permissions'].includes(currentScreen)
-      ) {
-        setCurrentScreen('welcome');
-      } else if (appState.hasCompletedOnboarding && ['welcome', 'onboarding'].includes(currentScreen)) {
-        setCurrentScreen('dashboard');
-      }
+    if (!isLoaded || migrationBlocked) return;
+
+    if (['reels_protection', 'protection_flow', 'active_session'].includes(currentScreen)) {
+      setCurrentScreen(appState.hasCompletedOnboarding ? 'apps' : 'welcome');
+    } else if (import.meta.env.PROD && currentScreen === 'debug') {
+      setCurrentScreen('dashboard');
+    } else if (
+      !appState.hasCompletedOnboarding &&
+      !['welcome', 'onboarding', 'permissions'].includes(currentScreen)
+    ) {
+      setCurrentScreen('welcome');
+    } else if (appState.hasCompletedOnboarding && ['welcome', 'onboarding'].includes(currentScreen)) {
+      setCurrentScreen('dashboard');
     }
   }, [isLoaded, migrationBlocked, currentScreen, appState.hasCompletedOnboarding]);
 
@@ -273,15 +273,11 @@ export default function App() {
               {currentScreen === 'focus' && (
                 <Focus key="focus" state={appState} updateState={updateState} navigate={navigate} />
               )}
-              {currentScreen === 'history' && <History key="history" state={appState} navigate={navigate} />}
+              {currentScreen === 'history' && (
+                <HistoryScreen key="history" state={appState} navigate={navigate} />
+              )}
               {currentScreen === 'settings' && (
-                <Settings
-                  key="settings"
-                  state={appState}
-                  updateState={updateState}
-                  resetApp={resetApp}
-                  navigate={navigate}
-                />
+                <SettingsScreen key="settings" state={appState} navigate={navigate} />
               )}
               {currentScreen === 'privacy' && (
                 <PrivacyScreen
@@ -292,19 +288,10 @@ export default function App() {
                   navigate={navigate}
                 />
               )}
-              {currentScreen === 'help' && <Help key="help" navigate={navigate} />}
-              {currentScreen === 'protection_flow' && (
-                <ProtectionFlow key="protection_flow" state={appState} updateState={updateState} navigate={navigate} />
+              {currentScreen === 'help' && (
+                <HelpScreen key="help" state={appState} navigate={navigate} />
               )}
-              {currentScreen === 'active_session' && (
-                <ActiveSessionScreen
-                  key="active_session"
-                  state={appState}
-                  updateState={updateState}
-                  navigate={navigate}
-                />
-              )}
-              {currentScreen === 'support' && <SupportScreen key="support" navigate={navigate} />}
+              {currentScreen === 'support' && <ReleaseSupportScreen key="support" navigate={navigate} />}
               {currentScreen === 'imprint' && <ImprintScreen key="imprint" navigate={navigate} />}
               {currentScreen === 'debug' && !import.meta.env.PROD && (
                 <DebugScreen key="debug" state={appState} updateState={updateState} navigate={navigate} />
@@ -313,7 +300,7 @@ export default function App() {
           </div>
 
           {appState.hasCompletedOnboarding &&
-            !['welcome', 'onboarding', 'protection_flow', 'active_session', 'permissions'].includes(currentScreen) && (
+            !['welcome', 'onboarding', 'permissions'].includes(currentScreen) && (
               <BottomNav currentScreen={currentScreen} navigate={navigate} />
             )}
         </div>
