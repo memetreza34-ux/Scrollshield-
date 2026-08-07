@@ -19,10 +19,13 @@ public class EmergencyUnlockPolicyTest {
     public void normalizesAndBoundsLocalReasonText() {
         assertEquals("Wichtiger Anruf", EmergencyUnlockPolicy.normalizeReason("  Wichtiger\n\tAnruf  "));
 
-        String oversized = "a".repeat(EmergencyUnlockPolicy.MAX_REASON_CHARACTERS + 20);
+        StringBuilder oversizedBuilder = new StringBuilder();
+        for (int index = 0; index < EmergencyUnlockPolicy.MAX_REASON_CHARACTERS + 20; index++) {
+            oversizedBuilder.append('a');
+        }
         assertEquals(
             EmergencyUnlockPolicy.MAX_REASON_CHARACTERS,
-            EmergencyUnlockPolicy.normalizeReason(oversized).length()
+            EmergencyUnlockPolicy.normalizeReason(oversizedBuilder.toString()).length()
         );
     }
 
