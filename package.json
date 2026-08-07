@@ -19,6 +19,7 @@
     "check:android": "tsx scripts/check-android-project.ts",
     "check:device-matrix": "tsx scripts/check-android-device-matrix.ts",
     "check:lifecycle": "tsx scripts/check-protection-lifecycle-diagnostics.ts",
+    "check:overlay-accessibility": "tsx scripts/check-overlay-accessibility.ts",
     "check:protection-config": "tsx scripts/check-protection-config.ts",
     "check:release-surface": "tsx scripts/check-release-surface.ts",
     "check:migration": "tsx scripts/check-storage-migration.ts && tsx scripts/check-migration-recovery-ui.ts",
@@ -50,7 +51,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "verify": "npm run check:runtime && npm run lint && npm run format:check && npm run check:version && npm run check:android && npm run check:device-matrix && npm run check:lifecycle && npm run check:protection-config && npm run check:release-surface && npm run check:migration && npm run check:release-approval && npm run check:transparency && npm run check:sdk && npm run check:notices && npm run check:secrets && npm run check:store && npm run check:release && npm run test && npm run check:a11y && npm run build && npm run check:pwa && npm run check:privacy && npm run check:bundle"
+    "verify": "npm run check:runtime && npm run lint && npm run format:check && npm run check:version && npm run check:android && npm run check:device-matrix && npm run check:lifecycle && npm run check:overlay-accessibility && npm run check:protection-config && npm run check:release-surface && npm run check:migration && npm run check:release-approval && npm run check:transparency && npm run check:sdk && npm run check:notices && npm run check:secrets && npm run check:store && npm run check:release && npm run test && npm run check:a11y && npm run build && npm run check:pwa && npm run check:privacy && npm run check:bundle"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
