@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_APP_CONFIG } from '../types';
 
 const {
   getPlatformMock,
@@ -44,6 +45,7 @@ describe('NativeProtection lifecycle reasons', () => {
     isNativePlatformMock.mockReturnValue(true);
     getPlatformMock.mockReturnValue('android');
     stopProtectionServiceMock.mockResolvedValue(undefined);
+    syncProtectionConfigMock.mockResolvedValue({ unavailableAppIdsJson: '[]' });
   });
 
   it('passes an explicit migration recovery reason to Android', async () => {
@@ -64,6 +66,50 @@ describe('NativeProtection lifecycle reasons', () => {
     expect(stopProtectionServiceMock).toHaveBeenCalledWith({
       reasonCode: 'manual_app_stop',
       reasonMessage: 'Der Android-Schutz wurde in ScrollShield manuell gestoppt',
+    });
+  });
+
+  it('syncs emergency countdown and reason requirements to Android', async () => {
+    await NativeProtection.sync(
+      {
+        instagram: {
+          id: 'instagram',
+          ...DEFAULT_APP_CONFIG,
+          active: true,
+          emergencyUnlock: {
+            ...DEFAULT_APP_CONFIG.emergencyUnlock,
+            enabled: true,
+            durationMinutes: 2,
+            maxPerDay: 1,
+            requireCountdown: false,
+            requireReason: true,
+          },
+        },
+      },
+      false,
+    );
+
+    const call = syncProtectionConfigMock.mock.calls[0]?.[0] as { configJson?: string } | undefined;
+    const config = JSON.parse(call?.configJson ?? '{}') as {
+      apps?: Array<{
+        id: string;
+        emergencyUnlock?: {
+          enabled: boolean;
+          durationMinutes: number;
+          maxPerDay: number;
+          requireCountdown: boolean;
+          requireReason: boolean;
+        };
+      }>;
+    };
+    const instagram = config.apps?.find((app) => app.id === 'instagram');
+
+    expect(instagram?.emergencyUnlock).toEqual({
+      enabled: true,
+      durationMinutes: 2,
+      maxPerDay: 1,
+      requireCountdown: false,
+      requireReason: true,
     });
   });
 
