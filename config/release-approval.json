@@ -6,6 +6,7 @@
   "androidUnitTestsPassed": false,
   "debugApkCompiled": false,
   "physicalDeviceMatrixPassed": false,
+  "terminalLifecycleValidationPassed": false,
   "batteryReliabilityPassed": false,
   "migrationValidationPassed": false,
   "playDeclarationsFinal": false,
