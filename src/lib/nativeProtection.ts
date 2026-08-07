@@ -84,6 +84,8 @@ interface NativeProtectionConfig {
       enabled: boolean;
       durationMinutes: number;
       maxPerDay: number;
+      requireCountdown: boolean;
+      requireReason: boolean;
     };
   }>;
 }
@@ -251,6 +253,8 @@ const buildConfig = (appsConfig: Record<string, AppConfig>, focusMode: boolean):
         enabled: appConfig?.emergencyUnlock.enabled ?? false,
         durationMinutes: Math.max(1, appConfig?.emergencyUnlock.durationMinutes ?? 5),
         maxPerDay: Math.max(0, appConfig?.emergencyUnlock.maxPerDay ?? 0),
+        requireCountdown: appConfig?.emergencyUnlock.requireCountdown ?? true,
+        requireReason: appConfig?.emergencyUnlock.requireReason ?? true,
       },
     };
   }),
