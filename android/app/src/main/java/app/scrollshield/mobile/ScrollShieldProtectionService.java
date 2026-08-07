@@ -19,10 +19,15 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.provider.Settings;
+import android.text.Editable;
+import android.text.InputFilter;
+import android.text.InputType;
+import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -363,7 +368,9 @@ public class ScrollShieldProtectionService extends Service {
                     antiBinge == null ? 20 : Math.max(1, antiBinge.optInt("blockWindowMinutes", 20)),
                     emergencyUnlock != null && emergencyUnlock.optBoolean("enabled", false),
                     emergencyUnlock == null ? 5 : Math.max(1, emergencyUnlock.optInt("durationMinutes", 5)),
-                    emergencyUnlock == null ? 0 : Math.max(0, emergencyUnlock.optInt("maxPerDay", 0))
+                    emergencyUnlock == null ? 0 : Math.max(0, emergencyUnlock.optInt("maxPerDay", 0)),
+                    emergencyUnlock == null || emergencyUnlock.optBoolean("requireCountdown", true),
+                    emergencyUnlock == null || emergencyUnlock.optBoolean("requireReason", true)
                 );
 
                 JSONArray packages = app.optJSONArray("packages");
@@ -507,8 +514,26 @@ public class ScrollShieldProtectionService extends Service {
         explanationParams.topMargin = dp(24);
         container.addView(explanation, explanationParams);
 
-        int countdownSeconds = strict ? Math.max(30, rule.delaySeconds) : rule.delaySeconds;
-        TextView countdown = createText(String.valueOf(countdownSeconds), 46, Color.WHITE);
+        int emergencyCount = getEmergencyCount(rule.id, System.currentTimeMillis());
+        boolean emergencyAvailable = strict
+            && ProtectionRulePolicy.hasEmergencyAvailable(
+                rule.emergencyEnabled,
+                emergencyCount,
+                rule.emergencyMaxPerDay
+            );
+        int countdownSeconds = EmergencyUnlockPolicy.resolveCountdownSeconds(
+            strict,
+            emergencyAvailable,
+            rule.emergencyRequireCountdown,
+            rule.delaySeconds
+        );
+        final boolean[] countdownFinished = { countdownSeconds <= 0 };
+
+        TextView countdown = createText(
+            countdownSeconds > 0 ? String.valueOf(countdownSeconds) : "Bereit",
+            46,
+            Color.WHITE
+        );
         LinearLayout.LayoutParams countdownParams = wrapContent();
         countdownParams.topMargin = dp(28);
         container.addView(countdown, countdownParams);
@@ -525,13 +550,16 @@ public class ScrollShieldProtectionService extends Service {
         returnParams.topMargin = dp(30);
         container.addView(returnButton, returnParams);
 
-        int emergencyCount = getEmergencyCount(rule.id, System.currentTimeMillis());
-        boolean emergencyAvailable = strict
-            && ProtectionRulePolicy.hasEmergencyAvailable(
-                rule.emergencyEnabled,
-                emergencyCount,
-                rule.emergencyMaxPerDay
-            );
+        @Nullable final EditText emergencyReasonInput;
+        if (strict && emergencyAvailable && rule.emergencyRequireReason) {
+            emergencyReasonInput = createEmergencyReasonInput();
+            LinearLayout.LayoutParams reasonParams = matchWidth();
+            reasonParams.topMargin = dp(12);
+            container.addView(emergencyReasonInput, reasonParams);
+        } else {
+            emergencyReasonInput = null;
+        }
+
         String continueLabel;
         if (strict) {
             continueLabel = emergencyAvailable
@@ -542,25 +570,76 @@ public class ScrollShieldProtectionService extends Service {
         }
 
         Button continueButton = createButton(continueLabel, false);
-        boolean canContinueImmediately = countdownSeconds == 0 && (!strict || emergencyAvailable);
-        continueButton.setEnabled(canContinueImmediately);
-        continueButton.setAlpha(canContinueImmediately ? 1f : 0.45f);
+        updateContinueButtonState(
+            continueButton,
+            !strict || emergencyAvailable,
+            countdownFinished[0],
+            strict && rule.emergencyRequireReason,
+            emergencyReasonInput
+        );
+
+        if (emergencyReasonInput != null) {
+            emergencyReasonInput.addTextChangedListener(new TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+                @Override
+                public void onTextChanged(CharSequence s, int start, int before, int count) {
+                    updateContinueButtonState(
+                        continueButton,
+                        emergencyAvailable,
+                        countdownFinished[0],
+                        true,
+                        emergencyReasonInput
+                    );
+                }
+
+                @Override
+                public void afterTextChanged(Editable s) {}
+            });
+        }
+
         continueButton.setOnClickListener(view -> {
             long actionTime = System.currentTimeMillis();
             if (strict) {
-                if (!hasEmergencyAvailable(rule, actionTime)) return;
+                String emergencyReason = emergencyReasonInput == null
+                    ? ""
+                    : EmergencyUnlockPolicy.normalizeReason(emergencyReasonInput.getText().toString());
+                boolean stillAvailable = hasEmergencyAvailable(rule, actionTime);
+                if (!EmergencyUnlockPolicy.canEmergencyUnlock(
+                    stillAvailable,
+                    countdownFinished[0],
+                    rule.emergencyRequireReason,
+                    emergencyReason
+                )) {
+                    updateContinueButtonState(
+                        continueButton,
+                        stillAvailable,
+                        countdownFinished[0],
+                        rule.emergencyRequireReason,
+                        emergencyReasonInput
+                    );
+                    return;
+                }
+
                 incrementEmergencyCount(rule.id, actionTime);
                 temporaryAccessUntil.put(
                     packageName,
                     actionTime + rule.emergencyDurationMinutes * 60_000L
                 );
+                String eventDescription =
+                    "Notfallfreigabe für " + rule.emergencyDurationMinutes + " Minuten";
+                if (!emergencyReason.isEmpty()) {
+                    eventDescription += " · Grund: " + emergencyReason;
+                }
                 ScrollShieldNativePlugin.appendProtectionEvent(
                     this,
                     "emergency",
                     rule.id,
-                    "Notfallfreigabe für " + rule.emergencyDurationMinutes + " Minuten"
+                    eventDescription
                 );
             } else {
+                if (!countdownFinished[0]) return;
                 recordIntentionalOpen(rule.id, actionTime);
                 temporaryAccessUntil.put(packageName, actionTime + rule.sessionMinutes * 60_000L);
                 ScrollShieldNativePlugin.appendProtectionEvent(
@@ -601,7 +680,15 @@ public class ScrollShieldProtectionService extends Service {
                         ? "Anti-Binge-Warnung vor erneuter Öffnung"
                         : "Bewusste Öffnungspause ausgelöst"
             );
-            startCountdown(countdown, continueButton, countdownSeconds, !strict || emergencyAvailable);
+            startCountdown(
+                countdown,
+                continueButton,
+                countdownSeconds,
+                !strict || emergencyAvailable,
+                countdownFinished,
+                strict && rule.emergencyRequireReason,
+                emergencyReasonInput
+            );
         } catch (RuntimeException error) {
             overlayView = null;
             overlayPackage = null;
@@ -613,15 +700,25 @@ public class ScrollShieldProtectionService extends Service {
         TextView countdown,
         Button continueButton,
         int seconds,
-        boolean enableWhenFinished
+        boolean eligibleWhenFinished,
+        boolean[] countdownFinished,
+        boolean requireReason,
+        @Nullable EditText reasonInput
     ) {
         if (seconds <= 0) {
+            countdownFinished[0] = true;
             countdown.setText("Bereit");
-            continueButton.setEnabled(enableWhenFinished);
-            continueButton.setAlpha(enableWhenFinished ? 1f : 0.45f);
+            updateContinueButtonState(
+                continueButton,
+                eligibleWhenFinished,
+                true,
+                requireReason,
+                reasonInput
+            );
             return;
         }
 
+        countdownFinished[0] = false;
         final int[] remaining = { seconds };
         countdownRunnable = new Runnable() {
             @Override
@@ -629,9 +726,15 @@ public class ScrollShieldProtectionService extends Service {
                 if (overlayView == null) return;
                 remaining[0] -= 1;
                 if (remaining[0] <= 0) {
+                    countdownFinished[0] = true;
                     countdown.setText("Bereit");
-                    continueButton.setEnabled(enableWhenFinished);
-                    continueButton.setAlpha(enableWhenFinished ? 1f : 0.45f);
+                    updateContinueButtonState(
+                        continueButton,
+                        eligibleWhenFinished,
+                        true,
+                        requireReason,
+                        reasonInput
+                    );
                     countdownRunnable = null;
                     return;
                 }
@@ -640,6 +743,43 @@ public class ScrollShieldProtectionService extends Service {
             }
         };
         handler.postDelayed(countdownRunnable, 1_000L);
+    }
+
+    private void updateContinueButtonState(
+        Button continueButton,
+        boolean eligible,
+        boolean countdownFinished,
+        boolean requireReason,
+        @Nullable EditText reasonInput
+    ) {
+        String reason = reasonInput == null ? "" : reasonInput.getText().toString();
+        boolean enabled = eligible
+            && countdownFinished
+            && EmergencyUnlockPolicy.isReasonSatisfied(requireReason, reason);
+        continueButton.setEnabled(enabled);
+        continueButton.setAlpha(enabled ? 1f : 0.45f);
+    }
+
+    private EditText createEmergencyReasonInput() {
+        EditText input = new EditText(this);
+        input.setHint("Warum brauchst du den Notfallzugang?");
+        input.setTextColor(Color.WHITE);
+        input.setHintTextColor(Color.rgb(113, 113, 122));
+        input.setTextSize(14);
+        input.setSingleLine(false);
+        input.setMaxLines(3);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        input.setFilters(new InputFilter[] {
+            new InputFilter.LengthFilter(EmergencyUnlockPolicy.MAX_REASON_CHARACTERS),
+        });
+        input.setPadding(dp(16), dp(14), dp(16), dp(14));
+
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(Color.rgb(24, 24, 27));
+        background.setStroke(dp(1), Color.rgb(63, 63, 70));
+        background.setCornerRadius(dp(14));
+        input.setBackground(background);
+        return input;
     }
 
     private void recordAllowedUsage(@Nullable String foregroundPackage, long now) {
@@ -892,6 +1032,8 @@ public class ScrollShieldProtectionService extends Service {
         private final boolean emergencyEnabled;
         private final int emergencyDurationMinutes;
         private final int emergencyMaxPerDay;
+        private final boolean emergencyRequireCountdown;
+        private final boolean emergencyRequireReason;
 
         private ProtectionRule(
             String id,
@@ -915,7 +1057,9 @@ public class ScrollShieldProtectionService extends Service {
             int blockWindowMinutes,
             boolean emergencyEnabled,
             int emergencyDurationMinutes,
-            int emergencyMaxPerDay
+            int emergencyMaxPerDay,
+            boolean emergencyRequireCountdown,
+            boolean emergencyRequireReason
         ) {
             this.id = id;
             this.name = name;
@@ -939,6 +1083,8 @@ public class ScrollShieldProtectionService extends Service {
             this.emergencyEnabled = emergencyEnabled;
             this.emergencyDurationMinutes = emergencyDurationMinutes;
             this.emergencyMaxPerDay = emergencyMaxPerDay;
+            this.emergencyRequireCountdown = emergencyRequireCountdown;
+            this.emergencyRequireReason = emergencyRequireReason;
         }
     }
 }
