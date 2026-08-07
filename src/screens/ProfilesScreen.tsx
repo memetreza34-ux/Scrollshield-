@@ -3,24 +3,50 @@ import { Check, Edit3, Plus, Save, Shield, Trash2, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Header } from '../components/ui';
 import {
+  getReleaseProfileConfig,
   getReleaseProfilePresentation,
   getReleaseSafeProfileConfig,
 } from '../lib/releaseProfiles';
 import type { AppConfig, AppState, Profile, Screen } from '../types';
 import { DEFAULT_APP_CONFIG, SUPPORTED_APPS } from '../types';
 
-const createSafeAppsConfig = (
+const getSourceConfig = (
+  appId: string,
+  source: Record<string, AppConfig>,
+  fallback: Record<string, AppConfig>,
+): AppConfig =>
+  source[appId] ||
+  fallback[appId] || {
+    id: appId,
+    ...DEFAULT_APP_CONFIG,
+    active: false,
+  };
+
+const createCurrentSnapshot = (
   source: Record<string, AppConfig>,
   fallback: Record<string, AppConfig>,
 ): Record<string, AppConfig> => {
   const result: Record<string, AppConfig> = {};
   for (const app of SUPPORTED_APPS) {
-    const config = source[app.id] || fallback[app.id] || {
-      id: app.id,
-      ...DEFAULT_APP_CONFIG,
-      active: false,
-    };
+    const config = getSourceConfig(app.id, source, fallback);
     result[app.id] = getReleaseSafeProfileConfig({ ...config, id: app.id });
+  }
+  return result;
+};
+
+const createProfileAppsConfig = (
+  profileId: string,
+  source: Record<string, AppConfig>,
+  fallback: Record<string, AppConfig>,
+): Record<string, AppConfig> => {
+  const result: Record<string, AppConfig> = {};
+  const switchedAt = Date.now();
+  for (const app of SUPPORTED_APPS) {
+    const config = getSourceConfig(app.id, source, fallback);
+    result[app.id] = {
+      ...getReleaseProfileConfig(profileId, { ...config, id: app.id }),
+      updatedAt: config.updatedAt ?? switchedAt,
+    };
   }
   return result;
 };
@@ -54,7 +80,7 @@ export function ProfilesScreen({
       profile.id === activeProfileId
         ? {
             ...profile,
-            appsConfig: createSafeAppsConfig(state.appsConfig, state.appsConfig),
+            appsConfig: createCurrentSnapshot(state.appsConfig, state.appsConfig),
           }
         : profile,
     );
@@ -68,7 +94,7 @@ export function ProfilesScreen({
     updateState({
       profiles: updatedProfiles,
       activeProfileId: profileId,
-      appsConfig: createSafeAppsConfig(target.appsConfig, state.appsConfig),
+      appsConfig: createProfileAppsConfig(profileId, target.appsConfig, state.appsConfig),
     });
   };
 
@@ -108,7 +134,7 @@ export function ProfilesScreen({
         icon: 'Shield',
         color: 'text-emerald-400',
         isCustom: true,
-        appsConfig: createSafeAppsConfig(state.appsConfig, state.appsConfig),
+        appsConfig: createCurrentSnapshot(state.appsConfig, state.appsConfig),
         createdAt: Date.now(),
       };
       updateState({ profiles: [...profiles, profile] });
@@ -144,8 +170,8 @@ export function ProfilesScreen({
       profiles: remaining,
       activeProfileId: fallback?.id,
       appsConfig: fallback
-        ? createSafeAppsConfig(fallback.appsConfig, state.appsConfig)
-        : createSafeAppsConfig({}, state.appsConfig),
+        ? createProfileAppsConfig(fallback.id, fallback.appsConfig, state.appsConfig)
+        : createCurrentSnapshot({}, state.appsConfig),
     });
     cancelEdit();
   };
