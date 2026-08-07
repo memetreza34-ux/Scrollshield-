@@ -63,4 +63,38 @@ describe('normalizeProtectionConfig', () => {
     expect(normalized.antiBinge.warningThreshold).toBe(8);
     expect(normalized.antiBinge.blockThreshold).toBe(9);
   });
+
+  it('collapses legacy soft mode to standard because Android v1 enforces them identically', () => {
+    const normalized = normalizeProtectionConfig({
+      id: 'instagram',
+      ...DEFAULT_APP_CONFIG,
+      mode: 'soft',
+    });
+
+    expect(normalized.mode).toBe('standard');
+  });
+
+  it('keeps an enabled emergency path usable while disabled emergency may retain zero daily releases', () => {
+    const enabled = normalizeProtectionConfig({
+      id: 'instagram',
+      ...DEFAULT_APP_CONFIG,
+      emergencyUnlock: {
+        ...DEFAULT_APP_CONFIG.emergencyUnlock,
+        enabled: true,
+        maxPerDay: 0,
+      },
+    });
+    const disabled = normalizeProtectionConfig({
+      id: 'instagram',
+      ...DEFAULT_APP_CONFIG,
+      emergencyUnlock: {
+        ...DEFAULT_APP_CONFIG.emergencyUnlock,
+        enabled: false,
+        maxPerDay: 0,
+      },
+    });
+
+    expect(enabled.emergencyUnlock.maxPerDay).toBe(1);
+    expect(disabled.emergencyUnlock.maxPerDay).toBe(0);
+  });
 });
