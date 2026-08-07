@@ -57,6 +57,7 @@ public class ScrollShieldProtectionService extends Service {
     private static final long POLL_INTERVAL_MS = 900L;
     private static final long USAGE_FLUSH_INTERVAL_MS = 10_000L;
     private static final long CONFIGURATION_HEALTH_INTERVAL_MS = 30_000L;
+    private static final long MAX_USAGE_TICK_MS = 5_000L;
     private static final AtomicBoolean RUNNING = new AtomicBoolean(false);
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -815,17 +816,14 @@ public class ScrollShieldProtectionService extends Service {
             return;
         }
 
-        if (lastUsagePackage != null) {
+        if (lastUsagePackage != null && now > lastUsageTickMs) {
             ProtectionRule previousRule = rulesByPackage.get(lastUsagePackage);
             Long allowedUntil = temporaryAccessUntil.get(lastUsagePackage);
             if (previousRule != null && allowedUntil != null && allowedUntil > lastUsageTickMs) {
                 long countedUntil = Math.min(now, allowedUntil);
-                long countedMs = Math.max(0L, Math.min(countedUntil - lastUsageTickMs, 5_000L));
-                if (countedMs > 0L) {
-                    long pending = pendingUsageMs.containsKey(previousRule.id)
-                        ? pendingUsageMs.get(previousRule.id)
-                        : 0L;
-                    pendingUsageMs.put(previousRule.id, pending + countedMs);
+                long boundedEnd = Math.min(countedUntil, lastUsageTickMs + MAX_USAGE_TICK_MS);
+                if (boundedEnd > lastUsageTickMs) {
+                    addPendingUsage(previousRule.id, lastUsageTickMs, boundedEnd);
                 }
             }
         }
@@ -835,15 +833,49 @@ public class ScrollShieldProtectionService extends Service {
         flushPendingUsage(now, false);
     }
 
+    private void addPendingUsage(String appId, long startMs, long endMs) {
+        if (endMs <= startMs) return;
+
+        String startDay = getDayKey(startMs);
+        String endDay = getDayKey(endMs - 1L);
+        if (startDay.equals(endDay)) {
+            addPendingUsageBucket(startDay, appId, endMs - startMs);
+            return;
+        }
+
+        Calendar boundaryCalendar = Calendar.getInstance();
+        boundaryCalendar.setTimeInMillis(endMs);
+        boundaryCalendar.set(Calendar.HOUR_OF_DAY, 0);
+        boundaryCalendar.set(Calendar.MINUTE, 0);
+        boundaryCalendar.set(Calendar.SECOND, 0);
+        boundaryCalendar.set(Calendar.MILLISECOND, 0);
+        long boundaryMs = boundaryCalendar.getTimeInMillis();
+        long[] split = UsageAccountingPolicy.splitAtBoundary(startMs, endMs, boundaryMs);
+
+        if (split[1] <= 0L) {
+            addPendingUsageBucket(endDay, appId, split[0]);
+            return;
+        }
+
+        addPendingUsageBucket(startDay, appId, split[0]);
+        addPendingUsageBucket(endDay, appId, split[1]);
+    }
+
+    private void addPendingUsageBucket(String dayKey, String appId, long durationMs) {
+        if (durationMs <= 0L) return;
+        String bucketKey = dayKey + "_" + appId;
+        long pending = pendingUsageMs.containsKey(bucketKey) ? pendingUsageMs.get(bucketKey) : 0L;
+        pendingUsageMs.put(bucketKey, pending + durationMs);
+    }
+
     private void flushPendingUsage(long now, boolean force) {
         if (pendingUsageMs.isEmpty()) return;
         if (!force && now - lastUsageFlushMs < USAGE_FLUSH_INTERVAL_MS) return;
 
         SharedPreferences preferences = getNativePreferences();
         SharedPreferences.Editor editor = preferences.edit();
-        String dayKey = getDayKey(now);
         for (Map.Entry<String, Long> entry : pendingUsageMs.entrySet()) {
-            String key = USAGE_KEY_PREFIX + dayKey + "_" + entry.getKey();
+            String key = USAGE_KEY_PREFIX + entry.getKey();
             long existing = preferences.getLong(key, 0L);
             editor.putLong(key, existing + entry.getValue());
         }
@@ -853,9 +885,10 @@ public class ScrollShieldProtectionService extends Service {
     }
 
     private long getDailyUsageMs(String appId, long now) {
-        String key = USAGE_KEY_PREFIX + getDayKey(now) + "_" + appId;
+        String dayAndAppKey = getDayKey(now) + "_" + appId;
+        String key = USAGE_KEY_PREFIX + dayAndAppKey;
         long persisted = getNativePreferences().getLong(key, 0L);
-        long pending = pendingUsageMs.containsKey(appId) ? pendingUsageMs.get(appId) : 0L;
+        long pending = pendingUsageMs.containsKey(dayAndAppKey) ? pendingUsageMs.get(dayAndAppKey) : 0L;
         return persisted + pending;
     }
 
