@@ -1,0 +1,131 @@
+import { readFile } from 'node:fs/promises';
+
+const configPath = 'src/lib/protectionConfig.ts';
+const configTestPath = 'src/lib/protectionConfig.test.ts';
+const statePath = 'src/lib/state.ts';
+const stateTestPath = 'src/lib/state.test.ts';
+const nativePath = 'src/lib/nativeProtection.ts';
+const nativeTestPath = 'src/lib/nativeProtection.test.ts';
+const appDetailPath = 'src/screens/AppDetailScreen.tsx';
+const appDetailTestPath = 'src/screens/AppDetailScreen.test.tsx';
+
+const [config, configTest, state, stateTest, native, nativeTest, appDetail, appDetailTest] = await Promise.all([
+  readFile(configPath, 'utf8'),
+  readFile(configTestPath, 'utf8'),
+  readFile(statePath, 'utf8'),
+  readFile(stateTestPath, 'utf8'),
+  readFile(nativePath, 'utf8'),
+  readFile(nativeTestPath, 'utf8'),
+  readFile(appDetailPath, 'utf8'),
+  readFile(appDetailTestPath, 'utf8'),
+]);
+
+const findings: string[] = [];
+
+function requirePattern(file: string, content: string, pattern: RegExp, message: string) {
+  if (pattern.test(content)) return;
+  findings.push(`${file}: ${message}`);
+}
+
+function rejectPattern(file: string, content: string, pattern: RegExp, message: string) {
+  if (!pattern.test(content)) return;
+  findings.push(`${file}: ${message}`);
+}
+
+for (const bound of [
+  'openDelaySeconds',
+  'dailyLimitMinutes',
+  'sessionMinutes',
+  'antiBingeWarningThreshold',
+  'antiBingeBlockThreshold',
+  'antiBingeWindowMinutes',
+  'emergencyDurationMinutes',
+  'emergencyMaxPerDay',
+]) {
+  requirePattern(configPath, config, new RegExp(`\\b${bound}\\b`), `Missing protection bound ${bound}.`);
+}
+requirePattern(
+  configPath,
+  config,
+  /sessionMinutes:\s*\{ min: 1, max: 240 \}/,
+  'A consciously allowed app session must never normalize to zero minutes.',
+);
+requirePattern(
+  configPath,
+  config,
+  /Math\.max\(rawBlockThreshold, warningThreshold \+ 1\)/,
+  'Anti-Binge strict blocking must remain above the warning threshold.',
+);
+requirePattern(
+  configPath,
+  config,
+  /config\.emergencyUnlock\.enabled \? 1 : PROTECTION_BOUNDS\.emergencyMaxPerDay\.min/,
+  'An enabled emergency path must allow at least one configured release per day.',
+);
+requirePattern(
+  configTestPath,
+  configTest,
+  /bounds extreme values before they reach the native protection engine[\s\S]*never creates a zero-minute session[\s\S]*strict Anti-Binge block happens after the warning threshold/,
+  'Protection-config tests must cover bounds, session minimum, and Anti-Binge ordering.',
+);
+
+requirePattern(
+  statePath,
+  state,
+  /normalizeProtectionConfig\(\{[\s\S]*DEFAULT_APP_CONFIG[\s\S]*emergencyUnlock[\s\S]*antiBinge/,
+  'Restored/imported app configuration must pass through the same protection normalizer.',
+);
+requirePattern(
+  stateTestPath,
+  stateTest,
+  /normalizes unsafe restored protection values before UI or native sync[\s\S]*sessionLimit\)\.toBe\(1\)[\s\S]*maxPerDay\)\.toBe\(1\)/,
+  'State restore tests must guard unsafe values before UI/native sync.',
+);
+
+requirePattern(
+  nativePath,
+  native,
+  /normalizeProtectionConfig\(rawConfig\)[\s\S]*delaySeconds: appConfig\.openDelay[\s\S]*sessionMinutes: appConfig\.sessionLimit/,
+  'Native JSON serialization must use normalized app configuration.',
+);
+requirePattern(
+  nativeTestPath,
+  nativeTest,
+  /syncs emergency countdown and reason requirements to Android/,
+  'Native bridge tests must continue covering emergency friction serialization.',
+);
+
+requirePattern(
+  appDetailPath,
+  appDetail,
+  /normalizeProtectionConfig[\s\S]*Tägliches Sperrfenster aktivieren[\s\S]*Sperrfenster Start[\s\S]*Sperrfenster Ende/,
+  'App detail must normalize edits and expose the native daily block window.',
+);
+requirePattern(
+  appDetailPath,
+  appDetail,
+  /Session-Länge[\s\S]*options=\{\[1, 2, 5, 10, 15, 30\]\}/,
+  'Session length must expose a real minimum instead of a fake disabled state.',
+);
+rejectPattern(
+  appDetailPath,
+  appDetail,
+  /Session-Länge[\s\S]{0,800}allowDisabled/,
+  'Session length must not claim to support a disabled state that Android turns into one minute.',
+);
+requirePattern(
+  appDetailTestPath,
+  appDetailTest,
+  /overnight-safe default[\s\S]*blockHours: '22:00-07:00'[\s\S]*normalizes invalid Anti-Binge ordering/,
+  'App-detail tests must cover native block-window activation and Anti-Binge normalization.',
+);
+
+if (findings.length > 0) {
+  console.log('Protection configuration check failed:\n');
+  for (const finding of findings) console.log(`- ${finding}`);
+  process.exit(1);
+}
+
+console.log(
+  'Protection configuration check passed. Restores, UI edits and native serialization share bounded values; sessions cannot silently become one minute; Anti-Binge ordering and overnight block-window controls remain guarded.',
+);
