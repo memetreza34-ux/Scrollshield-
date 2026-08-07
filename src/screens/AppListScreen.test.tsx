@@ -42,7 +42,43 @@ describe('AppList', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it('applies a recurring weekly preset to every active app', async () => {
+  it('uses a neutral release default on first activation of an untouched legacy config', async () => {
+    syncMock.mockResolvedValue([]);
+    const updateState = vi.fn();
+    const state = {
+      ...DEFAULT_STATE,
+      appsConfig: {
+        ...DEFAULT_STATE.appsConfig,
+        instagram: { id: 'instagram', ...DEFAULT_APP_CONFIG },
+      },
+    };
+
+    render(<AppList state={state} updateState={updateState} navigate={vi.fn()} />);
+    await waitFor(() => expect(syncMock).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Instagram Schutz umschalten' }));
+
+    expect(updateState).toHaveBeenCalledWith({
+      appsConfig: expect.objectContaining({
+        instagram: expect.objectContaining({
+          active: true,
+          mode: 'standard',
+          updatedAt: expect.any(Number),
+          timeWindows: {
+            morningRules: 'normal',
+            workRules: 'normal',
+            eveningRules: 'normal',
+            nightRules: 'normal',
+            weekendRules: 'normal',
+          },
+          antiBinge: expect.objectContaining({ enabled: false }),
+          reelsProtection: expect.objectContaining({ enabled: false }),
+        }),
+      }),
+    });
+  });
+
+  it('applies a recurring weekly preset to every active app and marks the explicit edit', async () => {
     const updateState = vi.fn();
     const state = {
       ...DEFAULT_STATE,
@@ -69,6 +105,7 @@ describe('AppList', () => {
       appsConfig: {
         youtube: expect.objectContaining({
           active: true,
+          updatedAt: expect.any(Number),
           timeWindows: {
             morningRules: 'normal',
             workRules: 'normal',
