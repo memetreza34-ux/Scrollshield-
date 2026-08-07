@@ -105,8 +105,9 @@ Do not reuse evidence from a different build number.
 | LIFE-05 | Manufacturer battery saver | Failures are recorded by manufacturer and mitigation copy remains honest. |
 | LIFE-06 | Extreme battery saver / restricted background mode | App reports degraded or stopped protection instead of showing a false active state. |
 | LIFE-07 | Twelve-hour active run | No runaway battery use, repeated overlays, duplicated notifications, or unbounded event growth. |
-| LIFE-08 | Protection lifecycle reason persistence | Trigger a manual app stop, migration-recovery stop, notification loss, Usage Access loss, Overlay loss, final-target removal, final-rule removal, and failed boot/app-update recovery. After each case and after reopening ScrollShield, `lastProtectionStartAt`, `lastProtectionStopAt`, `lastProtectionStopCode`, and `lastProtectionStopMessage` remain accurate and visible in both the debug report and copied JSON. |
+| LIFE-08 | Protection lifecycle reason persistence | Trigger a manual app stop, migration-recovery stop, notification loss, Usage Access loss, Overlay loss, final-target removal, final-rule removal, notification-action stop, unexpected service destruction, and failed boot/app-update recovery. After each case and after reopening ScrollShield, `lastProtectionStartAt`, `lastProtectionStopAt`, `lastProtectionStopCode`, and `lastProtectionStopMessage` remain accurate and visible in both the debug report and copied JSON. |
 | LIFE-09 | Stored activation without running service | Create or reproduce `enabled=true` with `running=false`. The Permissions screen must show `NEUSTART NÖTIG`, must display the exact last stop code and message when present, must offer `Schutzdienst starten`, and must never label the service `AKTIV`. A running service with `enabled=false` must be labeled `INKONSISTENT` and offer a stop action. |
+| LIFE-10 | Notification action and unexpected service destroy | Stop protection with the persistent notification action and verify `lastProtectionStopCode=notification_action_stop`, activation clears, overlay disappears, and reopening the app shows a deliberate stop. Separately terminate the service through a path that invokes `onDestroy()` while protection is still enabled and no controlled stop was requested; verify activation clears, a local system warning is queued, and `lastProtectionStopCode=unexpected_service_destroy`. Controlled app, migration, permission, target, and rule shutdowns must retain their original codes and must never be overwritten by `unexpected_service_destroy`. |
 
 ## Time and Calendar Boundaries
 
@@ -169,8 +170,9 @@ The Android release candidate remains blocked until:
 3. Manufacturer-specific failures have either a verified fix or explicit release exclusion.
 4. Battery behavior has been measured on physical devices.
 5. Installed V0.7 upgrade, direct former-backup import, write-failure retention, pending recovery, and export/import archive round trip have passed.
-6. Lifecycle stop codes and timestamps persist correctly for manual, migration, permission, configuration, and recovery failures.
-7. The Permissions screen correctly distinguishes active, deliberately stopped, stale-activation, and running-without-activation states.
-8. The copied diagnostic JSON matches the installed version and build under test.
-9. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, and `assembleDebug`.
-10. Play reviewer videos demonstrate the same tested build.
+6. Lifecycle stop codes and timestamps persist correctly for manual, migration, notification-action, unexpected-destroy, permission, configuration, and recovery failures.
+7. Controlled shutdown paths retain their specific reason instead of being overwritten by `unexpected_service_destroy`.
+8. The Permissions screen correctly distinguishes active, deliberately stopped, stale-activation, and running-without-activation states.
+9. The copied diagnostic JSON matches the installed version and build under test.
+10. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, and `assembleDebug`.
+11. Play reviewer videos demonstrate the same tested build.
