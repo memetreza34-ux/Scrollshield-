@@ -39,7 +39,7 @@ describe('App', () => {
     await expectNoA11yViolations(container);
   });
 
-  it('restores a running focus session from its start timestamp', async () => {
+  it('restores a running focus session from its start timestamp on the release dashboard', async () => {
     const now = new Date(2030, 0, 1, 12).getTime();
     vi.spyOn(Date, 'now').mockReturnValue(now);
     StorageService.saveState({
@@ -62,7 +62,7 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Fokusmodus Aktiv' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Fokus aktiv' })).toBeInTheDocument();
     expect(screen.getByLabelText('Noch 15 Minuten')).toBeInTheDocument();
   });
 
@@ -76,10 +76,10 @@ describe('App', () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Einstellungen' }));
-    expect(await screen.findByRole('heading', { name: 'Einstellungen' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Menü' }, { timeout: 5000 })).toBeInTheDocument();
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Datenschutz & Transparenz Lokale Daten, Berechtigungen & App-Reset',
+        name: /Datenschutz & lokale Daten/,
       }),
     );
     fireEvent.click(await screen.findByRole('button', { name: /App zurücksetzen/ }));
@@ -89,5 +89,24 @@ describe('App', () => {
     await waitFor(() => {
       expect(Object.keys(localStorage).filter((key) => key.startsWith('scrollshield_'))).toEqual([]);
     });
+  });
+
+  it('does not restore an obsolete simulated app session as a release screen', async () => {
+    StorageService.saveState({
+      ...DEFAULT_STATE,
+      hasCompletedOnboarding: true,
+      simulatedAppToOpen: 'instagram',
+      activeSession: {
+        appId: 'instagram',
+        startTime: Date.now() - 60_000,
+        extensionCount: 0,
+        isPaused: false,
+      },
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Dein Schutz heute.' })).toBeInTheDocument();
+    expect(screen.queryByText(/Aktive Sitzung/)).not.toBeInTheDocument();
   });
 });
