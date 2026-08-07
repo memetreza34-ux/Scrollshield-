@@ -38,6 +38,7 @@ export const normalizeProtectionConfig = (config: AppConfig): AppConfig => {
     PROTECTION_BOUNDS.antiBingeBlockThreshold.max,
     Math.max(rawBlockThreshold, warningThreshold + 1),
   );
+  const emergencyMinimum = config.emergencyUnlock.enabled ? 1 : PROTECTION_BOUNDS.emergencyMaxPerDay.min;
 
   return {
     ...config,
@@ -86,7 +87,7 @@ export const normalizeProtectionConfig = (config: AppConfig): AppConfig => {
       ),
       maxPerDay: clampInteger(
         config.emergencyUnlock.maxPerDay,
-        PROTECTION_BOUNDS.emergencyMaxPerDay.min,
+        emergencyMinimum,
         PROTECTION_BOUNDS.emergencyMaxPerDay.max,
         2,
       ),
