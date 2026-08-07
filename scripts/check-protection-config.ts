@@ -107,12 +107,19 @@ requirePattern(
   /Session-Länge[\s\S]*options=\{\[1, 2, 5, 10, 15, 30\]\}/,
   'Session length must expose a real minimum instead of a fake disabled state.',
 );
-rejectPattern(
-  appDetailPath,
-  appDetail,
-  /Session-Länge[\s\S]{0,800}allowDisabled/,
-  'Session length must not claim to support a disabled state that Android turns into one minute.',
-);
+const sessionStart = appDetail.indexOf('Session-Länge');
+const openingDelayStart = appDetail.indexOf('Öffnungsverzögerung', sessionStart + 1);
+if (sessionStart < 0 || openingDelayStart < 0) {
+  findings.push(`${appDetailPath}: Could not isolate the session-length control for validation.`);
+} else {
+  const sessionSection = appDetail.slice(sessionStart, openingDelayStart);
+  rejectPattern(
+    appDetailPath,
+    sessionSection,
+    /allowDisabled/,
+    'Session length must not claim to support a disabled state that Android turns into one minute.',
+  );
+}
 requirePattern(
   appDetailTestPath,
   appDetailTest,
