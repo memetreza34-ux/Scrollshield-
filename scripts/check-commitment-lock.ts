@@ -109,13 +109,23 @@ requirePattern(
 
 requirePattern(
   'dashboard',
+  /NativeProtection\.getStatus[\s\S]*5_000[\s\S]*commitmentRuntimeStatus\.running[\s\S]*commitmentRuntimeStatus\.enabled/,
+  'Dashboard must periodically verify native service health while commitment is active.',
+);
+requirePattern(
+  'dashboard',
+  /Commitment aktiv · Schutzstatus nicht prüfbar[\s\S]*Commitment aktiv · Android-Schutz läuft nicht[\s\S]*lastStopCode/,
+  'Dashboard must fail visibly when commitment native health is unknown or unhealthy.',
+);
+requirePattern(
+  'dashboard',
   /Commitment aktiv · Regeln eingefroren[\s\S]*commitmentLock\.lockedUntil[\s\S]*navigate\('rules'\)/,
-  'Dashboard must immediately surface an active commitment and link to its details.',
+  'Dashboard must surface a healthy active commitment and link to its details.',
 );
 requirePattern(
   'dashboardTest',
-  /surfaces an active commitment immediately and routes to its details/,
-  'Dashboard tests must guard commitment visibility after restart/navigation.',
+  /surfaces an active commitment after live native verification and routes to its details[\s\S]*warns and routes to protection status when commitment remains but native protection stops[\s\S]*fails visibly when commitment protection status cannot be read/,
+  'Dashboard tests must cover healthy, stopped, and unreadable native commitment states.',
 );
 
 requirePattern(
@@ -225,5 +235,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Commitment lock check passed. The bounded device-local lock requires a live enabled Android service and installed active target, freezes protection configuration centrally and visibly, remains recoverable, rejects full-state imports atomically, expires automatically, preserves safety exits, and is documented as anti-impulse rather than tamper-proof enforcement.',
+  'Commitment lock check passed. The bounded device-local lock requires live enabled Android enforcement before activation, continuously reports later native-service failure honestly, freezes protection configuration centrally and visibly, remains recoverable, rejects full-state imports atomically, expires automatically, preserves safety exits, and is documented as anti-impulse rather than tamper-proof enforcement.',
 );
