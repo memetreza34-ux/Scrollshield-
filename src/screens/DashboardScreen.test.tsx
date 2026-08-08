@@ -1,8 +1,20 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCommitmentLock } from '../lib/commitmentLock';
 import { DEFAULT_APP_CONFIG, DEFAULT_STATE } from '../types';
 import { DashboardScreen } from './DashboardScreen';
+
+const { isAvailableMock, getStatusMock } = vi.hoisted(() => ({
+  isAvailableMock: vi.fn(),
+  getStatusMock: vi.fn(),
+}));
+
+vi.mock('../lib/nativeProtection', () => ({
+  NativeProtection: {
+    isAvailable: () => isAvailableMock(),
+    getStatus: (...args: unknown[]) => getStatusMock(...args),
+  },
+}));
 
 const makeAndroidState = () => ({
   ...DEFAULT_STATE,
@@ -20,7 +32,25 @@ const makeAndroidState = () => ({
   },
 });
 
+const activeNativeStatus = () => ({
+  running: true,
+  enabled: true,
+  unavailableAppIds: [],
+  lastStartAt: Date.now(),
+  lastStopAt: 0,
+  lastStopCode: '',
+  lastStopMessage: '',
+  health: 'active' as const,
+});
+
 describe('DashboardScreen', () => {
+  beforeEach(() => {
+    isAvailableMock.mockReset();
+    getStatusMock.mockReset();
+    isAvailableMock.mockReturnValue(false);
+    getStatusMock.mockResolvedValue(activeNativeStatus());
+  });
+
   it('uses whole-app release metrics instead of unsupported reel statistics', () => {
     render(<DashboardScreen state={makeAndroidState()} updateState={vi.fn()} navigate={vi.fn()} />);
 
@@ -58,7 +88,9 @@ describe('DashboardScreen', () => {
     expect(screen.getByText(/native iOS-Schutz ist noch nicht Bestandteil des Release-Kandidaten/)).toBeInTheDocument();
   });
 
-  it('surfaces an active commitment immediately and routes to its details', () => {
+  it('surfaces an active commitment after live native verification and routes to its details', async () => {
+    isAvailableMock.mockReturnValue(true);
+    getStatusMock.mockResolvedValue(activeNativeStatus());
     const navigate = vi.fn();
     render(
       <DashboardScreen
@@ -69,7 +101,54 @@ describe('DashboardScreen', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Commitment aktiv · Regeln eingefroren/ }));
+    const commitmentButton = await screen.findByRole('button', { name: /Commitment aktiv · Regeln eingefroren/ });
+    fireEvent.click(commitmentButton);
     expect(navigate).toHaveBeenCalledWith('rules');
+  });
+
+  it('warns and routes to protection status when commitment remains but native protection stops', async () => {
+    isAvailableMock.mockReturnValue(true);
+    getStatusMock.mockResolvedValue({
+      ...activeNativeStatus(),
+      running: false,
+      enabled: false,
+      lastStopAt: Date.now(),
+      lastStopCode: 'notifications_missing',
+      lastStopMessage: 'Benachrichtigungen fehlen',
+      health: 'stopped-with-reason' as const,
+    });
+    const navigate = vi.fn();
+
+    render(
+      <DashboardScreen
+        state={makeAndroidState()}
+        updateState={vi.fn()}
+        navigate={navigate}
+        commitmentLock={createCommitmentLock(480, Date.now())}
+      />,
+    );
+
+    const warning = await screen.findByRole('button', { name: /Commitment aktiv · Android-Schutz läuft nicht/ });
+    expect(warning).toHaveTextContent('notifications_missing');
+    expect(screen.queryByRole('button', { name: /Commitment aktiv · Regeln eingefroren/ })).not.toBeInTheDocument();
+    fireEvent.click(warning);
+    expect(navigate).toHaveBeenCalledWith('permissions');
+  });
+
+  it('fails visibly when commitment protection status cannot be read', async () => {
+    isAvailableMock.mockReturnValue(true);
+    getStatusMock.mockRejectedValue(new Error('bridge unavailable'));
+
+    render(
+      <DashboardScreen
+        state={makeAndroidState()}
+        updateState={vi.fn()}
+        navigate={vi.fn()}
+        commitmentLock={createCommitmentLock(60, Date.now())}
+      />,
+    );
+
+    expect(await screen.findByRole('button', { name: /Commitment aktiv · Schutzstatus nicht prüfbar/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Commitment aktiv · Regeln eingefroren/ })).not.toBeInTheDocument();
   });
 });
