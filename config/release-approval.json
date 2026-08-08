@@ -1,7 +1,8 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "candidateVersion": "1.0.0",
   "candidateVersionCode": 1,
+  "candidateCommitSha": "",
   "webVerificationPassed": false,
   "androidUnitTestsPassed": false,
   "debugApkCompiled": false,
@@ -13,6 +14,19 @@
   "legalFieldsComplete": false,
   "reviewVideosRecorded": false,
   "signedBinaryInspected": false,
+  "evidence": {
+    "webVerification": { "candidateCommitSha": "", "reference": "" },
+    "androidUnitTests": { "candidateCommitSha": "", "reference": "" },
+    "debugApk": { "candidateCommitSha": "", "reference": "" },
+    "physicalDeviceMatrix": { "candidateCommitSha": "", "reference": "" },
+    "terminalLifecycle": { "candidateCommitSha": "", "reference": "" },
+    "batteryReliability": { "candidateCommitSha": "", "reference": "" },
+    "migrationValidation": { "candidateCommitSha": "", "reference": "" },
+    "playDeclarations": { "candidateCommitSha": "", "reference": "" },
+    "legalFields": { "candidateCommitSha": "", "reference": "" },
+    "reviewVideos": { "candidateCommitSha": "", "reference": "" },
+    "signedBinary": { "candidateCommitSha": "", "reference": "" }
+  },
   "approvedBy": "",
   "approvedAt": ""
 }
