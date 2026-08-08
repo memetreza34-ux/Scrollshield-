@@ -82,6 +82,12 @@ No new persisted AppConfig field is required. Adaptive friction derives entirely
 
 This avoids a new V0.7/V1 migration surface. Existing configurations retain their stored Anti-Binge thresholds; configurations with Anti-Binge disabled receive no adaptive escalation.
 
+## Lifecycle diagnostics interaction
+
+Adaptive-friction events are protection-history warnings, not lifecycle-stop records. They must never alter `lastProtectionStartAt`, `lastProtectionStopAt`, `lastProtectionStopCode`, or `lastProtectionStopMessage`.
+
+`lastProtectionStartAt` represents a successfully created foreground protection service, not merely an activation request. The native service records that timestamp only after `startForeground(...)` succeeds.
+
 ## Required verification
 
 Before this behavior can be called release-verified, the exact Android candidate must prove:
@@ -96,3 +102,4 @@ Before this behavior can be called release-verified, the exact Android candidate
 8. Emergency unlock timing is unchanged by adaptive friction.
 9. The short recent-open window still behaves correctly across local midnight.
 10. The overlay and local event text report the escalation honestly and remain readable with the existing accessibility matrix.
+11. A failed foreground-service start does not create a false new `lastProtectionStartAt` value.
