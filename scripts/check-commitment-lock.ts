@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 const paths = {
   app: 'src/App.tsx',
+  appIntegrationTest: 'src/App.commitmentActivation.test.tsx',
   policy: 'src/lib/commitmentLock.ts',
   policyTest: 'src/lib/commitmentLock.test.ts',
   dashboard: 'src/screens/DashboardScreen.tsx',
@@ -103,6 +104,19 @@ mustContain(
   ],
   'App.tsx is missing central commitment activation or enforcement wiring.',
 );
+mustContain(
+  'appIntegrationTest',
+  [
+    'persists commitment only after the real App flow verifies installed targets and a healthy native service',
+    'fails closed and does not persist commitment when the live native service is stopped',
+    'fails closed when the native readiness check itself throws',
+    'scrollshield_commitment_lock_v1',
+    'getStatusMock',
+    'syncMock',
+  ],
+  'App-level commitment integration coverage is missing or incomplete.',
+);
+
 mustContain(
   'dashboard',
   [
@@ -230,5 +244,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Commitment lock check passed. Activation requires live native Android enforcement, later service failure is reported honestly, rules remain centrally frozen, recovery and safety exits remain available, full imports are atomic, and physical-device evidence is mandatory.',
+  'Commitment lock check passed. Activation requires live native Android enforcement, App-level integration coverage guards persistence, later service failure is reported honestly, rules remain centrally frozen, recovery and safety exits remain available, full imports are atomic, and physical-device evidence is mandatory.',
 );
