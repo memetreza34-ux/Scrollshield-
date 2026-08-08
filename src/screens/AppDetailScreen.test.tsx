@@ -38,6 +38,15 @@ describe('AppDetailScreen', () => {
     expect(screen.queryByRole('switch', { name: 'Einzelinhalt-Erlaubnis' })).not.toBeInTheDocument();
   });
 
+  it('explains deterministic adaptive Anti-Binge friction without changing emergency timing', () => {
+    render(<AppDetailScreen state={makeState()} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    expect(screen.getByText('Adaptive Anti-Binge-Reibung')).toBeInTheDocument();
+    expect(screen.getByText(/steigt die normale Pause pro weiterer Öffnung um 5 Sekunden/)).toBeInTheDocument();
+    expect(screen.getByText(/auf 60 Sekunden begrenzt/)).toBeInTheDocument();
+    expect(screen.getByText(/Notfallfreigaben verwenden weiterhin ihren eigenen Countdown/)).toBeInTheDocument();
+  });
+
   it('enables the native daily block window with an overnight-safe default', () => {
     const updateState = vi.fn();
     render(<AppDetailScreen state={makeState()} updateState={updateState} navigate={vi.fn()} />);
