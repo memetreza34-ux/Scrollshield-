@@ -31,8 +31,14 @@ requirePattern(
 requirePattern(
   policyPath,
   policy,
-  /normalizeMessage[\s\S]*Character\.isISOControl[\s\S]*Character\.isWhitespace[\s\S]*MAX_MESSAGE_LENGTH/,
-  'Stop messages must collapse control/whitespace input and stay bounded.',
+  /normalizeMessageCharacters[\s\S]*MAX_MESSAGE_LENGTH[\s\S]*Character\.isISOControl[\s\S]*Character\.isWhitespace/,
+  'Stop messages must collapse control and repeated whitespace input.',
+);
+requirePattern(
+  policyPath,
+  policy,
+  /normalizeMessage\(String value, String fallback\)[\s\S]*truncate\(normalized, MAX_MESSAGE_LENGTH\)/,
+  'Normalized stop messages must remain bounded to MAX_MESSAGE_LENGTH.',
 );
 requirePattern(
   policyTestPath,
