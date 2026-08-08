@@ -24,7 +24,7 @@ describe('ReleasePrivacyScreen', () => {
     expect(screen.getByRole('button', { name: /App zurücksetzen/ })).toBeEnabled();
   });
 
-  it('reapplies the import lock after switching into and out of the detailed privacy view', async () => {
+  it('reapplies the import lock after the privacy detail view rerenders its file input', async () => {
     render(
       <ReleasePrivacyScreen
         state={{ ...DEFAULT_STATE, hasCompletedOnboarding: true }}
