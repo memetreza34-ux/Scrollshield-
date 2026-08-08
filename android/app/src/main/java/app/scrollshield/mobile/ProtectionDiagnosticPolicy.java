@@ -20,8 +20,6 @@ final class ProtectionDiagnosticPolicy {
 
     static String normalizeMessage(String value, String fallback) {
         String normalizedFallback = normalizeMessageCharacters(fallback);
-        if (normalizedFallback.isEmpty()) normalizedFallback = "Unbekannter Stoppgrund";
-
         String normalized = normalizeMessageCharacters(value);
         if (normalized.isEmpty()) normalized = normalizedFallback;
         return truncate(normalized, MAX_MESSAGE_LENGTH);
