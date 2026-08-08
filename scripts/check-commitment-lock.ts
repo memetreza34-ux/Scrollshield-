@@ -42,6 +42,16 @@ requirePattern(
 );
 requirePattern(
   'policy',
+  /assessCommitmentStartReadiness[\s\S]*android_required[\s\S]*active_app_required[\s\S]*native_unavailable[\s\S]*installed_app_required[\s\S]*service_inconsistent[\s\S]*service_not_running/,
+  'Commitment readiness must distinguish platform, configuration, installation, and live-service failures.',
+);
+requirePattern(
+  'policy',
+  /runtime\.running\s*&&\s*!runtime\.enabled[\s\S]*!runtime\.running\s*\|\|\s*!runtime\.enabled[\s\S]*return \{ ok: true \}/,
+  'Commitment must require a live enabled Android service before activation.',
+);
+requirePattern(
+  'policy',
   /applyCommitmentGuard[\s\S]*looksLikeFullStateReplacement[\s\S]*return \{\}/,
   'Central guard must reject full-state replacements atomically while commitment is active.',
 );
@@ -49,6 +59,11 @@ requirePattern(
   'policy',
   /applyCommitmentGuard[\s\S]*appsConfig[\s\S]*profiles[\s\S]*activeProfileId[\s\S]*activeProtectionLevel/,
   'Central guard must freeze every protection-configuration surface.',
+);
+requirePattern(
+  'policyTest',
+  /requires Android, an active installed app, and a live enabled service before commitment[\s\S]*accepts commitment when at least one of multiple active apps remains installed/,
+  'Policy tests must cover live readiness failures and partial target availability.',
 );
 requirePattern(
   'policyTest',
@@ -60,6 +75,16 @@ requirePattern(
   'app',
   /loadCommitmentLock\(\)[\s\S]*applyCommitmentGuard\(previousState, updates, commitmentLock\)[\s\S]*clearCommitmentLock\(\)/,
   'App.tsx must load, centrally enforce, and clear commitment on full reset.',
+);
+requirePattern(
+  'app',
+  /startCommitment\s*=\s*async[\s\S]*NativeProtection\.sync[\s\S]*NativeProtection\.getStatus[\s\S]*assessCommitmentStartReadiness[\s\S]*saveCommitmentLock/,
+  'Final commitment confirmation must verify installed targets and live native service status before persistence.',
+);
+requirePattern(
+  'app',
+  /runtime_check_failed[\s\S]*Commitment wurde nicht aktiviert[\s\S]*action: 'permissions'/,
+  'Native readiness-check failures must fail closed and direct the user to protection status.',
 );
 requirePattern(
   'app',
@@ -100,8 +125,23 @@ requirePattern(
 );
 requirePattern(
   'profiles',
-  /Notfallfreigabe, Hilfe, Datenexport und ein vollständiger App-Reset bleiben verfügbar/,
-  'Commitment UI must disclose its safety exits.',
+  /Schutz wird geprüft…[\s\S]*Ziel-App wirklich installiert ist und der Android-Schutzdienst tatsächlich läuft/,
+  'Commitment confirmation must visibly disclose and represent the live readiness check.',
+);
+requirePattern(
+  'profiles',
+  /nur mit dem nativen Android-Schutz verfügbar[\s\S]*Aktiviere zuerst mindestens eine App[\s\S]*Apps auswählen/,
+  'Profiles must block meaningless commitment setup before the final native check.',
+);
+requirePattern(
+  'profiles',
+  /Apps prüfen[\s\S]*Schutzstatus öffnen/,
+  'Failed readiness checks must expose actionable recovery routes.',
+);
+requirePattern(
+  'profiles',
+  /Notfallfreigabe, Hilfe, Datenexport und ein vollständiger App-Reset bleiben verfügbar[\s\S]*Berechtigungen und Schutzstatus können weiterhin repariert werden/,
+  'Commitment UI must disclose safety exits and recovery access.',
 );
 rejectPattern(
   'profiles',
@@ -110,8 +150,8 @@ rejectPattern(
 );
 requirePattern(
   'profilesTest',
-  /second confirmation before starting commitment[\s\S]*read-only while commitment is active/,
-  'Profiles tests must cover confirmation and read-only behavior.',
+  /second confirmation before starting commitment[\s\S]*does not offer commitment activation in the iOS preview[\s\S]*requires at least one active app[\s\S]*actionable native readiness failure[\s\S]*read-only while commitment is active/,
+  'Profiles tests must cover confirmation, preconditions, native readiness failure, and read-only behavior.',
 );
 
 requirePattern(
@@ -149,6 +189,16 @@ requirePattern(
 
 requirePattern(
   'contract',
+  /native Android[\s\S]*active target app is actually installed[\s\S]*running=true[\s\S]*enabled=true/,
+  'Commitment documentation must require real native enforcement before activation.',
+);
+requirePattern(
+  'contract',
+  /Recovery while Commitment is active[\s\S]*grant\/re-grant Usage Access[\s\S]*restart the Android protection service/,
+  'Commitment documentation must preserve recovery if native protection later stops.',
+);
+requirePattern(
+  'contract',
   /not a tamper-proof parental-control lock[\s\S]*full ScrollShield reset[\s\S]*clearing ScrollShield app data[\s\S]*uninstalling ScrollShield[\s\S]*wall-clock time/,
   'Commitment documentation must disclose the current anti-bypass limits.',
 );
@@ -175,5 +225,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Commitment lock check passed. The bounded device-local lock requires deliberate confirmation, freezes protection configuration centrally and visibly, remains visible on the dashboard, rejects full-state imports atomically, expires automatically, preserves safety exits, and is documented as anti-impulse rather than tamper-proof enforcement.',
+  'Commitment lock check passed. The bounded device-local lock requires a live enabled Android service and installed active target, freezes protection configuration centrally and visibly, remains recoverable, rejects full-state imports atomically, expires automatically, preserves safety exits, and is documented as anti-impulse rather than tamper-proof enforcement.',
 );
