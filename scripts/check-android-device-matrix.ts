@@ -114,9 +114,15 @@ for (const requiredScenario of [
   'COMMIT-04',
   'COMMIT-05',
   'COMMIT-06',
+  'ADAPT-01',
+  'ADAPT-02',
+  'ADAPT-03',
+  'ADAPT-04',
+  'ADAPT-05',
   'RULE-06',
   'RULE-08',
   'RULE-10',
+  'RULE-11',
   'RULE-12',
   'LIFE-04',
   'LIFE-07',
@@ -166,6 +172,12 @@ for (const evidenceField of [
   'Stop während Commitment gesperrt',
   'scrollshield_commitment_lock_v1',
   'Full backup import',
+  'Adaptive Anti-Binge Friction',
+  '5-second escalation',
+  '60-second cap',
+  'strict Anti-Binge precedence',
+  'unchanged emergency timing',
+  'local-midnight behavior',
   'PASS',
   'FAIL',
   'BLOCKED',
@@ -185,5 +197,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android device-matrix check passed. Build identity, channel/lifecycle diagnostics, commitment readiness, stop-bypass and reset evidence, emergency friction, overlay accessibility, stale activation, OEM coverage, migration recovery, and physical evidence requirements are guarded.',
+  'Android device-matrix check passed. Build identity, channel/lifecycle diagnostics, commitment readiness, adaptive-friction boundaries, stop-bypass and reset evidence, emergency friction, overlay accessibility, stale activation, OEM coverage, migration recovery, and physical evidence requirements are guarded.',
 );
