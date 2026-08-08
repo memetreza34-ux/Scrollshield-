@@ -55,6 +55,43 @@ describe('NativeProtectionStatusPanel', () => {
     expect(screen.getByRole('button', { name: 'Schutzdienst stoppen' })).toBeInTheDocument();
   });
 
+  it('blocks the in-app stop action while commitment is active but keeps status visible', () => {
+    const onToggle = vi.fn();
+    render(
+      <NativeProtectionStatusPanel
+        status={makeStatus({ running: true, enabled: true, health: 'active' })}
+        busy={false}
+        onToggle={onToggle}
+        stopLocked
+        stopLockedMessage="Regeln sind bis zum Commitment-Ende eingefroren."
+      />,
+    );
+
+    expect(screen.getByText('AKTIV')).toBeInTheDocument();
+    expect(screen.getByText('Regeln sind bis zum Commitment-Ende eingefroren.')).toBeInTheDocument();
+    const stopButton = screen.getByRole('button', { name: 'Stop während Commitment gesperrt' });
+    expect(stopButton).toBeDisabled();
+    fireEvent.click(stopButton);
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('still permits restarting a stopped service during commitment recovery', () => {
+    const onToggle = vi.fn();
+    render(
+      <NativeProtectionStatusPanel
+        status={makeStatus({ enabled: true, running: false, health: 'stale-activation' })}
+        busy={false}
+        onToggle={onToggle}
+        stopLocked
+      />,
+    );
+
+    const startButton = screen.getByRole('button', { name: 'Schutzdienst starten' });
+    expect(startButton).toBeEnabled();
+    fireEvent.click(startButton);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps deliberate manual stops neutral but visible', () => {
     render(
       <NativeProtectionStatusPanel
