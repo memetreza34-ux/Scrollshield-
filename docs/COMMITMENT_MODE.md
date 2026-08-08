@@ -50,6 +50,8 @@ While the lock is active, ScrollShield preserves the current:
 
 The visible app list disables app toggles, app-detail navigation, and recurring weekly-plan changes. The profile screen disables profile switching, creation, editing, and deletion. `App.tsx` independently guards those configuration writes so a missed UI control does not silently bypass the lock.
 
+The normal **in-app service stop is also disabled while the native service is running during Commitment**. The status screen continues to show the real service state, but its normal stop action becomes read-only. This closes the easiest in-app bypass without pretending that ScrollShield controls Android itself.
+
 Runtime data continues to work normally. History, statistics, permission status, focus runtime, Android diagnostics, and native event draining are not frozen.
 
 ## Recovery while Commitment is active
@@ -65,7 +67,7 @@ Commitment must therefore **not** freeze recovery controls. While rules remain r
 - use the documented emergency/home safety exits;
 - perform a complete ScrollShield reset if recovery is impossible.
 
-A later service failure must be displayed honestly through the normal lifecycle diagnostics. The mere presence of an active Commitment lock must never cause the UI to claim that native protection is still running.
+A stopped service may be **started** again during Commitment; only the normal in-app stop of an already-running service is blocked. A later service failure must be displayed honestly through the normal lifecycle diagnostics. The mere presence of an active Commitment lock must never cause the UI to claim that native protection is still running.
 
 ## Safety exits that must remain available
 
@@ -77,7 +79,13 @@ Commitment Mode must never remove:
 - local data export and migration/recovery evidence;
 - a complete ScrollShield app reset.
 
-A complete reset intentionally clears the device-local commitment key together with all other `scrollshield_` storage. This destructive escape route is part of the safety contract, not a bug.
+A complete reset intentionally sends an explicit native stop with lifecycle code `factory_reset`, then clears the device-local Commitment key together with all other `scrollshield_` storage. The factory reset is treated as a deliberate neutral stop rather than a service failure. This destructive escape route is part of the safety contract, not a bug.
+
+## Android-system controls remain outside the lock
+
+Commitment v1 does not own the Android operating system. Android may still expose system-level controls capable of ending the foreground service, including notification/system service controls, force-stop, app-data clearing, or uninstall.
+
+The ScrollShield UI must state this honestly. Blocking the normal in-app stop is deliberate anti-impulse friction; it is not evidence of device-owner enforcement or an impossible-to-bypass lock.
 
 ## Backup import during Commitment
 
@@ -100,8 +108,9 @@ This version is not tamper-proof. Do not market it as impossible to bypass, pare
 Known escape or tamper paths include:
 
 - full ScrollShield reset;
+- Android notification/system controls that can end the foreground service;
 - clearing ScrollShield app data in Android settings;
-- uninstalling ScrollShield;
+- force-stopping or uninstalling ScrollShield;
 - sufficiently manipulating wall-clock time because the first implementation uses a bounded local timestamp;
 - modifying the application/runtime on a rooted or otherwise compromised device.
 
@@ -126,12 +135,13 @@ Before calling Commitment Mode release-verified, evidence must cover:
 5. refusal when the native service is stopped or `running`/`enabled` are inconsistent;
 6. successful activation only with at least one installed active app and `running=true`, `enabled=true`;
 7. persistence after closing and reopening ScrollShield;
-8. app toggles, app details, weekly plans, and profile changes remaining read-only while active;
+8. app toggles, app details, weekly plans, profile changes, and the normal in-app service stop remaining read-only while active;
 9. unrelated history/statistics/focus/runtime updates continuing normally;
-10. protection permissions/status remaining repairable after a later service failure;
+10. protection permissions/status remaining repairable and a stopped service remaining restartable after a later service failure;
 11. automatic expiry at the configured deadline;
 12. no normal cancel action during the active lock;
-13. complete reset clearing the commitment key;
+13. complete reset issuing `factory_reset`, stopping native protection, and clearing the Commitment key;
 14. emergency/home safety exits remaining reachable in native protection;
 15. export remaining available while full backup import is disabled and atomically rejected;
-16. manual-clock behavior documented rather than represented as tamper-proof.
+16. Android system-level stop/data-clear/uninstall bypasses documented rather than represented as impossible;
+17. manual-clock behavior documented rather than represented as tamper-proof.
