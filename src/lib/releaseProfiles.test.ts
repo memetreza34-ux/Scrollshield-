@@ -90,12 +90,13 @@ describe('release profile helpers', () => {
     expect(result.timeWindows.workRules).toBe(DEFAULT_APP_CONFIG.timeWindows.workRules);
   });
 
-  it('presents default profiles without legacy Reels or endless-feed claims', () => {
+  it('presents default profiles without legacy Reels or endless-feed claims and discloses Balance adaptive friction', () => {
     const presentations = DEFAULT_PROFILES.map(getReleaseProfilePresentation);
     const text = presentations.map((profile) => `${profile.name} ${profile.description}`).join(' ');
 
     expect(text).not.toMatch(/Reels|Shorts|Endlos-Feed|Endlos-Swipe/i);
     expect(presentations.find((profile) => profile.name === 'Konsequent')).toBeDefined();
     expect(presentations.find((profile) => profile.name === 'Sanft')?.description).toMatch(/Kein Wochenplan/);
+    expect(presentations.find((profile) => profile.name === 'Balance')?.description).toMatch(/adaptive Anti-Binge-Reibung/);
   });
 });
