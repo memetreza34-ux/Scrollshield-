@@ -39,14 +39,22 @@ public class ProtectionDiagnosticPolicyTest {
         assertTrue(code.length() <= ProtectionDiagnosticPolicy.MAX_CODE_LENGTH);
         assertFalse(code.contains(" "));
         assertFalse(code.contains("\n"));
+
+        StringBuilder longCode = new StringBuilder();
+        for (int index = 0; index < 100; index++) longCode.append('a');
+        assertEquals(
+            ProtectionDiagnosticPolicy.MAX_CODE_LENGTH,
+            ProtectionDiagnosticPolicy.normalizeCode(longCode.toString(), "unknown_stop").length()
+        );
     }
 
     @Test
-    public void emptyCodeFallsBackSafely() {
+    public void emptyCodeFallsBackSafelyButOptionalReadCanRemainEmpty() {
         assertEquals(
             "unknown_stop",
             ProtectionDiagnosticPolicy.normalizeCode(" \n\t ", "unknown_stop")
         );
+        assertEquals("", ProtectionDiagnosticPolicy.normalizeCode("", ""));
     }
 
     @Test
@@ -70,10 +78,11 @@ public class ProtectionDiagnosticPolicyTest {
     }
 
     @Test
-    public void emptyMessageFallsBackSafely() {
+    public void emptyMessageFallsBackSafelyButOptionalReadCanRemainEmpty() {
         assertEquals(
             "Unbekannter Stoppgrund",
             ProtectionDiagnosticPolicy.normalizeMessage("", "Unbekannter Stoppgrund")
         );
+        assertEquals("", ProtectionDiagnosticPolicy.normalizeMessage("", ""));
     }
 }
