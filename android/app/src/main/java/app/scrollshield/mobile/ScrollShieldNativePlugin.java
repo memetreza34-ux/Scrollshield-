@@ -295,9 +295,15 @@ public class ScrollShieldNativePlugin extends Plugin {
                         .putLong(LAST_STOP_AT_KEY, timestamp)
                         .putString(
                             LAST_STOP_CODE_KEY,
-                            ProtectionStopReasonPolicy.classifySystemWarning(description)
+                            ProtectionDiagnosticPolicy.normalizeCode(
+                                ProtectionStopReasonPolicy.classifySystemWarning(description),
+                                "system_warning"
+                            )
                         )
-                        .putString(LAST_STOP_MESSAGE_KEY, safeDiagnosticText(description, "Systemwarnung"));
+                        .putString(
+                            LAST_STOP_MESSAGE_KEY,
+                            ProtectionDiagnosticPolicy.normalizeMessage(description, "Systemwarnung")
+                        );
                 }
                 editor.commit();
             } catch (JSONException error) {
@@ -373,8 +379,14 @@ public class ScrollShieldNativePlugin extends Plugin {
             .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
             .edit()
             .putLong(LAST_STOP_AT_KEY, System.currentTimeMillis())
-            .putString(LAST_STOP_CODE_KEY, safeDiagnosticText(code, "unknown_stop"))
-            .putString(LAST_STOP_MESSAGE_KEY, safeDiagnosticText(message, "Unbekannter Stoppgrund"))
+            .putString(
+                LAST_STOP_CODE_KEY,
+                ProtectionDiagnosticPolicy.normalizeCode(code, "unknown_stop")
+            )
+            .putString(
+                LAST_STOP_MESSAGE_KEY,
+                ProtectionDiagnosticPolicy.normalizeMessage(message, "Unbekannter Stoppgrund")
+            )
             .commit();
     }
 
@@ -391,7 +403,7 @@ public class ScrollShieldNativePlugin extends Plugin {
     }
 
     public static String getLastProtectionStopCode(Context context) {
-        return safeDiagnosticText(
+        return ProtectionDiagnosticPolicy.normalizeCode(
             context
                 .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
                 .getString(LAST_STOP_CODE_KEY, ""),
@@ -400,7 +412,7 @@ public class ScrollShieldNativePlugin extends Plugin {
     }
 
     public static String getLastProtectionStopMessage(Context context) {
-        return safeDiagnosticText(
+        return ProtectionDiagnosticPolicy.normalizeMessage(
             context
                 .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
                 .getString(LAST_STOP_MESSAGE_KEY, ""),
@@ -479,10 +491,6 @@ public class ScrollShieldNativePlugin extends Plugin {
         String appId = key.substring(appStart);
         if (appId.trim().isEmpty()) return null;
         return new UsageKey(date, appId);
-    }
-
-    private static String safeDiagnosticText(String value, String fallback) {
-        return value == null || value.trim().isEmpty() ? fallback : value.trim();
     }
 
     private SharedPreferences getPreferences() {
