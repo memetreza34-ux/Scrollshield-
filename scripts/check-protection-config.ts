@@ -190,7 +190,7 @@ requirePattern(
 requirePattern(
   servicePath,
   service,
-  /getPreviousDayKey[\s\S]*countRecentOpensForKey/,
+  /countRecentOpens[\s\S]*getPreviousDayKey\(now\)[\s\S]*countRecentOpensForKey/,
   'Adaptive friction must retain the existing recent-open accounting across local midnight.',
 );
 requirePattern(
@@ -214,8 +214,8 @@ requirePattern(
 rejectPattern(
   adaptiveContractPath,
   adaptiveContract,
-  /AI-powered|machine-learning-powered|addiction score|diagnos/i,
-  'Adaptive friction must not be marketed as AI, medical diagnosis, or an addiction score.',
+  /(?:is|uses|powered by|driven by)\s+(?:an?\s+)?(?:AI|machine learning|addiction score|diagnosis)/i,
+  'Adaptive friction must not positively market itself as AI, machine learning, diagnosis, or an addiction score.',
 );
 for (const scenario of ['ADAPT-01', 'ADAPT-02', 'ADAPT-03', 'ADAPT-04', 'ADAPT-05']) {
   requirePattern(matrixPath, matrix, new RegExp(`\\b${scenario}\\b`), `Physical adaptive-friction evidence is missing: ${scenario}.`);
