@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_STATE } from '../types';
+import { createCommitmentLock } from '../lib/commitmentLock';
+import { DEFAULT_APP_CONFIG, DEFAULT_STATE } from '../types';
 import { ReleasePermissionsScreen } from './ReleasePermissionsScreen';
 
 const {
@@ -73,9 +74,9 @@ const readyAndroidState = {
     notifications: true,
   },
   appsConfig: {
-    ...DEFAULT_STATE.appsConfig,
     instagram: {
-      ...DEFAULT_STATE.appsConfig.instagram,
+      id: 'instagram',
+      ...DEFAULT_APP_CONFIG,
       active: true,
     },
   },
@@ -127,7 +128,7 @@ describe('ReleasePermissionsScreen', () => {
   it('does not expose fake reminder or schedule promises', () => {
     render(<ReleasePermissionsScreen state={readyAndroidState} updateState={vi.fn()} navigate={vi.fn()} />);
 
-    expect(screen.getByText(/sichtbare Stop-Aktion/)).toBeInTheDocument();
+    expect(screen.getByText(/sichtbaren Android-Schutzdienst/)).toBeInTheDocument();
     expect(screen.queryByText(/Fokus-Erinnerungen/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Tageszusammenfassung/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Zeitpläne und aktive Sitzungen/)).not.toBeInTheDocument();
@@ -154,6 +155,45 @@ describe('ReleasePermissionsScreen', () => {
     await waitFor(() => expect(syncProtectionMock).toHaveBeenCalled());
     await waitFor(() => expect(startProtectionMock).toHaveBeenCalled());
     expect(await screen.findByText(/Android-Schutz läuft für 1 verfügbare App/)).toBeInTheDocument();
+  });
+
+  it('blocks the normal in-app service stop while commitment is active', async () => {
+    getProtectionStatusMock.mockResolvedValue(activeStatus);
+    const commitmentLock = createCommitmentLock(480, Date.now());
+
+    render(
+      <ReleasePermissionsScreen
+        state={readyAndroidState}
+        updateState={vi.fn()}
+        navigate={vi.fn()}
+        commitmentLock={commitmentLock}
+      />,
+    );
+
+    const stopButton = await screen.findByRole('button', { name: 'Stop während Commitment gesperrt' });
+    expect(stopButton).toBeDisabled();
+    expect(screen.getByText(/Der normale Stopp in ScrollShield ist bis/)).toBeInTheDocument();
+    fireEvent.click(stopButton);
+    expect(stopProtectionMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Status neu prüfen' })).toBeEnabled();
+  });
+
+  it('keeps service restart available during commitment recovery', async () => {
+    getProtectionStatusMock.mockResolvedValueOnce(stoppedStatus).mockResolvedValue(activeStatus);
+
+    render(
+      <ReleasePermissionsScreen
+        state={readyAndroidState}
+        updateState={vi.fn()}
+        navigate={vi.fn()}
+        commitmentLock={createCommitmentLock(60, Date.now())}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Schutzdienst starten' }));
+    await waitFor(() => expect(startProtectionMock).toHaveBeenCalled());
+    expect(await screen.findByText(/Android-Schutz läuft für 1 verfügbare App/)).toBeInTheDocument();
+    expect(stopProtectionMock).not.toHaveBeenCalled();
   });
 
   it('shows iOS as unreleased instead of simulating system permission toggles', () => {
