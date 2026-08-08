@@ -10,7 +10,12 @@ export interface NativeProtectionHealthPresentation {
   showLastStop: boolean;
 }
 
-const USER_STOP_CODES = new Set(['manual_app_stop', 'notification_action_stop', 'migration_recovery']);
+const USER_STOP_CODES = new Set([
+  'manual_app_stop',
+  'notification_action_stop',
+  'migration_recovery',
+  'factory_reset',
+]);
 
 export const describeNativeProtectionHealth = (
   status: NativeProtectionStatus | null,
