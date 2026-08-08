@@ -11,6 +11,7 @@ import {
   isCommitmentLockActive,
   type CommitmentDurationMinutes,
   type CommitmentLock,
+  type CommitmentStartResult,
 } from '../lib/commitmentLock';
 import type { AppConfig, AppState, Profile, Screen } from '../types';
 import { DEFAULT_APP_CONFIG, SUPPORTED_APPS } from '../types';
@@ -78,17 +79,28 @@ export function ProfilesScreen({
   updateState: (updates: Partial<AppState>) => void;
   navigate: (screen: Screen) => void;
   commitmentLock?: CommitmentLock | null;
-  onStartCommitment?: (durationMinutes: CommitmentDurationMinutes) => boolean;
+  onStartCommitment?: (durationMinutes: CommitmentDurationMinutes) => Promise<CommitmentStartResult>;
 }) {
   const profiles = state.profiles || [];
   const activeProfileId = state.activeProfileId || profiles[0]?.id || 'gentle';
   const commitmentActive = isCommitmentLockActive(commitmentLock);
+  const activeAppCount = Object.values(state.appsConfig).filter((config) => config.active).length;
+  const commitmentConfigurationMessage =
+    state.operatingSystem !== 'android'
+      ? 'Commitment ist in Version 1 nur mit dem nativen Android-Schutz verfügbar.'
+      : activeAppCount === 0
+        ? 'Aktiviere zuerst mindestens eine App, bevor du ihre Schutzregeln verbindlich einfrierst.'
+        : null;
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [pendingCommitment, setPendingCommitment] = useState<CommitmentDurationMinutes | null>(null);
-  const [commitmentError, setCommitmentError] = useState<string | null>(null);
+  const [commitmentStarting, setCommitmentStarting] = useState(false);
+  const [commitmentFailure, setCommitmentFailure] = useState<{
+    message: string;
+    action?: 'apps' | 'permissions';
+  } | null>(null);
 
   const saveCurrentIntoProfiles = () =>
     profiles.map((profile) =>
@@ -194,14 +206,26 @@ export function ProfilesScreen({
     cancelEdit();
   };
 
-  const confirmCommitment = () => {
-    if (!pendingCommitment || !onStartCommitment) return;
-    setCommitmentError(null);
-    if (!onStartCommitment(pendingCommitment)) {
-      setCommitmentError('Commitment konnte nicht sicher lokal gespeichert werden. Es wurde nicht aktiviert.');
-      return;
+  const confirmCommitment = async () => {
+    if (!pendingCommitment || !onStartCommitment || commitmentStarting) return;
+    setCommitmentFailure(null);
+    setCommitmentStarting(true);
+    try {
+      const result = await onStartCommitment(pendingCommitment);
+      if (!result.ok) {
+        setCommitmentFailure({ message: result.message, action: result.action });
+        return;
+      }
+      setPendingCommitment(null);
+    } catch (error) {
+      console.error('Commitment activation failed', error);
+      setCommitmentFailure({
+        message: 'Commitment konnte nicht sicher aktiviert werden. Der bestehende Schutz wurde nicht verändert.',
+        action: 'permissions',
+      });
+    } finally {
+      setCommitmentStarting(false);
     }
-    setPendingCommitment(null);
   };
 
   if (creating || editingProfileId) {
@@ -285,7 +309,7 @@ export function ProfilesScreen({
                   Deine aktuelle Schutzkonfiguration ist bis {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} eingefroren. Apps, Profile, Limits und Zeitpläne können bis dahin nicht geändert werden.
                 </p>
                 <p className="mt-3 text-xs leading-relaxed text-zinc-400">
-                  Notfallfreigabe, Hilfe, Datenexport und ein vollständiger App-Reset bleiben verfügbar. Der Reset löscht bewusst auch den Commitment-Lock.
+                  Notfallfreigabe, Hilfe, Datenexport und ein vollständiger App-Reset bleiben verfügbar. Berechtigungen und Schutzstatus können weiterhin repariert werden. Der Reset löscht bewusst auch den Commitment-Lock.
                 </p>
               </>
             ) : pendingCommitment ? (
@@ -294,14 +318,24 @@ export function ProfilesScreen({
                   {durationLabel(pendingCommitment)} verbindlich einfrieren?
                 </p>
                 <p className="mt-2 text-xs leading-relaxed text-zinc-400">
-                  Während dieser Zeit kannst du Schutzregeln nicht abschwächen oder umkonfigurieren. Es gibt keinen normalen Abbrechen-Schalter nach der Aktivierung. Ein kompletter Reset bleibt als Sicherheitsausstieg möglich.
+                  Beim Start prüft ScrollShield zusätzlich, dass mindestens eine aktive Ziel-App wirklich installiert ist und der Android-Schutzdienst tatsächlich läuft. Während der Laufzeit kannst du Schutzregeln nicht abschwächen oder umkonfigurieren. Ein kompletter Reset bleibt als Sicherheitsausstieg möglich.
                 </p>
                 <div className="mt-4 flex gap-2">
-                  <button type="button" onClick={() => setPendingCommitment(null)} className="min-h-[44px] rounded-xl border border-zinc-700 px-4 text-sm font-bold text-zinc-300">
+                  <button
+                    type="button"
+                    onClick={() => setPendingCommitment(null)}
+                    disabled={commitmentStarting}
+                    className="min-h-[44px] rounded-xl border border-zinc-700 px-4 text-sm font-bold text-zinc-300 disabled:opacity-40"
+                  >
                     Abbrechen
                   </button>
-                  <button type="button" onClick={confirmCommitment} className="min-h-[44px] flex-1 rounded-xl bg-indigo-200 px-4 text-sm font-bold text-indigo-950">
-                    Verbindlich starten
+                  <button
+                    type="button"
+                    onClick={() => void confirmCommitment()}
+                    disabled={commitmentStarting}
+                    className="min-h-[44px] flex-1 rounded-xl bg-indigo-200 px-4 text-sm font-bold text-indigo-950 disabled:opacity-60"
+                  >
+                    {commitmentStarting ? 'Schutz wird geprüft…' : 'Verbindlich starten'}
                   </button>
                 </div>
               </div>
@@ -310,21 +344,52 @@ export function ProfilesScreen({
                 <p className="mt-2 text-sm leading-relaxed text-zinc-400">
                   Friere deine aktuelle Konfiguration bewusst für eine begrenzte Zeit ein. Das erschwert impulsives Deaktivieren, ohne den sicheren Notfallweg zu entfernen.
                 </p>
-                <div className="mt-4 grid grid-cols-3 gap-2">
-                  {([60, 480, 1440] as CommitmentDurationMinutes[]).map((minutes) => (
-                    <button
-                      key={minutes}
-                      type="button"
-                      onClick={() => setPendingCommitment(minutes)}
-                      className="min-h-[44px] rounded-xl border border-zinc-700 bg-zinc-800 px-2 text-xs font-bold text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                    >
-                      {durationLabel(minutes)}
-                    </button>
-                  ))}
-                </div>
+                {commitmentConfigurationMessage ? (
+                  <div role="status" className="mt-4 rounded-xl border border-zinc-700/70 bg-zinc-950/60 p-3 text-xs leading-relaxed text-zinc-400">
+                    <p>{commitmentConfigurationMessage}</p>
+                    {state.operatingSystem === 'android' && activeAppCount === 0 && (
+                      <button
+                        type="button"
+                        onClick={() => navigate('apps')}
+                        className="mt-3 min-h-[44px] rounded-xl border border-zinc-700 bg-zinc-800 px-4 font-bold text-zinc-200"
+                      >
+                        Apps auswählen
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    {([60, 480, 1440] as CommitmentDurationMinutes[]).map((minutes) => (
+                      <button
+                        key={minutes}
+                        type="button"
+                        onClick={() => {
+                          setCommitmentFailure(null);
+                          setPendingCommitment(minutes);
+                        }}
+                        className="min-h-[44px] rounded-xl border border-zinc-700 bg-zinc-800 px-2 text-xs font-bold text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                      >
+                        {durationLabel(minutes)}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
             )}
-            {commitmentError && <p role="alert" className="mt-3 text-xs text-red-300">{commitmentError}</p>}
+            {commitmentFailure && (
+              <div role="alert" className="mt-3 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-xs leading-relaxed text-red-200">
+                <p>{commitmentFailure.message}</p>
+                {commitmentFailure.action && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(commitmentFailure.action as Screen)}
+                    className="mt-3 min-h-[44px] rounded-xl border border-red-400/30 px-4 font-bold text-red-100"
+                  >
+                    {commitmentFailure.action === 'apps' ? 'Apps prüfen' : 'Schutzstatus öffnen'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </section>
