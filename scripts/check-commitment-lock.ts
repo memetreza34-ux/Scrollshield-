@@ -7,12 +7,18 @@ const paths = {
   policyTest: 'src/lib/commitmentLock.test.ts',
   dashboard: 'src/screens/DashboardScreen.tsx',
   dashboardTest: 'src/screens/DashboardScreen.test.tsx',
+  statusPanel: 'src/components/NativeProtectionStatusPanel.tsx',
+  statusPanelTest: 'src/components/NativeProtectionStatusPanel.test.tsx',
+  permissions: 'src/screens/ReleasePermissionsScreen.tsx',
+  permissionsTest: 'src/screens/ReleasePermissionsScreen.test.tsx',
   appList: 'src/screens/AppListScreen.tsx',
   appListTest: 'src/screens/AppListScreen.test.tsx',
   profiles: 'src/screens/ProfilesScreen.tsx',
   profilesTest: 'src/screens/ProfilesScreen.test.tsx',
   privacy: 'src/screens/ReleasePrivacyScreen.tsx',
   privacyTest: 'src/screens/ReleasePrivacyScreen.test.tsx',
+  health: 'src/lib/nativeProtectionHealth.ts',
+  healthTest: 'src/lib/nativeProtectionHealth.test.ts',
   storage: 'src/lib/storage.ts',
   contract: 'docs/COMMITMENT_MODE.md',
   matrix: 'docs/ANDROID_DEVICE_TEST_MATRIX.md',
@@ -100,9 +106,10 @@ mustContain(
     'assessCommitmentStartReadiness',
     'runtime_check_failed',
     'saveCommitmentLock(nextLock)',
+    "code: 'factory_reset'",
     'commitmentLock={commitmentLock}',
   ],
-  'App.tsx is missing central commitment activation or enforcement wiring.',
+  'App.tsx is missing central commitment activation, reset, or enforcement wiring.',
 );
 mustContain(
   'appIntegrationTest',
@@ -110,9 +117,11 @@ mustContain(
     'persists commitment only after the real App flow verifies installed targets and a healthy native service',
     'fails closed and does not persist commitment when the live native service is stopped',
     'fails closed when the native readiness check itself throws',
+    'stops native protection with a deliberate factory-reset reason and clears commitment on full reset',
     'scrollshield_commitment_lock_v1',
     'getStatusMock',
     'syncMock',
+    'factory_reset',
   ],
   'App-level commitment integration coverage is missing or incomplete.',
 );
@@ -139,6 +148,45 @@ mustContain(
     'fails visibly when commitment protection status cannot be read',
   ],
   'Dashboard commitment runtime tests are incomplete.',
+);
+
+mustContain(
+  'statusPanel',
+  [
+    'stopLocked = false',
+    'stopActionLocked',
+    'Stop während Commitment gesperrt',
+    'Android kann den Dienst weiterhin über seine Systemoberflächen beenden',
+  ],
+  'Native protection status panel must block only the in-app stop while disclosing Android system control.',
+);
+mustContain(
+  'statusPanelTest',
+  [
+    'blocks the in-app stop action while commitment is active but keeps status visible',
+    'still permits restarting a stopped service during commitment recovery',
+  ],
+  'Status-panel tests must cover stop blocking and restart recovery.',
+);
+mustContain(
+  'permissions',
+  [
+    'commitmentLock = null',
+    'isCommitmentLockActive(commitmentLock)',
+    'if (commitmentActive)',
+    'Der normale App-Stopp ist während Commitment gesperrt',
+    'stopLocked={commitmentActive}',
+    'Berechtigungen und ein nötiger Neustart des Schutzdienstes bleiben verfügbar',
+  ],
+  'Permissions must independently block an in-app stop while keeping recovery controls available.',
+);
+mustContain(
+  'permissionsTest',
+  [
+    'blocks the normal in-app service stop while commitment is active',
+    'keeps service restart available during commitment recovery',
+  ],
+  'Permissions integration tests must cover commitment stop and restart behavior.',
 );
 
 mustContain(
@@ -207,6 +255,16 @@ mustContain(
   ],
   'Privacy commitment tests are incomplete.',
 );
+mustContain(
+  'health',
+  ['factory_reset'],
+  'Factory reset must be classified as a deliberate native protection stop.',
+);
+mustContain(
+  'healthTest',
+  ['treats a complete app factory reset as a deliberate stop'],
+  'Factory-reset health presentation needs regression coverage.',
+);
 mustMatch(
   'storage',
   /startsWith\(STORAGE_PREFIX\)[\s\S]*localStorage\.removeItem/,
@@ -220,16 +278,17 @@ mustContain(
     'active target app is actually installed/available on the device',
     '`running=true`',
     '`enabled=true`',
-    'Recovery while Commitment is active',
-    'grant/re-grant Usage Access',
-    'restart the Android protection service',
+    'normal **in-app service stop is also disabled',
+    'A stopped service may be **started** again during Commitment',
+    '`factory_reset`',
+    'Android-system controls remain outside the lock',
     'not tamper-proof',
     'export stays available',
     'import is temporarily disabled',
     'not part of a normal long-term ScrollShield backup',
     'purchase, restore, refund/revocation, offline entitlement, and downgrade behavior',
   ],
-  'Commitment documentation is missing activation, recovery, anti-bypass, backup, or subscription constraints.',
+  'Commitment documentation is missing activation, stop/recovery, reset, anti-bypass, backup, or subscription constraints.',
 );
 mustContain(
   'matrix',
@@ -244,5 +303,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Commitment lock check passed. Activation requires live native Android enforcement, App-level integration coverage guards persistence, later service failure is reported honestly, rules remain centrally frozen, recovery and safety exits remain available, full imports are atomic, and physical-device evidence is mandatory.',
+  'Commitment lock check passed. Activation requires live native Android enforcement, the normal in-app stop is blocked while restart/recovery remains available, factory reset stops native protection explicitly, later service failure is reported honestly, rules remain centrally frozen, full imports are atomic, and physical-device evidence is mandatory.',
 );
