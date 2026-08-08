@@ -126,6 +126,44 @@ requirePattern(
 requirePattern(
   pluginPath,
   plugin,
+  /recordProtectionServiceStarted\(Context context\)[\s\S]*LAST_START_AT_KEY[\s\S]*System\.currentTimeMillis\(\)/,
+  'The last-start timestamp must have a dedicated actual-service-start recorder.',
+);
+const setEnabledStart = plugin.indexOf('public static void setProtectionEnabled');
+const actualStartRecorderStart = plugin.indexOf('public static void recordProtectionServiceStarted');
+if (setEnabledStart < 0 || actualStartRecorderStart <= setEnabledStart) {
+  findings.push(`${pluginPath}: Could not isolate activation and actual-start persistence methods.`);
+} else if (plugin.slice(setEnabledStart, actualStartRecorderStart).includes('LAST_START_AT_KEY')) {
+  findings.push(`${pluginPath}: Activation requests must not write LAST_START_AT_KEY before the foreground service actually starts.`);
+}
+requirePattern(
+  servicePath,
+  service,
+  /onCreate\(\)[\s\S]*startForeground\(NOTIFICATION_ID, createNotification\(\)\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*RUNNING\.set\(true\)/,
+  'Foreground creation must succeed before last-start evidence and RUNNING=true are recorded.',
+);
+const onCreateStart = service.indexOf('public void onCreate()');
+const onStartCommandStart = service.indexOf('public int onStartCommand', onCreateStart + 1);
+if (onCreateStart < 0 || onStartCommandStart <= onCreateStart) {
+  findings.push(`${servicePath}: Could not isolate service onCreate lifecycle.`);
+} else {
+  const onCreateBody = service.slice(onCreateStart, onStartCommandStart);
+  const foregroundIndex = onCreateBody.indexOf('startForeground(NOTIFICATION_ID, createNotification())');
+  const runningIndex = onCreateBody.indexOf('RUNNING.set(true)');
+  const recorderIndex = onCreateBody.indexOf('recordProtectionServiceStarted(this)');
+  if (foregroundIndex < 0 || runningIndex < foregroundIndex || recorderIndex < foregroundIndex) {
+    findings.push(`${servicePath}: RUNNING and last-start evidence must only follow successful startForeground().`);
+  }
+}
+requirePattern(
+  servicePath,
+  service,
+  /catch \(RuntimeException error\)[\s\S]*RUNNING\.set\(false\)[\s\S]*setProtectionEnabled\(this, false\)[\s\S]*"start_failed"[\s\S]*stopSelf\(\)[\s\S]*return/,
+  'A foreground-start failure must fail closed without creating false start evidence.',
+);
+requirePattern(
+  pluginPath,
+  plugin,
   /appendProtectionEvent[\s\S]*ProtectionStopReasonPolicy\.classifySystemWarning[\s\S]*LAST_STOP_MESSAGE_KEY/,
   'System warning events must update persistent stop diagnostics.',
 );
@@ -139,7 +177,7 @@ requirePattern(
   pluginPath,
   plugin,
   /start_failed[\s\S]*Android konnte den Schutzdienst nicht starten/,
-  'Native start exceptions must retain a stable diagnostic reason.',
+  'Native start request exceptions must retain a stable diagnostic reason.',
 );
 
 for (const code of [
@@ -416,5 +454,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection lifecycle diagnostics check passed. Native fields, terminal stops, emergency friction, inconsistent service states, and physical evidence requirements remain guarded.',
+  'Protection lifecycle diagnostics check passed. Actual foreground starts, native fields, terminal stops, emergency friction, inconsistent service states, and physical evidence requirements remain guarded.',
 );
