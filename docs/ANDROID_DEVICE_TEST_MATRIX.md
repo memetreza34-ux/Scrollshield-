@@ -29,7 +29,7 @@ Capture the following before each scenario:
 - Installation source: debug APK, internal testing, closed testing, or release candidate
 - Clean install or upgrade path
 - Copied Android diagnostic JSON
-- Screen recording for permission, overlay, notification, migration, lifecycle, and recovery scenarios
+- Screen recording for permission, overlay, notification, migration, lifecycle, recovery, and commitment scenarios
 - Relevant `adb logcat` excerpt for failures
 - Result: `PASS`, `FAIL`, or `BLOCKED`
 - Defect or GitHub issue reference for every failure
@@ -75,6 +75,16 @@ Do not reuse evidence from a different build number.
 | APP-04 | Uninstall the final installed protected app | Running service stops within the configuration-health interval, persisted activation clears, and diagnostics retain `target_app_missing`. |
 | APP-05 | Disable the final active rule | Running service stops, no empty foreground service remains, and diagnostics retain `no_active_rules`. |
 | APP-06 | Clone or work-profile variant | Record package visibility and behavior; do not mark supported unless the exact package is validated. |
+
+## Commitment Mode Lifecycle
+
+| ID | Scenario | Acceptance criteria |
+| --- | --- | --- |
+| COMMIT-01 | Valid commitment activation | On native Android with at least one active installed target and a healthy service, the final confirmation reads the current native status, requires `running=true` and `enabled=true`, persists the selected 1 h / 8 h / 24 h deadline, and immediately makes app/profile/rule controls read-only. |
+| COMMIT-02 | Invalid commitment prerequisites | iOS/non-native runtime, zero active rules, every active target unavailable, `running=false`, or `running=true` with `enabled=false` must leave Commitment inactive. The UI must direct the user to `Apps prüfen` or `Schutzstatus öffnen` where applicable and must not persist `scrollshield_commitment_lock_v1`. |
+| COMMIT-03 | Native service stops after activation | After a valid Commitment starts, revoke a required permission or otherwise stop the service. The lock remains active and rules stay frozen, but the dashboard changes to `Commitment aktiv · Android-Schutz läuft nicht`, shows the latest stop code when available, and routes to protection status. Repairing permissions/restarting protection remains possible without weakening the frozen rules. |
+| COMMIT-04 | Backup and reset while active | Normal JSON export remains available. Full backup import is disabled and centrally rejected atomically; no partial import is reported as success. A deliberately confirmed full app reset remains available and removes `scrollshield_commitment_lock_v1`. |
+| COMMIT-05 | Expiry and restart | Close/reopen ScrollShield during the lock and verify the same deadline remains visible. At the exact deadline the lock clears automatically and rule editing becomes available again. Manual clock-change behavior is recorded separately and never described as tamper-proof. |
 
 ## Protection Rule Matrix
 
@@ -154,6 +164,8 @@ Every copied diagnostic JSON must contain at least:
 
 The in-app Permissions status panel must derive its label from both persisted activation and live service state. It must not collapse `enabled` and `running` into one boolean.
 
+Commitment evidence must show the exact native `running` and `enabled` state immediately before activation, the installed-target result, the persisted deadline, and the dashboard response if native protection later stops.
+
 Emergency-friction evidence must additionally prove the exact candidate honors `requireCountdown` and `requireReason`, keeps the normalized reason local, bounds it to 160 characters, and never bypasses the daily emergency maximum.
 
 Overlay-accessibility evidence must additionally prove that the exact candidate remains scrollable under maximum font scale and a visible software keyboard, and that both the safe return-home action and the emergency action remain reachable.
@@ -184,3 +196,4 @@ The Android release candidate remains blocked until:
 11. The copied diagnostic JSON matches the installed version and build under test.
 12. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, and `assembleDebug`.
 13. Play reviewer videos demonstrate the same tested build.
+14. `COMMIT-01` through `COMMIT-05` pass on the exact candidate, including refusal before live protection is ready and honest dashboard recovery after a later native-service failure.
