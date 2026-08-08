@@ -3,6 +3,7 @@ import { Activity, Bell, Eye, Info, Layers, RefreshCw, ShieldCheck } from 'lucid
 import { motion } from 'motion/react';
 import { NativeProtectionStatusPanel } from '../components/NativeProtectionStatusPanel';
 import { Header } from '../components/ui';
+import { isCommitmentLockActive, type CommitmentLock } from '../lib/commitmentLock';
 import { NativePermissions } from '../lib/nativePermissions';
 import { NativeProtection } from '../lib/nativeProtection';
 import type { NativeProtectionStatus } from '../lib/nativeProtection';
@@ -44,7 +45,7 @@ const PERMISSION_CARDS: PermissionCard[] = [
   {
     key: 'notifications',
     title: 'Benachrichtigungen',
-    description: 'Hält den laufenden Android-Schutzdienst sichtbar und stellt seine direkte Stop-Aktion in der Dauerbenachrichtigung bereit.',
+    description: 'Hält den laufenden Android-Schutzdienst sichtbar. Android behält seine Systemkontrolle über den laufenden Dienst.',
     missing: 'Ohne sichtbare Benachrichtigung startet der Android-Schutzdienst nicht.',
     icon: Bell,
   },
@@ -66,11 +67,13 @@ export function ReleasePermissionsScreen({
   updateState,
   navigate,
   isOnboarding = false,
+  commitmentLock = null,
 }: {
   state: AppState;
   updateState: (updates: Partial<AppState>) => void;
   navigate: (screen: Screen) => void;
   isOnboarding?: boolean;
+  commitmentLock?: CommitmentLock | null;
 }) {
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [openingSetting, setOpeningSetting] = useState<AndroidSettingsPermission | null>(null);
@@ -84,6 +87,7 @@ export function ReleasePermissionsScreen({
   permissionsRef.current = state.permissions;
 
   const nativeAndroid = state.operatingSystem === 'android' && NativePermissions.isAndroidNative();
+  const commitmentActive = isCommitmentLockActive(commitmentLock);
   const activeAppIds = Object.values(state.appsConfig)
     .filter((config) => config.active)
     .map((config) => config.id);
@@ -138,7 +142,7 @@ export function ReleasePermissionsScreen({
         const permissionStatus = await NativePermissions.getAndroidStatus();
         applyNativePermissionStatus(permissionStatus);
         if (granted && permissionStatus?.notifications) {
-          setStatusMessage('Benachrichtigungen und die sichtbare Stop-Aktion sind aktiv.');
+          setStatusMessage('Benachrichtigungen für den sichtbaren Schutzdienst sind aktiv.');
           return;
         }
         await NativePermissions.openAndroidSettings('notifications');
@@ -162,6 +166,12 @@ export function ReleasePermissionsScreen({
     setStatusMessage(null);
     try {
       if (serviceStatus?.running) {
+        if (commitmentActive) {
+          setStatusMessage(
+            'Der normale App-Stopp ist während Commitment gesperrt. Regeln bleiben eingefroren; Android-Systemkontrollen und der vollständige ScrollShield-Reset bleiben als externe bzw. sichere Ausgänge verfügbar.',
+          );
+          return;
+        }
         await NativeProtection.stop();
         setServiceStatus(await NativeProtection.getStatus());
         setStatusMessage('Der Android-Schutzdienst wurde bewusst gestoppt.');
@@ -268,7 +278,17 @@ export function ReleasePermissionsScreen({
               {checkingStatus ? 'Android-Status wird geprüft' : 'Status neu prüfen'}
             </button>
 
-            <NativeProtectionStatusPanel status={serviceStatus} busy={serviceBusy} onToggle={() => void toggleProtectionService()} />
+            <NativeProtectionStatusPanel
+              status={serviceStatus}
+              busy={serviceBusy}
+              onToggle={() => void toggleProtectionService()}
+              stopLocked={commitmentActive}
+              stopLockedMessage={
+                commitmentActive && commitmentLock
+                  ? `Der normale Stopp in ScrollShield ist bis ${new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} gesperrt. Berechtigungen und ein nötiger Neustart des Schutzdienstes bleiben verfügbar.`
+                  : undefined
+              }
+            />
 
             {statusMessage && (
               <p role="status" className="text-center text-xs leading-relaxed text-zinc-400">
