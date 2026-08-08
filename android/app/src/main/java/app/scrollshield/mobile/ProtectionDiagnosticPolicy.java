@@ -13,8 +13,6 @@ final class ProtectionDiagnosticPolicy {
 
     static String normalizeCode(String value, String fallback) {
         String normalizedFallback = normalizeCodeCharacters(fallback);
-        if (normalizedFallback.isEmpty()) normalizedFallback = "unknown_stop";
-
         String normalized = normalizeCodeCharacters(value);
         if (normalized.isEmpty()) normalized = normalizedFallback;
         return truncate(normalized, MAX_CODE_LENGTH);
