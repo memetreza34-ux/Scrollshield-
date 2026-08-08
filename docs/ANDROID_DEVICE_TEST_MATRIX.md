@@ -29,7 +29,7 @@ Capture the following before each scenario:
 - Installation source: debug APK, internal testing, closed testing, or release candidate
 - Clean install or upgrade path
 - Copied Android diagnostic JSON
-- Screen recording for permission, overlay, notification, migration, lifecycle, recovery, and commitment scenarios
+- Screen recording for permission, overlay, notification, migration, lifecycle, recovery, commitment, and adaptive-friction scenarios
 - Relevant `adb logcat` excerpt for failures
 - Result: `PASS`, `FAIL`, or `BLOCKED`
 - Defect or GitHub issue reference for every failure
@@ -87,6 +87,16 @@ Do not reuse evidence from a different build number.
 | COMMIT-05 | Expiry and restart | Close/reopen ScrollShield during the lock and verify the same deadline remains visible. At the exact deadline the lock clears automatically and rule editing becomes available again. Manual clock-change behavior is recorded separately and never described as tamper-proof. |
 | COMMIT-06 | In-app service-stop bypass | With Commitment active and native protection running, `Schutzdienst stoppen` is not available; the panel shows `Stop während Commitment gesperrt`, and invoking the screen path must not call the native stop method. If the service is already stopped, `Schutzdienst starten` remains available for recovery. Android notification/system controls remain documented external bypasses rather than being described as impossible. |
 
+## Adaptive Anti-Binge Friction
+
+| ID | Scenario | Acceptance criteria |
+| --- | --- | --- |
+| ADAPT-01 | Disabled and below-threshold baseline | With Anti-Binge disabled, repeated intentional opens always use the configured base opening delay. With Anti-Binge enabled but recent successful `Bewusst öffnen` actions still below the warning threshold, the base delay is also unchanged. Merely showing the overlay or returning home must not increment the counter. |
+| ADAPT-02 | Progressive warning friction | With a 10-second base delay and warning threshold 3, perform three successful intentional opens inside the warning window. The next normal opening waits exactly 15 seconds; the next counted repeat waits 20 seconds. Continue until the adaptive delay reaches 60 seconds and verify it never exceeds that cap. A manually configured base delay above 60 seconds must never be shortened. |
+| ADAPT-03 | Strict threshold precedence | Reach the configured Anti-Binge block threshold inside its block window. The result must be the existing strict Anti-Binge block; adaptive friction must not turn that strict result back into a normal `Bewusst öffnen` path. |
+| ADAPT-04 | Emergency and safety separation | Trigger adaptive friction and then separately trigger a strict emergency path. The adaptive opening count must not be incremented by the emergency unlock, the emergency countdown/reason/daily maximum remain governed by the emergency configuration, and `Zurück zum Startbildschirm` stays immediately reachable. |
+| ADAPT-05 | Midnight and transparent evidence | Create successful intentional opens immediately before and after local midnight within the configured short warning window. The recent-open count must include eligible events across the day boundary, the exact effective adaptive delay must be shown in the overlay and local warning event, and no cloud/network dependency is required. |
+
 ## Protection Rule Matrix
 
 | ID | Scenario | Acceptance criteria |
@@ -100,8 +110,8 @@ Do not reuse evidence from a different build number.
 | RULE-07 | Daytime blocked range | Start is inclusive and end is exclusive. |
 | RULE-08 | Overnight blocked range | Both sides of midnight are enforced correctly. |
 | RULE-09 | Weekly morning, work, evening, night, and weekend rules | Each window activates at its documented boundary with weekend precedence. |
-| RULE-10 | Anti-Binge warning threshold | Warning appears at the configured recent-open count. |
-| RULE-11 | Anti-Binge block threshold | Strict block appears at the configured recent-open count. |
+| RULE-10 | Anti-Binge warning threshold | Warning appears at the configured recent-open count and adaptive normal-opening friction follows the ADAPT contract. |
+| RULE-11 | Anti-Binge block threshold | Strict block appears at the configured recent-open count and takes precedence over adaptive normal-opening friction. |
 | RULE-12 | Emergency daily maximum | Releases stop exactly at the configured daily maximum and reset on the next local day. |
 | RULE-13 | Focus-mode block behavior | Only apps configured for focus blocking are blocked during an active focus session. |
 
@@ -167,6 +177,8 @@ The in-app Permissions status panel must derive its label from both persisted ac
 
 Commitment evidence must show the exact native `running` and `enabled` state immediately before activation, the installed-target result, the persisted deadline, the blocked in-app stop action, recovery start availability, and the dashboard response if native protection later stops.
 
+Adaptive-friction evidence must show the base delay, recent successful intentional-open count, warning threshold/window, resulting effective delay, the 60-second cap, strict-threshold precedence, and that emergency timing is unchanged. The overlay/local event must expose the effective escalation without claiming AI or cloud inference.
+
 Emergency-friction evidence must additionally prove the exact candidate honors `requireCountdown` and `requireReason`, keeps the normalized reason local, bounds it to 160 characters, and never bypasses the daily emergency maximum.
 
 Overlay-accessibility evidence must additionally prove that the exact candidate remains scrollable under maximum font scale and a visible software keyboard, and that both the safe return-home action and the emergency action remain reachable.
@@ -198,3 +210,4 @@ The Android release candidate remains blocked until:
 12. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, and `assembleDebug`.
 13. Play reviewer videos demonstrate the same tested build.
 14. `COMMIT-01` through `COMMIT-06` pass on the exact candidate, including refusal before live protection is ready, blocked in-app stop, restart recovery, explicit factory-reset shutdown, and honest dashboard recovery after a later native-service failure.
+15. `ADAPT-01` through `ADAPT-05` pass on the exact candidate, including deterministic 5-second escalation, the 60-second cap, strict Anti-Binge precedence, non-counting safety paths, unchanged emergency timing, and local-midnight behavior.
