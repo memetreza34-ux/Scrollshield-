@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   Clock,
@@ -11,6 +12,7 @@ import {
 import { motion } from 'motion/react';
 import { isCommitmentLockActive, type CommitmentLock } from '../lib/commitmentLock';
 import { createFocusEndUpdate } from '../lib/focus';
+import { NativeProtection, type NativeProtectionStatus } from '../lib/nativeProtection';
 import type { AppState, Screen } from '../types';
 
 const getLocalDateKey = (date = new Date()): string => {
@@ -49,11 +51,48 @@ export function DashboardScreen({
   const estimatedSavedMinutes = todayStats?.savedTimeMinutes ?? 0;
   const activeProfile = state.profiles?.find((profile) => profile.id === state.activeProfileId);
   const commitmentActive = isCommitmentLockActive(commitmentLock);
+  const nativeAndroid = state.operatingSystem === 'android' && NativeProtection.isAvailable();
+  const [commitmentRuntimeStatus, setCommitmentRuntimeStatus] = useState<NativeProtectionStatus | null>(null);
+  const [commitmentRuntimeError, setCommitmentRuntimeError] = useState(false);
+
+  useEffect(() => {
+    if (!commitmentActive || !nativeAndroid) {
+      setCommitmentRuntimeStatus(null);
+      setCommitmentRuntimeError(false);
+      return;
+    }
+
+    let cancelled = false;
+    const refreshCommitmentRuntime = async () => {
+      try {
+        const status = await NativeProtection.getStatus();
+        if (cancelled) return;
+        setCommitmentRuntimeStatus(status);
+        setCommitmentRuntimeError(false);
+      } catch (error) {
+        console.error('Failed to verify commitment protection status', error);
+        if (cancelled) return;
+        setCommitmentRuntimeStatus(null);
+        setCommitmentRuntimeError(true);
+      }
+    };
+
+    void refreshCommitmentRuntime();
+    const interval = window.setInterval(() => void refreshCommitmentRuntime(), 5_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [commitmentActive, nativeAndroid]);
 
   const missingAndroidProtection =
     state.operatingSystem === 'android' &&
     (!state.permissions.usageAccess || !state.permissions.overlay || !state.permissions.notifications);
   const iosPreview = state.operatingSystem === 'ios';
+  const commitmentRuntimeHealthy =
+    nativeAndroid && commitmentRuntimeStatus
+      ? commitmentRuntimeStatus.running && commitmentRuntimeStatus.enabled
+      : false;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6 pb-32 space-y-7">
@@ -83,7 +122,58 @@ export function DashboardScreen({
         </p>
       </header>
 
-      {commitmentActive && commitmentLock && (
+      {commitmentActive && commitmentLock && nativeAndroid && commitmentRuntimeError && (
+        <button
+          type="button"
+          onClick={() => navigate('permissions')}
+          className="flex w-full gap-3 rounded-[1.5rem] border border-amber-500/35 bg-amber-500/10 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+        >
+          <AlertTriangle size={20} className="mt-0.5 flex-shrink-0 text-amber-300" aria-hidden="true" />
+          <div>
+            <div className="text-sm font-bold text-amber-200">Commitment aktiv · Schutzstatus nicht prüfbar</div>
+            <p className="mt-1 text-xs leading-relaxed text-amber-100/70">
+              Deine Regeln bleiben bis {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} eingefroren, aber der Android-Dienststatus konnte nicht gelesen werden. Tippe hier, um den Schutzstatus zu prüfen.
+            </p>
+          </div>
+        </button>
+      )}
+
+      {commitmentActive && commitmentLock && nativeAndroid && !commitmentRuntimeError && !commitmentRuntimeStatus && (
+        <button
+          type="button"
+          onClick={() => navigate('permissions')}
+          className="flex w-full gap-3 rounded-[1.5rem] border border-zinc-700 bg-zinc-900/80 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+        >
+          <LockKeyhole size={20} className="mt-0.5 flex-shrink-0 text-zinc-300" aria-hidden="true" />
+          <div>
+            <div className="text-sm font-bold text-zinc-200">Commitment aktiv · Schutzstatus wird geprüft</div>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+              Die Regeln sind eingefroren. ScrollShield bestätigt gerade separat, ob der native Android-Schutzdienst noch läuft.
+            </p>
+          </div>
+        </button>
+      )}
+
+      {commitmentActive && commitmentLock && nativeAndroid && commitmentRuntimeStatus && !commitmentRuntimeHealthy && (
+        <button
+          type="button"
+          onClick={() => navigate('permissions')}
+          className="flex w-full gap-3 rounded-[1.5rem] border border-red-500/35 bg-red-500/10 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+        >
+          <AlertTriangle size={20} className="mt-0.5 flex-shrink-0 text-red-300" aria-hidden="true" />
+          <div>
+            <div className="text-sm font-bold text-red-200">Commitment aktiv · Android-Schutz läuft nicht</div>
+            <p className="mt-1 text-xs leading-relaxed text-red-100/70">
+              Die Regeln bleiben bis {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} eingefroren, aber der Schutzdienst ist aktuell nicht vollständig aktiv. Tippe hier zum Reparieren.
+            </p>
+            {commitmentRuntimeStatus.lastStopCode && (
+              <p className="mt-2 font-mono text-[10px] text-red-200/70">Stoppcode: {commitmentRuntimeStatus.lastStopCode}</p>
+            )}
+          </div>
+        </button>
+      )}
+
+      {commitmentActive && commitmentLock && (!nativeAndroid || commitmentRuntimeHealthy) && (
         <button
           type="button"
           onClick={() => navigate('rules')}
