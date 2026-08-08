@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_APP_CONFIG, DEFAULT_STATE } from '../types';
 import {
   applyCommitmentGuard,
+  assessCommitmentStartReadiness,
   clearCommitmentLock,
   createCommitmentLock,
   isCommitmentLockActive,
@@ -39,6 +40,66 @@ describe('commitment lock', () => {
     expect(saveCommitmentLock(createCommitmentLock(60, now))).toBe(true);
     clearCommitmentLock();
     expect(loadCommitmentLock(now)).toBeNull();
+  });
+
+  it('requires Android, an active installed app, and a live enabled service before commitment', () => {
+    const activeAndroidState = {
+      ...DEFAULT_STATE,
+      operatingSystem: 'android' as const,
+      appsConfig: {
+        instagram: { id: 'instagram', ...DEFAULT_APP_CONFIG, active: true },
+      },
+    };
+    const running = {
+      nativeAvailable: true,
+      unavailableAppIds: [] as string[],
+      running: true,
+      enabled: true,
+    };
+
+    expect(assessCommitmentStartReadiness({ ...activeAndroidState, operatingSystem: 'ios' }, running)).toMatchObject({
+      ok: false,
+      code: 'android_required',
+    });
+    expect(
+      assessCommitmentStartReadiness({ ...activeAndroidState, appsConfig: {} }, running),
+    ).toMatchObject({ ok: false, code: 'active_app_required', action: 'apps' });
+    expect(
+      assessCommitmentStartReadiness(activeAndroidState, { ...running, nativeAvailable: false }),
+    ).toMatchObject({ ok: false, code: 'native_unavailable', action: 'permissions' });
+    expect(
+      assessCommitmentStartReadiness(activeAndroidState, {
+        ...running,
+        unavailableAppIds: ['instagram'],
+      }),
+    ).toMatchObject({ ok: false, code: 'installed_app_required', action: 'apps' });
+    expect(
+      assessCommitmentStartReadiness(activeAndroidState, { ...running, running: false, enabled: false }),
+    ).toMatchObject({ ok: false, code: 'service_not_running', action: 'permissions' });
+    expect(
+      assessCommitmentStartReadiness(activeAndroidState, { ...running, enabled: false }),
+    ).toMatchObject({ ok: false, code: 'service_inconsistent', action: 'permissions' });
+    expect(assessCommitmentStartReadiness(activeAndroidState, running)).toEqual({ ok: true });
+  });
+
+  it('accepts commitment when at least one of multiple active apps remains installed', () => {
+    const state = {
+      ...DEFAULT_STATE,
+      operatingSystem: 'android' as const,
+      appsConfig: {
+        instagram: { id: 'instagram', ...DEFAULT_APP_CONFIG, active: true },
+        youtube: { id: 'youtube', ...DEFAULT_APP_CONFIG, active: true },
+      },
+    };
+
+    expect(
+      assessCommitmentStartReadiness(state, {
+        nativeAvailable: true,
+        unavailableAppIds: ['instagram'],
+        running: true,
+        enabled: true,
+      }),
+    ).toEqual({ ok: true });
   });
 
   it('freezes protection configuration but permits unrelated runtime updates', () => {
