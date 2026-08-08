@@ -27,6 +27,16 @@ Activation is two-step:
 
 Selecting a duration alone does not activate the lock.
 
+The final confirmation performs a live readiness check before the local lock is written. Commitment may start only when all of the following are true:
+
+- the installed runtime is native Android;
+- at least one protection rule is active;
+- at least one active target app is actually installed/available on the device;
+- the native protection service reports `running=true`;
+- persisted native activation reports `enabled=true`.
+
+If installation state cannot be checked, the service is stopped, or `running` and `enabled` are inconsistent, Commitment remains inactive and the UI routes the user toward either app selection or the protection-status screen. This prevents a frozen configuration from being presented as meaningful protection when the Android enforcement service is not actually active.
+
 After activation there is no normal cancel button. The lock expires automatically at its deadline.
 
 ## What is frozen
@@ -41,6 +51,21 @@ While the lock is active, ScrollShield preserves the current:
 The visible app list disables app toggles, app-detail navigation, and recurring weekly-plan changes. The profile screen disables profile switching, creation, editing, and deletion. `App.tsx` independently guards those configuration writes so a missed UI control does not silently bypass the lock.
 
 Runtime data continues to work normally. History, statistics, permission status, focus runtime, Android diagnostics, and native event draining are not frozen.
+
+## Recovery while Commitment is active
+
+The activation gate requires a live service only at the moment Commitment begins. Android can still revoke a permission, kill a process, disable notifications, or lose a target later.
+
+Commitment must therefore **not** freeze recovery controls. While rules remain read-only, the user may still:
+
+- open the protection-status screen;
+- grant/re-grant Usage Access, overlay, and notification access;
+- restart the Android protection service when prerequisites are valid;
+- reinstall the same configured target app;
+- use the documented emergency/home safety exits;
+- perform a complete ScrollShield reset if recovery is impossible.
+
+A later service failure must be displayed honestly through the normal lifecycle diagnostics. The mere presence of an active Commitment lock must never cause the UI to claim that native protection is still running.
 
 ## Safety exits that must remain available
 
@@ -95,12 +120,18 @@ Core safety exits, data rescue, diagnostics, export, migration archives, and use
 Before calling Commitment Mode release-verified, evidence must cover:
 
 1. the two-step activation flow;
-2. persistence after closing and reopening ScrollShield;
-3. app toggles, app details, weekly plans, and profile changes remaining read-only while active;
-4. unrelated history/statistics/focus/runtime updates continuing normally;
-5. automatic expiry at the configured deadline;
-6. no normal cancel action during the active lock;
-7. complete reset clearing the commitment key;
-8. emergency/home safety exits remaining reachable in native protection;
-9. export remaining available while full backup import is disabled and atomically rejected;
-10. manual-clock behavior documented rather than represented as tamper-proof.
+2. refusal on the iOS preview/non-native runtime;
+3. refusal when no protection app is active;
+4. refusal when every active target app is unavailable/uninstalled;
+5. refusal when the native service is stopped or `running`/`enabled` are inconsistent;
+6. successful activation only with at least one installed active app and `running=true`, `enabled=true`;
+7. persistence after closing and reopening ScrollShield;
+8. app toggles, app details, weekly plans, and profile changes remaining read-only while active;
+9. unrelated history/statistics/focus/runtime updates continuing normally;
+10. protection permissions/status remaining repairable after a later service failure;
+11. automatic expiry at the configured deadline;
+12. no normal cancel action during the active lock;
+13. complete reset clearing the commitment key;
+14. emergency/home safety exits remaining reachable in native protection;
+15. export remaining available while full backup import is disabled and atomically rejected;
+16. manual-clock behavior documented rather than represented as tamper-proof.
