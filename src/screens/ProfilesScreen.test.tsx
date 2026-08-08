@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { createCommitmentLock } from '../lib/commitmentLock';
 import { DEFAULT_STATE } from '../types';
@@ -19,6 +19,11 @@ const makeState = () => ({
       },
     },
   },
+});
+
+const makeAndroidState = () => ({
+  ...makeState(),
+  operatingSystem: 'android' as const,
 });
 
 describe('ProfilesScreen', () => {
@@ -69,11 +74,11 @@ describe('ProfilesScreen', () => {
     expect(custom.appsConfig.instagram.mode).toBe('standard');
   });
 
-  it('requires an explicit second confirmation before starting commitment', () => {
-    const onStartCommitment = vi.fn(() => true);
+  it('requires an explicit second confirmation before starting commitment', async () => {
+    const onStartCommitment = vi.fn(async () => ({ ok: true as const }));
     render(
       <ProfilesScreen
-        state={makeState()}
+        state={makeAndroidState()}
         updateState={vi.fn()}
         navigate={vi.fn()}
         onStartCommitment={onStartCommitment}
@@ -83,24 +88,75 @@ describe('ProfilesScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: '1 Stunde' }));
     expect(onStartCommitment).not.toHaveBeenCalled();
     expect(screen.getByText(/1 Stunde verbindlich einfrieren/)).toBeInTheDocument();
+    expect(screen.getByText(/Ziel-App wirklich installiert ist und der Android-Schutzdienst tatsächlich läuft/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Verbindlich starten' }));
-    expect(onStartCommitment).toHaveBeenCalledWith(60);
+    await waitFor(() => expect(onStartCommitment).toHaveBeenCalledWith(60));
+  });
+
+  it('does not offer commitment activation in the iOS preview', () => {
+    render(<ProfilesScreen state={makeState()} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    expect(screen.getByText(/nur mit dem nativen Android-Schutz verfügbar/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '1 Stunde' })).not.toBeInTheDocument();
+  });
+
+  it('requires at least one active app before offering commitment', () => {
+    const navigate = vi.fn();
+    render(
+      <ProfilesScreen
+        state={{ ...makeAndroidState(), appsConfig: {} }}
+        updateState={vi.fn()}
+        navigate={navigate}
+      />,
+    );
+
+    expect(screen.getByText(/Aktiviere zuerst mindestens eine App/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '1 Stunde' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Apps auswählen' }));
+    expect(navigate).toHaveBeenCalledWith('apps');
+  });
+
+  it('shows an actionable native readiness failure without activating commitment', async () => {
+    const navigate = vi.fn();
+    const onStartCommitment = vi.fn(async () => ({
+      ok: false as const,
+      code: 'service_not_running' as const,
+      message: 'Starte zuerst den Android-Schutzdienst. Commitment wurde nicht aktiviert.',
+      action: 'permissions' as const,
+    }));
+
+    render(
+      <ProfilesScreen
+        state={makeAndroidState()}
+        updateState={vi.fn()}
+        navigate={navigate}
+        onStartCommitment={onStartCommitment}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '8 Stunden' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Verbindlich starten' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Starte zuerst den Android-Schutzdienst/);
+    fireEvent.click(screen.getByRole('button', { name: 'Schutzstatus öffnen' }));
+    expect(navigate).toHaveBeenCalledWith('permissions');
   });
 
   it('makes profile configuration read-only while commitment is active', () => {
     const lock = createCommitmentLock(480, Date.now());
     render(
       <ProfilesScreen
-        state={makeState()}
+        state={makeAndroidState()}
         updateState={vi.fn()}
         navigate={vi.fn()}
         commitmentLock={lock}
-        onStartCommitment={vi.fn(() => true)}
+        onStartCommitment={vi.fn(async () => ({ ok: true as const }))}
       />,
     );
 
     expect(screen.getByText(/Regeln sind eingefroren/i)).toBeInTheDocument();
+    expect(screen.getByText(/Berechtigungen und Schutzstatus können weiterhin repariert werden/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Eigenes Profil' })).toBeDisabled();
     expect(screen.getByRole('radio', { name: /Balance/ })).toBeDisabled();
   });
