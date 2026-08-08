@@ -22,7 +22,7 @@ const DEFAULT_PRESENTATION: Record<string, ReleaseProfilePresentation> = {
   },
   balance: {
     name: 'Balance',
-    description: '15 Sekunden bewusste Pause, 45 Minuten Tageslimit, 15-Minuten-Sitzungen und Anti-Binge gegen häufiges Wiederöffnen. Kein Wochenplan.',
+    description: '15 Sekunden Grundpause, 45 Minuten Tageslimit, 15-Minuten-Sitzungen und adaptive Anti-Binge-Reibung bei häufigem Wiederöffnen. Kein Wochenplan.',
   },
   strict: {
     name: 'Streng',
