@@ -344,13 +344,15 @@ export function AppDetailScreen({
 
           <section aria-labelledby="app-detail-antibinge-title">
             <h2 id="app-detail-antibinge-title" className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">
-              Anti-Binge
+              Adaptive Anti-Binge-Reibung
             </h2>
             <div className="overflow-hidden rounded-[2rem] border border-zinc-800/50 bg-zinc-900/80">
               <div className="flex items-center justify-between gap-4 border-b border-zinc-800/50 p-6">
                 <div className="pr-4">
-                  <h3 className="font-semibold">Wiederholtes Öffnen erkennen</h3>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-400">Zählt bewusste Öffnungen lokal und kann zuerst warnen und später strikt blockieren.</p>
+                  <h3 className="font-semibold">Wiederholtes Öffnen adaptiv bremsen</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                    Zählt nur erfolgreiche bewusste Freigaben lokal. Ab der Warnschwelle steigt die normale Pause pro weiterer Öffnung um 5 Sekunden; an der Sperrschwelle greift der strikte Anti-Binge-Block.
+                  </p>
                 </div>
                 <Switch
                   checked={antiBinge.enabled}
@@ -363,7 +365,7 @@ export function AppDetailScreen({
                 <>
                   <div className="border-b border-zinc-800/50 bg-zinc-900/50 p-6">
                     <div className="mb-4 flex items-center justify-between gap-3">
-                      <label htmlFor="warning-threshold" className="font-semibold">Warnung nach</label>
+                      <label htmlFor="warning-threshold" className="font-semibold">Adaptive Warnung ab</label>
                       <span className="rounded-lg bg-zinc-800/60 px-3 py-1 text-sm font-mono text-zinc-300">
                         {antiBinge.warningThreshold}x / {antiBinge.warningTimeframe}m
                       </span>
@@ -386,6 +388,9 @@ export function AppDetailScreen({
                         options={[5, 10, 15, 20, 30]}
                       />
                     </div>
+                    <p className="mt-3 text-xs leading-relaxed text-zinc-600">
+                      Die adaptive Pause wächst deterministisch in 5-Sekunden-Schritten und ist auf 60 Sekunden begrenzt. Eine bereits längere manuelle Öffnungsverzögerung wird nie verkürzt. Notfallfreigaben verwenden weiterhin ihren eigenen Countdown.
+                    </p>
                   </div>
 
                   <div className="bg-zinc-900/50 p-6">
