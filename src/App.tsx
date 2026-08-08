@@ -8,6 +8,7 @@ import { NativeProtection } from './lib/nativeProtection';
 import { getRuntimeOperatingSystem } from './lib/runtimePlatform';
 import {
   applyCommitmentGuard,
+  assessCommitmentStartReadiness,
   clearCommitmentLock,
   createCommitmentLock,
   isCommitmentLockActive,
@@ -15,6 +16,7 @@ import {
   saveCommitmentLock,
   type CommitmentDurationMinutes,
   type CommitmentLock,
+  type CommitmentStartResult,
 } from './lib/commitmentLock';
 import { createEventId } from './lib/appUtils';
 import { recordProtectionEventStats } from './lib/session';
@@ -273,12 +275,62 @@ export default function App() {
     }));
   };
 
-  const startCommitment = (durationMinutes: CommitmentDurationMinutes): boolean => {
-    if (isCommitmentLockActive(commitmentLock)) return false;
-    const nextLock = createCommitmentLock(durationMinutes);
-    if (!saveCommitmentLock(nextLock)) return false;
-    setCommitmentLock(nextLock);
-    return true;
+  const startCommitment = async (durationMinutes: CommitmentDurationMinutes): Promise<CommitmentStartResult> => {
+    if (isCommitmentLockActive(commitmentLock) || isCommitmentLockActive(loadCommitmentLock())) {
+      return {
+        ok: false,
+        code: 'already_active',
+        message: 'Commitment ist bereits aktiv.',
+      };
+    }
+
+    const nativeAvailable = NativeProtection.isAvailable();
+    const preliminary = assessCommitmentStartReadiness(appState, {
+      nativeAvailable,
+      unavailableAppIds: [],
+      running: true,
+      enabled: true,
+    });
+    if (!preliminary.ok) return preliminary;
+
+    try {
+      const unavailableAppIds = await NativeProtection.sync(appState.appsConfig, appState.isFocusModeActive);
+      const serviceStatus = await NativeProtection.getStatus();
+      const readiness = assessCommitmentStartReadiness(appState, {
+        nativeAvailable: true,
+        unavailableAppIds,
+        running: serviceStatus.running,
+        enabled: serviceStatus.enabled,
+      });
+      if (!readiness.ok) return readiness;
+
+      if (isCommitmentLockActive(loadCommitmentLock())) {
+        return {
+          ok: false,
+          code: 'already_active',
+          message: 'Commitment ist bereits aktiv.',
+        };
+      }
+
+      const nextLock = createCommitmentLock(durationMinutes);
+      if (!saveCommitmentLock(nextLock)) {
+        return {
+          ok: false,
+          code: 'storage_failed',
+          message: 'Commitment konnte nicht sicher lokal gespeichert werden. Es wurde nicht aktiviert.',
+        };
+      }
+      setCommitmentLock(nextLock);
+      return { ok: true };
+    } catch (error) {
+      console.error('Failed to verify native protection before commitment', error);
+      return {
+        ok: false,
+        code: 'runtime_check_failed',
+        message: 'Der aktuelle Android-Schutzstatus konnte nicht sicher geprüft werden. Commitment wurde nicht aktiviert.',
+        action: 'permissions',
+      };
+    }
   };
 
   const resetApp = () => {
