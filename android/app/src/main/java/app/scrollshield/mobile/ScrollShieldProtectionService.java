@@ -258,9 +258,31 @@ public class ScrollShieldProtectionService extends Service {
         temporaryAccessUntil.remove(foregroundPackage);
 
         String strictReason = getStrictReason(rule, now);
-        boolean antiBingeWarning = strictReason == null && isAntiBingeWarning(rule, now);
+        int recentWarningOpens = strictReason == null && rule.antiBingeEnabled
+            ? countRecentOpens(rule.id, rule.warningWindowMinutes, now)
+            : 0;
+        boolean antiBingeWarning = strictReason == null && ProtectionRulePolicy.isAntiBingeWarning(
+            rule.antiBingeEnabled,
+            recentWarningOpens,
+            rule.warningThreshold
+        );
+        int adaptiveDelaySeconds = strictReason == null
+            ? AdaptiveFrictionPolicy.resolveDelaySeconds(
+                rule.antiBingeEnabled,
+                rule.delaySeconds,
+                recentWarningOpens,
+                rule.warningThreshold
+            )
+            : rule.delaySeconds;
         if (!foregroundPackage.equals(overlayPackage)) {
-            showOverlay(foregroundPackage, rule, strictReason, antiBingeWarning);
+            showOverlay(
+                foregroundPackage,
+                rule,
+                strictReason,
+                antiBingeWarning,
+                adaptiveDelaySeconds,
+                recentWarningOpens
+            );
         }
     }
 
@@ -455,25 +477,24 @@ public class ScrollShieldProtectionService extends Service {
         );
     }
 
-    private boolean isAntiBingeWarning(ProtectionRule rule, long now) {
-        int recentOpens = countRecentOpens(rule.id, rule.warningWindowMinutes, now);
-        return ProtectionRulePolicy.isAntiBingeWarning(
-            rule.antiBingeEnabled,
-            recentOpens,
-            rule.warningThreshold
-        );
-    }
-
     private void showOverlay(
         String packageName,
         ProtectionRule rule,
         @Nullable String strictReason,
-        boolean antiBingeWarning
+        boolean antiBingeWarning,
+        int effectiveNormalDelaySeconds,
+        int recentWarningOpens
     ) {
         hideOverlay();
         if (windowManager == null) return;
 
         boolean strict = strictReason != null;
+        boolean adaptiveFrictionActive = !strict && AdaptiveFrictionPolicy.isEscalated(
+            rule.antiBingeEnabled,
+            rule.delaySeconds,
+            recentWarningOpens,
+            rule.warningThreshold
+        );
         overlayPackage = packageName;
 
         ScrollView scrollView = new ScrollView(this);
@@ -508,6 +529,11 @@ public class ScrollShieldProtectionService extends Service {
         String explanationText;
         if (strict) {
             explanationText = strictReason;
+        } else if (adaptiveFrictionActive) {
+            explanationText =
+                "Du hast diese App " + recentWarningOpens + "-mal in den letzten "
+                + rule.warningWindowMinutes + " Minuten bewusst freigegeben. ScrollShield erhöht die Pause lokal auf "
+                + effectiveNormalDelaySeconds + " Sekunden, bevor du erneut entscheidest.";
         } else if (antiBingeWarning) {
             explanationText = "Du hast diese App in kurzer Zeit mehrfach geöffnet. Prüfe bewusst, ob du sie jetzt erneut brauchst.";
         } else {
@@ -530,12 +556,14 @@ public class ScrollShieldProtectionService extends Service {
                 emergencyCount,
                 rule.emergencyMaxPerDay
             );
-        int countdownSeconds = EmergencyUnlockPolicy.resolveCountdownSeconds(
-            strict,
-            emergencyAvailable,
-            rule.emergencyRequireCountdown,
-            rule.delaySeconds
-        );
+        int countdownSeconds = strict
+            ? EmergencyUnlockPolicy.resolveCountdownSeconds(
+                true,
+                emergencyAvailable,
+                rule.emergencyRequireCountdown,
+                rule.delaySeconds
+            )
+            : effectiveNormalDelaySeconds;
         final boolean[] countdownFinished = { countdownSeconds <= 0 };
 
         TextView countdown = createText(
@@ -703,9 +731,12 @@ public class ScrollShieldProtectionService extends Service {
                 rule.id,
                 strict
                     ? strictReason
-                    : antiBingeWarning
-                        ? "Anti-Binge-Warnung vor erneuter Öffnung"
-                        : "Bewusste Öffnungspause ausgelöst"
+                    : adaptiveFrictionActive
+                        ? "Adaptive Anti-Binge-Pause: " + effectiveNormalDelaySeconds
+                            + " Sekunden nach " + recentWarningOpens + " bewussten Öffnungen"
+                        : antiBingeWarning
+                            ? "Anti-Binge-Warnung vor erneuter Öffnung"
+                            : "Bewusste Öffnungspause ausgelöst"
             );
             startCountdown(
                 countdown,
