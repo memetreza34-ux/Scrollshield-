@@ -113,6 +113,7 @@ for (const requiredScenario of [
   'COMMIT-03',
   'COMMIT-04',
   'COMMIT-05',
+  'COMMIT-06',
   'RULE-06',
   'RULE-08',
   'RULE-10',
@@ -149,6 +150,7 @@ for (const evidenceField of [
   'lastProtectionStopMessage',
   'notification_action_stop',
   'unexpected_service_destroy',
+  'factory_reset',
   'requireCountdown',
   'requireReason',
   '160 characters',
@@ -161,6 +163,7 @@ for (const evidenceField of [
   'running=true',
   'enabled=true',
   'Commitment aktiv · Android-Schutz läuft nicht',
+  'Stop während Commitment gesperrt',
   'scrollshield_commitment_lock_v1',
   'Full backup import',
   'PASS',
@@ -182,5 +185,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android device-matrix check passed. Build identity, channel/lifecycle diagnostics, commitment readiness and recovery, emergency friction, overlay accessibility, stale activation, OEM coverage, migration recovery, and physical evidence requirements are guarded.',
+  'Android device-matrix check passed. Build identity, channel/lifecycle diagnostics, commitment readiness, stop-bypass and reset evidence, emergency friction, overlay accessibility, stale activation, OEM coverage, migration recovery, and physical evidence requirements are guarded.',
 );
