@@ -334,6 +334,14 @@ export default function App() {
   };
 
   const resetApp = () => {
+    if (NativeProtection.isAvailable()) {
+      void NativeProtection.stop({
+        code: 'factory_reset',
+        message: 'Der Android-Schutz wurde wegen eines vollständigen ScrollShield-Resets beendet',
+      }).catch((error) => {
+        console.error('Failed to stop native protection during app reset', error);
+      });
+    }
     skipNextSaveRef.current = true;
     StorageService.clearState();
     clearCommitmentLock();
@@ -372,6 +380,7 @@ export default function App() {
                   updateState={updateState}
                   navigate={navigate}
                   isOnboarding={!appState.hasCompletedOnboarding}
+                  commitmentLock={commitmentLock}
                 />
               )}
               {currentScreen === 'dashboard' && (
