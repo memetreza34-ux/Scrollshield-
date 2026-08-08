@@ -157,6 +157,39 @@ describe('ReleasePermissionsScreen', () => {
     expect(await screen.findByText(/Android-Schutz läuft für 1 verfügbare App/)).toBeInTheDocument();
   });
 
+  it('confirms a normal service stop only after Android reports running=false', async () => {
+    getProtectionStatusMock.mockResolvedValueOnce(activeStatus).mockResolvedValue(stoppedStatus);
+
+    render(<ReleasePermissionsScreen state={readyAndroidState} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Schutzdienst stoppen' }));
+
+    await waitFor(() => expect(stopProtectionMock).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Der Android-Schutzdienst wurde bewusst gestoppt.')).toBeInTheDocument();
+  });
+
+  it('reports a transient stop request honestly while Android still reports running=true', async () => {
+    const transitionalStatus = {
+      ...activeStatus,
+      enabled: false,
+      lastStopAt: Date.now(),
+      lastStopCode: 'manual_app_stop',
+      lastStopMessage: 'Stop wurde angefordert',
+      health: 'running-without-activation' as const,
+    };
+    getProtectionStatusMock.mockResolvedValueOnce(activeStatus).mockResolvedValue(transitionalStatus);
+
+    render(<ReleasePermissionsScreen state={readyAndroidState} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Schutzdienst stoppen' }));
+
+    await waitFor(() => expect(stopProtectionMock).toHaveBeenCalledTimes(1));
+    expect(
+      await screen.findByText(/Stopp wurde angefordert, aber Android meldet den Schutzdienst noch als laufend/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Der Android-Schutzdienst wurde bewusst gestoppt.')).not.toBeInTheDocument();
+  });
+
   it('blocks the normal in-app service stop while commitment is active', async () => {
     getProtectionStatusMock.mockResolvedValue(activeStatus);
     const commitmentLock = createCommitmentLock(480, Date.now());
