@@ -1,4 +1,4 @@
-import { AlertTriangle, Power } from 'lucide-react';
+import { AlertTriangle, LockKeyhole, Power } from 'lucide-react';
 import type { NativeProtectionStatus } from '../lib/nativeProtection';
 import {
   describeNativeProtectionHealth,
@@ -9,13 +9,18 @@ export function NativeProtectionStatusPanel({
   status,
   busy,
   onToggle,
+  stopLocked = false,
+  stopLockedMessage,
 }: {
   status: NativeProtectionStatus | null;
   busy: boolean;
   onToggle: () => void;
+  stopLocked?: boolean;
+  stopLockedMessage?: string;
 }) {
   const presentation = describeNativeProtectionHealth(status);
   const running = status?.running ?? false;
+  const stopActionLocked = running && stopLocked;
   const toneClasses =
     presentation.tone === 'positive'
       ? 'border-emerald-500/30 bg-emerald-500/5'
@@ -77,19 +82,35 @@ export function NativeProtectionStatusPanel({
           )}
 
           <p className="mt-3 text-xs leading-relaxed text-zinc-500">
-            Der Schutz läuft lokal als sichtbarer Hintergrunddienst. Benachrichtigungen müssen aktiv bleiben; über die
-            Dauerbenachrichtigung kann er jederzeit gestoppt werden.
+            Der Schutz läuft lokal als sichtbarer Hintergrunddienst. Benachrichtigungen müssen aktiv bleiben; Android
+            kann den Dienst weiterhin über seine Systemoberflächen beenden.
           </p>
+
+          {stopActionLocked && (
+            <div className="mt-4 flex gap-2 rounded-xl border border-indigo-500/25 bg-indigo-500/10 p-3 text-xs leading-relaxed text-indigo-100">
+              <LockKeyhole size={16} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
+              <p>
+                {stopLockedMessage ||
+                  'Der normale Stopp in ScrollShield ist während Commitment gesperrt. Schutzstatus und Berechtigungen können weiterhin repariert werden.'}
+              </p>
+            </div>
+          )}
 
           <button
             type="button"
             onClick={onToggle}
-            disabled={busy}
+            disabled={busy || stopActionLocked}
             className={`mt-4 w-full rounded-xl py-3 text-sm font-bold disabled:opacity-50 ${
               running ? 'bg-zinc-800 text-zinc-200' : 'bg-emerald-500 text-emerald-950'
             }`}
           >
-            {busy ? 'Wird geändert…' : running ? 'Schutzdienst stoppen' : 'Schutzdienst starten'}
+            {busy
+              ? 'Wird geändert…'
+              : stopActionLocked
+                ? 'Stop während Commitment gesperrt'
+                : running
+                  ? 'Schutzdienst stoppen'
+                  : 'Schutzdienst starten'}
           </button>
         </div>
       </div>
