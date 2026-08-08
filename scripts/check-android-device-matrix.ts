@@ -108,6 +108,11 @@ for (const requiredScenario of [
   'PERM-07',
   'APP-04',
   'APP-05',
+  'COMMIT-01',
+  'COMMIT-02',
+  'COMMIT-03',
+  'COMMIT-04',
+  'COMMIT-05',
   'RULE-06',
   'RULE-08',
   'RULE-10',
@@ -153,6 +158,11 @@ for (const evidenceField of [
   'Zurück zum Startbildschirm',
   'NEUSTART NÖTIG',
   'INKONSISTENT',
+  'running=true',
+  'enabled=true',
+  'Commitment aktiv · Android-Schutz läuft nicht',
+  'scrollshield_commitment_lock_v1',
+  'Backup-Import',
   'PASS',
   'FAIL',
   'BLOCKED',
@@ -172,5 +182,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android device-matrix check passed. Build identity, channel/lifecycle diagnostics, emergency friction, overlay accessibility, stale activation, OEM coverage, migration recovery, and physical evidence requirements are guarded.',
+  'Android device-matrix check passed. Build identity, channel/lifecycle diagnostics, commitment readiness and recovery, emergency friction, overlay accessibility, stale activation, OEM coverage, migration recovery, and physical evidence requirements are guarded.',
 );
