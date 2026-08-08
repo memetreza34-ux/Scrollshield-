@@ -346,14 +346,11 @@ public class ScrollShieldNativePlugin extends Plugin {
     public static void setProtectionEnabled(Context context, boolean enabled) {
         SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
         boolean wasEnabled = preferences.getBoolean(SERVICE_ENABLED_KEY, false);
-        long now = System.currentTimeMillis();
         SharedPreferences.Editor editor = preferences.edit().putBoolean(SERVICE_ENABLED_KEY, enabled);
 
-        if (enabled) {
-            editor.putLong(LAST_START_AT_KEY, now);
-        } else if (wasEnabled) {
+        if (!enabled && wasEnabled) {
             editor
-                .putLong(LAST_STOP_AT_KEY, now)
+                .putLong(LAST_STOP_AT_KEY, System.currentTimeMillis())
                 .putString(LAST_STOP_CODE_KEY, "protection_disabled")
                 .putString(
                     LAST_STOP_MESSAGE_KEY,
@@ -361,6 +358,14 @@ public class ScrollShieldNativePlugin extends Plugin {
                 );
         }
         editor.commit();
+    }
+
+    public static void recordProtectionServiceStarted(Context context) {
+        context
+            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(LAST_START_AT_KEY, System.currentTimeMillis())
+            .commit();
     }
 
     public static void recordProtectionStop(Context context, String code, String message) {
