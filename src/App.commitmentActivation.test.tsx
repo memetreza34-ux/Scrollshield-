@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { createCommitmentLock, saveCommitmentLock } from './lib/commitmentLock';
 import { StorageService } from './lib/storage';
 import { DEFAULT_APP_CONFIG, DEFAULT_STATE } from './types';
 
@@ -131,5 +132,29 @@ describe('App commitment activation', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/Android-Schutzstatus konnte nicht sicher geprüft werden/);
     expect(localStorage.getItem('scrollshield_commitment_lock_v1')).toBeNull();
+  });
+
+  it('stops native protection with a deliberate factory-reset reason and clears commitment on full reset', async () => {
+    expect(saveCommitmentLock(createCommitmentLock(480, Date.now()))).toBe(true);
+
+    render(<App />);
+    expect(await screen.findByRole('button', { name: /Commitment aktiv · Regeln eingefroren/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Einstellungen' }));
+    expect(await screen.findByRole('heading', { name: 'Menü' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Datenschutz & lokale Daten/ }));
+    expect(await screen.findByRole('heading', { name: 'Datenschutz & Transparenz' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /App zurücksetzen/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ja, Reset' }));
+
+    expect(await screen.findByRole('heading', { name: 'ScrollShield' })).toBeInTheDocument();
+    expect(stopMock).toHaveBeenCalledWith({
+      code: 'factory_reset',
+      message: 'Der Android-Schutz wurde wegen eines vollständigen ScrollShield-Resets beendet',
+    });
+    expect(localStorage.getItem('scrollshield_commitment_lock_v1')).toBeNull();
+    await waitFor(() => {
+      expect(Object.keys(localStorage).filter((key) => key.startsWith('scrollshield_'))).toEqual([]);
+    });
   });
 });
