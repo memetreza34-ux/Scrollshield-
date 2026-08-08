@@ -173,8 +173,13 @@ export function ReleasePermissionsScreen({
           return;
         }
         await NativeProtection.stop();
-        setServiceStatus(await NativeProtection.getStatus());
-        setStatusMessage('Der Android-Schutzdienst wurde bewusst gestoppt.');
+        const nextStatus = await NativeProtection.getStatus();
+        setServiceStatus(nextStatus);
+        setStatusMessage(
+          nextStatus.running
+            ? 'Der Stopp wurde angefordert, aber Android meldet den Schutzdienst noch als laufend. Prüfe den Status erneut.'
+            : 'Der Android-Schutzdienst wurde bewusst gestoppt.',
+        );
         return;
       }
 
