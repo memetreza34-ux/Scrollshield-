@@ -162,7 +162,7 @@ for (const evidenceField of [
   'enabled=true',
   'Commitment aktiv · Android-Schutz läuft nicht',
   'scrollshield_commitment_lock_v1',
-  'Backup-Import',
+  'Full backup import',
   'PASS',
   'FAIL',
   'BLOCKED',
