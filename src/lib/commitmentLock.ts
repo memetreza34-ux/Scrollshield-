@@ -12,6 +12,33 @@ export interface CommitmentLock {
   durationMinutes: CommitmentDurationMinutes;
 }
 
+export type CommitmentStartAction = 'apps' | 'permissions';
+
+export type CommitmentStartResult =
+  | { ok: true }
+  | {
+      ok: false;
+      code:
+        | 'already_active'
+        | 'android_required'
+        | 'active_app_required'
+        | 'native_unavailable'
+        | 'installed_app_required'
+        | 'service_not_running'
+        | 'service_inconsistent'
+        | 'runtime_check_failed'
+        | 'storage_failed';
+      message: string;
+      action?: CommitmentStartAction;
+    };
+
+export interface CommitmentRuntimeStatus {
+  nativeAvailable: boolean;
+  unavailableAppIds: readonly string[];
+  running: boolean;
+  enabled: boolean;
+}
+
 export const isCommitmentDuration = (minutes: number): minutes is CommitmentDurationMinutes =>
   (COMMITMENT_DURATION_MINUTES as readonly number[]).includes(minutes);
 
@@ -73,6 +100,73 @@ export const saveCommitmentLock = (lock: CommitmentLock): boolean => {
 };
 
 export const clearCommitmentLock = () => localStorage.removeItem(STORAGE_KEY);
+
+export const getActiveCommitmentAppIds = (state: Pick<AppState, 'appsConfig'>): string[] =>
+  Object.values(state.appsConfig)
+    .filter((config) => config.active)
+    .map((config) => config.id);
+
+export const assessCommitmentStartReadiness = (
+  state: Pick<AppState, 'operatingSystem' | 'appsConfig'>,
+  runtime: CommitmentRuntimeStatus,
+): CommitmentStartResult => {
+  if (state.operatingSystem !== 'android') {
+    return {
+      ok: false,
+      code: 'android_required',
+      message: 'Commitment ist in Version 1 nur mit dem nativen Android-Schutz verfügbar.',
+    };
+  }
+
+  const activeAppIds = getActiveCommitmentAppIds(state);
+  if (activeAppIds.length === 0) {
+    return {
+      ok: false,
+      code: 'active_app_required',
+      message: 'Aktiviere zuerst mindestens eine App, bevor du ihre Schutzregeln verbindlich einfrierst.',
+      action: 'apps',
+    };
+  }
+
+  if (!runtime.nativeAvailable) {
+    return {
+      ok: false,
+      code: 'native_unavailable',
+      message: 'Der native Android-Schutz ist auf diesem Gerät nicht verfügbar.',
+      action: 'permissions',
+    };
+  }
+
+  const unavailable = new Set(runtime.unavailableAppIds);
+  if (!activeAppIds.some((appId) => !unavailable.has(appId))) {
+    return {
+      ok: false,
+      code: 'installed_app_required',
+      message: 'Keine deiner aktuell geschützten Apps ist auf diesem Gerät verfügbar. Prüfe zuerst die App-Auswahl.',
+      action: 'apps',
+    };
+  }
+
+  if (runtime.running && !runtime.enabled) {
+    return {
+      ok: false,
+      code: 'service_inconsistent',
+      message: 'Der Android-Schutzdienst läuft in einem inkonsistenten Zustand. Behebe zuerst den Schutzstatus.',
+      action: 'permissions',
+    };
+  }
+
+  if (!runtime.running || !runtime.enabled) {
+    return {
+      ok: false,
+      code: 'service_not_running',
+      message: 'Starte zuerst den Android-Schutzdienst. Commitment wird erst aktiviert, wenn der Schutz wirklich läuft.',
+      action: 'permissions',
+    };
+  }
+
+  return { ok: true };
+};
 
 const hasOwn = <T extends object>(value: T, key: PropertyKey): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
