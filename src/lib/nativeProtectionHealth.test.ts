@@ -63,6 +63,21 @@ describe('describeNativeProtectionHealth', () => {
     expect(presentation.message).toContain('Dauerbenachrichtigung');
   });
 
+  it('treats a complete app factory reset as a deliberate stop', () => {
+    const presentation = describeNativeProtectionHealth(
+      makeStatus({
+        health: 'stopped-with-reason',
+        lastStopAt: 1_786_000_000_000,
+        lastStopCode: 'factory_reset',
+        lastStopMessage: 'Der Android-Schutz wurde wegen eines vollständigen ScrollShield-Resets beendet',
+      }),
+    );
+
+    expect(presentation.badge).toBe('GESTOPPT');
+    expect(presentation.tone).toBe('neutral');
+    expect(presentation.message).toContain('ScrollShield-Resets');
+  });
+
   it('marks permission and system stops as requiring attention', () => {
     const presentation = describeNativeProtectionHealth(
       makeStatus({
