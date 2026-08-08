@@ -145,3 +145,5 @@ Before calling Commitment Mode release-verified, evidence must cover:
 15. export remaining available while full backup import is disabled and atomically rejected;
 16. Android system-level stop/data-clear/uninstall bypasses documented rather than represented as impossible;
 17. manual-clock behavior documented rather than represented as tamper-proof.
+
+The physical release candidate must pass `COMMIT-01` through `COMMIT-06` in `docs/ANDROID_DEVICE_TEST_MATRIX.md`; source or React tests alone are not sufficient release evidence.
