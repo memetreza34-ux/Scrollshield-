@@ -102,10 +102,23 @@ public class ScrollShieldProtectionService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        RUNNING.set(true);
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         createNotificationChannel();
-        startForeground(NOTIFICATION_ID, createNotification());
+        try {
+            startForeground(NOTIFICATION_ID, createNotification());
+        } catch (RuntimeException error) {
+            RUNNING.set(false);
+            ScrollShieldNativePlugin.setProtectionEnabled(this, false);
+            ScrollShieldNativePlugin.recordProtectionStop(
+                this,
+                "start_failed",
+                "Android konnte den Foreground-Schutzdienst nicht starten"
+            );
+            stopSelf();
+            return;
+        }
+        ScrollShieldNativePlugin.recordProtectionServiceStarted(this);
+        RUNNING.set(true);
         lastUsageTickMs = System.currentTimeMillis();
         lastUsageFlushMs = lastUsageTickMs;
         handler.post(pollRunnable);
