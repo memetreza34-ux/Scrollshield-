@@ -17,6 +17,7 @@ export interface NativeUsageSample {
 }
 
 export interface NativeProtectionDrain {
+  batchId: string;
   events: NativeProtectionEvent[];
   usage: NativeUsageSample[];
 }
@@ -58,7 +59,8 @@ interface NativeProtectionPlugin {
     lastStopCode: string;
     lastStopMessage: string;
   }>;
-  drainProtectionEvents(): Promise<{ eventsJson: string; usageJson: string }>;
+  drainProtectionEvents(): Promise<{ batchId: string; eventsJson: string; usageJson: string }>;
+  acknowledgeProtectionEvents(options: { batchId: string }): Promise<{ acknowledged: boolean }>;
 }
 
 interface NativeProtectionConfig {
@@ -144,6 +146,7 @@ const EMPTY_STATUS: NativeProtectionStatus = {
 
 const EVENT_TYPES = new Set<NativeProtectionEvent['type']>(['open', 'block', 'warning', 'emergency']);
 const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const NATIVE_BATCH_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const isNativeProtectionEvent = (value: unknown): value is NativeProtectionEvent => {
   if (!value || typeof value !== 'object') return false;
@@ -198,6 +201,12 @@ const normalizeTimestamp = (value: unknown): number =>
 
 const normalizeDiagnosticText = (value: unknown): string =>
   typeof value === 'string' ? value.trim() : '';
+
+const normalizeNativeBatchId = (value: unknown): string => {
+  if (typeof value !== 'string') return '';
+  const normalized = value.trim();
+  return NATIVE_BATCH_ID_PATTERN.test(normalized) ? normalized.toLowerCase() : '';
+};
 
 export const assessNativeProtectionHealth = (status: {
   running: boolean;
@@ -298,11 +307,23 @@ export const NativeProtection = {
   },
 
   async drain(): Promise<NativeProtectionDrain> {
-    if (!this.isAvailable()) return { events: [], usage: [] };
+    if (!this.isAvailable()) return { batchId: '', events: [], usage: [] };
     const result = await AndroidProtection.drainProtectionEvents();
-    return {
-      events: parseArray(result.eventsJson, isNativeProtectionEvent),
-      usage: parseArray(result.usageJson, isNativeUsageSample),
-    };
+    const events = parseArray(result.eventsJson, isNativeProtectionEvent);
+    const usage = parseArray(result.usageJson, isNativeUsageSample);
+    const batchId = normalizeNativeBatchId(result.batchId);
+
+    if ((events.length > 0 || usage.length > 0) && !batchId) {
+      throw new Error('Android returned protection data without a valid drain batch id');
+    }
+    return { batchId, events, usage };
+  },
+
+  async acknowledgeDrain(batchId: string): Promise<void> {
+    if (!this.isAvailable()) return;
+    const normalizedBatchId = normalizeNativeBatchId(batchId);
+    if (!normalizedBatchId) throw new Error('Invalid native drain batch id');
+    const result = await AndroidProtection.acknowledgeProtectionEvents({ batchId: normalizedBatchId });
+    if (result.acknowledged !== true) throw new Error('Android did not acknowledge the native drain batch');
   },
 };
