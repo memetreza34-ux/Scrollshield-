@@ -19,7 +19,9 @@ Bereits vorhanden:
 - Third-Party Notices;
 - Secret-Check;
 - Privacy-/SDK-/Store-Source-Checks;
-- Release-Binary-Audit als Pflicht-Evidence.
+- Release-Binary-Audit als Pflicht-Evidence;
+- Android-v1-Manifest ohne `android.permission.INTERNET`;
+- `check-privacy-build.ts` blockiert dokumentationslose Netzwerk-APIs, bekannte Tracker-Marker und eine stille Wiedereinführung der INTERNET-Permission.
 
 ## 3. Regeln für neue Dependencies
 
@@ -35,6 +37,8 @@ Eine neue Runtime-Dependency wird nur aufgenommen, wenn mindestens beantwortet i
 8. Welche Tests schützen unsere Nutzung?
 
 Keine Dependency nur für kosmetische Bequemlichkeit hinzufügen, wenn sie neue Privacy-/Store-/Security-Risiken erzeugt.
+
+Eine künftige Netzwerk-, Cloud-, Analytics- oder Remote-Config-Dependency darf nicht einfach die Offline-First-Gates umgehen. Vor Integration müssen mindestens `PRODUCT_REQUIREMENTS.md`, `THREAT_MODEL.md`, Privacy/Data Safety und die Permission-Strategie bewusst neu bewertet werden.
 
 ## 4. GitHub Actions
 
@@ -56,7 +60,8 @@ Vor Kandidaten-Freeze:
 - Dependency-Änderungen im PR bewusst prüfen;
 - bekannte kritische Advisories bewerten;
 - neue Postinstall-/Build-Skripte bewusst prüfen;
-- unnötige Runtime-Dependencies entfernen.
+- unnötige Runtime-Dependencies entfernen;
+- prüfen, ob eine neue Dependency Netzwerk-/Telemetry-Code in den finalen Bundlepfad bringt.
 
 ## 6. Gradle / Android
 
@@ -68,6 +73,7 @@ Vor Release prüfen:
 - tatsächlich enthaltene Permissions;
 - tatsächlich enthaltene Services/Receiver/Provider;
 - keine unerwarteten Tracker/Ads/Analytics SDKs;
+- keine unerwartete Netzwerkfähigkeit;
 - R8/Resource Shrinking für Release aktiv.
 
 ## 7. SBOM / Dependency Snapshot
@@ -118,6 +124,8 @@ Vor `signedBinaryInspected=true` muss belegt sein:
 
 - finaler AAB stammt vom erwarteten Source-Kandidaten;
 - keine unerwarteten SDKs/Permissions;
+- das finale Manifest enthält weiterhin nur bewusst freigegebene Permissions;
+- keine undokumentierte Netzwerk-/Telemetry-Fähigkeit wurde durch transitive Dependencies eingebracht;
 - Dependency Snapshot archiviert;
 - Privacy-/Data-Safety-Aussagen passen weiterhin;
 - keine offenen kritischen Supply-Chain-Blocker.
@@ -127,5 +135,5 @@ Vor `signedBinaryInspected=true` muss belegt sein:
 - automatisierten Dependency-/SBOM-Snapshot für Release definieren;
 - finalen Gradle Dependency Report als Evidence archivieren;
 - finalen Manifest-Merge gegen Store-Deklaration prüfen;
-- `INTERNET`-Permission und alle netzwerkfähigen Dependencies bewusst auditieren;
+- finalen AAB auf transitive netzwerkfähige SDKs und unerwartete Endpoints prüfen;
 - Release-Signing- und Play-Credentials außerhalb des Repos organisatorisch absichern.
