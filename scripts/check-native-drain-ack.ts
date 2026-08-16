@@ -64,14 +64,20 @@ requireMatch(
 requireMatch(
   storePath,
   store,
-  /getBoolean\(FACTORY_RESET_PENDING_KEY, false\)[\s\S]*edit\(\)\.clear\(\)\.commit\(\)[\s\S]*DrainBatch\.empty\(\)/,
-  'A reset tombstone must clear late writes before any future drain payload is exposed.',
+  /markFactoryReset\([\s\S]*\.clear\(\)[\s\S]*putBoolean\(FACTORY_RESET_PENDING_KEY, true\)[\s\S]*commit\(\)/,
+  'Factory reset must clear native preferences and persist the tombstone atomically.',
 );
 requireMatch(
   storePath,
   store,
-  /markFactoryReset\([\s\S]*\.clear\(\)[\s\S]*putBoolean\(FACTORY_RESET_PENDING_KEY, true\)[\s\S]*commit\(\)/,
-  'Factory reset must clear native preferences and persist the tombstone atomically.',
+  /finalizeFactoryResetIfPending\([\s\S]*getBoolean\(FACTORY_RESET_PENDING_KEY, false\)[\s\S]*String newConfig[\s\S]*preferences\.edit\(\)\.clear\(\)[\s\S]*putString\(CONFIG_KEY, newConfig\)[\s\S]*commit\(\)/,
+  'Reset cleanup must delete late writes while preserving only a fresh post-reset protection config.',
+);
+requireMatch(
+  storePath,
+  store,
+  /getOrCreate\([\s\S]*finalizeFactoryResetIfPending\(preferences\)[\s\S]*DrainBatch\.empty\(\)/,
+  'No post-reset native payload may be exposed before tombstone cleanup.',
 );
 
 requireMatch(
@@ -161,6 +167,18 @@ requireMatch(
   /resetApp = async[\s\S]*await NativeProtection\.factoryReset\(\)[\s\S]*StorageService\.clearState\(\)/,
   'Web state must be cleared only after Android confirms the protected native factory reset.',
 );
+requireMatch(
+  appPath,
+  app,
+  /!appState\.hasCompletedOnboarding[\s\S]*NativeProtection\.sync/,
+  'Native config sync must stay disabled before onboarding completes.',
+);
+requireMatch(
+  appPath,
+  app,
+  /!appState\.hasCompletedOnboarding[\s\S]*NativeProtection\.drain/,
+  'Native drain must stay disabled before onboarding completes.',
+);
 
 for (const [method, description] of [
   ['pendingBatchReplaysExactlyUntilMatchingAck', 'replay until ACK'],
@@ -169,6 +187,7 @@ for (const [method, description] of [
   ['usageAccumulatedWhilePendingBecomesNextDeltaAfterAck', 'usage after pending snapshot'],
   ['acknowledgeIsIdempotentAfterSuccessfulRemoval', 'idempotent ACK'],
   ['factoryResetTombstoneDeletesLateServiceFlushBeforeAnyReplay', 'post-reset resurrection prevention'],
+  ['resetCleanupPreservesOnlyFreshPostResetConfiguration', 'fresh config preservation after reset'],
 ]) {
   requireMatch(
     instrumentedTestPath,
@@ -210,5 +229,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Native drain ACK contract check passed. Persistent batch, transactional journal, reset tombstone, and ACK guards are present.',
+  'Native drain ACK contract check passed. Persistent batch, transactional journal, reset tombstone, onboarding gate, and ACK guards are present.',
 );
