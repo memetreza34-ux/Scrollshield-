@@ -35,6 +35,7 @@ Ein Source-Checker darf niemals als ausgeführter Android-Test dargestellt werde
 - Android-Instrumentation-Source-Vertrag;
 - Supply-Chain-Integrität;
 - **Native Drain/ACK-/Factory-Reset-Vertrag**;
+- **Native Counter Retention**;
 - Device-Matrix-Vertrag;
 - Lifecycle-Diagnostik;
 - Diagnose-Normalisierung;
@@ -132,6 +133,17 @@ Prüft die neue Native-Persistenzgrenze:
 - Factory-Reset-Tombstone löscht verspätete Service-Writes vor jedem Replay;
 - falls bereits eine frische Post-Reset-Config existiert, bleibt nur diese erhalten, nicht alte Usage/Event-Daten.
 
+### `NativeRetentionInstrumentedTest.java`
+
+Prüft die bestätigungsgebundene Retention:
+
+- aktuelle und vorherige Open-/Emergency-Partition bleiben erhalten;
+- ältere Ephemeral-Counter werden entfernt;
+- alte vollständig bestätigte Raw-Usage und ihr Exportcursor werden gemeinsam entfernt;
+- unbestätigte Usage bleibt erhalten;
+- Raw-Usage innerhalb des 30-Tage-Fensters bleibt erhalten;
+- malformed/unrelated Keys werden nicht gelöscht.
+
 Der frühere `ExampleInstrumentedTest.java` wurde entfernt.
 
 ### Noch offen
@@ -221,7 +233,33 @@ Zusätzlich vorbereitet:
 
 Diese Source-/Testdateien sind noch keine Ausführungsevidence.
 
-## 7. Storage Migration Check
+## 7. Native Counter Retention Check
+
+```bash
+npm run check:native-retention
+```
+
+Retention ist jetzt im Source produktiv **hinter dem ACK-Gate** verdrahtet.
+
+Vertrag:
+
+- `NativeCounterRetentionPolicy.java` bleibt die Pure-Java-Regelquelle;
+- Cleanup läuft erst, nachdem Exportcursor und Pending-Batch-Entfernung erfolgreich committed wurden;
+- aktuelle + vorherige Open-/Emergency-Partition bleiben erhalten;
+- Raw Usage wird nach **30 lokalen Kalendertagen** nur dann entfernt, wenn `current == exported` gilt;
+- unbestätigte, inkonsistente oder malformed Usage bleibt erhalten;
+- beim Löschen werden `usage_ms_*` und der zugehörige `exported_usage_ms_*` gemeinsam entfernt;
+- Cleanup ist nach einem bereits erfolgreichen ACK best-effort: ein Prune-Fehler darf keinen bereits persistenten React-Batch wieder in einen unbestätigten Zustand versetzen.
+
+Tests/Verträge:
+
+- `NativeCounterRetentionPolicyTest.java`;
+- `NativeRetentionInstrumentedTest.java`;
+- `scripts/check-native-retention.ts`.
+
+Die Implementierung ist vorhanden, aber noch nicht real durch Android-JUnit/Instrumentation bestätigt.
+
+## 8. Storage Migration Check
 
 ```bash
 npm run check:migration
@@ -243,7 +281,7 @@ Schützt die besonders kritische V0.7-/Legacy-Datenmigration:
 
 Reale V0.7-Geräte-Evidence bleibt trotzdem Pflicht.
 
-## 8. Lifecycle Diagnostics
+## 9. Lifecycle Diagnostics
 
 ```bash
 npm run check:lifecycle
@@ -263,7 +301,7 @@ Schützt:
 - React-Health-Klassifikation;
 - ehrliche UI-Darstellung.
 
-## 9. Native Usage Accounting
+## 10. Native Usage Accounting
 
 ```bash
 npm run check:usage-accounting
@@ -280,15 +318,9 @@ Schützt unabhängig vom Drain-ACK:
 
 Der Checker verlangt **nicht** die alte sofortige Exportcursor-Änderung und ist mit dem neuen ACK-Pfad kompatibel.
 
-Zusätzlich:
+Der noch offene Performance-Punkt ist der periodische 10-Sekunden-`SharedPreferences.commit()` im Service-Main-Thread. Dieser wird nicht mit einem pauschalen `apply()`-Tausch gelöst; ein späterer Worker-Umbau muss In-Flight Usage weiterhin in Tageslimits berücksichtigen und fehlgeschlagene Writes verlustfrei zurückführen.
 
-- `NativeCounterRetentionPolicy.java`;
-- `NativeCounterRetentionPolicyTest.java`;
-- `docs/NATIVE_PERSISTENCE_AUDIT.md`.
-
-Retention ist noch nicht produktiv verdrahtet, bevor ACK-Regression real ausgeführt wurde.
-
-## 10. Device Matrix Contract
+## 11. Device Matrix Contract
 
 ```bash
 npm run check:device-matrix
@@ -298,7 +330,7 @@ Schützt den manuellen Testvertrag für Pixel, Samsung, Xiaomi/Redmi, OnePlus, M
 
 Der Checker beweist die Existenz des Testplans, nicht dessen Durchführung.
 
-## 11. Privacy / Offline-First
+## 12. Privacy / Offline-First
 
 ```bash
 npm run check:privacy
@@ -306,7 +338,7 @@ npm run check:privacy
 
 Blockiert unter anderem bekannte Analytics-/Tracking-SDKs, `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, Tracker-Marker und eine unbemerkte Wiedereinführung von `android.permission.INTERNET`.
 
-## 12. Release Approval Gate
+## 13. Release Approval Gate
 
 ```bash
 npm run check:release-approval
@@ -315,7 +347,7 @@ npm run release:gate
 
 Schema v2 verlangt kandidatgebundene Evidence. Der strikte Gate benötigt unter anderem Web Verification, Android Unit Tests, APK, Device Matrix, Lifecycle, Battery, Migration, Play/Legal/Reviewer-Nachweise, Signed Binary, Approver und exakte Candidate-SHA.
 
-## 13. Android CI Stage
+## 14. Android CI Stage
 
 Der bestehende Verify-Workflow soll nach `npm run verify` ausführen:
 
@@ -328,7 +360,7 @@ Bei Erfolg werden Debug APK und Unit-Test-Report als Artifact vorgesehen.
 
 Die `androidTest`-Suite benötigt zusätzlich eine reale Instrumentation-Ausführung auf Emulator/Gerät. `assembleDebug` allein ist kein Instrumentation-Pass.
 
-## 14. Aktuelle Ausführungsgrenze
+## 15. Aktuelle Ausführungsgrenze
 
 GitHub-hosted Actions starten für dieses Repository derzeit wegen Billing-/Spending-Limit nicht. Wiederholte Runs enden vor Step 1 mit `steps: null`.
 
@@ -338,8 +370,9 @@ Deshalb sind derzeit **nicht als bestanden belegt**:
 - `check:android-instrumentation`;
 - `check:supply-chain`;
 - `check:native-drain-ack`;
+- `check:native-retention`;
 - TypeScript/Lint/Prettier;
-- Vitest inklusive ACK-/Reset-Tests;
+- Vitest inklusive ACK-/Reset-/Retention-Tests;
 - Vite/PWA;
 - Android JUnit;
 - Android Instrumentation;
@@ -349,7 +382,7 @@ Deshalb sind derzeit **nicht als bestanden belegt**:
 
 Ein nicht gestarteter Runner ist ein Infrastrukturblocker und weder ein Code-Pass noch ein Code-Fail.
 
-## 15. Verbindliche Reihenfolge nach Entsperrung
+## 16. Verbindliche Reihenfolge nach Entsperrung
 
 1. sauberer Checkout;
 2. `npm ci`;
@@ -357,7 +390,7 @@ Ein nicht gestarteter Runner ist ein Infrastrukturblocker und weder ein Code-Pas
 4. Fehler beheben und wiederholen;
 5. `./gradlew testDebugUnitTest assembleDebug`;
 6. Android Instrumentation auf Emulator/Gerät;
-7. ACK-/Reset-Crash-Replay gezielt ausführen;
+7. ACK-/Reset-/Retention-Crash-Replay gezielt ausführen;
 8. Debug APK auf physischer Device Matrix;
 9. erst danach Release-Evidence hochstufen.
 
