@@ -356,7 +356,6 @@ requireMatch(
 );
 
 const allowedPermissions = new Set([
-  'android.permission.INTERNET',
   'android.permission.RECEIVE_BOOT_COMPLETED',
   'android.permission.PACKAGE_USAGE_STATS',
   'android.permission.SYSTEM_ALERT_WINDOW',
