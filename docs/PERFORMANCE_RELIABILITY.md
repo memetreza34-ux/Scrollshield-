@@ -65,12 +65,14 @@ Messen:
 - CPU-Auslastung im Idle-Schutz;
 - Polling-/Health-Intervalle;
 - Verhalten während temporärer Freigabe;
-- Verhalten bei mehreren geschützten Apps.
+- Verhalten bei mehreren geschützten Apps;
+- Worker-Aktivität rund um den 10-Sekunden-Usage-Flush.
 
 Release-Kriterium:
 
 - keine dauerhaft auffällige CPU-Auslastung im Idle;
-- Intervalle nur so aggressiv wie für den Produktnutzen nötig.
+- Intervalle nur so aggressiv wie für den Produktnutzen nötig;
+- Usage-Persistenz darf den Service-Main-Thread nicht periodisch mit synchronem Storage-I/O blockieren.
 
 ### PERF-05 Speicher
 
@@ -79,57 +81,81 @@ Messen:
 - typischer RAM-Verbrauch;
 - Langzeitlauf;
 - wiederholte Overlay-/Freigabezyklen;
-- Export/Import großer valider Backups.
+- Export/Import großer valider Backups;
+- Service-Start/Stop-Zyklen mit Worker-Neuanlage und Shutdown-Drain.
 
 Release-Kriterium:
 
 - kein reproduzierbares ungebremstes Wachstum;
-- keine OOM-/WebView-Crash-Serie in Normalnutzung.
+- keine OOM-/WebView-Crash-Serie in Normalnutzung;
+- keine hängenbleibenden Worker-/Executor-Threads nach wiederholtem Schutz-Start/Stop.
 
 ### PERF-06 Native-Persistenz
 
-Der Source-Audit ist erfolgt und dokumentiert aktuell:
+Der Source-Pfad ist jetzt auf eine explizite Coordinator-/Worker-Architektur umgestellt:
 
-- Usage wird im Service im Speicher gebündelt;
-- der periodische Flush läuft ungefähr alle 10 Sekunden;
-- der aktuelle Flush verwendet synchrones `SharedPreferences.commit()`;
-- der Service besitzt dafür aktuell keinen eigenen Worker-Thread;
-- Lifecycle-Diagnosewrites sind seltener und haben andere Durability-Anforderungen als periodische Usage-Writes.
+- `ScrollShieldProtectionService` misst Usage weiterhin im Polling-Pfad;
+- `UsageFlushCoordinator` verwaltet Pending + genau einen In-Flight-Batch;
+- neue Usage während eines laufenden Writes bleibt separat pending;
+- `UsageFlushWorker` verwendet `Executors.newSingleThreadExecutor(...)`;
+- der periodische `SharedPreferences.commit()` läuft ausschließlich im Worker;
+- der Protection Service besitzt keinen direkten periodischen Usage-`commit()` mehr;
+- `commit=false`, Runtime-Exception und Executor-Rejection werden als Failure zurück an den Coordinator gemeldet;
+- Failure-Batches werden wieder in Pending Usage aufgenommen;
+- Tageslimits berücksichtigen persistierte + Pending + In-Flight-Usage;
+- beim Service-Shutdown wird der letzte Usage-Tick erfasst, ein Force-Flush angefordert und danach ein serieller Final-Drain eingeplant;
+- der Final-Drain verarbeitet Usage, die während eines bereits laufenden Writes neu entstanden ist;
+- ein fehlgeschlagener In-Flight-Write kann beim Final-Drain einmal erneut geschrieben werden.
 
-Ziel:
+Wichtig:
 
-- sichere Datenpersistenz behalten;
-- unnötige blockierende periodische Main-Thread-I/O vermeiden;
-- Usage-Werte während In-Flight-Schreibvorgängen weiterhin korrekt in Tageslimits einrechnen;
-- fehlgeschlagene Writes nicht still verlieren;
-- keinen Doppelcount beim finalen Service-Flush erzeugen.
+Die Architektur ist **im Source umgesetzt**, aber wegen des GitHub-Actions-Billing-Blockers noch nicht real als Android-Build/JUnit/Device-Verhalten belegt.
 
-Ein pauschales `commit()` → `apply()` ist ausdrücklich **nicht** die Definition of Done, weil dadurch Fehlererkennung und Crash-/Durability-Semantik verändert würden.
+Release-Kriterien:
+
+- `UsageFlushCoordinatorTest` grün;
+- `UsageFlushWorkerTest` inklusive Shutdown-Drain grün;
+- `check:usage-flush-worker` grün;
+- Android `assembleDebug`/später Release-Build kompiliert den verdrahteten Service;
+- kein direkter periodischer `SharedPreferences.commit()` im Protection Service;
+- keine verlorene Pending Usage beim kontrollierten Shutdown;
+- keine Doppelzählung in Tageslimits bei normalen/In-Flight-/Shutdown-Szenarien;
+- kein reproduzierbarer ANR/Jank durch den Persistenzpfad;
+- Process-Kill-/Restart-Grenzen sind dokumentiert und auf Geräten getestet.
+
+Ein pauschales `commit()` → `apply()` bleibt ausdrücklich **nicht** die Definition of Done, weil dadurch Fehlererkennung und Crash-/Durability-Semantik verändert würden.
 
 Details: `docs/NATIVE_PERSISTENCE_AUDIT.md`.
 
 ### PERF-07 Storage-Retention
 
-Der Audit hat folgende datumsbezogene Native-Key-Familien bestätigt:
+Der bestätigungsgebundene Native-Retention-Pfad ist im Source verdrahtet.
+
+Betroffene datumsbezogene Native-Key-Familien:
 
 - `usage_ms_<date>_<appId>`;
 - `exported_usage_ms_<date>_<appId>`;
 - `open_events_<date>_<appId>`;
 - `emergency_count_<date>_<appId>`.
 
-Die reine Policy-Schicht ist vorbereitet:
+Aktuelle Regeln:
 
-- `NativeCounterRetentionPolicy.java` entscheidet ohne Android-I/O, welche Counter grundsätzlich löschbar sind;
-- `NativeCounterRetentionPolicyTest.java` deckt Current/Previous-Day, malformed Keys, unexportierte Usage-Deltas, inkonsistente Export-Marker und Retention-Cutoff-Grenzen ab;
-- die Policy ist bewusst noch **nicht** an SharedPreferences-Cleanup verdrahtet, solange Android-JUnit/Build nicht real ausgeführt werden können.
+- `NativeCounterRetentionPolicy.java` entscheidet ohne Android-I/O über Löschbarkeit;
+- Open-/Emergency-Counter behalten aktuellen + vorherigen lokalen Tag;
+- bestätigte Raw Usage besitzt einen 30-Tage-Horizont;
+- Usage wird nur gelöscht, wenn `current == exported`;
+- unbestätigte, inkonsistente oder malformed Usage bleibt fail-closed erhalten;
+- Retention läuft erst nach durablem Native→React-ACK;
+- `usage_ms_*` und zugehörige `exported_usage_ms_*` werden gemeinsam bereinigt;
+- `NativeCounterRetentionPolicyTest.java`, `NativeRetentionInstrumentedTest.java` und `check:native-retention` definieren den Testvertrag.
 
 Release-Kriterium:
 
-- Open-/Emergency-Counter werden nach einer klaren Enforcement-Retention sicher bereinigt;
+- Open-/Emergency-Counter werden nach der definierten Enforcement-Retention sicher bereinigt;
 - Usage-/Export-Paare werden nur konservativ bereinigt, wenn kein nicht exportiertes Delta verloren gehen kann;
-- Cleanup wird durch die Pure-Java-Policy/JUnit abgesichert;
+- Cleanup wird durch Policy/JUnit/Instrumentation abgesichert;
 - Mitternacht/Zeitzone/DST werden berücksichtigt;
-- die tatsächliche Verdrahtung ist real kompiliert und getestet.
+- die tatsächliche Verdrahtung ist real kompiliert und auf Android ausgeführt.
 
 ### PERF-08 12-Stunden-Batterietest
 
@@ -148,6 +174,7 @@ Dokumentieren:
 - Start-/End-Akkustand und relevante Nutzung;
 - Schutzdienst aktiv/inaktiv Vergleich, soweit praktikabel;
 - auffällige Wärme/CPU/Prozessneustarts;
+- Worker-/Persistenz-Auffälligkeiten;
 - Diagnose-JSON am Ende.
 
 Es gibt vor dem ersten Lauf bewusst noch keinen erfundenen Prozent-Grenzwert. Nach der ersten Baseline wird ein empirischer Budgetwert festgelegt und dieses Dokument aktualisiert.
@@ -161,6 +188,8 @@ Testen:
 - Batteriesparmodus;
 - OEM-Task-Killer;
 - Prozessende;
+- kontrollierter Service-Stop während eines Usage-Writes;
+- schneller Schutz-Neustart nach Stop;
 - Reboot;
 - App-Update;
 - Notification-Channel-Änderung;
@@ -169,7 +198,9 @@ Testen:
 Release-Kriterium:
 
 - ScrollShield darf nie fälschlich einen aktiven Dienst behaupten;
-- definierte Stops besitzen persistente Diagnosegründe.
+- definierte Stops besitzen persistente Diagnosegründe;
+- kontrollierter Shutdown verliert keine bereits erfasste Pending Usage außerhalb ausdrücklich dokumentierter Process-Kill-Grenzen;
+- ein Neustart darf keinen doppelten oder konkurrierenden Persistenzpfad erzeugen.
 
 ### PERF-10 Zeitgrenzen
 
@@ -180,7 +211,8 @@ Testen:
 - Zeitzonenwechsel;
 - manuelle Uhränderung;
 - über-Mitternacht-Schedule;
-- Anti-Binge-Fenster über lokale Mitternacht.
+- Anti-Binge-Fenster über lokale Mitternacht;
+- Usage-Flush unmittelbar vor/nach Tagesgrenze.
 
 ## 3. Web/PWA Performance
 
@@ -200,6 +232,7 @@ Neue große Dependencies benötigen Begründung, wenn sie den Bundle-/Startpfad 
 - unkontrollierte Overlay-Schleife;
 - Service wird häufig beendet und UI bleibt „aktiv“;
 - Datenverlust;
+- reproduzierbarer Usage-Verlust oder Doppelcount im Worker-/Shutdown-Pfad;
 - extreme Batterie-/CPU-Auffälligkeit.
 
 ### Major
@@ -207,6 +240,7 @@ Neue große Dependencies benötigen Begründung, wenn sie den Bundle-/Startpfad 
 - reproduzierbar hohe Overlay-Latenz;
 - Memory-Wachstum;
 - fehlerhafte Counter nach Langzeitlauf;
+- hängenbleibender Worker nach wiederholtem Service-Stop;
 - OEM-spezifischer Schutzverlust ohne sichtbare Warnung.
 
 ## 5. Evidence-Format
@@ -232,10 +266,12 @@ Result: PASS | FAIL | BLOCKED
 
 ## 6. Offene technische Arbeit
 
-1. Retention-Policy erst nach realem Android-JUnit/Build an SharedPreferences-Cleanup verdrahten.
-2. periodischen Usage-Flush so gestalten, dass blockierende Main-Thread-I/O reduziert wird, ohne Durability/Daily-Limit-Korrektheit zu verlieren.
-3. Native Drain/React-Persistenz-Grenze langfristig auf explizite ACK-Semantik prüfen.
-4. erste echte 12h-Baseline erstellen.
-5. daraus konkrete Batterie-/CPU-Budgets ableiten.
-6. physische Overlay-Latenzwerte sammeln.
-7. Memory-/Prozessstabilität bei wiederholten Freigabezyklen prüfen.
+1. GitHub Actions Billing/Spending-Limit entsperren und den exakten Head real verifizieren.
+2. `UsageFlushCoordinatorTest` + `UsageFlushWorkerTest` einschließlich Shutdown-Drain real ausführen.
+3. Android-Kompilierung des produktiv verdrahteten Worker-Pfads bestätigen.
+4. Shutdown/In-Flight/Process-Kill/Restart-Regressions auf Android ergänzen und ausführen.
+5. Drain/ACK/Retention parallel zu Worker-Write regressionsprüfen.
+6. erste echte 12h-Baseline erstellen.
+7. daraus konkrete Batterie-/CPU-Budgets ableiten.
+8. physische Overlay-Latenzwerte sammeln.
+9. Memory-/Prozessstabilität bei wiederholten Freigabe- und Schutz-Start/Stop-Zyklen prüfen.
