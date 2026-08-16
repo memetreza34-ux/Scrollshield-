@@ -1,6 +1,6 @@
 # ScrollShield – Native Persistence Audit
 
-Status: **G8-Engineering-Audit; ACK + Retention + Flush-Worker-Bausteine im Source, Service-Verdrahtung offen**
+Status: **G8-Engineering-Audit; ACK + Retention + produktiver Usage-Flush-Worker im Source, reale Android-Evidence offen**
 
 Letzte Aktualisierung: **16. August 2026**
 
@@ -23,11 +23,11 @@ Primäre Dateien:
 
 ## 2. NP-01 – periodischer Usage-Commit
 
-**Produktive Service-Verdrahtung weiterhin offen; Coordinator + echter serieller Writer sind vorbereitet.**
+**Produktive Service-Verdrahtung ist im Source umgesetzt. Reale JUnit-/Gradle-/Geräte-Evidence fehlt weiterhin.**
 
-Der aktuelle produktive Service führt weiterhin etwa alle 10 Sekunden `SharedPreferences.Editor.commit()` direkt aus `flushPendingUsage()` aus. Da Android-Services standardmäßig im Main Thread laufen, bleibt das ein potenzielles Jank-/ANR-Risiko.
+Der frühere produktive Pfad führte etwa alle 10 Sekunden `SharedPreferences.Editor.commit()` direkt aus `ScrollShieldProtectionService.flushPendingUsage()` aus. Da Android-Services standardmäßig im Main Thread laufen, war das ein unnötiges Jank-/ANR-Risiko.
 
-Ein blindes `commit()` → `apply()` bleibt ausgeschlossen: Tageslimits und Exportsemantik benötigen beobachtbare Failure-/Durability-Grenzen.
+Ein blindes `commit()` → `apply()` wurde bewusst nicht verwendet: Tageslimits und Exportsemantik benötigen weiterhin beobachtbare Failure-/Durability-Grenzen.
 
 ### 2.1 `UsageFlushCoordinator`
 
@@ -45,45 +45,74 @@ Die Pure-Java-State-Machine verwaltet synchronisiert:
 
 ### 2.2 `UsageFlushWorker`
 
-Der zweite Baustein existiert jetzt ebenfalls im Source:
+Der produktive Writer besitzt:
 
-- Produktionsfactory nutzt `Executors.newSingleThreadExecutor(...)`;
-- eingefrorene Coordinator-Batches werden ausschließlich auf diesem seriellen Executor geschrieben;
-- SharedPreferences verwendet weiterhin `commit()` **im Worker**, damit `false` als realer Persistenzfehler erkennbar bleibt;
-- Commit-Failure meldet `completeFlush(batchId, false, ...)`;
-- Runtime-Exception meldet ebenfalls Failure;
-- `RejectedExecutionException` führt den aktiven Batch synchron zurück in Pending Usage;
-- erfolgreicher Write meldet Success an den Coordinator;
-- `close()` führt orderly `executor.shutdown()` aus;
-- `awaitTermination(timeoutMs)` ist für einen späteren kontrollierten Shutdown-Pfad vorbereitet.
+- `Executors.newSingleThreadExecutor(...)`;
+- ausschließlich serielles Schreiben eingefrorener Coordinator-Batches;
+- weiterhin synchrones `SharedPreferences.commit()` **im Worker**, damit `false` als realer Persistenzfehler erkennbar bleibt;
+- Commit-Failure → `completeFlush(batchId, false, ...)`;
+- Runtime-Exception → Failure-Mergeback;
+- `RejectedExecutionException` → aktiver Batch zurück in Pending Usage;
+- erfolgreichen Write → Success an den Coordinator;
+- normalen `close()`-Pfad mit orderly `executor.shutdown()`;
+- `closeAfterDrainingPending()` für den Service-Shutdown;
+- Final-Drain auf demselben seriellen Worker-Thread;
+- Final-Drain verarbeitet Pending Usage, die während eines vorherigen In-Flight-Writes eingetroffen ist;
+- ein fehlgeschlagener In-Flight-Write kann über den anschließenden Final-Drain einmal erneut versucht werden;
+- `awaitTermination(timeoutMs)` bleibt für Tests und kontrollierte Diagnosepfade verfügbar.
 
-### 2.3 Tests
+### 2.3 Produktive Service-Integration
+
+`ScrollShieldProtectionService` ist jetzt eng verdrahtet:
+
+1. Coordinator + Worker werden nach erfolgreichem Service-Start initialisiert;
+2. die frühere Service-eigene `pendingUsageMs`-Map ist entfernt;
+3. der frühere Service-eigene `lastUsageFlushMs`-Timer ist entfernt;
+4. `addPendingUsageBucket(...)` delegiert an `UsageFlushCoordinator.addPendingUsage(...)`;
+5. `flushPendingUsage(...)` führt nur `beginFlush(...)` aus und submitted den Snapshot an den Worker;
+6. `getDailyUsageMs(...)` addiert persistierte + Pending + In-Flight-Usage saturierend;
+7. der periodische Service-Pfad enthält keinen direkten `SharedPreferences.commit()` mehr;
+8. `onDestroy()` erfasst zuerst den letzten erlaubten Usage-Tick;
+9. danach wird ein Force-Flush angefordert;
+10. anschließend plant `closeAfterDrainingPending()` den seriellen Final-Drain vor dem Executor-Shutdown ein.
+
+Damit ist der frühere Main-Thread-Write **im Source entfernt**. Das ist noch keine Behauptung, dass der Android-Build oder das Laufzeitverhalten bestanden wurde.
+
+### 2.4 Tests / Source Gate
 
 `UsageFlushCoordinatorTest.java` deckt State-Machine-Grenzen ab.
 
-`UsageFlushWorkerTest.java` deckt zusätzlich ab:
+`UsageFlushWorkerTest.java` deckt ab:
 
 - erfolgreichen Background-Write;
 - `commit=false` → Mergeback;
 - Writer-Exception → Mergeback;
 - neue Usage bleibt während blockiertem Worker vollständig im Tageslimit sichtbar;
-- geschlossener Worker lehnt einen Batch ab und gibt ihn an Pending zurück.
+- Shutdown-Drain schreibt Usage, die während eines In-Flight-Writes neu eingetroffen ist;
+- Shutdown-Drain versucht einen vorher fehlgeschlagenen In-Flight-Batch erneut;
+- geschlossener Worker lehnt einen neuen Batch ab und gibt ihn an Pending zurück.
 
-`scripts/check-usage-flush-worker.ts` schützt Coordinator **und** Worker. Der Checker hält die verbleibende Service-Grenze absichtlich fest: solange `ScrollShieldProtectionService.flushPendingUsage()` selbst `editor.commit()` enthält, ist NP-01 nicht abgeschlossen.
+`scripts/check-usage-flush-worker.ts` ist jetzt ein Integrations-Gate. Es verlangt:
 
-### 2.4 Noch fehlende Service-Integration
+- Coordinator/Worker im Protection Service;
+- Initialisierung beim Service-Start;
+- Add-/Flush-/Daily-Limit-Verdrahtung;
+- Shutdown-Drain;
+- keinen direkten `SharedPreferences.commit()` im Protection Service;
+- keine Rückkehr der alten Service-Pending-Map;
+- keine Rückkehr des alten Service-Flush-Timers.
 
-Vor Abschluss NP-01 muss `ScrollShieldProtectionService` eng verdrahtet werden:
+### 2.5 Noch offene NP-01-Evidence
 
-1. Coordinator und Worker beim Service-Start initialisieren;
-2. `addPendingUsageBucket(...)` an den Coordinator delegieren;
-3. `flushPendingUsage(...)` nur `beginFlush(...)` auslösen und den Snapshot an den Worker submitten;
-4. `getDailyUsageMs(...)` = persisted + `coordinator.getUnpersistedUsageMs(...)`;
-5. kein `SharedPreferences.commit()` mehr im periodischen Main-Thread-Pfad;
-6. kontrollierten Shutdown koordinieren: vorhandenen In-Flight-Write beenden, restliche Pending Usage forcieren, dann Worker schließen;
-7. Write-Failure/Shutdown/Drain-ACK-Races auf Android regressionsprüfen.
+Vor einer Release-Freigabe muss real bestätigt werden:
 
-Der 49-KB-Service wird nicht als unprüfbarer Vollersatz geschrieben. Die verbleibende Änderung muss ein kleiner, nachvollziehbarer Integrationspatch sein.
+1. `UsageFlushCoordinatorTest` läuft auf dem exakten Head grün;
+2. `UsageFlushWorkerTest` einschließlich Shutdown-Drain läuft grün;
+3. Android kompiliert den verdrahteten Service (`assembleDebug`);
+4. Service-Shutdown mit bereits laufendem In-Flight-Write funktioniert auf Android;
+5. Process-Kill-/Restart-Fälle verlieren keine releasekritisch relevante Usage außerhalb der dokumentierten Durability-Grenzen;
+6. Drain/ACK/Retention und Worker-Write erzeugen keine Doppelzählung oder Datenlöschung;
+7. 12h-/OEM-Baseline zeigt keine neue CPU-/Batterie-Auffälligkeit.
 
 ## 3. NP-02 – bestätigungsgebundene Retention
 
@@ -169,7 +198,7 @@ Vorbereitet sind unter anderem:
 - `check:native-retention`;
 - `check:usage-flush-worker`.
 
-**Nicht als bestanden belegt:** GitHub Actions stoppt weiter vor Step 1 wegen Billing/Spending-Limit. Eine isolierte lokale `javac`-Plausibilitätsprüfung des Coordinators ist keine Android-/Release-Evidence.
+**Nicht als bestanden belegt:** GitHub Actions stoppt weiterhin vor Step 1 wegen Billing/Spending-Limit. Der aktuelle Head hat deshalb keine echte Verify-/JUnit-/Gradle-/APK-Evidence.
 
 ## 7. NP-04 – Lifecycle-Diagnostik
 
@@ -177,7 +206,7 @@ Seltene Start-/Stop-Diagnostik verwendet teilweise bewusst synchrones `commit()`
 
 ## 8. Release-Einstufung
 
-### Im Source umgesetzt/vorbereitet
+### Im Source umgesetzt
 
 - crash-sicherer Native Pending-Batch + ACK;
 - React Dedup/Save-before-ACK;
@@ -185,26 +214,26 @@ Seltene Start-/Stop-Diagnostik verwendet teilweise bewusst synchrones `commit()`
 - bestätigungsgebundene Retention;
 - `UsageFlushCoordinator`;
 - echter `UsageFlushWorker` mit Single-Thread-Executor und Failure-Mergeback;
-- JUnit-/Source-Verträge für beide Worker-Bausteine.
+- produktive Coordinator-/Worker-Verdrahtung im `ScrollShieldProtectionService`;
+- kein direkter periodischer Usage-`commit()` mehr im Protection-Service-Main-Thread;
+- serieller Shutdown-Drain;
+- JUnit-/Source-Verträge für Coordinator, Worker und Service-Verdrahtung.
 
 ### Vor v1 weiterhin zwingend
 
 - Coordinator-/Worker-/ACK-/Reset-/Retention-Tests real ausführen;
 - `npm run verify` + Android JUnit + Instrumentation + `assembleDebug` erfolgreich durchführen;
-- Coordinator + Worker in `ScrollShieldProtectionService` integrieren;
-- periodischen Main-Thread-`commit()` entfernen;
-- Shutdown/In-Flight/Drain-Races regressionsprüfen;
+- Shutdown/In-Flight/Drain-/Retention-Races real regressionsprüfen;
 - Prozesskill-/Mitternacht-/DST-Fälle auf Gerät;
 - 12h-/OEM-Batterie-/Reliability-Baseline.
 
 ## 9. Nächste Engineering-Schritte
 
-1. Billing/Runner entsperren und Worker-JUnit real ausführen.
-2. Fehler beheben, bis Verify/JUnit/Debug-Build grün sind.
-3. Coordinator + Worker als kleinen Patch in den Service verdrahten.
-4. Main-Thread-`commit()` aus dem periodischen Flush entfernen.
-5. Shutdown mit laufendem In-Flight-Flush testen.
-6. Drain/ACK gleichzeitig mit Worker-Write testen.
-7. reale Process-Kill-/12h-/OEM-/Zeitgrenzen-Evidence erfassen.
+1. Billing/Runner entsperren und den exakten Head real ausführen.
+2. echte Compiler-/JUnit-/Source-Gate-Fehler beheben, bis Verify/JUnit/Debug-Build grün sind.
+3. Android-Test für Service-Shutdown mit In-Flight-/Pending-Usage ergänzen bzw. real ausführen.
+4. Drain/ACK gleichzeitig mit Worker-Write regressionsprüfen.
+5. Process-Kill/Restart und Service-Neustart gegen Usage-Durability testen.
+6. reale Process-Kill-/12h-/OEM-/Zeitgrenzen-Evidence erfassen.
 
 Bis diese Punkte erledigt sind, bleibt G8 **TEILWEISE**.
