@@ -2,6 +2,14 @@
 
 ScrollShield is an offline-first digital wellbeing app for reducing impulsive social media use. The repository contains a production-oriented web/PWA experience and a Capacitor Android app.
 
+## Start Here – Entwicklung von A bis Z
+
+Wer ScrollShield entwickeln, prüfen oder veröffentlichen will, beginnt mit:
+
+**[`docs/APP_DEVELOPMENT_A_TO_Z.md`](docs/APP_DEVELOPMENT_A_TO_Z.md)**
+
+Das Master-Handbuch legt die verbindliche Reihenfolge vom Produktproblem über Architektur, UI, Daten, Native Android, Berechtigungen, Migration, Tests und CI bis zu Signing, Play Console, Closed Testing, Release-Evidence, Produktion, Rollout und Hotfix fest. Die übrigen Dokumente in `docs/` sind Detailquellen für einzelne Phasen.
+
 ## Current Scope
 
 - App and short-video protection profiles
@@ -89,11 +97,13 @@ npm run android:bundle
 
 ## Product and Release References
 
+- `docs/APP_DEVELOPMENT_A_TO_Z.md` – master process from idea to production
 - `docs/COMPETITOR_PRODUCT_BLUEPRINT.md`
 - `docs/NATIVE_ANDROID.md`
 - `docs/DATA_MIGRATION.md`
 - `docs/ANDROID_DEVICE_TEST_MATRIX.md`
 - `docs/RELEASE_CHECKLIST.md`
+- `docs/RELEASE_EVIDENCE.md`
 - `docs/ROLLOUT_PLAN.md`
 - `docs/STORE_SUBMISSION_PACKET.md`
 - `docs/ENGINEERING_CHECKS.md`
