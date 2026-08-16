@@ -4,6 +4,8 @@ import App from './App';
 import { DEFAULT_APP_CONFIG, DEFAULT_STATE } from './types';
 
 const {
+  acknowledgeDrainMock,
+  factoryResetMock,
   loadStateMock,
   pendingMigrationMock,
   saveStateMock,
@@ -12,6 +14,8 @@ const {
   startMock,
   drainMock,
 } = vi.hoisted(() => ({
+  acknowledgeDrainMock: vi.fn(),
+  factoryResetMock: vi.fn(),
   loadStateMock: vi.fn(),
   pendingMigrationMock: vi.fn(),
   saveStateMock: vi.fn(),
@@ -37,6 +41,8 @@ vi.mock('./lib/nativeProtection', () => ({
     getStatus: (...args: unknown[]) => getStatusMock(...args),
     start: (...args: unknown[]) => startMock(...args),
     drain: (...args: unknown[]) => drainMock(...args),
+    acknowledgeDrain: (...args: unknown[]) => acknowledgeDrainMock(...args),
+    factoryReset: (...args: unknown[]) => factoryResetMock(...args),
     stop: vi.fn(),
   },
 }));
@@ -76,13 +82,18 @@ describe('App native protection recovery', () => {
     getStatusMock.mockReset();
     startMock.mockReset();
     drainMock.mockReset();
+    acknowledgeDrainMock.mockReset();
+    factoryResetMock.mockReset();
 
     loadStateMock.mockReturnValue(savedState);
     pendingMigrationMock.mockReturnValue(false);
+    saveStateMock.mockReturnValue(true);
     syncMock.mockResolvedValue([]);
     getStatusMock.mockResolvedValue(status(true, false));
     startMock.mockResolvedValue(undefined);
-    drainMock.mockResolvedValue({ events: [], usage: [] });
+    drainMock.mockResolvedValue({ batchId: '', events: [], usage: [] });
+    acknowledgeDrainMock.mockResolvedValue(undefined);
+    factoryResetMock.mockResolvedValue(undefined);
   });
 
   it('restarts a previously enabled stale service when an active target is installed', async () => {
