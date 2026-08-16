@@ -26,8 +26,8 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 | G4 | Native Android Schutz | **TEILWEISE** | Usage Access, Overlay, FGS, Regeln, Recovery, Diagnostik und crash-sicherer Native-Datentransfer sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + reale Geräte |
 | G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First-Manifest, Privacy-Guard, gepinnter Gradle-SHA256 und `check:supply-chain` existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-Check + Dependency-/Manifest-Snapshot + finaler Binary-Audit + Threat-Review |
 | G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` und Android-Stufen sind vorbereitet; GitHub Runner stoppt vor Step 1 wegen Billing/Spending-Limit | kompletter echter Verify-Lauf auf exaktem Head |
-| G7 | Android Instrumentation/E2E | **TEILWEISE** | Runtime-State/Lifecycle, Manifest/Permissions, Boot-Recovery und Native-Drain/ACK/Reset besitzen echte `androidTest`-Verträge; Ausführung sowie weitere Overlay-/Permission-Loss-End-to-End-Fälle fehlen | Instrumentation real ausführen + verbleibende kritische Android-Flows ergänzen |
-| G8 | Performance & Batterie | **TEILWEISE** | persistenter Native Pending-Batch, UUID-Batch-ID, React-Dedup-Journal, Save-before-ACK, Crash-Replay und Factory-Reset-Tombstone sind im Source implementiert; Retention-Verdrahtung, Main-Thread-Flush-Härtung und reale CPU/Memory/Batterie-Evidenz fehlen | ACK-/Reset-Tests real ausführen → Retention verdrahten → Flush-I/O härten → 12h-Baseline |
+| G7 | Android Instrumentation/E2E | **TEILWEISE** | Runtime-State/Lifecycle, Manifest/Permissions, Boot-Recovery, Native-Drain/ACK/Reset und Retention besitzen echte `androidTest`-Verträge; Ausführung sowie weitere Overlay-/Permission-Loss-End-to-End-Fälle fehlen | Instrumentation real ausführen + verbleibende kritische Android-Flows ergänzen |
+| G8 | Performance & Batterie | **TEILWEISE** | Pending-Batch, React-Dedup, Save-before-ACK, Crash-Replay, Factory-Reset-Tombstone **und bestätigungsgebundene Native-Retention** sind im Source implementiert; periodischer Main-Thread-Usage-Flush und reale CPU/Memory/Batterie-Evidenz fehlen | ACK/Reset/Retention real ausführen → Flush-I/O härten → 12h-Baseline |
 | G9 | Physical Device Matrix | **FEHLT** | Matrix ist definiert, aber nicht vollständig ausgeführt | Pflichtgeräte/Szenarien mit Build-ID/Evidenz vollständig dokumentieren |
 | G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Evidence-Schema v2 existiert; Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Kandidaten-SHA + echte Referenzen |
 | G11 | Legal / Privacy / Support | **TEILWEISE** | Dokumente/Struktur existieren; finale reale Identität, Support-Mailbox und öffentliche Privacy-Domain fehlen | keine Platzhalter + überprüfbare öffentliche Angaben |
@@ -43,7 +43,6 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 - Gradle Wrapper 8.14.3 mit offiziellem Distribution-SHA256 gepinnt.
 - Android-Instrumentation vom Beispieltest auf reale Runtime-Verträge ausgebaut.
 - V0.7-Migration bleibt transaktional und bytegenau archiviert.
-- Native Counter Retention als Pure-Java-Policy + JUnit vorbereitet.
 - Native→React-Datentransfer gehärtet:
   - persistenter `pending_protection_drain_v1`;
   - UUID-Batch-ID;
@@ -59,22 +58,29 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
   - Tombstone `factory_reset_pending_v1` verhindert Wiederkehr verspäteter Service-Writes;
   - frische Post-Reset-Konfiguration kann erhalten bleiben, alte Usage/Event/Lifecycle-Daten nicht;
   - Native Runtime startet nach Reset erst wieder nach abgeschlossenem Onboarding.
-- `check:native-drain-ack` ist Bestandteil von `npm run verify`.
-- Vitest-/App-/Android-Instrumentationstests für ACK und Reset sind vorbereitet, aber noch nicht ausgeführt.
+- Native Retention jetzt im Source verdrahtet:
+  - `NativeCounterRetentionPolicy` bleibt die Pure-Java-Regelquelle;
+  - Cleanup läuft erst nach durablem ACK;
+  - Open-/Emergency-Counter behalten aktuellen + vorherigen Tag;
+  - rohe bestätigte Usage wird nach 30 lokalen Kalendertagen begrenzt;
+  - `current != exported` bleibt unangetastet;
+  - bestätigte alte Usage und Exportcursor werden gemeinsam entfernt;
+  - `NativeRetentionInstrumentedTest.java` + `check:native-retention` schützen die Grenze.
+- `check:native-drain-ack` und `check:native-retention` sind Bestandteil von `npm run verify`.
+- Vitest-/App-/Android-Instrumentationstests für ACK, Reset und Retention sind vorbereitet, aber noch nicht ausgeführt.
 
 ## Aktueller Arbeitsfokus
 
 ### Jetzt aktiv
 
 1. **G6 extern entsperren:** GitHub Actions Billing/Spending-Limit korrigieren; danach vollständige Verify-/Android-JUnit-/Debug-Build-Kette real ausführen.
-2. **G8:** nach erfolgreicher ACK-Regression Retention sicher verdrahten.
-3. **G8:** periodischen Usage-Flush vom blockierenden Service-Main-Thread entkoppeln.
-4. **G7:** verbleibende Overlay-/Permission-Loss-/Service-E2E-Fälle ergänzen und reale Instrumentation ausführen.
-5. **G9:** stabilen Debug-Kandidaten auf der physischen Device Matrix testen.
-6. **G2:** reale V0.7-Migration mit bytegenauer Evidence durchführen.
-7. **G8/G9:** 12h/OEM-/Mitternacht-/DST-/Prozesskill-Evidence erfassen.
-8. **G5:** finalen Dependency-/SBOM-/Manifest-Snapshot für Release-Evidence erzeugen.
-9. **G0/G3:** reale User-Research-/Accessibility-Sessions mit stabilem APK durchführen.
+2. **G8:** periodischen 10-Sekunden-Usage-Flush vom blockierenden Service-Main-Thread entkoppeln, jedoch erst mit ausführbarer Java-/Gradle-Regression oder als eng isolierter Block.
+3. **G7:** verbleibende Overlay-/Permission-Loss-/Service-E2E-Fälle ergänzen und reale Instrumentation ausführen.
+4. **G9:** stabilen Debug-Kandidaten auf der physischen Device Matrix testen.
+5. **G2:** reale V0.7-Migration mit bytegenauer Evidence durchführen.
+6. **G8/G9:** 12h/OEM-/Mitternacht-/DST-/Prozesskill-Evidence erfassen.
+7. **G5:** finalen Dependency-/SBOM-/Manifest-Snapshot für Release-Evidence erzeugen.
+8. **G0/G3:** reale User-Research-/Accessibility-Sessions mit stabilem APK durchführen.
 
 ### Nicht jetzt anfangen
 
