@@ -36,6 +36,7 @@ Ein Source-Checker darf niemals als ausgeführter Android-Test dargestellt werde
 - Supply-Chain-Integrität;
 - **Native Drain/ACK-/Factory-Reset-Vertrag**;
 - **Native Counter Retention**;
+- **Usage-Flush-Worker-Foundation**;
 - Device-Matrix-Vertrag;
 - Lifecycle-Diagnostik;
 - Diagnose-Normalisierung;
@@ -66,23 +67,7 @@ Ein Source-Checker darf niemals als ausgeführter Android-Test dargestellt werde
 npm run check:android
 ```
 
-Schützt unter anderem:
-
-- SDK-Untergrenzen und Package-ID;
-- Release-Minification und Resource Shrinking;
-- Signing-Konfiguration;
-- `allowBackup=false`;
-- Cleartext-Verbot;
-- Foreground-Service-Registrierung und `specialUse`;
-- Boot Receiver;
-- scoped Package Visibility;
-- Native Protection-/Diagnostics-Bridge;
-- explizite Nutzeraktivierung;
-- Safe-Shutdown bei Permission-/Rule-/Target-Verlust;
-- Schedule-/Daily-Limit-/Anti-Binge-/Emergency-Policy-Verknüpfung;
-- Boot-/Update-Recovery-Vertrag;
-- gepinnte externe GitHub Actions;
-- Android Unit-Test-/Debug-Build-Schritte im Workflow.
+Schützt unter anderem SDK-/Package-Vertrag, Release-Minification, Signing-Konfiguration, `allowBackup=false`, Cleartext-Verbot, FGS-/Boot-Receiver-Registrierung, scoped Package Visibility, Native Bridge, explizite Schutzaktivierung, Safe-Shutdown, Regeln/Zeiten/Daily-Limit/Anti-Binge/Emergency, Recovery und CI-Buildschritte.
 
 Die tatsächliche Permission-Wahrheit wird zusätzlich durch `check:privacy` und die On-Device-Manifest-Instrumentation geschützt. Android v1 darf derzeit keine `android.permission.INTERNET` besitzen.
 
@@ -92,72 +77,51 @@ Die tatsächliche Permission-Wahrheit wird zusätzlich durch `check:privacy` und
 npm run check:android-instrumentation
 ```
 
-Dieser Source-Checker verhindert, dass die Android-Instrumentation wieder auf den früheren Android-Studio-Platzhaltertest reduziert wird.
-
 Verbindlich vorhanden sind derzeit:
 
 ### `ProtectionStateInstrumentedTest.java`
 
 - Protection default disabled;
-- `lastProtectionStartAt` erst durch tatsächlichen Start-Record;
+- Startzeit erst durch tatsächlichen Service-Start-Record;
 - Deaktivierung persistiert Lifecycle-Wahrheit;
-- Stop-Code/-Message werden normalisiert;
-- aktive Ziel-App gilt nur bei installiertem/sichtbarem Package.
+- Diagnosewerte werden normalisiert;
+- Ziel-App gilt nur bei installiertem/sichtbarem Package.
 
 ### `ManifestSecurityInstrumentedTest.java`
-
-Prüft das installierte/zusammengeführte Manifest:
 
 - freigegebener Android-v1-Permission-Satz;
 - kein `android.permission.INTERNET`;
 - Backup aus;
-- Protection Service registriert/nicht exportiert;
+- Protection Service korrekt registriert/nicht exportiert;
 - Boot Receiver korrekt registriert.
 
 ### `BootRecoveryInstrumentedTest.java`
 
 - fremde Broadcasts verändern Aktivierung nicht;
-- `BOOT_COMPLETED` ohne Ziel-App endet fail-closed;
-- `MY_PACKAGE_REPLACED` ohne Ziel-App endet fail-closed;
+- BOOT/App-Update ohne verfügbares Ziel endet fail-closed;
 - stabiler Diagnosecode `recovery_target_app_missing`.
 
 ### `NativeDrainBatchInstrumentedTest.java`
 
-Prüft die neue Native-Persistenzgrenze:
-
-- Pending Batch wird bis zum passenden ACK identisch wiedergegeben;
-- falsches ACK verändert weder Cursor noch Pending Batch;
-- Events nach Erstellung eines Pending-Batches bleiben für einen Folgebatch erhalten;
-- neue Usage oberhalb des Snapshot-Werts bleibt nach ACK als neues Delta erhalten;
-- ACK nach bereits erfolgreicher Finalisierung ist idempotent;
-- Factory-Reset-Tombstone löscht verspätete Service-Writes vor jedem Replay;
-- falls bereits eine frische Post-Reset-Config existiert, bleibt nur diese erhalten, nicht alte Usage/Event-Daten.
+- Replay bis ACK;
+- falsches ACK;
+- neue Events während Pending;
+- neue Usage oberhalb Snapshot;
+- idempotentes ACK;
+- Factory-Reset-Tombstone gegen verspätete Writes;
+- nur frische Post-Reset-Config darf erhalten bleiben.
 
 ### `NativeRetentionInstrumentedTest.java`
 
-Prüft die bestätigungsgebundene Retention:
-
-- aktuelle und vorherige Open-/Emergency-Partition bleiben erhalten;
-- ältere Ephemeral-Counter werden entfernt;
-- alte vollständig bestätigte Raw-Usage und ihr Exportcursor werden gemeinsam entfernt;
-- unbestätigte Usage bleibt erhalten;
-- Raw-Usage innerhalb des 30-Tage-Fensters bleibt erhalten;
-- malformed/unrelated Keys werden nicht gelöscht.
+- aktuelle/Vortags-Ephemeral-Counter bleiben;
+- alte vollständig bestätigte Raw-Usage wird gemeinsam mit Exportcursor entfernt;
+- unbestätigte Usage bleibt;
+- 30-Tage-Horizont;
+- malformed/unrelated Keys bleiben.
 
 Der frühere `ExampleInstrumentedTest.java` wurde entfernt.
 
-### Noch offen
-
-G7 bleibt **TEILWEISE**. Offen sind insbesondere:
-
-- real ausgeführte Instrumentation auf Emulator/Gerät;
-- echter Service-Start mit erfüllten System-Permissions;
-- Overlay-Rendering und Aktionen;
-- Permission-Verlust während laufendem Schutz;
-- Notification-Channel-Entzug;
-- Countdown-/Session-Ende;
-- komplette Boot-Recovery mit realem FGS-Start;
-- OEM-/Prozesskiller-Verhalten.
+G7 bleibt **TEILWEISE**, weil reale Instrumentation sowie Service-/Overlay-/Permission-Loss-/Notification-/OEM-End-to-End-Fälle noch fehlen.
 
 ## 5. Supply-Chain Check
 
@@ -165,25 +129,15 @@ G7 bleibt **TEILWEISE**. Offen sind insbesondere:
 npm run check:supply-chain
 ```
 
-Schützt derzeit:
+Schützt Lockfile-/Dependency-Vertrag, HTTPS-Auflösungen, Gradle-Distributionshost, SHA-256 und blockiert dynamische Gradle-Versionen/Plain-HTTP-Repositories.
 
-- `package.json` + `package-lock.json`;
-- Lockfile-Version mindestens 3;
-- keine direkten ungebundenen/Git/HTTP/File/Link-Dependency-Specifier;
-- keine Plain-HTTP-Paketauflösungen;
-- keine Git-/SSH-Lockfile-Auflösungen ohne Review;
-- Gradle Wrapper über offiziellen HTTPS-Host;
-- Distribution-SHA256;
-- keine dynamischen Gradle-Versionen;
-- keine Plain-HTTP-Gradle-Repositories.
-
-Gradle 8.14.3 ist aktuell gepinnt auf:
+Gradle 8.14.3 ist gepinnt auf:
 
 ```text
 ed1a8d686605fd7c23bdf62c7fc7add1c5b23b2bbc3721e661934ef4a4911d7c
 ```
 
-Das ersetzt keinen echten `npm ci`, Advisory-Review, Gradle Dependency Report, SBOM oder Binary Audit.
+Das ersetzt keinen echten `npm ci`, Advisory-Review, Dependency Report, SBOM oder Binary Audit.
 
 ## 6. Native Drain / ACK / Reset Check
 
@@ -191,47 +145,20 @@ Das ersetzt keinen echten `npm ci`, Advisory-Review, Gradle Dependency Report, S
 npm run check:native-drain-ack
 ```
 
-Dieser Source-Checker schützt die Datenübergabe zwischen Native Android und React.
-
 Pflichtvertrag:
 
-### Native
-
 - `pending_protection_drain_v1` speichert einen unveränderlichen Pending-Batch;
-- Event Queue wird nur zusammen mit dem persistenten Pending-Batch geleert;
-- Usage-Exportcursor werden **nicht beim Drain**, sondern erst beim passenden ACK vorgerückt;
-- falsches ACK ist fail-closed;
-- inkonsistente Usage-Cursor blockieren Finalisierung;
-- neue Usage/Events oberhalb bzw. außerhalb des Pending-Snapshots bleiben erhalten.
-
-### React
-
-- Drain-Payload benötigt gültige UUID-Batch-ID;
+- Event Queue wird nur zusammen mit dem Pending-Batch geleert;
+- Usage-Exportcursor erst beim passenden ACK;
+- falsches/inkonsistentes ACK fail-closed;
+- neue Usage/Events bleiben für Folgebatches erhalten;
+- React benötigt gültige UUID-Batch-ID;
 - `__scrollshieldNativeDrain.lastProcessedBatchId` liegt im transaktionalen Settings-Chunk;
-- gleicher Batch wird genau einmal angewendet;
-- Usage/History + Batch-ID müssen erfolgreich durch `StorageService.saveState(...)` gespeichert sein;
-- erst danach ACK;
-- bereits gespeicherter Replay-Batch wird nicht erneut addiert;
-- fehlgeschlagener Save blockiert ACK und wird erneut versucht.
+- Stats/History + Batch-ID müssen vor ACK erfolgreich gespeichert sein;
+- Replay eines bereits gespeicherten Batch führt nur zum ACK;
+- Factory Reset nutzt `factory_reset_pending_v1` und löscht Web-State erst nach Native-Bestätigung.
 
-### Factory Reset
-
-- Android muss Native-Reset zuerst bestätigen;
-- `factory_reset_pending_v1` verhindert, dass verspätete `onDestroy()`-Writes wieder in den neuen App-State gelangen;
-- frische Post-Reset-Config darf erhalten bleiben;
-- alte Usage/Event/Lifecycle-Daten nicht;
-- Web-State/Commitment werden erst danach gelöscht;
-- Native Sync/Drain laufen erst nach abgeschlossenem Onboarding.
-
-Zusätzlich vorbereitet:
-
-- `nativeDrainJournal.test.ts`;
-- `nativeProtectionDrain.test.ts`;
-- `App.nativeDrainAck.test.tsx`;
-- aktualisierte Reset-Tests in `App.commitmentActivation.test.tsx`;
-- `NativeDrainBatchInstrumentedTest.java`.
-
-Diese Source-/Testdateien sind noch keine Ausführungsevidence.
+Die Source-/Testdateien sind noch keine Ausführungsevidence.
 
 ## 7. Native Counter Retention Check
 
@@ -239,17 +166,13 @@ Diese Source-/Testdateien sind noch keine Ausführungsevidence.
 npm run check:native-retention
 ```
 
-Retention ist jetzt im Source produktiv **hinter dem ACK-Gate** verdrahtet.
+Retention ist produktiv **hinter dem ACK-Gate** verdrahtet:
 
-Vertrag:
-
-- `NativeCounterRetentionPolicy.java` bleibt die Pure-Java-Regelquelle;
-- Cleanup läuft erst, nachdem Exportcursor und Pending-Batch-Entfernung erfolgreich committed wurden;
-- aktuelle + vorherige Open-/Emergency-Partition bleiben erhalten;
-- Raw Usage wird nach **30 lokalen Kalendertagen** nur dann entfernt, wenn `current == exported` gilt;
-- unbestätigte, inkonsistente oder malformed Usage bleibt erhalten;
-- beim Löschen werden `usage_ms_*` und der zugehörige `exported_usage_ms_*` gemeinsam entfernt;
-- Cleanup ist nach einem bereits erfolgreichen ACK best-effort: ein Prune-Fehler darf keinen bereits persistenten React-Batch wieder in einen unbestätigten Zustand versetzen.
+- aktuelle + vorherige Open-/Emergency-Partition bleiben;
+- Raw Usage wird nach 30 lokalen Kalendertagen nur bei `current == exported` entfernt;
+- unbestätigte/inkonsistente/malformed Usage bleibt;
+- Raw-Counter + Exportcursor werden gemeinsam entfernt;
+- Cleanup-Fehler dürfen einen bereits bestätigten React-Batch nicht rückgängig machen.
 
 Tests/Verträge:
 
@@ -257,70 +180,92 @@ Tests/Verträge:
 - `NativeRetentionInstrumentedTest.java`;
 - `scripts/check-native-retention.ts`.
 
-Die Implementierung ist vorhanden, aber noch nicht real durch Android-JUnit/Instrumentation bestätigt.
+## 8. Usage Flush Worker Foundation
 
-## 8. Storage Migration Check
+```bash
+npm run check:usage-flush-worker
+```
+
+Dieser neue Source-Checker schützt **noch nicht die fertige Service-Integration**, sondern die Korrektheitsbasis, die vor dem Thread-Umbau vorhanden sein muss.
+
+### `UsageFlushCoordinator.java`
+
+Der Pure-Java-Coordinator besitzt keine Android-I/O-Abhängigkeit und verwaltet synchronisiert:
+
+- Pending Usage;
+- genau einen unveränderlichen In-Flight-Snapshot;
+- neue Usage, die während des Writes separat pending bleibt;
+- Success-Completion nur für die passende Batch-ID;
+- Failure-Mergeback ohne Datenverlust;
+- Ablehnung stale Worker-Callbacks;
+- `getUnpersistedUsageMs()` = Pending + In-Flight für Tageslimits;
+- saturierende Addition gegen Long-Overflow;
+- normales Flush-Intervall sowie Force-Start für einen späteren kontrollierten Shutdown-Pfad.
+
+### `UsageFlushCoordinatorTest.java`
+
+JUnit deckt ab:
+
+- Intervall + Force;
+- kein paralleler zweiter Flush;
+- neue Usage während In-Flight;
+- Success;
+- Failure-Mergeback;
+- stale Completion;
+- Daily-Limit-View;
+- invalid Input;
+- Overflow.
+
+### Bewusst noch offen
+
+`ScrollShieldProtectionService.flushPendingUsage()` verwendet aktuell weiterhin synchrones `SharedPreferences.commit()` im Service-Main-Thread. Der Checker **erwartet und dokumentiert diese pre-integration Grenze ausdrücklich**, damit sie nicht fälschlich als gelöst dargestellt wird.
+
+Nach realem Java-/Gradle-Pass muss der Checker verschärft werden und künftig verlangen:
+
+- Single-Thread-Executor im Service;
+- Coordinator als einzige Pending/In-Flight-Regelquelle;
+- `commit()` nur im Worker;
+- Daily-Limit = persisted + Coordinator unpersisted;
+- Worker-Failure-Mergeback;
+- sauber koordinierter Shutdown ohne parallelen/doppelten Flush.
+
+## 9. Storage Migration Check
 
 ```bash
 npm run check:migration
 ```
 
-Schützt die besonders kritische V0.7-/Legacy-Datenmigration:
+Schützt die V0.7-/Legacy-Datenmigration einschließlich `_pending`-Staging, exakter Read-Back-Verifikation, Recovery, bytegenauem Legacy-Archiv, sichere Alt-Ereignis-Konvertierung, Export/Import und Recovery-UI.
 
-- bekannte monolithische und V0.7-Keys;
-- `_pending`-Staging;
-- exakte Read-Back-Verifikation;
-- Recovery vollständiger Pending-Transaktionen;
-- Verwerfen unvollständiger Pending-Sets;
-- bytegenaues Legacy-Archiv vor Quelllöschung;
-- keine Aktivierung alter generierter Regeln;
-- sichere Konvertierung deterministischer Alt-Ereignisse und Saved-Time-Werte;
-- Export/Import des Legacy-Archivs;
-- Blockierung normaler Saves bei ungelöster Legacy-Migration;
-- Recovery-UI.
+Reale V0.7-Geräte-Evidence bleibt Pflicht.
 
-Reale V0.7-Geräte-Evidence bleibt trotzdem Pflicht.
-
-## 9. Lifecycle Diagnostics
+## 10. Lifecycle Diagnostics
 
 ```bash
 npm run check:lifecycle
 npm run check:diagnostic-normalization
 ```
 
-Schützt:
+Schützt Lifecycle-Wahrheit, stabile Stop-/Recovery-Codes, Bounds/Normalisierung und ehrliche React-Health-Klassifikation.
 
-- `lastProtectionStartAt` erst nach erfolgreichem FGS-Start;
-- letzte Stop-Zeit, Code und Message;
-- stabile Stop-/Recovery-Codes;
-- `unexpected_service_destroy` nur für unerwartete Zerstörung;
-- `migration_recovery`;
-- `notification_action_stop`;
-- Recovery-Fehlercodes;
-- Normalisierung und Bounds;
-- React-Health-Klassifikation;
-- ehrliche UI-Darstellung.
-
-## 10. Native Usage Accounting
+## 11. Native Usage Accounting
 
 ```bash
 npm run check:usage-accounting
 ```
 
-Schützt unabhängig vom Drain-ACK:
+Schützt:
 
-- Usage-Intervall-Splitting an lokalen Tagesgrenzen;
+- Usage-Splitting an lokalen Tagesgrenzen;
 - keine negative Usage bei rückwärts laufender Uhr;
-- Pending Usage wird nach Tag + App gebucketet;
-- Flush verwendet den bereits bestimmten Bucket statt Flush-Zeitpunkt;
-- Tageslimit berücksichtigt aktuelle Pending Usage;
-- Anti-Binge-Fenster kann über Mitternacht auf den Vortag zugreifen.
+- Pending Usage nach Tag + App;
+- Flush verwendet den bereits bestimmten Bucket;
+- Tageslimit berücksichtigt aktuelle unpersistierte Usage;
+- Anti-Binge-Fenster über Mitternacht.
 
-Der Checker verlangt **nicht** die alte sofortige Exportcursor-Änderung und ist mit dem neuen ACK-Pfad kompatibel.
+Nach Service-Integration wird dieser Checker zusammen mit `check:usage-flush-worker` auf die Coordinator-Semantik verschärft.
 
-Der noch offene Performance-Punkt ist der periodische 10-Sekunden-`SharedPreferences.commit()` im Service-Main-Thread. Dieser wird nicht mit einem pauschalen `apply()`-Tausch gelöst; ein späterer Worker-Umbau muss In-Flight Usage weiterhin in Tageslimits berücksichtigen und fehlgeschlagene Writes verlustfrei zurückführen.
-
-## 11. Device Matrix Contract
+## 12. Device Matrix Contract
 
 ```bash
 npm run check:device-matrix
@@ -328,41 +273,37 @@ npm run check:device-matrix
 
 Schützt den manuellen Testvertrag für Pixel, Samsung, Xiaomi/Redmi, OnePlus, Motorola, Tablet, API 24/26/Android 13+, Reboot, Permission-Verlust, Zeitgrenzen, Batterie/12h, Font Scaling, TalkBack, Commitment und Adaptive Friction.
 
-Der Checker beweist die Existenz des Testplans, nicht dessen Durchführung.
-
-## 12. Privacy / Offline-First
+## 13. Privacy / Offline-First
 
 ```bash
 npm run check:privacy
 ```
 
-Blockiert unter anderem bekannte Analytics-/Tracking-SDKs, `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, Tracker-Marker und eine unbemerkte Wiedereinführung von `android.permission.INTERNET`.
+Blockiert bekannte Tracking-/Netzwerkpfade und eine unbemerkte Wiedereinführung von `android.permission.INTERNET`.
 
-## 13. Release Approval Gate
+## 14. Release Approval Gate
 
 ```bash
 npm run check:release-approval
 npm run release:gate
 ```
 
-Schema v2 verlangt kandidatgebundene Evidence. Der strikte Gate benötigt unter anderem Web Verification, Android Unit Tests, APK, Device Matrix, Lifecycle, Battery, Migration, Play/Legal/Reviewer-Nachweise, Signed Binary, Approver und exakte Candidate-SHA.
+Schema v2 verlangt kandidatgebundene Evidence für Web, Android Tests/APK, Device Matrix, Lifecycle, Battery, Migration, Play/Legal/Reviewer, Signed Binary, Approver und exakte Candidate-SHA.
 
-## 14. Android CI Stage
+## 15. Android CI Stage
 
-Der bestehende Verify-Workflow soll nach `npm run verify` ausführen:
+Nach `npm run verify` soll CI ausführen:
 
 ```bash
 cd android
 ./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace
 ```
 
-Bei Erfolg werden Debug APK und Unit-Test-Report als Artifact vorgesehen.
+Die `androidTest`-Suite benötigt zusätzlich reale Instrumentation auf Emulator/Gerät.
 
-Die `androidTest`-Suite benötigt zusätzlich eine reale Instrumentation-Ausführung auf Emulator/Gerät. `assembleDebug` allein ist kein Instrumentation-Pass.
+## 16. Aktuelle Ausführungsgrenze
 
-## 15. Aktuelle Ausführungsgrenze
-
-GitHub-hosted Actions starten für dieses Repository derzeit wegen Billing-/Spending-Limit nicht. Wiederholte Runs enden vor Step 1 mit `steps: null`.
+GitHub-hosted Actions starten für dieses Repository derzeit wegen Billing-/Spending-Limit nicht und enden vor Step 1 mit `steps: null`.
 
 Deshalb sind derzeit **nicht als bestanden belegt**:
 
@@ -371,27 +312,29 @@ Deshalb sind derzeit **nicht als bestanden belegt**:
 - `check:supply-chain`;
 - `check:native-drain-ack`;
 - `check:native-retention`;
+- `check:usage-flush-worker`;
 - TypeScript/Lint/Prettier;
-- Vitest inklusive ACK-/Reset-/Retention-Tests;
-- Vite/PWA;
-- Android JUnit;
+- Vitest;
+- Android JUnit einschließlich `UsageFlushCoordinatorTest`;
 - Android Instrumentation;
 - Gradle Debug Build;
 - APK;
 - physische Geräte-Matrix.
 
-Ein nicht gestarteter Runner ist ein Infrastrukturblocker und weder ein Code-Pass noch ein Code-Fail.
+Eine isolierte lokale `javac`-Plausibilitätsprüfung des Coordinators ist **keine** Release-Evidence.
 
-## 16. Verbindliche Reihenfolge nach Entsperrung
+## 17. Verbindliche Reihenfolge nach Entsperrung
 
 1. sauberer Checkout;
 2. `npm ci`;
 3. `npm run verify`;
 4. Fehler beheben und wiederholen;
 5. `./gradlew testDebugUnitTest assembleDebug`;
-6. Android Instrumentation auf Emulator/Gerät;
-7. ACK-/Reset-/Retention-Crash-Replay gezielt ausführen;
-8. Debug APK auf physischer Device Matrix;
-9. erst danach Release-Evidence hochstufen.
+6. `UsageFlushCoordinatorTest` und bestehende Android-JUnit-Kette bestätigen;
+7. Coordinator eng mit Single-Thread-Worker in den Service integrieren;
+8. Verify/JUnit/Debug-Build erneut auf dem Integrations-Head;
+9. Android Instrumentation;
+10. Debug APK auf physischer Device Matrix;
+11. erst danach Release-Evidence hochstufen.
 
 Weitere Prozessreihenfolge: `docs/APP_DEVELOPMENT_A_TO_Z.md` und `docs/DEVELOPMENT_GATES_STATUS.md`.
