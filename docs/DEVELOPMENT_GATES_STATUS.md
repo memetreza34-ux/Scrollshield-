@@ -27,7 +27,7 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 | G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First-Manifest, Privacy-Guard, gepinnter Gradle-SHA256 und `check:supply-chain` existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-Check + Dependency-/Manifest-Snapshot + finaler Binary-Audit + Threat-Review |
 | G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` und Android-Stufen sind vorbereitet; GitHub Runner stoppt vor Step 1 wegen Billing/Spending-Limit | kompletter echter Verify-Lauf auf exaktem Head |
 | G7 | Android Instrumentation/E2E | **TEILWEISE** | Runtime-State/Lifecycle, Manifest/Permissions, Boot-Recovery, Native-Drain/ACK/Reset und Retention besitzen echte `androidTest`-Verträge; Ausführung sowie weitere Overlay-/Permission-Loss-End-to-End-Fälle fehlen | Instrumentation real ausführen + verbleibende kritische Android-Flows ergänzen |
-| G8 | Performance & Batterie | **TEILWEISE** | ACK/Reset/Retention sind implementiert. `UsageFlushCoordinator` + `UsageFlushWorker` kapseln jetzt Pending/In-Flight/Failure und einen echten Single-Thread-Persistenzpfad; `ScrollShieldProtectionService` ist aber noch nicht auf diese Bausteine verdrahtet | Worker-JUnit real ausführen → Service eng verdrahten → Main-Thread-Commit entfernen → 12h-Baseline |
+| G8 | Performance & Batterie | **TEILWEISE** | `ScrollShieldProtectionService` ist jetzt auf `UsageFlushCoordinator` + `UsageFlushWorker` verdrahtet. Periodische Usage-`commit()`-Writes laufen nicht mehr im Service-Main-Thread; Pending/In-Flight bleibt im Tageslimit sichtbar und Shutdown besitzt einen seriellen Final-Drain. Reale JUnit-/Gradle-/Device-Evidenz fehlt weiterhin | Worker-/Coordinator-JUnit real ausführen + `assembleDebug` + Shutdown/Process-Kill-Regressions + 12h-Baseline |
 | G9 | Physical Device Matrix | **FEHLT** | Matrix ist definiert, aber nicht vollständig ausgeführt | Pflichtgeräte/Szenarien mit Build-ID/Evidenz vollständig dokumentieren |
 | G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Evidence-Schema v2 existiert; Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Kandidaten-SHA + echte Referenzen |
 | G11 | Legal / Privacy / Support | **TEILWEISE** | Dokumente/Struktur existieren; finale reale Identität, Support-Mailbox und öffentliche Privacy-Domain fehlen | keine Platzhalter + überprüfbare öffentliche Angaben |
@@ -46,18 +46,23 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 - Native→React-Datentransfer gehärtet: persistenter Pending-Batch, UUID-Batch-ID, Save-before-ACK, Replay ohne Doppeladdition und fail-closed Cursorprüfung.
 - Factory Reset mit `factory_reset_pending_v1` gegen verspätete Native-Writes gehärtet.
 - Native Retention hinter durablem ACK verdrahtet; unbestätigte Usage bleibt erhalten.
-- Usage-Flush-Worker-Foundation ausgebaut:
+- Usage-Persistenzpfad produktiv auf Worker umgestellt:
   - `UsageFlushCoordinator.java` verwaltet synchronisiert Pending/In-Flight/Failure-Semantik;
   - höchstens ein In-Flight-Flush;
-  - Tageslimit kann Pending + In-Flight berücksichtigen;
+  - Tageslimit berücksichtigt Pending + In-Flight;
   - Write-Failure merged verlustfrei zurück;
   - stale Completion wird ignoriert;
   - `UsageFlushWorker.java` besitzt einen echten `Executors.newSingleThreadExecutor(...)`;
-  - SharedPreferences-`commit()` bleibt bewusst synchron **innerhalb des Workers**, damit `false` als Fehler zurückgemeldet werden kann;
-  - Runtime-Exception oder Executor-Rejection führen ebenfalls zu Failure-Mergeback;
-  - orderly `shutdown()` + bounded `awaitTermination(...)` sind vorbereitet;
-  - `UsageFlushCoordinatorTest.java` und `UsageFlushWorkerTest.java` decken State-Machine und Worker-Grenzen ab;
-  - `check:usage-flush-worker` schützt Coordinator + Worker und dokumentiert gleichzeitig, dass die Service-Integration noch fehlt.
+  - SharedPreferences-`commit()` bleibt bewusst synchron **innerhalb des Workers**, damit `false` als Persistenzfehler sichtbar bleibt;
+  - Runtime-Exception oder Executor-Rejection führen zu Failure-Mergeback;
+  - `ScrollShieldProtectionService` besitzt keine eigene Pending-Usage-Map und keinen eigenen Flush-Timer mehr;
+  - `addPendingUsageBucket()` schreibt in den Coordinator;
+  - `flushPendingUsage()` friert einen Coordinator-Batch ein und übergibt ihn an den Worker;
+  - `getDailyUsageMs()` addiert persistierte + pending + in-flight Usage saturierend;
+  - beim Service-Shutdown wird der letzte Usage-Tick erfasst, ein Force-Flush angefordert und danach ein serieller Worker-Drain eingeplant;
+  - der Shutdown-Drain verarbeitet Usage, die während eines früheren In-Flight-Writes neu eingetroffen ist, und kann einen fehlgeschlagenen In-Flight-Batch einmal über den finalen Drain erneut versuchen;
+  - `UsageFlushCoordinatorTest.java` und `UsageFlushWorkerTest.java` decken State-Machine, Worker-Grenzen und Shutdown-Drain ab;
+  - `check:usage-flush-worker` verlangt jetzt die echte Service-Verdrahtung und verbietet einen direkten `SharedPreferences.commit()` im Protection Service.
 - `check:native-drain-ack`, `check:native-retention` und `check:usage-flush-worker` sind Bestandteil von `npm run verify`.
 
 ## Aktueller Arbeitsfokus
@@ -65,7 +70,7 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 ### Jetzt aktiv
 
 1. **G6 extern entsperren:** GitHub Actions Billing/Spending-Limit korrigieren; danach vollständige Verify-/Android-JUnit-/Debug-Build-Kette real ausführen.
-2. **G8:** Coordinator-/Worker-JUnit real bestätigen und anschließend `ScrollShieldProtectionService` eng verdrahten: add → Coordinator, flush → Worker, Tageslimit → persisted + unpersisted, Shutdown → finaler koordinierter Flush.
+2. **G8 verifizieren:** Coordinator-/Worker-JUnit einschließlich Shutdown-Drain real ausführen, Android-Kompilierung bestätigen und anschließend Shutdown/Process-Kill/12h-Batterie-Evidenz erfassen.
 3. **G7:** verbleibende Overlay-/Permission-Loss-/Service-E2E-Fälle ergänzen und reale Instrumentation ausführen.
 4. **G9:** stabilen Debug-Kandidaten auf der physischen Device Matrix testen.
 5. **G2:** reale V0.7-Migration mit bytegenauer Evidence durchführen.
