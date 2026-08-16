@@ -71,7 +71,8 @@ Vorhandene `androidTest`-Verträge:
 - `BootRecoveryInstrumentedTest.java`;
 - `NativeDrainBatchInstrumentedTest.java`;
 - `NativeRetentionInstrumentedTest.java`;
-- `UsageFlushInstrumentedTest.java`.
+- `UsageFlushInstrumentedTest.java`;
+- `ProtectionDiagnosticsInstrumentedTest.java`.
 
 `UsageFlushInstrumentedTest` verlangt auf Android:
 
@@ -80,9 +81,18 @@ Vorhandene `androidTest`-Verträge:
 - Shutdown-Drain, während ein erster Write künstlich In-Flight gehalten wird;
 - Erhalt und anschließende Persistenz von Usage, die während dieses In-Flight-Writes neu eintrifft.
 
-`check:android-instrumentation` verlangt diese Methoden im Sourcevertrag ausdrücklich. Das ist noch keine ausgeführte Instrumentation.
+`ProtectionDiagnosticsInstrumentedTest` verlangt auf Android:
 
-G7 bleibt **TEILWEISE**, weil reale Instrumentation sowie verbleibende Service-/Overlay-/Permission-Loss-/Notification-/OEM-E2E-Fälle fehlen.
+- stabile persistierte Codes für entzogenen Nutzungszugriff;
+- stabile persistierte Codes für verlorene Overlay-Berechtigung;
+- stabile persistierte Codes für verlorene Benachrichtigungen;
+- stabile persistierte Codes für fehlende aktive Regeln und fehlende Ziel-App;
+- persistierte Stop-Nachricht und Stop-Zeitstempel über den realen `SharedPreferences`-Pfad;
+- app-spezifische Warnungen dürfen einen bereits gespeicherten terminalen Stop-Grund nicht überschreiben.
+
+`check:android-instrumentation` verlangt diese Methoden und Codes im Sourcevertrag ausdrücklich. Das ist noch keine ausgeführte Instrumentation.
+
+G7 bleibt **TEILWEISE**, weil reale Instrumentation sowie verbleibende echte Service-/Overlay-/Permission-Loss-/Notification-/OEM-E2E-Fälle fehlen.
 
 ## 4. Supply Chain
 
@@ -234,6 +244,8 @@ npm run check:usage-accounting
 
 Schützt Lifecycle-Wahrheit, stabile Diagnosecodes, lokale Tagesgrenzen, keine negative Usage bei rückwärts laufender Uhr, Tag+App-Bucketing, Tageslimit und Anti-Binge über Mitternacht.
 
+Zusätzlich schützt `ProtectionDiagnosticsInstrumentedTest.java` den realen Android-Persistenzpfad für systemische Stop-Warnungen. Die eigentliche Berechtigungsentziehung während eines laufenden Services bleibt ein separater E2E-Fall und darf durch diesen Test nicht als erledigt gelten.
+
 Die Worker-/Usage-Checker müssen gemeinsam verhindern, dass die neue Persistenzarchitektur Tageslimits während Pending/In-Flight-Zuständen unterzählt oder Usage bei kontrolliertem Shutdown verliert.
 
 ## 10. Device Matrix / Privacy / Release Gate
@@ -281,6 +293,7 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - `UsageFlushCoordinatorTest`;
 - `UsageFlushWorkerTest`;
 - `UsageFlushInstrumentedTest`;
+- `ProtectionDiagnosticsInstrumentedTest`;
 - TypeScript/Lint/Prettier/Vitest;
 - Android JUnit/Instrumentation;
 - Gradle Debug Build;
@@ -295,7 +308,8 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 4. Coordinator-/Worker-JUnit und Service-Kompilierung bestätigen;
 5. reale Fehler beheben und erneut ausführen;
 6. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace` auf Emulator/Gerät;
-7. `UsageFlushInstrumentedTest` + Native Drain/Retention/Recovery-Instrumentation bestätigen;
-8. Shutdown/In-Flight/Process-Kill/Restart-Races testen;
-9. Debug APK auf Device Matrix;
-10. erst danach Release-Evidence hochstufen.
+7. `UsageFlushInstrumentedTest`, `ProtectionDiagnosticsInstrumentedTest` + Native Drain/Retention/Recovery-Instrumentation bestätigen;
+8. echte Permission-Loss-/Overlay-/Service-E2E-Fälle ausführen;
+9. Shutdown/In-Flight/Process-Kill/Restart-Races testen;
+10. Debug APK auf Device Matrix;
+11. erst danach Release-Evidence hochstufen.
