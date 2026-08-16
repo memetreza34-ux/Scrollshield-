@@ -11,15 +11,17 @@ const storePath = path.join(javaRoot, 'NativeDrainBatchStore.java');
 const pluginPath = path.join(javaRoot, 'ScrollShieldNativePlugin.java');
 const instrumentedTestPath = path.join(androidTestRoot, 'NativeDrainBatchInstrumentedTest.java');
 const bridgePath = path.join('src', 'lib', 'nativeProtection.ts');
+const bridgeTestPath = path.join('src', 'lib', 'nativeProtectionDrain.test.ts');
 const journalPath = path.join('src', 'lib', 'nativeDrainJournal.ts');
 const journalTestPath = path.join('src', 'lib', 'nativeDrainJournal.test.ts');
 const appPath = path.join('src', 'App.tsx');
 
-const [store, plugin, instrumentedTest, bridge, journal, journalTest, app] = await Promise.all([
+const [store, plugin, instrumentedTest, bridge, bridgeTest, journal, journalTest, app] = await Promise.all([
   readFile(storePath, 'utf8'),
   readFile(pluginPath, 'utf8'),
   readFile(instrumentedTestPath, 'utf8'),
   readFile(bridgePath, 'utf8'),
+  readFile(bridgeTestPath, 'utf8'),
   readFile(journalPath, 'utf8'),
   readFile(journalTestPath, 'utf8'),
   readFile(appPath, 'utf8'),
@@ -53,6 +55,24 @@ requireMatch(
   /current < snapshot \|\| exported > snapshot/,
   'ACK must fail closed when native usage counters move backwards or cursors are inconsistent.',
 );
+requireMatch(
+  storePath,
+  store,
+  /FACTORY_RESET_PENDING_KEY\s*=\s*"factory_reset_pending_v1"/,
+  'Native factory reset must retain a tombstone against late service writes.',
+);
+requireMatch(
+  storePath,
+  store,
+  /getBoolean\(FACTORY_RESET_PENDING_KEY, false\)[\s\S]*edit\(\)\.clear\(\)\.commit\(\)[\s\S]*DrainBatch\.empty\(\)/,
+  'A reset tombstone must clear late writes before any future drain payload is exposed.',
+);
+requireMatch(
+  storePath,
+  store,
+  /markFactoryReset\([\s\S]*\.clear\(\)[\s\S]*putBoolean\(FACTORY_RESET_PENDING_KEY, true\)[\s\S]*commit\(\)/,
+  'Factory reset must clear native preferences and persist the tombstone atomically.',
+);
 
 requireMatch(
   pluginPath,
@@ -66,6 +86,12 @@ requireMatch(
   /acknowledgeProtectionEvents[\s\S]*NativeDrainBatchStore\.acknowledge/,
   'Capacitor bridge must expose explicit batch acknowledgement.',
 );
+requireMatch(
+  pluginPath,
+  plugin,
+  /factoryResetProtectionData[\s\S]*NativeDrainBatchStore\.markFactoryReset[\s\S]*stopService/,
+  'Factory reset must mark native data before stopping the protection service.',
+);
 
 requireMatch(
   bridgePath,
@@ -78,6 +104,12 @@ requireMatch(
   bridge,
   /acknowledgeDrain\([\s\S]*acknowledgeProtectionEvents/,
   'TypeScript bridge must expose native drain acknowledgement.',
+);
+requireMatch(
+  bridgePath,
+  bridge,
+  /factoryReset\(\)[\s\S]*factoryResetProtectionData/,
+  'TypeScript bridge must expose the protected native factory-reset path.',
 );
 requireMatch(
   bridgePath,
@@ -123,6 +155,12 @@ requireMatch(
   /getLastProcessedNativeDrainBatchId\(currentState\) === nativeDrain\.batchId[\s\S]*StorageService\.saveState\(currentState\)/,
   'A failed in-process save must be retried before ACK.',
 );
+requireMatch(
+  appPath,
+  app,
+  /resetApp = async[\s\S]*await NativeProtection\.factoryReset\(\)[\s\S]*StorageService\.clearState\(\)/,
+  'Web state must be cleared only after Android confirms the protected native factory reset.',
+);
 
 for (const [method, description] of [
   ['pendingBatchReplaysExactlyUntilMatchingAck', 'replay until ACK'],
@@ -130,6 +168,7 @@ for (const [method, description] of [
   ['eventsCreatedAfterBatchStayQueuedWhenOldBatchIsAcknowledged', 'new-event preservation'],
   ['usageAccumulatedWhilePendingBecomesNextDeltaAfterAck', 'usage after pending snapshot'],
   ['acknowledgeIsIdempotentAfterSuccessfulRemoval', 'idempotent ACK'],
+  ['factoryResetTombstoneDeletesLateServiceFlushBeforeAnyReplay', 'post-reset resurrection prevention'],
 ]) {
   requireMatch(
     instrumentedTestPath,
@@ -151,6 +190,18 @@ requireMatch(
   /keeps the processed id through normal state normalization/,
   'Vitest must prove the journal survives state persistence/normalization shape.',
 );
+requireMatch(
+  bridgeTestPath,
+  bridgeTest,
+  /parses a valid native batch and acknowledges the same id explicitly/,
+  'Bridge tests must cover valid drain and ACK routing.',
+);
+requireMatch(
+  bridgeTestPath,
+  bridgeTest,
+  /requires an explicit native factory-reset confirmation/,
+  'Bridge tests must fail closed when Android does not confirm factory-reset protection.',
+);
 
 if (findings.length > 0) {
   console.log('Native drain ACK contract check failed:\n');
@@ -158,4 +209,6 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log('Native drain ACK contract check passed. Persistent batch, transactional journal, and ACK guards are present.');
+console.log(
+  'Native drain ACK contract check passed. Persistent batch, transactional journal, reset tombstone, and ACK guards are present.',
+);
