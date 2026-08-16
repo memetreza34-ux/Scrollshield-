@@ -24,6 +24,9 @@ final class NativeDrainBatchStore {
     static final String PENDING_BATCH_KEY = "pending_protection_drain_v1";
     static final String FACTORY_RESET_PENDING_KEY = "factory_reset_pending_v1";
 
+    private static final String CONFIG_KEY = "protection_config";
+    private static final String UNAVAILABLE_APPS_KEY = "unavailable_app_ids";
+    private static final String UNAVAILABLE_ACTIVE_APPS_KEY = "unavailable_active_app_ids";
     private static final int SCHEMA_VERSION = 1;
 
     private NativeDrainBatchStore() {}
@@ -107,9 +110,6 @@ final class NativeDrainBatchStore {
         JSONObject usageCursors = pending.optJSONObject("usageCursors");
         if (usageCursors == null) throw new JSONException("Pending batch has no usage cursors");
 
-        // Validate the whole cursor set before mutating anything. If native counters moved backwards
-        // or export state is inconsistent, keep the pending batch so a later recovery path cannot
-        // silently lose usage.
         JSONArray cursorNames = usageCursors.names();
         if (cursorNames != null) {
             for (int index = 0; index < cursorNames.length(); index++) {
@@ -146,14 +146,24 @@ final class NativeDrainBatchStore {
     }
 
     /**
-     * Clears a reset tombstone together with any writes that arrived after the reset request.
-     *
-     * Callers that are about to expose old data or write a new post-reset configuration must call
-     * this first. Returning true means a reset was pending and has now been finalized.
+     * Clears a reset tombstone together with any late service writes. If onboarding already caused
+     * a fresh protection-config sync, those three configuration values are preserved; they cannot
+     * be pre-reset values because markFactoryReset() cleared the complete preferences first.
      */
     static boolean finalizeFactoryResetIfPending(SharedPreferences preferences) {
         if (!preferences.getBoolean(FACTORY_RESET_PENDING_KEY, false)) return false;
-        if (!preferences.edit().clear().commit()) {
+
+        String newConfig = preferences.getString(CONFIG_KEY, null);
+        String newUnavailableApps = preferences.getString(UNAVAILABLE_APPS_KEY, null);
+        String newUnavailableActiveApps = preferences.getString(UNAVAILABLE_ACTIVE_APPS_KEY, null);
+
+        SharedPreferences.Editor editor = preferences.edit().clear();
+        if (newConfig != null) editor.putString(CONFIG_KEY, newConfig);
+        if (newUnavailableApps != null) editor.putString(UNAVAILABLE_APPS_KEY, newUnavailableApps);
+        if (newUnavailableActiveApps != null) {
+            editor.putString(UNAVAILABLE_ACTIVE_APPS_KEY, newUnavailableActiveApps);
+        }
+        if (!editor.commit()) {
             throw new IllegalStateException("Could not finalize native factory reset");
         }
         return true;
