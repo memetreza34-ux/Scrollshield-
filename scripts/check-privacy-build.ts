@@ -44,6 +44,13 @@ if (sourceNetworkFindings.length > 0) {
   throw new Error(`Undocumented network API usage found: ${sourceNetworkFindings.join(', ')}`);
 }
 
+const androidManifest = await readFile('android/app/src/main/AndroidManifest.xml', 'utf8');
+if (/android\.permission\.INTERNET/.test(androidManifest)) {
+  throw new Error(
+    'Offline-first Android v1 must not declare android.permission.INTERNET unless the privacy/store contract is deliberately revised first.',
+  );
+}
+
 const trackerMarkers = [
   'google-analytics.com',
   'googletagmanager.com',
@@ -70,5 +77,5 @@ if (bundleTrackerFindings.length > 0) {
 }
 
 console.log(
-  `Privacy build check passed. ${runtimeDependencies.length} runtime dependencies, ${sourceFiles.length} source files, no network APIs or tracker markers.`,
+  `Privacy build check passed. ${runtimeDependencies.length} runtime dependencies, ${sourceFiles.length} source files, no Android INTERNET permission, no network APIs or tracker markers.`,
 );
