@@ -107,8 +107,20 @@ requirePattern(
 requirePattern(
   workerPath,
   worker,
+  /closeAfterDrainingPending\(\)[\s\S]*executor\.execute\(this::drainPendingBeforeShutdown\)[\s\S]*executor\.shutdown\(\)/,
+  'Service shutdown must queue a final serialized drain before shutting down the executor.',
+);
+requirePattern(
+  workerPath,
+  worker,
+  /drainPendingBeforeShutdown\(\)[\s\S]*beginFlush\([\s\S]*true,[\s\S]*0L[\s\S]*persistAndComplete\(batch\)/,
+  'Shutdown drain must force-flush coordinator pending usage on the worker thread.',
+);
+requirePattern(
+  workerPath,
+  worker,
   /public void close\(\)[\s\S]*executor\.shutdown\(\)/,
-  'Worker must expose orderly executor shutdown.',
+  'Worker must retain orderly executor shutdown.',
 );
 
 for (const testName of [
@@ -116,6 +128,8 @@ for (const testName of [
   'commitFailureMergesBatchBackIntoPendingAccounting',
   'writerExceptionAlsoMergesBatchBack',
   'newUsageRemainsCountedWhileWorkerIsBlocked',
+  'shutdownDrainPersistsUsageAddedWhileFirstBatchIsInFlight',
+  'shutdownDrainRetriesOneFailedInFlightBatch',
   'closedWorkerRejectsBatchAndReturnsItToPending',
 ]) {
   requirePattern(
@@ -126,22 +140,65 @@ for (const testName of [
   );
 }
 
-// This checker deliberately records the remaining integration boundary instead of pretending the
-// main-thread problem is already solved. Once the service is migrated, this marker must disappear
-// and the checker must be tightened to require actual coordinator/worker wiring in the service.
 requirePattern(
   servicePath,
   service,
-  /private void flushPendingUsage\([\s\S]*editor\.commit\(\)/,
-  'Expected current pre-integration service boundary changed; review and tighten this checker.',
+  /private UsageFlushCoordinator usageFlushCoordinator;[\s\S]*private UsageFlushWorker usageFlushWorker;/,
+  'Protection service must own coordinator and worker instances.',
+);
+requirePattern(
+  servicePath,
+  service,
+  /usageFlushCoordinator = new UsageFlushCoordinator\(lastUsageTickMs\);[\s\S]*UsageFlushWorker\.forSharedPreferences\([\s\S]*USAGE_KEY_PREFIX,[\s\S]*usageFlushCoordinator/,
+  'Protection service must initialize the serialized usage persistence pipeline on create.',
+);
+requirePattern(
+  servicePath,
+  service,
+  /addPendingUsageBucket\([\s\S]*usageFlushCoordinator\.addPendingUsage\(dayKey \+ "_" \+ appId, durationMs\)/,
+  'Measured usage must enter the coordinator instead of a service-owned pending map.',
+);
+requirePattern(
+  servicePath,
+  service,
+  /flushPendingUsage\([\s\S]*usageFlushCoordinator\.beginFlush\([\s\S]*USAGE_FLUSH_INTERVAL_MS[\s\S]*usageFlushWorker\.submit\(batch\)/,
+  'Periodic usage flush must hand frozen batches to the background worker.',
+);
+requirePattern(
+  servicePath,
+  service,
+  /getDailyUsageMs\([\s\S]*getUnpersistedUsageMs\(dayAndAppKey\)[\s\S]*saturatingAdd\(persisted, unpersisted\)/,
+  'Daily-limit reads must include pending and in-flight coordinator usage.',
+);
+requirePattern(
+  servicePath,
+  service,
+  /onDestroy\(\)[\s\S]*recordAllowedUsage\(null, shutdownNow\)[\s\S]*flushPendingUsage\(shutdownNow, true\)[\s\S]*closeAfterDrainingPending\(\)/,
+  'Service shutdown must capture the final usage tick, request a force flush, and drain pending worker state.',
 );
 
+if (/editor\.commit\s*\(/.test(service)) {
+  findings.push(
+    `${servicePath}: SharedPreferences.commit() must not execute directly inside the protection service.`,
+  );
+}
+if (/private final Map<String, Long> pendingUsageMs/.test(service)) {
+  findings.push(
+    `${servicePath}: service-owned pending usage map must stay removed after coordinator integration.`,
+  );
+}
+if (/lastUsageFlushMs/.test(service)) {
+  findings.push(
+    `${servicePath}: flush timing must be owned by UsageFlushCoordinator, not duplicated in the service.`,
+  );
+}
+
 if (findings.length > 0) {
-  console.log('Usage flush worker foundation check failed:\n');
+  console.log('Usage flush worker integration check failed:\n');
   for (const finding of findings) console.log(`- ${finding}`);
   process.exit(1);
 }
 
 console.log(
-  'Usage flush worker foundation check passed. Coordinator + serialized writer are guarded; productive service integration remains explicitly open.',
+  'Usage flush worker integration check passed. Protection-service usage persistence is coordinator-backed, serialized off the main thread, and shutdown-drained.',
 );
