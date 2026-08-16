@@ -1,225 +1,361 @@
-# Engineering Checks
+# ScrollShield – Engineering Checks
 
-ScrollShield uses one primary verification command:
+Status: **verbindlicher technischer Verifikationsvertrag**
+
+Letzte Aktualisierung: **16. August 2026**
+
+ScrollShield verwendet einen zentralen Source-/Web-Verifikationsbefehl:
 
 ```bash
 npm run verify
 ```
 
-## JavaScript and Web Checks
+Dieser Befehl ist notwendig, aber nicht hinreichend für einen Release. Android-JUnit, Instrumentation, echte APK-Builds und physische Geräte-Evidence bleiben separate reale Nachweise.
 
-The verification chain covers:
+## 1. Grundregel
 
-- supported Node and npm runtime
-- TypeScript compilation
-- ESLint
-- Prettier formatting
-- package/app/store version consistency
-- release-approval schema, candidate version, and candidate-bound evidence consistency
-- transactional and legacy-storage migration safeguards
-- Android protection lifecycle and stop-reason diagnostics
-- bounded native diagnostic code/message normalization
-- SDK registry and third-party notices
-- committed-secret detection
-- store copy, privacy declarations, and screenshot metadata
-- release-readiness warnings
-- Vitest component and logic tests
-- accessibility source safeguards
-- production Vite build
-- PWA/service-worker output
-- production privacy/network scan
-- bundle-size budget
+Es gibt drei unterschiedliche Ebenen:
 
-## Storage Migration Check
+1. **Source Contract** – ein Checker bestätigt, dass ein verlangter Vertrag im Repository vorhanden ist.
+2. **Executed Test** – ein Test/Build wurde tatsächlich auf dem exakten Commit ausgeführt.
+3. **Release Evidence** – das Ergebnis ist eindeutig dem finalen Candidate-SHA, Version Name und Version Code zugeordnet.
 
-`npm run check:migration` protects the complete local-data migration contract:
+Ein Source-Checker darf niemals als ausgeführter Android-Test dargestellt werden.
 
-- recognizes `scrollshield_state_v2` and the unversioned `scrollshield_state`
-- recognizes former V0.7/PRO keys for brain state, events, rules, gamification, installation metadata, and old backups
-- recognizes the former V0.7 backup-file structure and converts only safe values
-- stages every current storage chunk under a `_pending` key before live data is replaced
-- verifies staged and committed values byte-for-byte and returns explicit save success
-- completes a whole pending transaction after a process interruption
-- discards an incomplete pending set instead of replacing the last complete live state
-- writes a byte-for-byte legacy archive before source deletion
-- removes source keys only after both archive and normalized current-state writes are verified
-- retains corrupted or unwritable legacy source data for retry or manual recovery
-- converts only deterministic V0.7 events and saved-time values
-- keeps obsolete generated rules archived and inactive
-- preserves each converted event's original payload in history metadata
-- includes the legacy archive in normal JSON exports and validates/restores it during import
-- blocks normal saves, focus processing, native sync, and native draining while migration remains unresolved
-- provides retry and local raw-data recovery actions
-- requires regression tests for monolithic, unversioned, V0.7, write-failure, corrupted-source, pending-recovery, recovery-UI, and export/import cases
+## 2. Aktuelle `verify`-Kette
 
-The implementation is in `src/lib/storage.ts`, `src/lib/dataExport.ts`, and `src/screens/MigrationRecoveryScreen.tsx`. The human validation contract is in `docs/DATA_MIGRATION.md`.
+`npm run verify` umfasst derzeit unter anderem:
 
-## Android Source Checks
+- Runtime-Versionen;
+- TypeScript;
+- ESLint;
+- Prettier;
+- Version-Konsistenz;
+- Android-Projektvertrag;
+- Android-Instrumentation-Source-Vertrag;
+- Supply-Chain-Integrität;
+- Device-Matrix-Vertrag;
+- Lifecycle-Diagnostik;
+- Diagnose-Normalisierung;
+- Overlay-Accessibility;
+- Native Usage Accounting;
+- Protection Config;
+- Release Surface;
+- Commitment;
+- Subscription Safety;
+- V0.7-/Storage-Migration;
+- Release Approval;
+- Protection Transparency;
+- SDK Registry;
+- Third-Party Notices;
+- Secret Scan;
+- Store Assets/Copy;
+- Release Readiness;
+- Vitest;
+- Accessibility Source Checks;
+- Vite Production Build;
+- PWA Output;
+- Privacy-/Network-Build-Check;
+- Bundle Budget.
 
-`npm run check:android` guards:
+## 3. Android Project Check
 
-- minimum, target, and compile SDK requirements
-- package id and namespace
-- release minification, resource shrinking, and signing configuration
-- backup and cleartext-traffic restrictions
-- approved Android permissions only
-- foreground-service type and boot receiver registration
-- scoped package visibility instead of broad installed-app access
-- native protection and diagnostics registration
-- explicit user activation and safe stop behavior
-- installed-package validation and periodic runtime health checks
-- recurring schedules, daily limits, Anti-Binge, and emergency counters
-- actual service usage of the JUnit-tested `ProtectionRulePolicy`
-- permission-loss, no-active-rule, removed-app, and boot-recovery safeguards
-- explicit foreground-notification removal
-- Java rule-policy tests and Android compile commands
-- debug APK and unit-test report artifacts
+```bash
+npm run check:android
+```
 
-## Protection Lifecycle Diagnostics Check
+Schützt unter anderem:
 
-`npm run check:lifecycle` protects the complete Android start/stop diagnosis contract:
+- SDK-Untergrenzen und Package-ID;
+- Release-Minification und Resource Shrinking;
+- Signing-Konfiguration;
+- `allowBackup=false`;
+- Cleartext-Verbot;
+- Foreground-Service-Registrierung und `specialUse`;
+- Boot Receiver;
+- scoped Package Visibility;
+- Native Protection-/Diagnostics-Bridge;
+- explizite Nutzeraktivierung;
+- Safe-Shutdown bei Permission-/Rule-/Target-Verlust;
+- Schedule-/Daily-Limit-/Anti-Binge-/Emergency-Policy-Verknüpfung;
+- Boot-/Update-Recovery-Vertrag;
+- gepinnte externe GitHub Actions;
+- Android Unit-Test-/Debug-Build-Schritte im Workflow.
 
-- `lastProtectionStartAt` is persisted only after successful foreground-service startup, not merely after an activation request
-- native preferences retain the last stop time, stable stop code, and readable stop reason
-- a generic deactivation reason is written first and may be replaced by a more specific system cause
-- system warning events are classified by the pure Java `ProtectionStopReasonPolicy`
-- JUnit tests cover Usage Access, Overlay, notification, missing-rule, missing-target, recovery, and unknown-warning codes
-- Android service-start exceptions retain `start_failed`
-- React may pass explicit stop reasons to Android
-- normal manual stops retain `manual_app_stop`
-- blocked data migration uses `migration_recovery`
-- the persistent foreground-notification stop action records `notification_action_stop`
-- controlled shutdown paths mark the service before `stopSelf()` so their exact reasons are not overwritten
-- `ProtectionServiceLifecyclePolicy` records `unexpected_service_destroy` only when the service is destroyed while protection is still enabled and no controlled stop was requested
-- unexpected destruction clears stale activation, queues a local system warning, and preserves the exact terminal reason
-- failed boot or app-update recovery clears persisted activation and records the exact `recovery_*` reason
-- the native diagnostic snapshot exposes all lifecycle fields
-- `NativeProtection.getStatus()` preserves and normalizes start time, stop time, stop code, and stop message instead of discarding them
-- the TypeScript bridge classifies `active`, `running-without-activation`, `stale-activation`, `stopped-with-reason`, `stopped-without-reason`, and `never-started`
-- malformed lifecycle values are normalized to safe empty values
-- the Permissions screen derives its status from both persisted activation and live service state
-- stale activation displays `NEUSTART NÖTIG` together with the exact stop code and reason
-- a running service without persisted activation displays `INKONSISTENT` and offers a stop action
-- deliberate app, notification, and migration stops remain visually distinguishable from permission, unexpected-service, or other system failures
-- the Debug screen displays start time, stop time, stop code, and stop message
-- bridge, health-presentation, status-panel, Permissions, App-integration, Java lifecycle-policy, and Debug tests protect the full route
-- the physical-device matrix requires persistence evidence after reopening ScrollShield, explicit stale-state validation, notification-action validation, and unexpected-destroy validation
-- the reviewer flow must show the matching code and message in both the visible UI and copied diagnostic JSON
+Die tatsächliche Permission-Wahrheit wird zusätzlich durch `check:privacy` und die On-Device-Manifest-Instrumentation geschützt. Android v1 darf derzeit keine `android.permission.INTERNET` besitzen.
 
-The executable source contract is in `scripts/check-protection-lifecycle-diagnostics.ts`.
+## 4. Android Instrumentation Contract
 
-## Diagnostic Normalization Check
+```bash
+npm run check:android-instrumentation
+```
 
-`npm run check:diagnostic-normalization` guards the native lifecycle evidence boundary:
+Dieser Source-Checker verhindert, dass die Android-Instrumentation wieder auf den früheren Android-Studio-Platzhaltertest reduziert wird.
 
-- stable internal stop codes remain unchanged
-- arbitrary stop-code input is normalized to a bounded lowercase identifier
-- stop codes are limited to 64 characters
-- stop messages are limited to 500 characters
-- control characters and repeated whitespace are normalized
-- explicit stop reasons and system-warning reasons pass through the same policy before persistence
-- historical stored values are normalized on read
-- the legitimate never-stopped empty state remains representable
-- Java boundary tests cover stable codes, arbitrary input, empty values, control characters, and length bounds
+Verbindlich vorhanden sind derzeit:
 
-## Android Device-Matrix Check
+### `ProtectionStateInstrumentedTest.java`
 
-`npm run check:device-matrix` protects the diagnostic and manual-test contract:
+Prüft auf einem Android-Testgerät bzw. Emulator:
 
-- installed Android version name and version code are exposed in the native diagnostic snapshot
-- app-wide notification status and protection-channel status remain separately visible
-- protection start/stop timestamps, stop code, and stop message remain visible and copyable
-- the debug screen displays build identity, channel creation, channel enabled state, combined notification readiness, and lifecycle state
-- the Permissions screen must distinguish persisted activation from the actual running service
-- the diagnostic component test covers a disabled-channel failure case and a stored stop reason
-- required coverage includes Pixel, Samsung, Xiaomi/Redmi, OnePlus, Motorola, a tablet, Android 7, Android 8, and Android 13+
-- mandatory scenarios include migration, runtime notification permission, channel revocation, permission loss, app uninstall, final-rule removal, reason persistence, stale activation, notification-action stop, unexpected service destruction, reboot, long-run battery behavior, time-zone and daylight-saving changes, font scaling, tablet layout, and TalkBack
-- every real-device result requires build identity, copied diagnostic JSON, screen evidence, logs for failures, and `PASS`, `FAIL`, or `BLOCKED` status
+- Protection ist nach sauberem Test-State standardmäßig deaktiviert;
+- `lastProtectionStartAt` entsteht erst durch den tatsächlichen Service-Start-Record;
+- Deaktivierung persistiert Lifecycle-Wahrheit;
+- Stop-Code/-Message werden normalisiert und persistiert;
+- aktive Ziel-App-Konfiguration gilt nur, wenn wenigstens ein Package tatsächlich installiert/sichtbar ist.
 
-The executable source contract is in `scripts/check-android-device-matrix.ts`. The manual test plan is in `docs/ANDROID_DEVICE_TEST_MATRIX.md`.
+### `ManifestSecurityInstrumentedTest.java`
 
-## Protection Transparency Check
+Prüft das **tatsächlich installierte/zusammengeführte Manifest**, nicht nur die handgeschriebene XML-Datei:
 
-`npm run check:transparency` verifies the complete Android notification path:
+- nur der freigegebene Android-v1-Permission-Satz ist vorhanden;
+- `android.permission.INTERNET` fehlt;
+- Android Backup bleibt deaktiviert;
+- Protection Service ist registriert, aktiviert und nicht exportiert;
+- Boot Receiver ist registriert und für die vorgesehenen System-Recovery-Broadcasts erreichbar.
 
-- the dedicated notification plugin is registered in `MainActivity`
-- `POST_NOTIFICATIONS` is declared through a Capacitor permission alias
-- Android 13+ uses `requestPermissionForAlias` and a `PermissionCallback`
-- Android 8+ opens the exact `Aktiver App-Schutz` channel when manual settings are needed
-- Android 7 falls back to application details
-- the protection service, status checker, and settings plugin share one channel id
-- app-wide and channel-level notification disabling are detected
-- Android protection cannot start while notifications are disabled
-- reboot recovery does not restart an invisible service
-- a running service stops, clears activation, records a warning, and preserves a diagnostic reason after notification revocation
-- the foreground notification is removed when the service ends
-- the ongoing foreground-service notification retains its direct `Schutz stoppen` action
-- using that direct action records `notification_action_stop` before the service terminates
-- the permission screen marks notifications as required on Android
-- the React start action blocks before native startup when the permission is absent
-- the TypeScript bridge routes notification prompts and channel settings to the dedicated plugin
-- other Android settings remain on the main native plugin
-- browser preview calls remain no-ops
-- component tests cover successful permission grant and denied-prompt fallback
+### `BootRecoveryInstrumentedTest.java`
 
-## Release Approval Gate
+Prüft deterministische Recovery-Grenzen:
 
-`npm run check:release-approval` validates schema **v2** without pretending that incomplete evidence is approval.
+- fremde Broadcasts verändern die Aktivierung nicht;
+- `BOOT_COMPLETED` ohne verfügbare aktive Ziel-App endet fail-closed;
+- `MY_PACKAGE_REPLACED` ohne verfügbare aktive Ziel-App endet fail-closed;
+- der stabile Diagnosecode `recovery_target_app_missing` bleibt erhalten.
 
-It validates at least:
+Der frühere `ExampleInstrumentedTest.java`, der nur die Package-ID prüfte, wurde entfernt.
 
-- approval-manifest schema version
-- candidate version against `package.json`
-- candidate version against Android `versionName`
-- candidate build against Android `versionCode`
-- explicit Boolean release flags
-- candidate-bound evidence records
-- evidence `candidateCommitSha` consistency
-- non-empty references for evidence that is marked complete
+### Noch nicht durch Instrumentation abgedeckt
 
-`npm run release:gate` is strict. It blocks until all mandatory evidence is explicitly complete for the same tested candidate, including:
+G7 bleibt deshalb **TEILWEISE**. Offen sind insbesondere:
 
-- complete web verification
-- Android JUnit tests
-- debug APK compilation and inspection
-- physical-device matrix
-- terminal lifecycle validation on the exact candidate
-- battery and process reliability
-- V0.7 and previous-candidate migration
-- final Play declarations
-- final legal and support fields
-- reviewer videos
-- signed-binary inspection
-- named approver and valid approval date
+- echter Service-Start mit erfüllten System-Permissions;
+- Overlay-Rendering und Aktionen;
+- Permission-Verlust während laufendem Schutz;
+- Notification-Channel-Entzug;
+- Countdown-/Session-Ende;
+- Native Usage Drain/ACK;
+- komplette Boot-Recovery mit realem Foreground-Service-Start;
+- OEM-/Prozesskiller-Verhalten.
 
-The strict gate also requires a real 40-character tested candidate SHA. Candidate-bound evidence must reference that same SHA. The gate compares the tested candidate against repository `HEAD`; after the final tested candidate is frozen, only `config/release-approval.json` may differ for recording approval evidence. Any other source/release change invalidates the freeze and requires a new candidate and retest. Missing Git history fails closed.
+Und vor allem: Die neuen `androidTest`-Klassen wurden wegen des GitHub-Runner-Blockers noch nicht real ausgeführt.
 
-Both `npm run android:release` and `npm run android:bundle` execute this gate before Gradle. The current `config/release-approval.json` intentionally keeps the evidence flags false and evidence references empty, so release output remains blocked.
+## 5. Supply-Chain Check
 
-The human process is documented in `docs/RELEASE_EVIDENCE.md` and the complete development sequence in `docs/APP_DEVELOPMENT_A_TO_Z.md`.
+```bash
+npm run check:supply-chain
+```
 
-## Android CI Stage
+Schützt derzeit:
 
-After the web verification passes, the GitHub workflow runs:
+- Vorhandensein von `package.json` und `package-lock.json`;
+- npm Lockfile-Version mindestens 3;
+- keine direkten ungebundenen bzw. nicht bewusst freigegebenen Dependency-Specifier wie `*`, `latest`, `next`, Git-/HTTP-/File-/Link-Quellen;
+- keine Plain-HTTP-Paketauflösungen im npm Lockfile;
+- keine Git-/SSH-Lockfile-Auflösungen ohne bewusste Review;
+- Gradle Wrapper nur über den offiziellen HTTPS-Distributionshost;
+- vorhandenen SHA-256 für die Gradle-Distribution;
+- für `gradle-8.14.3-all.zip` den aktuell erwarteten offiziellen SHA-256;
+- keine dynamischen Gradle-Versionen mit `+` oder `latest.release`;
+- keine Plain-HTTP-Gradle-Repository-/Dependency-URLs.
+
+Aktuell ist die Gradle-8.14.3-Distribution gepinnt auf:
+
+```text
+ed1a8d686605fd7c23bdf62c7fc7add1c5b23b2bbc3721e661934ef4a4911d7c
+```
+
+Das ersetzt **nicht**:
+
+- echten `npm ci`;
+- Vulnerability-/Advisory-Bewertung;
+- Gradle Dependency Report;
+- finalen SBOM-/Dependency Snapshot;
+- finalen Binary Audit.
+
+Details: `docs/SUPPLY_CHAIN_SECURITY.md`.
+
+## 6. Storage Migration Check
+
+```bash
+npm run check:migration
+```
+
+Schützt die besonders kritische V0.7-/Legacy-Datenmigration:
+
+- bekannte monolithische und V0.7-Keys;
+- `_pending`-Staging;
+- exakte Read-Back-Verifikation;
+- Recovery vollständiger Pending-Transaktionen;
+- Verwerfen unvollständiger Pending-Sets;
+- bytegenaues Legacy-Archiv vor Quelllöschung;
+- keine Aktivierung alter generierter Regeln;
+- sichere Konvertierung deterministischer Alt-Ereignisse und Saved-Time-Werte;
+- Export/Import des Legacy-Archivs;
+- Blockierung normaler Saves bei ungelöster Legacy-Migration;
+- Recovery-UI.
+
+Reale V0.7-Geräte-Evidence bleibt trotzdem Pflicht.
+
+## 7. Lifecycle Diagnostics
+
+```bash
+npm run check:lifecycle
+npm run check:diagnostic-normalization
+```
+
+Schützt:
+
+- `lastProtectionStartAt` erst nach erfolgreichem Foreground-Service-Start;
+- letzte Stop-Zeit, Code und Message;
+- stabile Stop-/Recovery-Codes;
+- `unexpected_service_destroy` nur für tatsächlich unerwartete Zerstörung;
+- `migration_recovery`;
+- `notification_action_stop`;
+- Recovery-Fehlercodes;
+- Normalisierung fremder Diagnosewerte;
+- Bounds 64 Zeichen für Code / 500 für Message;
+- React-Health-Klassifikation wie `active`, `stale-activation`, `running-without-activation` usw.;
+- ehrliche UI-Darstellung des realen Native-Zustands.
+
+## 8. Device Matrix Contract
+
+```bash
+npm run check:device-matrix
+```
+
+Schützt den manuellen Testvertrag für:
+
+- Pixel/Near Stock;
+- Samsung;
+- Xiaomi/Redmi;
+- OnePlus;
+- Motorola;
+- Tablet;
+- API 24;
+- API 26;
+- Android 13+;
+- Reboot/App-Update;
+- Permission-/Notification-Verlust;
+- Lifecycle-Diagnostik;
+- Zeitgrenzen;
+- Batterie/12h;
+- Font Scaling;
+- TalkBack;
+- Commitment- und Adaptive-Friction-Matrix.
+
+Der Checker beweist die Existenz des Testplans, nicht dessen reale Durchführung.
+
+## 9. Privacy / Offline-First
+
+```bash
+npm run check:privacy
+```
+
+Die aktuelle Android-v1-Architektur ist offline-first. Der Checker blockiert unter anderem:
+
+- bekannte Analytics-/Tracking-SDKs;
+- `fetch`;
+- `XMLHttpRequest`;
+- `WebSocket`;
+- `EventSource`;
+- `sendBeacon`;
+- bekannte Tracker-Marker im Production Bundle;
+- Wiedereinführung von `android.permission.INTERNET` ohne bewusste Architekturänderung.
+
+Neue Cloud-/Analytics-/Remote-Funktionen erfordern zuerst eine Revision von Product Requirements, Threat Model, Privacy/Data Safety und Permission Strategy.
+
+## 10. Native Persistence / Usage Accounting
+
+```bash
+npm run check:usage-accounting
+```
+
+Die aktuelle Source-Basis schützt Datumssplitting und lokale Usage-Semantik. Zusätzlich existieren:
+
+- `NativeCounterRetentionPolicy.java`;
+- `NativeCounterRetentionPolicyTest.java`;
+- `docs/NATIVE_PERSISTENCE_AUDIT.md`.
+
+Aktuell bekannte G8-Grenze:
+
+```text
+Native Drain markiert Daten konsumiert
+→ React übernimmt in State
+→ separater Storage-Save folgt später
+```
+
+Deshalb wird historische Usage noch nicht allein anhand des heutigen `exported_*`-Markers gelöscht. Ziel ist ein persistenter Batch-ID-/ACK-Pfad, bei dem React die Batch-ID im selben transaktionalen State wie Statistik/History speichert und erst danach Native bestätigt.
+
+## 11. Release Approval Gate
+
+```bash
+npm run check:release-approval
+npm run release:gate
+```
+
+Schema v2 verlangt kandidatgebundene Evidence.
+
+Strikter Release-Gate benötigt unter anderem:
+
+- Web Verification;
+- Android Unit Tests;
+- Debug APK;
+- Device Matrix;
+- Lifecycle;
+- Battery Reliability;
+- Migration;
+- Play Declarations;
+- Legal Fields;
+- Reviewer Videos;
+- Signed Binary;
+- Approver + Approval Time;
+- exakte Candidate-SHA.
+
+Nach Candidate Freeze darf nur die Evidence-Datei geändert werden; Produkt-/Build-/Release-Codeänderungen erzwingen einen neuen Kandidaten und neue Tests.
+
+## 12. Android CI Stage
+
+Der bestehende Verify-Workflow soll nach `npm run verify` ausführen:
 
 ```bash
 cd android
 ./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace
 ```
 
-A successful run uploads:
+Bei Erfolg werden Debug APK und Unit-Test-Report als Artifact vorgesehen.
 
-- the debug APK
-- the local Android unit-test HTML report
+Die neue `androidTest`-Suite benötigt zusätzlich eine reale Android-Instrumentation-Ausführung auf Emulator/Gerät. Sie wird nicht dadurch als bestanden betrachtet, dass `assembleDebug` kompiliert.
 
-All external GitHub Actions are pinned to immutable 40-character commit SHAs. Dependabot remains configured to propose controlled updates for GitHub Actions, npm, Capacitor, React, and Gradle.
+## 13. Aktuelle Ausführungsgrenze
 
-## Current Execution Limitation
+GitHub-hosted Actions starten für dieses Repository derzeit wegen Billing-/Spending-Limit nicht. Wiederholte Runs enden vor Step 1 mit `steps: null`.
 
-The workflow is configured but the repository account currently prevents GitHub-hosted runners from starting because of a billing or spending-limit restriction. Until a runner or local Android environment executes the commands above, compilation and test success remain unverified.
+Deshalb sind derzeit **nicht als bestanden belegt**:
 
-The lifecycle source checker, diagnostic-normalization policy tests, terminal-service Java policy test, health-classification tests, status-panel tests, Permissions integration test, App integration test, Debug component test, full TypeScript check, formatting check, and Android compilation still require successful execution on the exact current candidate.
+- `npm run verify` auf aktuellem Head;
+- `check:android-instrumentation`;
+- `check:supply-chain`;
+- TypeScript/Lint/Prettier;
+- Vitest;
+- Vite/PWA;
+- Android JUnit;
+- Android Instrumentation;
+- Gradle Debug Build;
+- APK;
+- physische Geräte-Matrix.
 
-Source contracts and documentation are not substitutes for execution. Further source claims must not be treated as release-verified until the exact branch head completes the full verification chain and physical-device evidence.
+Ein nicht gestarteter Runner ist ein Infrastrukturblocker und weder ein Code-Pass noch ein Code-Fail.
 
-A job with no runner and `steps: []` is an infrastructure block, not evidence that application code passed or failed.
+## 14. Verbindliche Reihenfolge nach Entsperrung
+
+1. sauberer Checkout;
+2. `npm ci`;
+3. `npm run verify`;
+4. Fehler beheben und wiederholen;
+5. `./gradlew testDebugUnitTest assembleDebug`;
+6. Android Instrumentation auf Emulator/Gerät;
+7. Debug APK auf physischer Device Matrix;
+8. erst danach Release-Evidence hochstufen.
+
+Weitere Prozessreihenfolge: `docs/APP_DEVELOPMENT_A_TO_Z.md` und `docs/DEVELOPMENT_GATES_STATUS.md`.
