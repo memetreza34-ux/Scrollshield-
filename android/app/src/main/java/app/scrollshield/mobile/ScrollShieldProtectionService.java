@@ -63,7 +63,6 @@ public class ScrollShieldProtectionService extends Service {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Map<String, ProtectionRule> rulesByPackage = new HashMap<>();
     private final Map<String, Long> temporaryAccessUntil = new HashMap<>();
-    private final Map<String, Long> pendingUsageMs = new HashMap<>();
 
     private WindowManager windowManager;
     private View overlayView;
@@ -76,8 +75,9 @@ public class ScrollShieldProtectionService extends Service {
     private String lastDetectedForegroundPackage;
     private String lastUsagePackage;
     private long lastUsageTickMs;
-    private long lastUsageFlushMs;
     private long lastConfigurationHealthCheckMs;
+    private UsageFlushCoordinator usageFlushCoordinator;
+    private UsageFlushWorker usageFlushWorker;
 
     private final Runnable pollRunnable = new Runnable() {
         @Override
@@ -120,7 +120,12 @@ public class ScrollShieldProtectionService extends Service {
         ScrollShieldNativePlugin.recordProtectionServiceStarted(this);
         RUNNING.set(true);
         lastUsageTickMs = System.currentTimeMillis();
-        lastUsageFlushMs = lastUsageTickMs;
+        usageFlushCoordinator = new UsageFlushCoordinator(lastUsageTickMs);
+        usageFlushWorker = UsageFlushWorker.forSharedPreferences(
+            getNativePreferences(),
+            USAGE_KEY_PREFIX,
+            usageFlushCoordinator
+        );
         handler.post(pollRunnable);
     }
 
@@ -185,7 +190,12 @@ public class ScrollShieldProtectionService extends Service {
         }
 
         handler.removeCallbacksAndMessages(null);
-        flushPendingUsage(System.currentTimeMillis(), true);
+        long shutdownNow = System.currentTimeMillis();
+        recordAllowedUsage(null, shutdownNow);
+        flushPendingUsage(shutdownNow, true);
+        if (usageFlushWorker != null) {
+            usageFlushWorker.closeAfterDrainingPending();
+        }
         hideOverlay();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE);
@@ -906,35 +916,37 @@ public class ScrollShieldProtectionService extends Service {
     }
 
     private void addPendingUsageBucket(String dayKey, String appId, long durationMs) {
-        if (durationMs <= 0L) return;
-        String bucketKey = dayKey + "_" + appId;
-        long pending = pendingUsageMs.containsKey(bucketKey) ? pendingUsageMs.get(bucketKey) : 0L;
-        pendingUsageMs.put(bucketKey, pending + durationMs);
+        if (durationMs <= 0L || usageFlushCoordinator == null) return;
+        usageFlushCoordinator.addPendingUsage(dayKey + "_" + appId, durationMs);
     }
 
     private void flushPendingUsage(long now, boolean force) {
-        if (pendingUsageMs.isEmpty()) return;
-        if (!force && now - lastUsageFlushMs < USAGE_FLUSH_INTERVAL_MS) return;
-
-        SharedPreferences preferences = getNativePreferences();
-        SharedPreferences.Editor editor = preferences.edit();
-        for (Map.Entry<String, Long> entry : pendingUsageMs.entrySet()) {
-            String key = USAGE_KEY_PREFIX + entry.getKey();
-            long existing = preferences.getLong(key, 0L);
-            editor.putLong(key, existing + entry.getValue());
-        }
-        if (editor.commit()) {
-            pendingUsageMs.clear();
-            lastUsageFlushMs = now;
+        if (usageFlushCoordinator == null || usageFlushWorker == null) return;
+        UsageFlushCoordinator.FlushBatch batch = usageFlushCoordinator.beginFlush(
+            now,
+            force,
+            USAGE_FLUSH_INTERVAL_MS
+        );
+        if (batch != null) {
+            usageFlushWorker.submit(batch);
         }
     }
 
     private long getDailyUsageMs(String appId, long now) {
         String dayAndAppKey = getDayKey(now) + "_" + appId;
         String key = USAGE_KEY_PREFIX + dayAndAppKey;
-        long persisted = getNativePreferences().getLong(key, 0L);
-        long pending = pendingUsageMs.containsKey(dayAndAppKey) ? pendingUsageMs.get(dayAndAppKey) : 0L;
-        return persisted + pending;
+        long persisted = Math.max(0L, getNativePreferences().getLong(key, 0L));
+        long unpersisted = usageFlushCoordinator == null
+            ? 0L
+            : usageFlushCoordinator.getUnpersistedUsageMs(dayAndAppKey);
+        return saturatingAdd(persisted, unpersisted);
+    }
+
+    private long saturatingAdd(long current, long increment) {
+        if (current < 0L) current = 0L;
+        if (increment <= 0L) return current;
+        if (current > Long.MAX_VALUE - increment) return Long.MAX_VALUE;
+        return current + increment;
     }
 
     private void recordIntentionalOpen(String appId, long now) {
