@@ -22,12 +22,20 @@ final class NativeDrainBatchStore {
     static final String USAGE_COUNTER_PREFIX = "usage_ms_";
     static final String EXPORTED_USAGE_PREFIX = "exported_";
     static final String PENDING_BATCH_KEY = "pending_protection_drain_v1";
+    static final String FACTORY_RESET_PENDING_KEY = "factory_reset_pending_v1";
 
     private static final int SCHEMA_VERSION = 1;
 
     private NativeDrainBatchStore() {}
 
     static DrainBatch getOrCreate(SharedPreferences preferences) throws JSONException {
+        if (preferences.getBoolean(FACTORY_RESET_PENDING_KEY, false)) {
+            if (!preferences.edit().clear().commit()) {
+                throw new IllegalStateException("Could not finalize native factory reset");
+            }
+            return DrainBatch.empty();
+        }
+
         String pendingJson = preferences.getString(PENDING_BATCH_KEY, null);
         if (pendingJson != null && !pendingJson.isEmpty()) {
             return parsePendingBatch(pendingJson);
@@ -86,6 +94,9 @@ final class NativeDrainBatchStore {
     }
 
     static boolean acknowledge(SharedPreferences preferences, String batchId) throws JSONException {
+        if (preferences.getBoolean(FACTORY_RESET_PENDING_KEY, false)) {
+            return preferences.edit().clear().commit();
+        }
         if (batchId == null || batchId.trim().isEmpty()) return false;
 
         String pendingJson = preferences.getString(PENDING_BATCH_KEY, null);
@@ -129,6 +140,14 @@ final class NativeDrainBatchStore {
         }
         editor.remove(PENDING_BATCH_KEY);
         return editor.commit();
+    }
+
+    static boolean markFactoryReset(SharedPreferences preferences) {
+        return preferences
+            .edit()
+            .clear()
+            .putBoolean(FACTORY_RESET_PENDING_KEY, true)
+            .commit();
     }
 
     static boolean hasPendingBatch(SharedPreferences preferences) {
