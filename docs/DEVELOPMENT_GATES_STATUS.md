@@ -13,7 +13,7 @@ Dieses Dokument beantwortet: **Wo steht ScrollShield jetzt, was ist belegt und w
 - **FEHLT** = die Stufe ist noch nicht ausreichend implementiert.
 - **BLOCKIERT** = die Stufe kann aktuell nicht abgeschlossen werden, weil eine externe oder vorgelagerte Voraussetzung fehlt.
 
-Ein grüner Source-Checker allein macht ein Gate nicht automatisch `FERTIG`, wenn reale Android-Ausführung gefordert ist.
+Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`, wenn reale Android-Ausführung gefordert ist.
 
 ## Gate-Übersicht
 
@@ -21,13 +21,13 @@ Ein grüner Source-Checker allein macht ein Gate nicht automatisch `FERTIG`, wen
 |---|---|---|---|---|
 | G0 | Produktproblem & v1-Scope | **TEILWEISE** | `PRODUCT_REQUIREMENTS.md` formalisiert PR-01..18; `USER_RESEARCH.md` definiert echte Erstnutzungsaufgaben; reale Sessions fehlen | 5–8 beobachtete neue Nutzer + dokumentierte Ergebnisse |
 | G1 | Architektur & Repo-Prozess | **FERTIG** | React/TS, lokale Daten, Capacitor/Native Android, Draft-PR-Prozess und Verantwortungsgrenzen sind dokumentiert | bei Architekturänderung erneut öffnen |
-| G2 | Datenmodell & Migration | **TEILWEISE** | sehr starke transaktionale/V0.7-Migration im Source; reale Alt-Daten-Evidenz fehlt | echter V0.7-Upgrade-Test + bytegenauer Archivvergleich |
+| G2 | Datenmodell & Migration | **TEILWEISE** | starke transaktionale/V0.7-Migration im Source; reale Alt-Daten-Evidenz fehlt | echter V0.7-Upgrade-Test + bytegenauer Archivvergleich |
 | G3 | Kern-UI/UX & Accessibility | **TEILWEISE** | Release-Screens und Source-A11y-Checks existieren; reale Usability-/Large-Font-/TalkBack-Evidenz fehlt | physische Accessibility- und User-Research-Sessions |
-| G4 | Native Android Schutz | **TEILWEISE** | Usage Access, Overlay, FGS, Regeln, Recovery und Diagnostik sind implementiert; unnötige `INTERNET`-Permission wurde entfernt; Runtime-Instrumentation wurde erweitert, aber noch nicht ausgeführt | Android JUnit + Instrumentation + `assembleDebug` + reale Geräte |
-| G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, P0–P3, Offline-First-Manifest, Privacy-Guard, gepinnter Gradle-Distribution-SHA256 und `check:supply-chain` existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-Check + Dependency-/Manifest-Snapshot + finaler Binary-Audit + Threat-Review |
+| G4 | Native Android Schutz | **TEILWEISE** | Usage Access, Overlay, FGS, Regeln, Recovery, Diagnostik und crash-sicherer Native-Datentransfer sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + reale Geräte |
+| G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First-Manifest, Privacy-Guard, gepinnter Gradle-SHA256 und `check:supply-chain` existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-Check + Dependency-/Manifest-Snapshot + finaler Binary-Audit + Threat-Review |
 | G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` und Android-Stufen sind vorbereitet; GitHub Runner stoppt vor Step 1 wegen Billing/Spending-Limit | kompletter echter Verify-Lauf auf exaktem Head |
-| G7 | Android Instrumentation/E2E | **TEILWEISE** | der Android-Studio-Platzhaltertest wurde entfernt; Runtime-State/Lifecycle, gemergtes Manifest/Permissions und Boot-/App-Update-Fail-Closed-Recovery besitzen echte `androidTest`-Verträge; Ausführung sowie Overlay/Permission-Loss/Usage-Import-Service-E2E fehlen | Instrumentation real ausführen + Overlay/Service/Permission-Loss/Usage-Import-E2E ergänzen |
-| G8 | Performance & Batterie | **TEILWEISE** | Messvertrag + Native-Persistenz-Audit + pure Retention-Policy/JUnit existieren; ACK-Lücke im Native→React-Drain ist exakt identifiziert; Usage-Cleanup bleibt bis robustem ACK bewusst gesperrt; Flush-Worker/CPU/Memory/12h-Evidenz fehlen | ACK-Datenpfad sauber implementieren/testen → Retention verdrahten → Flush-I/O härten → 12h-Baseline |
+| G7 | Android Instrumentation/E2E | **TEILWEISE** | Runtime-State/Lifecycle, Manifest/Permissions, Boot-Recovery und Native-Drain/ACK/Reset besitzen echte `androidTest`-Verträge; Ausführung sowie weitere Overlay-/Permission-Loss-End-to-End-Fälle fehlen | Instrumentation real ausführen + verbleibende kritische Android-Flows ergänzen |
+| G8 | Performance & Batterie | **TEILWEISE** | persistenter Native Pending-Batch, UUID-Batch-ID, React-Dedup-Journal, Save-before-ACK, Crash-Replay und Factory-Reset-Tombstone sind im Source implementiert; Retention-Verdrahtung, Main-Thread-Flush-Härtung und reale CPU/Memory/Batterie-Evidenz fehlen | ACK-/Reset-Tests real ausführen → Retention verdrahten → Flush-I/O härten → 12h-Baseline |
 | G9 | Physical Device Matrix | **FEHLT** | Matrix ist definiert, aber nicht vollständig ausgeführt | Pflichtgeräte/Szenarien mit Build-ID/Evidenz vollständig dokumentieren |
 | G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Evidence-Schema v2 existiert; Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Kandidaten-SHA + echte Referenzen |
 | G11 | Legal / Privacy / Support | **TEILWEISE** | Dokumente/Struktur existieren; finale reale Identität, Support-Mailbox und öffentliche Privacy-Domain fehlen | keine Platzhalter + überprüfbare öffentliche Angaben |
@@ -35,39 +35,46 @@ Ein grüner Source-Checker allein macht ein Gate nicht automatisch `FERTIG`, wen
 | G13 | Signing / Binary / Internal & Closed Test | **BLOCKIERT** | Release-Gate blockiert bewusst; kein final signierter freigegebener Kandidat | Gate PASS → AAB → Internal/Closed Test |
 | G14 | Production Rollout & Operations | **BLOCKIERT** | Rollout- und Incident-Response-Prozess existieren; Produktion darf vor G13 nicht beginnen | Produktionsfreigabe + gestaffelter Rollout + benannte Verantwortliche |
 
-## In diesem Arbeitsblock bereits erledigt
+## Wichtige bisherige Fortschritte
 
-- A–Z-Handbuch auf 15-Gate-System umgestellt.
-- `PRODUCT_REQUIREMENTS.md` mit PR-01..PR-18 angelegt.
-- `USER_RESEARCH.md` mit UR-01..UR-07 und objektiver Session-Auswertung angelegt.
-- `THREAT_MODEL.md` mit Trust Boundaries und P0–P3 angelegt.
-- `SUPPLY_CHAIN_SECURITY.md` angelegt und mit Offline-First-Entscheidung synchronisiert.
-- `PERFORMANCE_RELIABILITY.md` angelegt.
-- `NATIVE_PERSISTENCE_AUDIT.md` mit NP-01..NP-04 angelegt.
-- `INCIDENT_RESPONSE.md` angelegt.
-- veraltete `PERMISSION_MATRIX.md` an aktuellen Android-v1-Code angepasst.
-- `android.permission.INTERNET` aus dem Android-v1-Manifest entfernt.
-- `check-privacy-build.ts` blockiert Netzwerk-APIs/Tracker und eine stille Wiedereinführung der INTERNET-Permission.
-- `NativeCounterRetentionPolicy.java` + JUnit-Grenztests vorbereitet; historische Usage-Bereinigung bleibt wegen der noch fehlenden End-to-End-ACK-Semantik bewusst unverdrahtet.
-- Android-Instrumentation von einem Standard-Beispieltest auf reale Runtime-Verträge ausgebaut:
-  - `ProtectionStateInstrumentedTest.java`
-  - `ManifestSecurityInstrumentedTest.java`
-  - `BootRecoveryInstrumentedTest.java`
-- `ExampleInstrumentedTest.java` entfernt.
-- `check:android-instrumentation` in `npm run verify` aufgenommen.
-- Gradle-Wrapper-Distribution 8.14.3 mit dem offiziellen SHA-256 gepinnt.
-- `check:supply-chain` in `npm run verify` aufgenommen; schützt Lockfile, Dependency-Protokolle, Gradle-Checksum und dynamische Gradle-Versionen.
+- Masterprozess auf G0–G14 umgestellt.
+- PR-01..PR-18, User-Research-Vertrag, Threat Model, Performance-/Supply-Chain-/Incident-Dokumente angelegt.
+- Android-v1 bleibt offline-first; `android.permission.INTERNET` entfernt und durch mehrere Source-/Runtime-Verträge blockiert.
+- Gradle Wrapper 8.14.3 mit offiziellem Distribution-SHA256 gepinnt.
+- Android-Instrumentation vom Beispieltest auf reale Runtime-Verträge ausgebaut.
+- V0.7-Migration bleibt transaktional und bytegenau archiviert.
+- Native Counter Retention als Pure-Java-Policy + JUnit vorbereitet.
+- Native→React-Datentransfer gehärtet:
+  - persistenter `pending_protection_drain_v1`;
+  - UUID-Batch-ID;
+  - Usage-Cursor erst beim ACK;
+  - React-Marker `__scrollshieldNativeDrain.lastProcessedBatchId` im transaktionalen Settings-Chunk;
+  - Batch genau einmal anwenden;
+  - Save-before-ACK;
+  - Crash nach Save/vor ACK führt nur zum nachgeholten ACK;
+  - fehlgeschlagener Save blockiert ACK;
+  - neue Usage/Events während Pending-Batch bleiben für Folgebatch erhalten.
+- Factory Reset gehärtet:
+  - Native Reset muss vor Web-State-Löschung bestätigt werden;
+  - Tombstone `factory_reset_pending_v1` verhindert Wiederkehr verspäteter Service-Writes;
+  - frische Post-Reset-Konfiguration kann erhalten bleiben, alte Usage/Event/Lifecycle-Daten nicht;
+  - Native Runtime startet nach Reset erst wieder nach abgeschlossenem Onboarding.
+- `check:native-drain-ack` ist Bestandteil von `npm run verify`.
+- Vitest-/App-/Android-Instrumentationstests für ACK und Reset sind vorbereitet, aber noch nicht ausgeführt.
 
 ## Aktueller Arbeitsfokus
 
 ### Jetzt aktiv
 
-1. **G6 extern entsperren:** GitHub Actions Billing/Spending-Limit korrigieren; danach sofort vollständigen Verify-/Android-JUnit-/Debug-Build ausführen.
-2. **G7 weiter:** Service-/Overlay-/Permission-Loss-/Usage-Import-Instrumentation ergänzen und auf echten Geräten ausführen.
-3. **G8:** Native-Drain mit persistenter Batch-ID + React-Persistenz + ACK gegen Crash/Doppelzählung härten; erst danach historische Usage-Retention verdrahten.
-4. **G8 danach:** periodischen Usage-Flush vom blockierenden Main-Thread-I/O entkoppeln und CPU/Memory/Batterie messen.
-5. **G5:** finalen Dependency-/SBOM-/Manifest-Snapshot für Release-Evidence automatisieren.
-6. **G0/G3:** reale User-Research-/Accessibility-Sessions durchführen, sobald ein installierbarer stabiler Debug-Kandidat existiert.
+1. **G6 extern entsperren:** GitHub Actions Billing/Spending-Limit korrigieren; danach vollständige Verify-/Android-JUnit-/Debug-Build-Kette real ausführen.
+2. **G8:** nach erfolgreicher ACK-Regression Retention sicher verdrahten.
+3. **G8:** periodischen Usage-Flush vom blockierenden Service-Main-Thread entkoppeln.
+4. **G7:** verbleibende Overlay-/Permission-Loss-/Service-E2E-Fälle ergänzen und reale Instrumentation ausführen.
+5. **G9:** stabilen Debug-Kandidaten auf der physischen Device Matrix testen.
+6. **G2:** reale V0.7-Migration mit bytegenauer Evidence durchführen.
+7. **G8/G9:** 12h/OEM-/Mitternacht-/DST-/Prozesskill-Evidence erfassen.
+8. **G5:** finalen Dependency-/SBOM-/Manifest-Snapshot für Release-Evidence erzeugen.
+9. **G0/G3:** reale User-Research-/Accessibility-Sessions mit stabilem APK durchführen.
 
 ### Nicht jetzt anfangen
 
@@ -75,7 +82,7 @@ Ein grüner Source-Checker allein macht ein Gate nicht automatisch `FERTIG`, wen
 - Cloud-Sync;
 - iOS-Parität;
 - Reels-only Accessibility Service;
-- weitere große Produktblöcke, die G6–G9 weiter nach hinten schieben.
+- neue große Produktblöcke, die G6–G9 weiter nach hinten schieben.
 
 ## Gate-Abhängigkeiten
 
