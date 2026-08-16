@@ -6,6 +6,10 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -23,6 +27,9 @@ final class NativeDrainBatchStore {
     static final String EXPORTED_USAGE_PREFIX = "exported_";
     static final String PENDING_BATCH_KEY = "pending_protection_drain_v1";
     static final String FACTORY_RESET_PENDING_KEY = "factory_reset_pending_v1";
+    static final String OPEN_EVENTS_PREFIX = "open_events_";
+    static final String EMERGENCY_COUNT_PREFIX = "emergency_count_";
+    static final int RAW_USAGE_RETENTION_DAYS = 30;
 
     private static final String CONFIG_KEY = "protection_config";
     private static final String UNAVAILABLE_APPS_KEY = "unavailable_app_ids";
@@ -100,6 +107,7 @@ final class NativeDrainBatchStore {
         String pendingJson = preferences.getString(PENDING_BATCH_KEY, null);
         if (pendingJson == null || pendingJson.isEmpty()) {
             // ACK is intentionally idempotent once the native pending batch has already been removed.
+            cleanupConfirmedCounters(preferences, System.currentTimeMillis());
             return true;
         }
 
@@ -134,7 +142,12 @@ final class NativeDrainBatchStore {
             }
         }
         editor.remove(PENDING_BATCH_KEY);
-        return editor.commit();
+        if (!editor.commit()) return false;
+
+        // Cleanup is best-effort after a durable ACK. Failure to prune old confirmed counters must
+        // never turn a successfully persisted React batch back into an unacknowledged batch.
+        cleanupConfirmedCounters(preferences, System.currentTimeMillis());
+        return true;
     }
 
     static boolean markFactoryReset(SharedPreferences preferences) {
@@ -169,9 +182,78 @@ final class NativeDrainBatchStore {
         return true;
     }
 
+    /**
+     * Prunes only counters that are no longer needed for enforcement or crash-safe handoff.
+     *
+     * Raw usage is intentionally retained for 30 local calendar days after it has been fully ACKed
+     * into React. Open/emergency counters retain current + previous day for conservative midnight,
+     * time-zone, and rolling-window behavior. Malformed and unconfirmed values are untouched.
+     */
+    static boolean cleanupConfirmedCounters(SharedPreferences preferences, long now) {
+        String currentDay = getDayKey(now);
+        String previousDay = getRelativeDayKey(now, -1);
+        String oldestRetainedUsageDay = getRelativeDayKey(now, -RAW_USAGE_RETENTION_DAYS);
+
+        SharedPreferences.Editor editor = preferences.edit();
+        boolean changed = false;
+        for (Map.Entry<String, ?> entry : preferences.getAll().entrySet()) {
+            String key = entry.getKey();
+
+            if (
+                NativeCounterRetentionPolicy.shouldDeleteEphemeralCounter(
+                    key,
+                    OPEN_EVENTS_PREFIX,
+                    currentDay,
+                    previousDay
+                )
+                || NativeCounterRetentionPolicy.shouldDeleteEphemeralCounter(
+                    key,
+                    EMERGENCY_COUNT_PREFIX,
+                    currentDay,
+                    previousDay
+                )
+            ) {
+                editor.remove(key);
+                changed = true;
+                continue;
+            }
+
+            if (!key.startsWith(USAGE_COUNTER_PREFIX) || !(entry.getValue() instanceof Long)) continue;
+            long current = (Long) entry.getValue();
+            String exportedKey = EXPORTED_USAGE_PREFIX + key;
+            long exported = preferences.getLong(exportedKey, -1L);
+            if (
+                NativeCounterRetentionPolicy.shouldDeleteFullyExportedUsage(
+                    key,
+                    USAGE_COUNTER_PREFIX,
+                    current,
+                    exported,
+                    oldestRetainedUsageDay
+                )
+            ) {
+                editor.remove(key);
+                editor.remove(exportedKey);
+                changed = true;
+            }
+        }
+
+        return !changed || editor.commit();
+    }
+
     static boolean hasPendingBatch(SharedPreferences preferences) {
         String pending = preferences.getString(PENDING_BATCH_KEY, null);
         return pending != null && !pending.isEmpty();
+    }
+
+    private static String getRelativeDayKey(long timestamp, int dayOffset) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(timestamp);
+        calendar.add(Calendar.DAY_OF_YEAR, dayOffset);
+        return getDayKey(calendar.getTimeInMillis());
+    }
+
+    private static String getDayKey(long timestamp) {
+        return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(timestamp));
     }
 
     private static DrainBatch parsePendingBatch(String raw) throws JSONException {
