@@ -79,7 +79,7 @@ final class UsageFlushWorker implements AutoCloseable {
         }
     }
 
-    private void persistAndComplete(UsageFlushCoordinator.FlushBatch batch) {
+    private boolean persistAndComplete(UsageFlushCoordinator.FlushBatch batch) {
         boolean success = false;
         try {
             success = writer.write(batch);
@@ -87,6 +87,38 @@ final class UsageFlushWorker implements AutoCloseable {
             error.printStackTrace();
         } finally {
             coordinator.completeFlush(batch.id, success, clock.nowMs());
+        }
+        return success;
+    }
+
+    /**
+     * Stops accepting new service submissions, lets already queued writes finish, then force-drains
+     * any usage that arrived while an earlier batch was in flight. The drain runs on the same
+     * serialized worker thread, so shutdown never moves SharedPreferences.commit() back to the
+     * service main thread.
+     */
+    boolean closeAfterDrainingPending() {
+        if (!closed.compareAndSet(false, true)) return false;
+
+        try {
+            executor.execute(this::drainPendingBeforeShutdown);
+        } catch (RejectedExecutionException error) {
+            executor.shutdown();
+            return false;
+        }
+        executor.shutdown();
+        return true;
+    }
+
+    private void drainPendingBeforeShutdown() {
+        while (true) {
+            UsageFlushCoordinator.FlushBatch batch = coordinator.beginFlush(
+                clock.nowMs(),
+                true,
+                0L
+            );
+            if (batch == null) return;
+            if (!persistAndComplete(batch)) return;
         }
     }
 
