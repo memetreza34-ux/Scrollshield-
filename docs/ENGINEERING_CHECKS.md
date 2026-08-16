@@ -15,9 +15,10 @@ The verification chain covers:
 - ESLint
 - Prettier formatting
 - package/app/store version consistency
-- release-approval schema and candidate-version consistency
+- release-approval schema, candidate version, and candidate-bound evidence consistency
 - transactional and legacy-storage migration safeguards
 - Android protection lifecycle and stop-reason diagnostics
+- bounded native diagnostic code/message normalization
 - SDK registry and third-party notices
 - committed-secret detection
 - store copy, privacy declarations, and screenshot metadata
@@ -78,7 +79,7 @@ The implementation is in `src/lib/storage.ts`, `src/lib/dataExport.ts`, and `src
 
 `npm run check:lifecycle` protects the complete Android start/stop diagnosis contract:
 
-- native preferences retain the last protection start time
+- `lastProtectionStartAt` is persisted only after successful foreground-service startup, not merely after an activation request
 - native preferences retain the last stop time, stable stop code, and readable stop reason
 - a generic deactivation reason is written first and may be replaced by a more specific system cause
 - system warning events are classified by the pure Java `ProtectionStopReasonPolicy`
@@ -106,6 +107,20 @@ The implementation is in `src/lib/storage.ts`, `src/lib/dataExport.ts`, and `src
 - the reviewer flow must show the matching code and message in both the visible UI and copied diagnostic JSON
 
 The executable source contract is in `scripts/check-protection-lifecycle-diagnostics.ts`.
+
+## Diagnostic Normalization Check
+
+`npm run check:diagnostic-normalization` guards the native lifecycle evidence boundary:
+
+- stable internal stop codes remain unchanged
+- arbitrary stop-code input is normalized to a bounded lowercase identifier
+- stop codes are limited to 64 characters
+- stop messages are limited to 500 characters
+- control characters and repeated whitespace are normalized
+- explicit stop reasons and system-warning reasons pass through the same policy before persistence
+- historical stored values are normalized on read
+- the legitimate never-stopped empty state remains representable
+- Java boundary tests cover stable codes, arbitrary input, empty values, control characters, and length bounds
 
 ## Android Device-Matrix Check
 
@@ -149,23 +164,26 @@ The executable source contract is in `scripts/check-android-device-matrix.ts`. T
 
 ## Release Approval Gate
 
-`npm run check:release-approval` validates:
+`npm run check:release-approval` validates schema **v2** without pretending that incomplete evidence is approval.
+
+It validates at least:
 
 - approval-manifest schema version
 - candidate version against `package.json`
 - candidate version against Android `versionName`
 - candidate build against Android `versionCode`
-- explicit Boolean presence of `terminalLifecycleValidationPassed`
+- explicit Boolean release flags
+- candidate-bound evidence records
+- evidence `candidateCommitSha` consistency
+- non-empty references for evidence that is marked complete
 
-This non-strict check is included in `npm run verify` and reports the number of incomplete evidence items without pretending the release is approved.
-
-`npm run release:gate` is strict. It blocks until all of the following are explicitly complete for the same candidate:
+`npm run release:gate` is strict. It blocks until all mandatory evidence is explicitly complete for the same tested candidate, including:
 
 - complete web verification
 - Android JUnit tests
 - debug APK compilation and inspection
 - physical-device matrix
-- `terminalLifecycleValidationPassed=true` after `LIFE-08`, `LIFE-09`, and `LIFE-10` pass on the exact candidate
+- terminal lifecycle validation on the exact candidate
 - battery and process reliability
 - V0.7 and previous-candidate migration
 - final Play declarations
@@ -174,7 +192,11 @@ This non-strict check is included in `npm run verify` and reports the number of 
 - signed-binary inspection
 - named approver and valid approval date
 
-Both `npm run android:release` and `npm run android:bundle` execute this gate before Gradle. The current `config/release-approval.json` intentionally keeps `terminalLifecycleValidationPassed` and the other evidence fields false, so release output remains blocked.
+The strict gate also requires a real 40-character tested candidate SHA. Candidate-bound evidence must reference that same SHA. The gate compares the tested candidate against repository `HEAD`; after the final tested candidate is frozen, only `config/release-approval.json` may differ for recording approval evidence. Any other source/release change invalidates the freeze and requires a new candidate and retest. Missing Git history fails closed.
+
+Both `npm run android:release` and `npm run android:bundle` execute this gate before Gradle. The current `config/release-approval.json` intentionally keeps the evidence flags false and evidence references empty, so release output remains blocked.
+
+The human process is documented in `docs/RELEASE_EVIDENCE.md` and the complete development sequence in `docs/APP_DEVELOPMENT_A_TO_Z.md`.
 
 ## Android CI Stage
 
@@ -196,8 +218,8 @@ All external GitHub Actions are pinned to immutable 40-character commit SHAs. De
 
 The workflow is configured but the repository account currently prevents GitHub-hosted runners from starting because of a billing or spending-limit restriction. Until a runner or local Android environment executes the commands above, compilation and test success remain unverified.
 
-The lifecycle source checker, terminal-service Java policy test, health-classification tests, status-panel tests, Permissions integration test, App integration test, Debug component test, full TypeScript check, formatting check, and Android compilation have not executed successfully yet.
+The lifecycle source checker, diagnostic-normalization policy tests, terminal-service Java policy test, health-classification tests, status-panel tests, Permissions integration test, App integration test, Debug component test, full TypeScript check, formatting check, and Android compilation still require successful execution on the exact current candidate.
 
-The lifecycle source and documentation block is frozen pending execution. Further source claims must not be treated as verified until the exact branch head completes the full verification chain and physical-device evidence.
+Source contracts and documentation are not substitutes for execution. Further source claims must not be treated as release-verified until the exact branch head completes the full verification chain and physical-device evidence.
 
 A job with no runner and `steps: []` is an infrastructure block, not evidence that application code passed or failed.
