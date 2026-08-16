@@ -138,8 +138,6 @@ public class NativeDrainBatchInstrumentedTest {
         assertTrue(NativeDrainBatchStore.markFactoryReset(preferences));
         assertTrue(preferences.getBoolean(NativeDrainBatchStore.FACTORY_RESET_PENDING_KEY, false));
 
-        // Simulate ScrollShieldProtectionService.onDestroy writing a final usage/event payload after
-        // the reset request. The tombstone must win before a future drain can expose this data.
         preferences
             .edit()
             .putLong(USAGE_KEY, 240_000L)
@@ -162,5 +160,29 @@ public class NativeDrainBatchInstrumentedTest {
         assertEquals("[]", afterReset.eventsJson);
         assertEquals("[]", afterReset.usageJson);
         assertTrue(preferences.getAll().isEmpty());
+    }
+
+    @Test
+    public void resetCleanupPreservesOnlyFreshPostResetConfiguration() throws Exception {
+        assertTrue(NativeDrainBatchStore.markFactoryReset(preferences));
+
+        String freshConfig = "{\"focusMode\":false,\"apps\":[]}";
+        preferences
+            .edit()
+            .putString(ScrollShieldNativePlugin.CONFIG_KEY, freshConfig)
+            .putString("unavailable_app_ids", "[]")
+            .putString("unavailable_active_app_ids", "[]")
+            .putLong(USAGE_KEY, 999_000L)
+            .putString(NativeDrainBatchStore.EVENT_QUEUE_KEY, "[{\"type\":\"warning\"}]")
+            .commit();
+
+        assertTrue(NativeDrainBatchStore.finalizeFactoryResetIfPending(preferences));
+        assertEquals(freshConfig, preferences.getString(ScrollShieldNativePlugin.CONFIG_KEY, null));
+        assertEquals("[]", preferences.getString("unavailable_app_ids", null));
+        assertEquals("[]", preferences.getString("unavailable_active_app_ids", null));
+        assertFalse(preferences.contains(USAGE_KEY));
+        assertFalse(preferences.contains(NativeDrainBatchStore.EVENT_QUEUE_KEY));
+        assertFalse(preferences.contains(NativeDrainBatchStore.FACTORY_RESET_PENDING_KEY));
+        assertEquals(3, preferences.getAll().size());
     }
 }
