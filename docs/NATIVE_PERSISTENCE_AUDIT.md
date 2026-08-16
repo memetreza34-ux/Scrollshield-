@@ -1,22 +1,12 @@
 # ScrollShield – Native Persistence Audit
 
-Status: **G8-Engineering-Audit; ACK + Retention + Flush-Worker-Foundation im Source, Ausführungsevidenz offen**
+Status: **G8-Engineering-Audit; ACK + Retention + Flush-Worker-Bausteine im Source, Service-Verdrahtung offen**
 
 Letzte Aktualisierung: **16. August 2026**
 
 ## 1. Scope
 
-Geprüft werden die nativen Persistenzpfade für:
-
-- gemessene temporär freigegebene Nutzungszeit;
-- bewusste Öffnungsereignisse;
-- Emergency-Tageszähler;
-- Native Event Queue;
-- Lifecycle-Diagnostik;
-- Native→React-Drain/ACK;
-- Factory Reset;
-- Export-/Retention-Marker;
-- periodische Usage-Persistenz und In-Flight-Semantik.
+Geprüft werden die nativen Persistenzpfade für gemessene Nutzungszeit, Open-/Emergency-Counter, Event Queue, Lifecycle-Diagnostik, Native→React-Drain/ACK, Factory Reset, Retention und periodische Usage-Persistenz.
 
 Primäre Dateien:
 
@@ -25,303 +15,196 @@ Primäre Dateien:
 - `NativeDrainBatchStore.java`
 - `NativeCounterRetentionPolicy.java`
 - `UsageFlushCoordinator.java`
+- `UsageFlushWorker.java`
 - `src/lib/nativeProtection.ts`
 - `src/lib/nativeDrainJournal.ts`
 - `src/App.tsx`
 - `src/lib/storage.ts`
 
-## 2. NP-01 – synchroner Usage-Commit im Service-Main-Thread
+## 2. NP-01 – periodischer Usage-Commit
 
-**Service-Verdrahtung weiterhin offen; Korrektheits-State-Machine jetzt vorbereitet.**
+**Produktive Service-Verdrahtung weiterhin offen; Coordinator + echter serieller Writer sind vorbereitet.**
 
-Aktueller produktiver Service-Pfad:
+Der aktuelle produktive Service führt weiterhin etwa alle 10 Sekunden `SharedPreferences.Editor.commit()` direkt aus `flushPendingUsage()` aus. Da Android-Services standardmäßig im Main Thread laufen, bleibt das ein potenzielles Jank-/ANR-Risiko.
 
-- Polling: ca. alle 900 ms;
-- Usage wird im Service in `pendingUsageMs` gebündelt;
-- `USAGE_FLUSH_INTERVAL_MS = 10_000L`;
-- `flushPendingUsage()` führt weiterhin `SharedPreferences.Editor.commit()` aus;
-- der Service besitzt für diesen periodischen Flush noch keinen eigenen seriellen Worker.
+Ein blindes `commit()` → `apply()` bleibt ausgeschlossen: Tageslimits und Exportsemantik benötigen beobachtbare Failure-/Durability-Grenzen.
 
-Android-Services laufen standardmäßig im Main Thread. Der periodische synchrone Disk-I/O bleibt deshalb ein potenzielles Jank-/ANR-Risiko.
+### 2.1 `UsageFlushCoordinator`
 
-### Warum kein blindes `commit()` → `apply()`?
+Die Pure-Java-State-Machine verwaltet synchronisiert:
 
-Die Werte beeinflussen Tageslimits und den Native→React-Export. Ein bloßer API-Austausch würde Persistenzfehler nicht mehr synchron sichtbar machen und könnte Crash-/Durability-Semantik verändern.
+- Pending Usage;
+- genau einen unveränderlichen In-Flight-Snapshot;
+- neue Usage während eines laufenden Writes separat pending;
+- Success nur für die passende Batch-ID;
+- Failure-Mergeback des kompletten Snapshots;
+- Ablehnung stale Completion;
+- `getUnpersistedUsageMs(bucket)` = Pending + In-Flight für Tageslimits;
+- normales Intervall + Force-Pfad;
+- saturierende Addition gegen Long-Overflow.
 
-### Neue Worker-Foundation: `UsageFlushCoordinator`
+### 2.2 `UsageFlushWorker`
 
-Die gefährliche Concurrency-/Accounting-Semantik wurde deshalb zuerst in eine kleine Android-unabhängige State-Machine ausgelagert.
+Der zweite Baustein existiert jetzt ebenfalls im Source:
 
-`UsageFlushCoordinator.java` definiert:
+- Produktionsfactory nutzt `Executors.newSingleThreadExecutor(...)`;
+- eingefrorene Coordinator-Batches werden ausschließlich auf diesem seriellen Executor geschrieben;
+- SharedPreferences verwendet weiterhin `commit()` **im Worker**, damit `false` als realer Persistenzfehler erkennbar bleibt;
+- Commit-Failure meldet `completeFlush(batchId, false, ...)`;
+- Runtime-Exception meldet ebenfalls Failure;
+- `RejectedExecutionException` führt den aktiven Batch synchron zurück in Pending Usage;
+- erfolgreicher Write meldet Success an den Coordinator;
+- `close()` führt orderly `executor.shutdown()` aus;
+- `awaitTermination(timeoutMs)` ist für einen späteren kontrollierten Shutdown-Pfad vorbereitet.
 
-1. **Pending Usage** – noch nicht an den Worker übergeben;
-2. **genau einen In-Flight-Batch** – unveränderlicher Snapshot für einen seriellen Write;
-3. **neue Usage während des Writes** – bleibt separat pending;
-4. **Success** – nur der passende aktive Batch wird abgeschlossen;
-5. **Failure** – der In-Flight-Snapshot wird mit zwischenzeitlich neuer Pending Usage verlustfrei zusammengeführt;
-6. **stale Completion** – ein Callback mit fremder Batch-ID darf keinen Zustand verändern;
-7. **Daily-Limit-View** – `getUnpersistedUsageMs(bucket)` umfasst Pending + In-Flight;
-8. **Overflow-Schutz** – Addition saturiert auf `Long.MAX_VALUE`, statt in negative Usage überzulaufen.
+### 2.3 Tests
 
-Ein normaler Flush respektiert das 10-Sekunden-Intervall. Ein späterer kontrollierter Shutdown-Pfad kann `force=true` verwenden, ohne einen bereits laufenden Flush parallel zu starten.
+`UsageFlushCoordinatorTest.java` deckt State-Machine-Grenzen ab.
 
-### Tests für die State-Machine
+`UsageFlushWorkerTest.java` deckt zusätzlich ab:
 
-`UsageFlushCoordinatorTest.java` deckt ab:
+- erfolgreichen Background-Write;
+- `commit=false` → Mergeback;
+- Writer-Exception → Mergeback;
+- neue Usage bleibt während blockiertem Worker vollständig im Tageslimit sichtbar;
+- geschlossener Worker lehnt einen Batch ab und gibt ihn an Pending zurück.
 
-- Intervallblockierung + Force-Bypass;
-- maximal einen In-Flight-Flush;
-- neue Usage während eines Writes;
-- Success entfernt nur den eigenen Snapshot;
-- Failure-Mergeback ohne Verlust;
-- stale Completion wird abgewiesen;
-- Tageslimit sieht Pending + In-Flight;
-- ungültige Keys/Dauern werden ignoriert;
-- Overflow wird saturiert.
+`scripts/check-usage-flush-worker.ts` schützt Coordinator **und** Worker. Der Checker hält die verbleibende Service-Grenze absichtlich fest: solange `ScrollShieldProtectionService.flushPendingUsage()` selbst `editor.commit()` enthält, ist NP-01 nicht abgeschlossen.
 
-`scripts/check-usage-flush-worker.ts` schützt diese Source-Grenzen und ist als `npm run check:usage-flush-worker` Bestandteil von `npm run verify`.
+### 2.4 Noch fehlende Service-Integration
 
-### Noch fehlende produktive Verdrahtung
+Vor Abschluss NP-01 muss `ScrollShieldProtectionService` eng verdrahtet werden:
 
-Der große `ScrollShieldProtectionService` verwendet aktuell **noch nicht** `UsageFlushCoordinator`. Vor Abschluss NP-01 muss die Integration eng und überprüfbar erfolgen:
-
-1. einen dedizierten Single-Thread-Executor besitzen;
+1. Coordinator und Worker beim Service-Start initialisieren;
 2. `addPendingUsageBucket(...)` an den Coordinator delegieren;
-3. `flushPendingUsage(...)` nur einen Snapshot starten lassen und den `commit()` ausschließlich im Worker ausführen;
-4. `getDailyUsageMs(...)` = persisted + Coordinator Pending/In-Flight;
-5. Worker-Completion zurück an den Coordinator melden;
-6. Write-Fehler sicher zurückführen;
-7. kontrollierten Service-Shutdown so koordinieren, dass ein laufender Batch nicht doppelt oder verloren geschrieben wird;
-8. Executor sauber herunterfahren;
-9. Drain/ACK gleichzeitig gegen Usage-Write-Races regressionsprüfen.
+3. `flushPendingUsage(...)` nur `beginFlush(...)` auslösen und den Snapshot an den Worker submitten;
+4. `getDailyUsageMs(...)` = persisted + `coordinator.getUnpersistedUsageMs(...)`;
+5. kein `SharedPreferences.commit()` mehr im periodischen Main-Thread-Pfad;
+6. kontrollierten Shutdown koordinieren: vorhandenen In-Flight-Write beenden, restliche Pending Usage forcieren, dann Worker schließen;
+7. Write-Failure/Shutdown/Drain-ACK-Races auf Android regressionsprüfen.
 
-Der 49-KB-Service wird nicht als unprüfbarer Vollersatz umgeschrieben. Die Integration bleibt ein kleiner separater Patch, sobald Java-/Gradle-Ausführung möglich ist bzw. die Änderung lokal exakt patchbar ist.
+Der 49-KB-Service wird nicht als unprüfbarer Vollersatz geschrieben. Die verbleibende Änderung muss ein kleiner, nachvollziehbarer Integrationspatch sein.
 
-## 3. NP-02 – Retention datumsbezogener Counter im Source verdrahtet
+## 3. NP-02 – bestätigungsgebundene Retention
 
-Aktuelle Schlüsseltypen:
-
-```text
-usage_ms_<yyyy-MM-dd>_<appId>
-exported_usage_ms_<yyyy-MM-dd>_<appId>
-open_events_<yyyy-MM-dd>_<appId>
-emergency_count_<yyyy-MM-dd>_<appId>
-```
-
-`NativeCounterRetentionPolicy.java` definiert konservative Regeln:
-
-- aktuelle und vorherige Open-/Emergency-Partitionen bleiben;
-- malformed/fremde Keys werden nicht gelöscht;
-- historische Usage ist nur löschbar, wenn `current == exported`, beide Werte gültig sind und der Retention-Horizont überschritten ist.
-
-### Runtime-Verdrahtung
-
-`NativeDrainBatchStore.cleanupConfirmedCounters(...)` ist **nach durablem ACK** verdrahtet.
+`NativeDrainBatchStore.cleanupConfirmedCounters(...)` läuft erst **nach durablem ACK**.
 
 Regeln:
 
-- Raw-Usage-Retention: **30 lokale Kalendertage nach bestätigter Übergabe**;
-- Open-/Emergency-Counter: aktueller + vorheriger lokaler Tag bleiben;
-- alte `usage_ms_*`-Werte werden nur gelöscht, wenn der zugehörige `exported_usage_ms_*`-Wert exakt gleich ist;
-- bei einem neueren/unbestätigten Delta bleibt das Paar unangetastet;
-- beim Löschen bestätigter alter Usage werden Raw-Counter und Exportcursor gemeinsam entfernt;
-- malformed/unrelated Keys bleiben unangetastet;
-- Cleanup läuft erst, nachdem Pending-Batch-Entfernung und Exportcursor-ACK erfolgreich committed wurden;
-- schlägt nur der Cleanup fehl, wird ein bereits erfolgreich bestätigter React-Batch nicht wieder „unbestätigt“ gemacht.
+- Open-/Emergency-Counter behalten aktuellen + vorherigen lokalen Tag;
+- bestätigte Raw Usage besitzt einen 30-Tage-Horizont;
+- Raw Usage wird nur bei `current == exported` gelöscht;
+- unbestätigte/inkonsistente/malformed Usage bleibt erhalten;
+- `usage_ms_*` und `exported_usage_ms_*` werden gemeinsam entfernt;
+- Cleanup-Fehler machen einen bereits bestätigten React-Batch nicht wieder unbestätigt.
 
-### Tests/Checker
+Tests/Checker:
 
 - `NativeCounterRetentionPolicyTest.java`;
 - `NativeRetentionInstrumentedTest.java`;
-- `scripts/check-native-retention.ts`;
-- `npm run check:native-retention` ist Bestandteil von `npm run verify`.
+- `check:native-retention`.
 
-**Noch nicht real ausgeführt.**
+## 4. NP-03 – Native→React Drain/ACK
 
-## 4. NP-03 – Native→React-Drain/ACK im Source implementiert
+Der frühere at-most-once-nahe Drain wurde ersetzt.
 
-Der frühere Datenweg leerte Event Queue und rückte Usage-Exportmarker bereits während des Drains vor. Ein Crash vor React-Persistenz konnte dadurch Daten verlieren. Diese Architektur wurde ersetzt.
+### Native
 
-### 4.1 Native Pending Batch
+- `pending_protection_drain_v1` hält einen unveränderlichen UUID-Batch;
+- Event Queue wird nur zusammen mit dem Pending-Batch geleert;
+- Usage-Cursor werden erst beim passenden ACK vorgerückt;
+- falsches/inkonsistentes ACK ist fail-closed;
+- neue Events und neue Usage bleiben für Folgebatches erhalten.
 
-`NativeDrainBatchStore.getOrCreate(...)`:
+### React
 
-1. liefert einen bestehenden Pending-Batch unverändert erneut;
-2. oder erzeugt einen neuen UUID-v4-Batch;
-3. friert Event-Payload und Usage-Snapshot ein;
-4. verschiebt Events in denselben persistenten Pending-Batch;
-5. leert die Live-Event-Queue im **gleichen `SharedPreferences.commit()`**;
-6. verändert die Usage-Exportcursor noch nicht.
-
-Persistenter Schlüssel:
-
-```text
-pending_protection_drain_v1
-```
-
-Neue Events können während eines Pending-Batches weiter in der Live-Queue entstehen. Neue Usage kann weiter anwachsen.
-
-### 4.2 Explizites ACK
-
-`acknowledgeProtectionEvents(batchId)` akzeptiert nur den passenden Pending-Batch.
-
-Vor Mutation werden Usage-Cursor validiert:
-
-- Snapshot nicht negativ;
-- aktueller Counter darf nicht unter Snapshot liegen;
-- bereits exportierter Cursor darf nicht über Snapshot liegen.
-
-Erst beim gültigen ACK:
-
-- Exportcursor → eingefrorener Snapshot;
-- Pending-Batch wird entfernt;
-- neue Usage oberhalb des Snapshots bleibt für den nächsten Batch erhalten;
-- danach darf die Retention bestätigte alte Rohdaten prüfen.
-
-ACK nach bereits erfolgreicher Entfernung ist idempotent.
-
-### 4.3 React genau-einmalige Anwendung
-
-`src/lib/nativeDrainJournal.ts` verwendet:
+Persistenter Marker:
 
 ```text
 __scrollshieldNativeDrain.lastProcessedBatchId
 ```
 
-Der Marker liegt im bestehenden Settings-Chunk. `StorageService.saveState()` staged, committed und verifiziert diesen Chunk in derselben State-Transaktion wie Stats/History.
+Stats/History + Batch-ID werden in derselben `StorageService.saveState()`-Transaktion gespeichert. Erst danach sendet React ACK. Replay nach Crash zwischen Save und ACK führt deshalb nicht zur Doppeladdition.
 
-`applyNativeDrainBatch(...)`:
-
-- akzeptiert nur gültige UUID-Batch-IDs;
-- addiert Usage und Events einmal;
-- schreibt die Batch-ID gleichzeitig in Settings;
-- versieht importierte History-Einträge mit `metadata.nativeDrainBatchId`;
-- gibt bei Replay derselben Batch-ID den unveränderten State zurück.
-
-### 4.4 Reihenfolge in `App.tsx`
+Ablauf:
 
 ```text
 Native Pending Batch
   ↓
 React applyNativeDrainBatch(...)
   ↓
-StorageService.saveState(appState) === true
+StorageService.saveState(...) === true
   ↓
-NativeProtection.acknowledgeDrain(batchId)
+Native ACK
   ↓
-Native Exportcursor + Pending Batch finalisieren
+Cursor/Pending-Batch finalisieren
   ↓
-Best-effort Retention bestätigter alter Rohcounter
+Best-effort Retention
 ```
 
-ACK wird **nicht** gesendet, wenn der Batch-tragende State nicht erfolgreich gespeichert wurde.
+## 5. NP-03B – Factory Reset
 
-### 4.5 Crash-Fälle
+`factory_reset_pending_v1` verhindert, dass ein verspäteter Service-Flush nach Vollreset wieder in den frischen React-State importiert wird.
 
-**Crash vor React-Save**
-
-- Native Pending-Batch bleibt;
-- Batch-ID fehlt im dauerhaft gespeicherten AppState;
-- beim Neustart wird der Batch erneut angewendet.
-
-**Crash nach React-Save, vor ACK**
-
-- Batch-ID ist zusammen mit Stats/History gespeichert;
-- Native liefert denselben Pending-Batch erneut;
-- React erkennt den bereits gespeicherten Marker;
-- keine zweite Addition;
-- nur ACK wird nachgeholt.
-
-**Save-Fehler im laufenden Prozess**
-
-- in-memory State kann Batch-ID bereits enthalten;
-- App führt vor ACK einen expliziten erneuten `StorageService.saveState(currentState)` aus;
-- ACK erst bei Erfolg.
-
-## 5. NP-03B – Factory Reset gegen Native-Daten-Wiederkehr geschützt
-
-Native Reset verwendet:
-
-```text
-factory_reset_pending_v1
-```
-
-Ablauf:
-
-1. `factoryResetProtectionData()` löscht Native-Preferences und setzt den Tombstone atomar;
-2. danach wird der Schutzdienst gestoppt;
-3. ein verspäteter finaler Service-Flush darf noch in dieselben Preferences schreiben;
-4. vor jedem späteren Drain gewinnt der Tombstone und löscht diese Restdaten;
-5. falls nach Reset bereits eine frische Schutzkonfiguration synchronisiert wurde, bleiben ausschließlich die neuen Config-/Unavailable-Werte erhalten;
-6. Usage, Events, alte Lifecycle-Werte und Pending-Batches werden nicht wiederhergestellt.
-
-React löscht Web-State und Commitment erst nach erfolgreicher Native-Reset-Bestätigung. Scheitert Native-Cleanup, wird der sichtbare Vollreset abgebrochen.
+- Native Reset muss vor Web-State-/Commitment-Löschung bestätigt werden;
+- Tombstone gewinnt vor jedem späteren Drain;
+- alte Usage/Event/Lifecycle/Pending-Daten werden entfernt;
+- bereits frische Post-Reset-Config darf erhalten bleiben;
+- Native Sync/Drain starten nach Reset erst wieder nach abgeschlossenem Onboarding.
 
 ## 6. Test-/Source-Vertrag
 
-Vorbereitet:
+Vorbereitet sind unter anderem:
 
 - `NativeDrainBatchInstrumentedTest.java`;
 - `NativeRetentionInstrumentedTest.java`;
 - `NativeCounterRetentionPolicyTest.java`;
 - `UsageFlushCoordinatorTest.java`;
+- `UsageFlushWorkerTest.java`;
 - `nativeDrainJournal.test.ts`;
 - `nativeProtectionDrain.test.ts`;
 - `App.nativeDrainAck.test.tsx`;
 - `App.commitmentActivation.test.tsx`;
-- `scripts/check-native-drain-ack.ts`;
-- `scripts/check-native-retention.ts`;
-- `scripts/check-usage-flush-worker.ts`.
+- `check:native-drain-ack`;
+- `check:native-retention`;
+- `check:usage-flush-worker`.
 
-Die drei Source-Gates `check:native-drain-ack`, `check:native-retention` und `check:usage-flush-worker` sind Bestandteil von `npm run verify`.
+**Nicht als bestanden belegt:** GitHub Actions stoppt weiter vor Step 1 wegen Billing/Spending-Limit. Eine isolierte lokale `javac`-Plausibilitätsprüfung des Coordinators ist keine Android-/Release-Evidence.
 
-**Wichtig:** Die Repo-Tests sind aufgrund des GitHub-Actions-Billing-Blockers noch nicht real ausgeführt. Eine isolierte lokale `javac`-Plausibilitätsprüfung des Pure-Java-Coordinators ersetzt weder Android JUnit noch Gradle-/CI-Evidence.
+## 7. NP-04 – Lifecycle-Diagnostik
 
-## 7. NP-04 – Lifecycle-Diagnostik bewusst synchron
-
-Start-/Stop-Diagnostik verwendet teilweise `commit()`.
-
-Diese Writes sind selten und besitzen hohe Durability-Bedeutung. Sie werden nicht pauschal zusammen mit der periodischen Usage-Optimierung auf `apply()` umgestellt.
+Seltene Start-/Stop-Diagnostik verwendet teilweise bewusst synchrones `commit()`. Diese Durability-Writes werden nicht pauschal mit dem periodischen Usage-Pfad auf async umgestellt.
 
 ## 8. Release-Einstufung
 
-### Im Source umgesetzt bzw. vorbereitet
+### Im Source umgesetzt/vorbereitet
 
-- persistenter Native Pending-Batch;
-- UUID-Batch-ID;
-- Replay vor ACK;
-- Usage-Cursor erst beim ACK;
-- React-Dedup-Marker im transaktionalen Settings-Chunk;
-- Save-before-ACK;
-- Crash-Replay ohne Doppeladdition;
+- crash-sicherer Native Pending-Batch + ACK;
+- React Dedup/Save-before-ACK;
 - Factory-Reset-Tombstone;
 - bestätigungsgebundene Retention;
-- 30-Tage-Native-Raw-Usage-Horizont;
-- **Pure-Java-Worker-State-Machine für Pending/In-Flight/Failure-Semantik**;
-- JUnit-/Source-Verträge für die Worker-Foundation.
+- `UsageFlushCoordinator`;
+- echter `UsageFlushWorker` mit Single-Thread-Executor und Failure-Mergeback;
+- JUnit-/Source-Verträge für beide Worker-Bausteine.
 
 ### Vor v1 weiterhin zwingend
 
-- ACK-/Reset-/Retention-/Coordinator-Tests real ausführen;
+- Coordinator-/Worker-/ACK-/Reset-/Retention-Tests real ausführen;
 - `npm run verify` + Android JUnit + Instrumentation + `assembleDebug` erfolgreich durchführen;
-- `UsageFlushCoordinator` in den Service integrieren und den periodischen Main-Thread-`commit()` entfernen;
-- Service-Shutdown/Worker-Race regressionsprüfen;
-- Prozesskill-/Mitternacht-/DST-Fälle auf Gerät ausführen;
-- 12h-/OEM-Batterie-/Reliability-Baseline durchführen.
-
-### Nicht kurz vor Release erzwingen
-
-- vollständige Migration SharedPreferences → Room/DataStore ohne eigenen Migrations-/Regressionblock.
+- Coordinator + Worker in `ScrollShieldProtectionService` integrieren;
+- periodischen Main-Thread-`commit()` entfernen;
+- Shutdown/In-Flight/Drain-Races regressionsprüfen;
+- Prozesskill-/Mitternacht-/DST-Fälle auf Gerät;
+- 12h-/OEM-Batterie-/Reliability-Baseline.
 
 ## 9. Nächste Engineering-Schritte
 
-1. Coordinator-/ACK-/Reset-/Retention-Kette auf einem echten Runner ausführen.
-2. Fehler beheben, bis Verify/JUnit/Instrumentation/Debug-Build grün sind.
-3. `UsageFlushCoordinator` mit Single-Thread-Executor in `ScrollShieldProtectionService` verdrahten.
-4. synchronen periodischen Main-Thread-`commit()` entfernen.
-5. Tageslimit während In-Flight-Flush und Write-Failure explizit auf Android regressionsprüfen.
-6. kontrollierten Service-Shutdown + gleichzeitig laufenden Flush testen.
-7. reale Process-Kill-/Crash-Replay-Fälle durchführen.
-8. 12h/OEM-/Mitternacht-/DST-Evidence erfassen.
+1. Billing/Runner entsperren und Worker-JUnit real ausführen.
+2. Fehler beheben, bis Verify/JUnit/Debug-Build grün sind.
+3. Coordinator + Worker als kleinen Patch in den Service verdrahten.
+4. Main-Thread-`commit()` aus dem periodischen Flush entfernen.
+5. Shutdown mit laufendem In-Flight-Flush testen.
+6. Drain/ACK gleichzeitig mit Worker-Write testen.
+7. reale Process-Kill-/12h-/OEM-/Zeitgrenzen-Evidence erfassen.
 
 Bis diese Punkte erledigt sind, bleibt G8 **TEILWEISE**.
