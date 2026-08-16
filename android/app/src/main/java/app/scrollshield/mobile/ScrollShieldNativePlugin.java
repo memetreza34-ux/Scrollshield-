@@ -24,8 +24,6 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.Map;
-
 @CapacitorPlugin(name = "ScrollShieldNative")
 public class ScrollShieldNativePlugin extends Plugin {
     public static final String PREFERENCES_NAME = "scrollshield_native";
@@ -35,8 +33,6 @@ public class ScrollShieldNativePlugin extends Plugin {
     private static final String EVENT_QUEUE_KEY = "protection_events";
     private static final String UNAVAILABLE_APPS_KEY = "unavailable_app_ids";
     private static final String UNAVAILABLE_ACTIVE_APPS_KEY = "unavailable_active_app_ids";
-    private static final String USAGE_COUNTER_PREFIX = "usage_ms_";
-    private static final String EXPORTED_USAGE_PREFIX = "exported_";
     private static final String LAST_START_AT_KEY = "protection_last_start_at";
     private static final String LAST_STOP_AT_KEY = "protection_last_stop_at";
     private static final String LAST_STOP_CODE_KEY = "protection_last_stop_code";
@@ -218,44 +214,46 @@ public class ScrollShieldNativePlugin extends Plugin {
 
     @PluginMethod
     public void drainProtectionEvents(PluginCall call) {
-        String eventsJson;
-        JSONArray usageSamples = new JSONArray();
+        NativeDrainBatchStore.DrainBatch batch;
         synchronized (EVENT_LOCK) {
-            SharedPreferences preferences = getPreferences();
-            eventsJson = preferences.getString(EVENT_QUEUE_KEY, "[]");
-            SharedPreferences.Editor editor = preferences.edit().putString(EVENT_QUEUE_KEY, "[]");
-
-            for (Map.Entry<String, ?> entry : preferences.getAll().entrySet()) {
-                String key = entry.getKey();
-                Object value = entry.getValue();
-                if (!key.startsWith(USAGE_COUNTER_PREFIX) || !(value instanceof Long)) continue;
-
-                long current = (Long) value;
-                String exportedKey = EXPORTED_USAGE_PREFIX + key;
-                long exported = preferences.getLong(exportedKey, 0L);
-                if (current < exported) exported = 0L;
-                long delta = current - exported;
-                editor.putLong(exportedKey, current);
-                if (delta <= 0L) continue;
-
-                UsageKey usageKey = parseUsageKey(key);
-                if (usageKey == null) continue;
-                try {
-                    JSONObject sample = new JSONObject();
-                    sample.put("date", usageKey.date);
-                    sample.put("appId", usageKey.appId);
-                    sample.put("durationMs", delta);
-                    usageSamples.put(sample);
-                } catch (JSONException error) {
-                    error.printStackTrace();
-                }
+            try {
+                batch = NativeDrainBatchStore.getOrCreate(getPreferences());
+            } catch (JSONException | IllegalStateException error) {
+                call.reject("Native protection data could not be prepared safely", error);
+                return;
             }
-            editor.commit();
         }
 
         JSObject result = new JSObject();
-        result.put("eventsJson", eventsJson == null ? "[]" : eventsJson);
-        result.put("usageJson", usageSamples.toString());
+        result.put("batchId", batch.batchId);
+        result.put("eventsJson", batch.eventsJson);
+        result.put("usageJson", batch.usageJson);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void acknowledgeProtectionEvents(PluginCall call) {
+        String batchId = call.getString("batchId");
+        if (batchId == null || batchId.trim().isEmpty()) {
+            call.reject("Missing native drain batch id");
+            return;
+        }
+
+        synchronized (EVENT_LOCK) {
+            try {
+                boolean acknowledged = NativeDrainBatchStore.acknowledge(getPreferences(), batchId);
+                if (!acknowledged) {
+                    call.reject("Native drain batch does not match the pending batch");
+                    return;
+                }
+            } catch (JSONException | IllegalStateException error) {
+                call.reject("Native drain batch could not be acknowledged safely", error);
+                return;
+            }
+        }
+
+        JSObject result = new JSObject();
+        result.put("acknowledged", true);
         call.resolve(result);
     }
 
@@ -482,17 +480,6 @@ public class ScrollShieldNativePlugin extends Plugin {
         return false;
     }
 
-    private static UsageKey parseUsageKey(String key) {
-        int dateStart = USAGE_COUNTER_PREFIX.length();
-        int appStart = dateStart + 11;
-        if (key.length() <= appStart) return null;
-        String date = key.substring(dateStart, dateStart + 10);
-        if (key.charAt(dateStart + 10) != '_') return null;
-        String appId = key.substring(appStart);
-        if (appId.trim().isEmpty()) return null;
-        return new UsageKey(date, appId);
-    }
-
     private SharedPreferences getPreferences() {
         return getContext().getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
     }
@@ -508,16 +495,6 @@ public class ScrollShieldNativePlugin extends Plugin {
             call.resolve();
         } catch (ActivityNotFoundException fallbackError) {
             call.reject("Android settings screen is unavailable", originalError);
-        }
-    }
-
-    private static final class UsageKey {
-        private final String date;
-        private final String appId;
-
-        private UsageKey(String date, String appId) {
-            this.date = date;
-            this.appId = appId;
         }
     }
 }
