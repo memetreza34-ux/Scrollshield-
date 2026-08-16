@@ -117,14 +117,19 @@ Der Audit hat folgende datumsbezogene Native-Key-Familien bestätigt:
 - `open_events_<date>_<appId>`;
 - `emergency_count_<date>_<appId>`.
 
-Aktuell fehlt eine vollständige begrenzte Cleanup-Policy.
+Die reine Policy-Schicht ist vorbereitet:
+
+- `NativeCounterRetentionPolicy.java` entscheidet ohne Android-I/O, welche Counter grundsätzlich löschbar sind;
+- `NativeCounterRetentionPolicyTest.java` deckt Current/Previous-Day, malformed Keys, unexportierte Usage-Deltas, inkonsistente Export-Marker und Retention-Cutoff-Grenzen ab;
+- die Policy ist bewusst noch **nicht** an SharedPreferences-Cleanup verdrahtet, solange Android-JUnit/Build nicht real ausgeführt werden können.
 
 Release-Kriterium:
 
 - Open-/Emergency-Counter werden nach einer klaren Enforcement-Retention sicher bereinigt;
 - Usage-/Export-Paare werden nur konservativ bereinigt, wenn kein nicht exportiertes Delta verloren gehen kann;
-- Cleanup wird durch Pure-Java-Policy/JUnit abgesichert;
-- Mitternacht/Zeitzone/DST werden berücksichtigt.
+- Cleanup wird durch die Pure-Java-Policy/JUnit abgesichert;
+- Mitternacht/Zeitzone/DST werden berücksichtigt;
+- die tatsächliche Verdrahtung ist real kompiliert und getestet.
 
 ### PERF-08 12-Stunden-Batterietest
 
@@ -227,11 +232,10 @@ Result: PASS | FAIL | BLOCKED
 
 ## 6. Offene technische Arbeit
 
-1. Pure-Java-Retention-Policy und JUnit für Native-Counter ergänzen.
+1. Retention-Policy erst nach realem Android-JUnit/Build an SharedPreferences-Cleanup verdrahten.
 2. periodischen Usage-Flush so gestalten, dass blockierende Main-Thread-I/O reduziert wird, ohne Durability/Daily-Limit-Korrektheit zu verlieren.
-3. Retention/Cleanup der nativen datumsbezogenen Keys sicher verdrahten.
-4. Native Drain/React-Persistenz-Grenze langfristig auf explizite ACK-Semantik prüfen.
-5. erste echte 12h-Baseline erstellen.
-6. daraus konkrete Batterie-/CPU-Budgets ableiten.
-7. physische Overlay-Latenzwerte sammeln.
-8. Memory-/Prozessstabilität bei wiederholten Freigabezyklen prüfen.
+3. Native Drain/React-Persistenz-Grenze langfristig auf explizite ACK-Semantik prüfen.
+4. erste echte 12h-Baseline erstellen.
+5. daraus konkrete Batterie-/CPU-Budgets ableiten.
+6. physische Overlay-Latenzwerte sammeln.
+7. Memory-/Prozessstabilität bei wiederholten Freigabezyklen prüfen.
