@@ -29,8 +29,15 @@ const testRoot = path.join(
 const stateTestPath = path.join(testRoot, 'ProtectionStateInstrumentedTest.java');
 const manifestTestPath = path.join(testRoot, 'ManifestSecurityInstrumentedTest.java');
 const recoveryTestPath = path.join(testRoot, 'BootRecoveryInstrumentedTest.java');
+const usageFlushTestPath = path.join(testRoot, 'UsageFlushInstrumentedTest.java');
 
-for (const requiredPath of [buildGradlePath, stateTestPath, manifestTestPath, recoveryTestPath]) {
+for (const requiredPath of [
+  buildGradlePath,
+  stateTestPath,
+  manifestTestPath,
+  recoveryTestPath,
+  usageFlushTestPath,
+]) {
   if (!existsSync(requiredPath)) {
     findings.push({ file: requiredPath, text: 'Required Android instrumentation contract file is missing.' });
   }
@@ -41,6 +48,7 @@ if (findings.length === 0) {
   const stateTest = await readFile(stateTestPath, 'utf8');
   const manifestTest = await readFile(manifestTestPath, 'utf8');
   const recoveryTest = await readFile(recoveryTestPath, 'utf8');
+  const usageFlushTest = await readFile(usageFlushTestPath, 'utf8');
 
   const requireMatch = (file: string, content: string, pattern: RegExp, text: string) => {
     if (!pattern.test(content)) findings.push({ file, text });
@@ -106,6 +114,31 @@ if (findings.length === 0) {
     );
   }
 
+  for (const [method, description] of [
+    ['productionWorkerPersistsCoordinatorBatchIntoSharedPreferences', 'real SharedPreferences worker persistence'],
+    ['shutdownDrainPersistsUsageAddedDuringInFlightAndroidWrite', 'Android shutdown drain with in-flight usage'],
+  ]) {
+    requireMatch(
+      usageFlushTestPath,
+      usageFlushTest,
+      new RegExp(`void\\s+${method}\\s*\\(`),
+      `Instrumentation must cover ${description}.`,
+    );
+  }
+
+  requireMatch(
+    usageFlushTestPath,
+    usageFlushTest,
+    /UsageFlushWorker\.forSharedPreferences\([\s\S]*preferences,[\s\S]*USAGE_KEY_PREFIX,[\s\S]*coordinator/,
+    'On-device instrumentation must exercise the production SharedPreferences worker factory.',
+  );
+  requireMatch(
+    usageFlushTestPath,
+    usageFlushTest,
+    /closeAfterDrainingPending\(\)[\s\S]*awaitTermination/,
+    'On-device instrumentation must exercise the serialized shutdown drain.',
+  );
+
   requireMatch(
     manifestTestPath,
     manifestTest,
@@ -126,4 +159,6 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log('Android instrumentation contract check passed. Runtime state, recovery, and merged-manifest tests are present.');
+console.log(
+  'Android instrumentation contract check passed. Runtime state, recovery, merged-manifest, and real Android usage-persistence tests are present.',
+);
