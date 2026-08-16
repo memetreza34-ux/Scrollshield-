@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { AppState, HistoryEvent, Screen, DEFAULT_STATE } from './types';
+import { AppState, Screen, DEFAULT_STATE } from './types';
 import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
 import { reconcileFocusRuntime } from './lib/focus';
 import { NativeProtection } from './lib/nativeProtection';
+import {
+  applyNativeDrainBatch,
+  getLastProcessedNativeDrainBatchId,
+} from './lib/nativeDrainJournal';
 import { getRuntimeOperatingSystem } from './lib/runtimePlatform';
 import {
   applyCommitmentGuard,
@@ -18,8 +22,6 @@ import {
   type CommitmentLock,
   type CommitmentStartResult,
 } from './lib/commitmentLock';
-import { createEventId } from './lib/appUtils';
-import { recordProtectionEventStats } from './lib/session';
 import { BottomNav } from './components/ui';
 import { ReleaseWelcome, ReleaseOnboarding } from './screens/ReleaseOnboardingScreens';
 import { DashboardScreen } from './screens/DashboardScreen';
@@ -56,6 +58,10 @@ export default function App() {
   const [migrationBlocked, setMigrationBlocked] = useState(false);
   const skipNextSaveRef = useRef(false);
   const screenScrollRef = useRef<HTMLDivElement>(null);
+  const appStateRef = useRef(appState);
+  const pendingNativeDrainAckRef = useRef<string | null>(null);
+  const persistedNativeDrainBatchIdRef = useRef<string | null>(null);
+  appStateRef.current = appState;
 
   const applyLoadedState = React.useCallback((saved: Partial<AppState>): boolean => {
     try {
@@ -71,6 +77,7 @@ export default function App() {
         activeSession: null,
         simulatedAppToOpen: null,
       };
+      persistedNativeDrainBatchIdRef.current = getLastProcessedNativeDrainBatchId(releaseState);
       setAppState(releaseState);
       setCurrentScreen(releaseState.hasCompletedOnboarding ? 'dashboard' : 'welcome');
       return true;
@@ -159,13 +166,29 @@ export default function App() {
   }, [isLoaded, migrationBlocked, currentScreen, appState.hasCompletedOnboarding, commitmentLock]);
 
   useEffect(() => {
-    if (isLoaded && !migrationBlocked) {
-      if (skipNextSaveRef.current) {
-        skipNextSaveRef.current = false;
-        return;
-      }
-      StorageService.saveState(appState);
+    if (!isLoaded || migrationBlocked) return;
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
     }
+
+    const saved = StorageService.saveState(appState);
+    if (!saved) return;
+
+    const persistedBatchId = getLastProcessedNativeDrainBatchId(appState);
+    persistedNativeDrainBatchIdRef.current = persistedBatchId;
+    const pendingBatchId = pendingNativeDrainAckRef.current;
+    if (!pendingBatchId || persistedBatchId !== pendingBatchId || !NativeProtection.isAvailable()) return;
+
+    void NativeProtection.acknowledgeDrain(pendingBatchId)
+      .then(() => {
+        if (pendingNativeDrainAckRef.current === pendingBatchId) {
+          pendingNativeDrainAckRef.current = null;
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to acknowledge persisted native protection data', error);
+      });
   }, [appState, isLoaded, migrationBlocked]);
 
   useEffect(() => {
@@ -184,56 +207,43 @@ export default function App() {
     if (!isLoaded || migrationBlocked || !NativeProtection.isAvailable()) return;
 
     let cancelled = false;
+    let drainInFlight = false;
     const drainNativeData = async () => {
+      if (drainInFlight) return;
+      drainInFlight = true;
       try {
         const nativeDrain = await NativeProtection.drain();
-        if (cancelled || (nativeDrain.events.length === 0 && nativeDrain.usage.length === 0)) return;
+        if (cancelled || !nativeDrain.batchId) return;
 
-        setAppState((previousState) => {
-          let dailyStats = previousState.dailyStats;
+        // Crash recovery: if this id is known to have reached StorageService successfully, the
+        // payload was already applied before the previous process died. Only ACK it; never add it
+        // to stats/history again.
+        if (persistedNativeDrainBatchIdRef.current === nativeDrain.batchId) {
+          await NativeProtection.acknowledgeDrain(nativeDrain.batchId);
+          return;
+        }
 
-          for (const sample of nativeDrain.usage) {
-            const existing = dailyStats[sample.date] || {
-              date: sample.date,
-              usageMinutes: {},
-              blockedOpens: 0,
-              savedTimeMinutes: 0,
-              emergencyUnlocks: 0,
-              focusMinutes: 0,
-            };
-            dailyStats = {
-              ...dailyStats,
-              [sample.date]: {
-                ...existing,
-                usageMinutes: {
-                  ...existing.usageMinutes,
-                  [sample.appId]: (existing.usageMinutes[sample.appId] || 0) + sample.durationMs / 60_000,
-                },
-              },
-            };
+        // A previous save attempt may have failed in this process. If the in-memory state already
+        // carries the id, retry the transactional save explicitly instead of relying on another
+        // React state change to retrigger the save effect.
+        const currentState = appStateRef.current;
+        if (getLastProcessedNativeDrainBatchId(currentState) === nativeDrain.batchId) {
+          if (StorageService.saveState(currentState)) {
+            persistedNativeDrainBatchIdRef.current = nativeDrain.batchId;
+            await NativeProtection.acknowledgeDrain(nativeDrain.batchId);
+            if (pendingNativeDrainAckRef.current === nativeDrain.batchId) {
+              pendingNativeDrainAckRef.current = null;
+            }
           }
+          return;
+        }
 
-          const historyEvents: HistoryEvent[] = nativeDrain.events.map((event) => {
-            dailyStats = recordProtectionEventStats(dailyStats, event.type, event.timestamp);
-            return {
-              id: createEventId(),
-              timestamp: event.timestamp,
-              type: event.type,
-              appId: event.appId,
-              desc: event.desc,
-              trigger: 'Android-Systemschutz',
-              metadata: { source: 'native_android' },
-            };
-          });
-
-          return {
-            ...previousState,
-            history: [...historyEvents.reverse(), ...previousState.history].slice(0, 1_000),
-            dailyStats,
-          };
-        });
+        pendingNativeDrainAckRef.current = nativeDrain.batchId;
+        setAppState((previousState) => applyNativeDrainBatch(previousState, nativeDrain));
       } catch (error) {
         console.error('Failed to import native protection data', error);
+      } finally {
+        drainInFlight = false;
       }
     };
 
@@ -343,6 +353,8 @@ export default function App() {
       });
     }
     skipNextSaveRef.current = true;
+    pendingNativeDrainAckRef.current = null;
+    persistedNativeDrainBatchIdRef.current = null;
     StorageService.clearState();
     clearCommitmentLock();
     setCommitmentLock(null);
