@@ -19,6 +19,9 @@ Primäre Dateien:
 
 - `ScrollShieldProtectionService.java`
 - `ScrollShieldNativePlugin.java`
+- `src/lib/nativeProtection.ts`
+- `src/App.tsx`
+- `src/lib/storage.ts`
 
 ## 2. Befund NP-01 – synchroner Usage-Commit im Service-Main-Thread
 
@@ -66,72 +69,166 @@ Ohne Cleanup können datumsbezogene Keys über lange Nutzung wachsen.
 
 - `open_events_*` wird für Anti-Binge nur für aktuellen und vorherigen lokalen Tag benötigt.
 - `emergency_count_*` wird für den aktuellen Tag benötigt.
-- `usage_ms_*` wird beim Drain in React-Statistik exportiert.
-- `exported_usage_ms_*` verhindert Doppelimport bereits übernommener Usage-Deltas.
+- `usage_ms_*` wird beim Drain in React-Statistik übergeben.
+- `exported_usage_ms_*` verhindert im aktuellen Design Doppelimport bereits als abgeholt markierter Usage-Deltas.
 
 ### Retention darf keine Nutzungsdaten zerstören
 
-Besonders `usage_ms_*` darf nicht einfach nach Alter gelöscht werden, solange kein sicherer Export-/ACK-Zustand belegt ist.
+`NativeCounterRetentionPolicy.java` und die zugehörigen JUnit-Tests definieren bereits konservative Löschregeln:
 
-Sichere Zielrichtung:
+- aktuelle und vorherige Open-/Emergency-Tagespartitionen bleiben erhalten;
+- malformed oder fremde Keys werden nie gelöscht;
+- historische Usage wäre nur grundsätzlich löschbar, wenn `current == exported`, beide Werte gültig sind und ein konservativer Retention-Horizont überschritten wurde.
 
-- Open-/Emergency-Counter nach definierter Policy bereinigen, sobald sie für Enforcement nicht mehr benötigt werden;
-- Usage/Exported-Paare nur bereinigen, wenn bereits vollständig exportiert und ein konservativer Retention-Horizont überschritten ist;
-- bei neuem Delta niemals im selben Drain löschen;
-- Cleanup mit Pure-Java-Policy + JUnit absichern;
-- Mitternacht/Zeitzone/DST berücksichtigen.
+Diese letzte Usage-Regel wird **noch nicht an echten Cleanup verdrahtet**, weil `exported` im heutigen Native-Drain noch nicht beweist, dass React die Daten dauerhaft gespeichert hat.
 
-## 4. Befund NP-03 – Drain arbeitet aktuell at-most-once-nah
+Open-/Emergency-Counter können unabhängig davon später sicherer bereinigt werden, weil sie nur Enforcement-Fenster und Tagesgrenzen bedienen. Auch diese Verdrahtung wird erst nach einem realen Android-JUnit-/Build-Lauf abgeschlossen.
 
-`drainProtectionEvents()`:
+## 4. Befund NP-03 – aktueller Native→React-Drain besitzt kein End-to-End-ACK
 
-- liest Event Queue;
-- setzt Event Queue im selben Native-Schritt auf `[]`;
-- markiert Usage als exportiert;
-- gibt Daten danach an React zurück.
+Der aktuelle Datenweg ist:
 
-Wenn der Prozess nach Native-Commit, aber vor erfolgreicher React-Persistenz endet, kann die App keinen echten End-to-End-ACK nachweisen.
+```text
+Native SharedPreferences
+  ↓
+drainProtectionEvents()
+  ├─ Event Queue wird geleert
+  ├─ Usage-Deltas werden als exportiert markiert
+  └─ JSON wird an React zurückgegeben
+       ↓
+NativeProtection.drain()
+       ↓
+App.tsx setAppState(...)
+       ↓
+separater React-Effekt
+       ↓
+StorageService.saveState(appState)
+```
 
-Das ist kein neu eingeführter Fehler, aber eine wichtige Architekturgrenze für zukünftige Zuverlässigkeit.
+`StorageService.saveState()` besitzt selbst eine starke transaktionale, verifizierte lokale Speicherung und liefert `boolean` zurück. Das schützt aber den Native→React-Übergang noch nicht, weil Native seinen Cursor **vor** dieser Speicherung verändert.
 
-### Spätere stärkere Lösung
+### Crash-Fenster A – Datenverlust
 
-Für eine robustere Exactly-Once-/At-Least-Once-ähnliche Übergabe wäre ein explizites Native-Drain-ACK-Protokoll sinnvoll:
+Wenn der Prozess nach dem Native-Commit, aber vor erfolgreicher React-Persistenz endet:
 
-1. Native erstellt Batch-ID;
-2. React liest Batch;
-3. React persistiert lokal;
-4. React bestätigt Batch-ID;
-5. erst dann Native Queue/Export-Marker finalisieren.
+- Event Queue kann bereits leer sein;
+- Usage kann bereits als exportiert markiert sein;
+- React-Statistik/History kann die Daten noch nicht dauerhaft enthalten.
 
-Das ist eine größere Datenpfadänderung und wird **nicht** kurz vor Release ohne vollständige Migration-/Regressionstests eingebaut.
+### Warum ein einfaches ACK danach ebenfalls nicht reicht
 
-## 5. Befund NP-04 – Lifecycle-Diagnostik bewusst synchron
+Ein naiver Umbau auf:
+
+```text
+Native liefert Daten
+→ React saveState()
+→ React sendet ACK
+```
+
+hat noch ein zweites Crash-Fenster:
+
+- `saveState()` kann erfolgreich sein;
+- Prozess stirbt vor ACK;
+- Native liefert denselben Batch erneut;
+- React würde ihn nach Neustart ein zweites Mal addieren.
+
+Deshalb reicht ein ACK allein nicht für genau-einmalige Anwendung.
+
+## 5. Zielarchitektur NP-03A – persistente Batch-ID + atomare React-Anwendung + ACK
+
+Die robuste Zielsemantik für ScrollShield lautet:
+
+### Native
+
+1. Native bildet einen unveränderlichen Pending-Batch.
+2. Batch erhält eine eindeutige `batchId`.
+3. Events und Usage-Cursor werden noch **nicht** final entfernt/verschoben.
+4. Solange kein ACK vorliegt, liefert `drain` denselben Pending-Batch erneut.
+
+### React
+
+5. React prüft, ob `batchId` bereits in seinem dauerhaft gespeicherten Zustand verarbeitet wurde.
+6. Falls nein: Usage/Events genau einmal in State anwenden.
+7. Dieselbe transaktionale `StorageService.saveState(...)`-Operation speichert gleichzeitig:
+   - neue Statistik;
+   - neue History;
+   - die verarbeitete `batchId`.
+8. Erst bei `saveState(...) === true` wird Native ACK aufgerufen.
+
+### Native ACK
+
+9. Native akzeptiert ACK nur für den aktuell ausstehenden Batch.
+10. Erst jetzt:
+   - passenden Event-Prefix entfernen;
+   - Usage-Exportcursor auf die im Batch eingefrorenen Snapshot-Werte vorrücken;
+   - Pending-Batch löschen;
+   - letzte bestätigte Batch-ID optional für idempotentes ACK merken.
+
+### Crash-Fälle
+
+**Crash vor React-Save:**
+
+- Batch-ID nicht im AppState;
+- Native liefert denselben Batch erneut;
+- React verarbeitet ihn einmal.
+
+**Crash nach React-Save, vor ACK:**
+
+- Batch-ID ist bereits zusammen mit den Daten gespeichert;
+- Native liefert denselben Batch erneut;
+- React erkennt die Batch-ID und addiert nichts erneut;
+- React sendet nur ACK.
+
+Damit lassen sich sowohl Datenverlust als auch Doppelzählung vermeiden.
+
+## 6. AppState-Anforderung für genau-einmalige Batch-Anwendung
+
+Vorgesehener persistenter State-Bestandteil:
+
+```text
+processedNativeDrainBatchIds: string[]
+```
+
+Regeln:
+
+- bounded, z. B. letzte 50 IDs;
+- über `normalizeAppState()` rückwärtskompatibel defaulten;
+- im gleichen transaktionalen V3-State wie Statistik/History persistieren;
+- niemals als Nutzerdaten-Migrationsblocker behandeln;
+- erst entfernen, wenn die native ACK-/Replay-Grenze sicher überschritten ist.
+
+Die endgültige Feldbezeichnung darf bei Implementierung angepasst werden, die Semantik nicht.
+
+## 7. Befund NP-04 – Lifecycle-Diagnostik bewusst synchron
 
 Start-/Stop-Diagnostik verwendet teilweise `commit()`.
 
 Diese Writes sind deutlich seltener als der 10-Sekunden-Usage-Flush und besitzen höhere Durability-Bedeutung. Sie werden deshalb nicht zusammen mit der periodischen Usage-Optimierung pauschal auf `apply()` umgestellt.
 
-## 6. Release-Einstufung
+## 8. Release-Einstufung
 
 ### Vor v1 zwingend
 
 - periodischen Main-Thread-Usage-Commit entweder technisch entschärfen oder auf realen Geräten nachweisbar als unkritisch begrenzen;
 - Retention-Strategie für datumsbezogene Native-Keys implementieren/testen;
+- Native→React-Drain so härten, dass ein Prozessabbruch zwischen Übergabe und Persistenz weder stille Datenverluste noch Doppelzählung erzeugt;
 - 12h-/OEM-Baseline durchführen.
 
 ### Nicht ohne Testinfrastruktur erzwingen
 
 - große Migration SharedPreferences → DataStore/Room kurz vor v1;
-- neues Drain-ACK-Protokoll ohne End-to-End-Regression.
+- Datenpfad-Umbau ohne JVM-/TypeScript-/Android-/Crash-Replay-Regressionen.
 
-## 7. Nächste Engineering-Schritte
+## 9. Nächste Engineering-Schritte
 
-1. Pure-Java-Retention-Policy + JUnit entwerfen.
-2. Source-Contract für Retention ergänzen.
-3. Usage-Flush-Worker-Design mit In-Flight-/Failure-Semantik implementieren.
-4. JVM-/React-Drain-Regressionsfälle ergänzen.
-5. `npm run verify` + Android JUnit/assembleDebug tatsächlich ausführen.
-6. reale 12h-/Prozesskill-/Mitternacht-Tests durchführen.
+1. vorhandene `NativeCounterRetentionPolicy` real per Android JUnit ausführen.
+2. persistente Native-Drain-Batch-Struktur und ACK-Methoden implementieren.
+3. `processedNativeDrainBatchIds` rückwärtskompatibel im AppState integrieren.
+4. React-Drain auf explizites Apply → transaktionales Save → ACK umbauen.
+5. Tests für beide kritischen Crash-Fenster ergänzen.
+6. erst danach historische Usage-/Exported-Paare bereinigen.
+7. Usage-Flush-Worker-Design mit In-Flight-/Failure-Semantik implementieren.
+8. `npm run verify` + Android JUnit/Instrumentation/`assembleDebug` tatsächlich ausführen.
+9. reale 12h-/Prozesskill-/Mitternacht-Tests durchführen.
 
 Bis diese Punkte erledigt sind, bleibt G8 **TEILWEISE**.
