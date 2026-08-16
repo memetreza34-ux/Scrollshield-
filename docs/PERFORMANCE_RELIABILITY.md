@@ -6,6 +6,8 @@ Letzte Aktualisierung: **16. August 2026**
 
 ScrollShield ist eine dauerhafte Schutz-App. Deshalb reichen „App startet“ und „kein offensichtlicher Lag“ als Qualitätskriterium nicht aus. Dieses Dokument definiert, was vor v1 gemessen und belegt werden muss.
 
+Der aktuelle native Persistenzbefund steht in `docs/NATIVE_PERSISTENCE_AUDIT.md`.
+
 ## 1. Grundsatz
 
 Performance wird auf dem **exakten Release-Kandidaten** gemessen. Emulatorwerte allein reichen für Batterie, Prozessverhalten und Foreground-Service-Zuverlässigkeit nicht.
@@ -19,7 +21,7 @@ Messen:
 - Cold Start bis erste nutzbare Hauptansicht;
 - Warm Start;
 - Start mit vorhandenen Legacy-/großen lokalen Daten;
-- Start während/ nach Migration-Recovery.
+- Start während/nach Migration-Recovery.
 
 Release-Kriterium:
 
@@ -86,31 +88,43 @@ Release-Kriterium:
 
 ### PERF-06 Native-Persistenz
 
-Auditieren:
+Der Source-Audit ist erfolgt und dokumentiert aktuell:
 
-- synchrone `SharedPreferences.commit()`-Pfade im Service;
-- Frequenz von Usage-/Event-Flushes;
-- Datumspartitionierung;
-- Crash-Konsistenz.
+- Usage wird im Service im Speicher gebündelt;
+- der periodische Flush läuft ungefähr alle 10 Sekunden;
+- der aktuelle Flush verwendet synchrones `SharedPreferences.commit()`;
+- der Service besitzt dafür aktuell keinen eigenen Worker-Thread;
+- Lifecycle-Diagnosewrites sind seltener und haben andere Durability-Anforderungen als periodische Usage-Writes.
 
 Ziel:
 
-- sichere Datenpersistenz behalten, aber unnötige Main-Thread-Sync-Writes vermeiden.
+- sichere Datenpersistenz behalten;
+- unnötige blockierende periodische Main-Thread-I/O vermeiden;
+- Usage-Werte während In-Flight-Schreibvorgängen weiterhin korrekt in Tageslimits einrechnen;
+- fehlgeschlagene Writes nicht still verlieren;
+- keinen Doppelcount beim finalen Service-Flush erzeugen.
 
-Änderungen an Persistenz erst nach Regressionstests für Usage-/Event-Korrektheit.
+Ein pauschales `commit()` → `apply()` ist ausdrücklich **nicht** die Definition of Done, weil dadurch Fehlererkennung und Crash-/Durability-Semantik verändert würden.
+
+Details: `docs/NATIVE_PERSISTENCE_AUDIT.md`.
 
 ### PERF-07 Storage-Retention
 
-Auditieren:
+Der Audit hat folgende datumsbezogene Native-Key-Familien bestätigt:
 
-- Native Usage Keys;
-- Open-/Emergency-Counter;
-- Diagnose-/History-Retention;
-- lokale React-Historie.
+- `usage_ms_<date>_<appId>`;
+- `exported_usage_ms_<date>_<appId>`;
+- `open_events_<date>_<appId>`;
+- `emergency_count_<date>_<appId>`.
+
+Aktuell fehlt eine vollständige begrenzte Cleanup-Policy.
 
 Release-Kriterium:
 
-- keine unbegrenzte stille Key-Vermehrung ohne dokumentierte Retention-/Cleanup-Strategie.
+- Open-/Emergency-Counter werden nach einer klaren Enforcement-Retention sicher bereinigt;
+- Usage-/Export-Paare werden nur konservativ bereinigt, wenn kein nicht exportiertes Delta verloren gehen kann;
+- Cleanup wird durch Pure-Java-Policy/JUnit abgesichert;
+- Mitternacht/Zeitzone/DST werden berücksichtigt.
 
 ### PERF-08 12-Stunden-Batterietest
 
@@ -213,9 +227,11 @@ Result: PASS | FAIL | BLOCKED
 
 ## 6. Offene technische Arbeit
 
-1. Native `SharedPreferences.commit()`-Nutzung im laufenden Service vollständig auditieren.
-2. Retention/Cleanup der nativen datumsbezogenen Keys begrenzen.
-3. erste echte 12h-Baseline erstellen.
-4. daraus konkrete Batterie-/CPU-Budgets ableiten.
-5. physische Overlay-Latenzwerte sammeln.
-6. Memory-/Prozessstabilität bei wiederholten Freigabezyklen prüfen.
+1. Pure-Java-Retention-Policy und JUnit für Native-Counter ergänzen.
+2. periodischen Usage-Flush so gestalten, dass blockierende Main-Thread-I/O reduziert wird, ohne Durability/Daily-Limit-Korrektheit zu verlieren.
+3. Retention/Cleanup der nativen datumsbezogenen Keys sicher verdrahten.
+4. Native Drain/React-Persistenz-Grenze langfristig auf explizite ACK-Semantik prüfen.
+5. erste echte 12h-Baseline erstellen.
+6. daraus konkrete Batterie-/CPU-Budgets ableiten.
+7. physische Overlay-Latenzwerte sammeln.
+8. Memory-/Prozessstabilität bei wiederholten Freigabezyklen prüfen.
