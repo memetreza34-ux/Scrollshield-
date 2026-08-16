@@ -118,7 +118,7 @@ The browser/PWA build remains a preview and cannot block other installed apps. O
 
 The lifecycle values are local diagnostic state, not analytics and not a guarantee that Android will keep a process alive.
 
-A protection start stores the attempted start time. Every known controlled stop stores a timestamp, stable machine-readable code, and human-readable message. When a generic deactivation is immediately followed by a more specific runtime warning, the specific reason replaces the generic fallback.
+`lastProtectionStartAt` is written only after the foreground service has successfully entered `startForeground(...)`; merely requesting activation does not create a successful-start timestamp. Every known controlled stop stores a timestamp, stable machine-readable code, and human-readable message. When a generic deactivation is immediately followed by a more specific runtime warning, the specific reason replaces the generic fallback.
 
 Examples:
 
