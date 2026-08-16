@@ -192,7 +192,14 @@ export default function App() {
   }, [appState, isLoaded, migrationBlocked]);
 
   useEffect(() => {
-    if (!isLoaded || migrationBlocked || !NativeProtection.isAvailable()) return;
+    if (
+      !isLoaded ||
+      migrationBlocked ||
+      !appState.hasCompletedOnboarding ||
+      !NativeProtection.isAvailable()
+    ) {
+      return;
+    }
 
     const syncTimer = window.setTimeout(() => {
       void NativeProtection.sync(appState.appsConfig, appState.isFocusModeActive).catch((error) => {
@@ -201,10 +208,23 @@ export default function App() {
     }, 250);
 
     return () => window.clearTimeout(syncTimer);
-  }, [appState.appsConfig, appState.isFocusModeActive, isLoaded, migrationBlocked]);
+  }, [
+    appState.appsConfig,
+    appState.isFocusModeActive,
+    appState.hasCompletedOnboarding,
+    isLoaded,
+    migrationBlocked,
+  ]);
 
   useEffect(() => {
-    if (!isLoaded || migrationBlocked || !NativeProtection.isAvailable()) return;
+    if (
+      !isLoaded ||
+      migrationBlocked ||
+      !appState.hasCompletedOnboarding ||
+      !NativeProtection.isAvailable()
+    ) {
+      return;
+    }
 
     let cancelled = false;
     let drainInFlight = false;
@@ -247,7 +267,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [isLoaded, migrationBlocked]);
+  }, [isLoaded, migrationBlocked, appState.hasCompletedOnboarding]);
 
   if (!isLoaded)
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">Laden...</div>;
