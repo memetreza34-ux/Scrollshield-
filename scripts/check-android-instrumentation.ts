@@ -30,6 +30,7 @@ const stateTestPath = path.join(testRoot, 'ProtectionStateInstrumentedTest.java'
 const manifestTestPath = path.join(testRoot, 'ManifestSecurityInstrumentedTest.java');
 const recoveryTestPath = path.join(testRoot, 'BootRecoveryInstrumentedTest.java');
 const usageFlushTestPath = path.join(testRoot, 'UsageFlushInstrumentedTest.java');
+const diagnosticsTestPath = path.join(testRoot, 'ProtectionDiagnosticsInstrumentedTest.java');
 
 for (const requiredPath of [
   buildGradlePath,
@@ -37,6 +38,7 @@ for (const requiredPath of [
   manifestTestPath,
   recoveryTestPath,
   usageFlushTestPath,
+  diagnosticsTestPath,
 ]) {
   if (!existsSync(requiredPath)) {
     findings.push({ file: requiredPath, text: 'Required Android instrumentation contract file is missing.' });
@@ -49,6 +51,7 @@ if (findings.length === 0) {
   const manifestTest = await readFile(manifestTestPath, 'utf8');
   const recoveryTest = await readFile(recoveryTestPath, 'utf8');
   const usageFlushTest = await readFile(usageFlushTestPath, 'utf8');
+  const diagnosticsTest = await readFile(diagnosticsTestPath, 'utf8');
 
   const requireMatch = (file: string, content: string, pattern: RegExp, text: string) => {
     if (!pattern.test(content)) findings.push({ file, text });
@@ -126,6 +129,47 @@ if (findings.length === 0) {
     );
   }
 
+  for (const [method, description] of [
+    ['systemPermissionWarningsPersistStableStopDiagnostics', 'permission-loss diagnostic persistence'],
+    ['systemConfigurationWarningsPersistStableStopDiagnostics', 'configuration-loss diagnostic persistence'],
+    ['appSpecificWarningsDoNotOverwriteTerminalSystemStopDiagnostics', 'terminal diagnostic isolation from app warnings'],
+  ]) {
+    requireMatch(
+      diagnosticsTestPath,
+      diagnosticsTest,
+      new RegExp(`void\\s+${method}\\s*\\(`),
+      `Instrumentation must cover ${description}.`,
+    );
+  }
+
+  for (const code of [
+    'usage_access_missing',
+    'overlay_permission_missing',
+    'notifications_missing',
+    'no_active_rules',
+    'target_app_missing',
+  ]) {
+    requireMatch(
+      diagnosticsTestPath,
+      diagnosticsTest,
+      new RegExp(`\\b${code}\\b`),
+      `On-device diagnostics instrumentation must assert stable code ${code}.`,
+    );
+  }
+
+  requireMatch(
+    diagnosticsTestPath,
+    diagnosticsTest,
+    /appendProtectionEvent\([\s\S]*"warning",[\s\S]*"system"/,
+    'On-device diagnostics instrumentation must exercise the same system-warning persistence path used by controlled service stops.',
+  );
+  requireMatch(
+    diagnosticsTestPath,
+    diagnosticsTest,
+    /recordProtectionStop\([\s\S]*"manual_app_stop"[\s\S]*appendProtectionEvent\([\s\S]*"instagram"[\s\S]*assertEquals\("manual_app_stop"/,
+    'App-specific warning instrumentation must prove it cannot overwrite an existing terminal stop reason.',
+  );
+
   requireMatch(
     usageFlushTestPath,
     usageFlushTest,
@@ -160,5 +204,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android instrumentation contract check passed. Runtime state, recovery, merged-manifest, and real Android usage-persistence tests are present.',
+  'Android instrumentation contract check passed. Runtime state, recovery, merged-manifest, usage-persistence, and protection-diagnostic tests are present.',
 );
