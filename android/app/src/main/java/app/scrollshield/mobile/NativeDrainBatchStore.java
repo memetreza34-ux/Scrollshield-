@@ -29,10 +29,7 @@ final class NativeDrainBatchStore {
     private NativeDrainBatchStore() {}
 
     static DrainBatch getOrCreate(SharedPreferences preferences) throws JSONException {
-        if (preferences.getBoolean(FACTORY_RESET_PENDING_KEY, false)) {
-            if (!preferences.edit().clear().commit()) {
-                throw new IllegalStateException("Could not finalize native factory reset");
-            }
+        if (finalizeFactoryResetIfPending(preferences)) {
             return DrainBatch.empty();
         }
 
@@ -94,9 +91,7 @@ final class NativeDrainBatchStore {
     }
 
     static boolean acknowledge(SharedPreferences preferences, String batchId) throws JSONException {
-        if (preferences.getBoolean(FACTORY_RESET_PENDING_KEY, false)) {
-            return preferences.edit().clear().commit();
-        }
+        if (finalizeFactoryResetIfPending(preferences)) return true;
         if (batchId == null || batchId.trim().isEmpty()) return false;
 
         String pendingJson = preferences.getString(PENDING_BATCH_KEY, null);
@@ -148,6 +143,20 @@ final class NativeDrainBatchStore {
             .clear()
             .putBoolean(FACTORY_RESET_PENDING_KEY, true)
             .commit();
+    }
+
+    /**
+     * Clears a reset tombstone together with any writes that arrived after the reset request.
+     *
+     * Callers that are about to expose old data or write a new post-reset configuration must call
+     * this first. Returning true means a reset was pending and has now been finalized.
+     */
+    static boolean finalizeFactoryResetIfPending(SharedPreferences preferences) {
+        if (!preferences.getBoolean(FACTORY_RESET_PENDING_KEY, false)) return false;
+        if (!preferences.edit().clear().commit()) {
+            throw new IllegalStateException("Could not finalize native factory reset");
+        }
+        return true;
     }
 
     static boolean hasPendingBatch(SharedPreferences preferences) {
