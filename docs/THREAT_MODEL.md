@@ -152,16 +152,17 @@ Offen: Work Profiles, Clone Apps, regionale Varianten physisch prüfen.
 
 ### TM-09 Unnötige Netzwerkfähigkeit
 
-Risiko: Offline-First-App besitzt `INTERNET`-Permission und könnte durch neue SDKs unerwartet kommunizieren.
+Risiko: Eine Offline-First-App könnte durch Manifest-Permissions oder neue SDKs unerwartete Netzwerkfähigkeit erhalten.
 
-Gegenmaßnahmen:
+Aktuelle Gegenmaßnahmen:
 
-- keine Analytics/Ads/Backend in v1;
-- CSP/Privacy-Build-Checks;
-- Secret-/SDK-/Notices-Checks;
-- finaler Binary-/Dependency-Audit.
+- `android.permission.INTERNET` ist aus dem Android-v1-Manifest entfernt;
+- keine Analytics/Ads/Backend-Abhängigkeit in v1;
+- Production-CSP begrenzt `connect-src` auf `'self'`;
+- `check-privacy-build.ts` blockiert `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, bekannte Tracker-Marker und eine stille Wiedereinführung der Android-INTERNET-Permission;
+- finaler Dependency-/Manifest-/Binary-Audit bleibt Pflicht.
 
-Offen: vor Release begründen, ob `INTERNET` für Capacitor/PWA/Runtime zwingend bleiben muss. Falls nicht benötigt, Entfernung prüfen.
+Neue Cloud-, Analytics-, Remote-Config- oder Netzwerkfunktionen dürfen diese Entscheidung nur über eine bewusste Revision von Requirements, Threat Model, Privacy und Data Safety ändern.
 
 ### TM-10 Supply-Chain-Angriff
 
@@ -270,10 +271,9 @@ Vor Merge eines Features mit Daten-, Native-, Permission- oder Store-Auswirkung 
 
 ## 6. Offene Security-Aufgaben vor v1
 
-1. `INTERNET`-Permission technisch auditieren.
-2. Dependency-/SBOM-Report für finalen Kandidaten archivieren.
-3. Android-Instrumentation für Service/Overlay/Permission-Lifecycle ausbauen.
-4. Work-Profile/Clone-/regionale Package-Varianten testen.
-5. physische Overlay-Exit-/Accessibility-Tests abschließen.
-6. final signierten AAB gegen Permissions, SDKs und Netzwerkfähigkeit prüfen.
-7. Threat Model erneut prüfen, sobald Billing, Cloud, Account oder Accessibility Service eingeführt werden.
+1. Dependency-/SBOM-Report für finalen Kandidaten archivieren.
+2. Android-Instrumentation für Service/Overlay/Permission-Lifecycle ausbauen.
+3. Work-Profile/Clone-/regionale Package-Varianten testen.
+4. physische Overlay-Exit-/Accessibility-Tests abschließen.
+5. final signierten AAB gegen Permissions, SDKs und Netzwerkfähigkeit prüfen.
+6. Threat Model erneut prüfen, sobald Billing, Cloud, Account oder Accessibility Service eingeführt werden.
