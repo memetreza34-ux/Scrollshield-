@@ -70,7 +70,7 @@ public class ProtectionStateInstrumentedTest {
             "  Android\n konnte\t den Dienst   nicht starten  "
         );
 
-        assertEquals("start-failed", ScrollShieldNativePlugin.getLastProtectionStopCode(context));
+        assertEquals("start_failed", ScrollShieldNativePlugin.getLastProtectionStopCode(context));
         assertEquals(
             "Android konnte den Dienst nicht starten",
             ScrollShieldNativePlugin.getLastProtectionStopMessage(context)
