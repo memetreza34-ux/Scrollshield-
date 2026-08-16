@@ -8,11 +8,25 @@ Wer ScrollShield entwickeln, prüfen oder veröffentlichen will, beginnt mit:
 
 **[`docs/APP_DEVELOPMENT_A_TO_Z.md`](docs/APP_DEVELOPMENT_A_TO_Z.md)**
 
-Das Master-Handbuch legt die verbindliche Reihenfolge vom Produktproblem über Architektur, UI, Daten, Native Android, Berechtigungen, Migration, Tests und CI bis zu Signing, Play Console, Closed Testing, Release-Evidence, Produktion, Rollout und Hotfix fest. Die übrigen Dokumente in `docs/` sind Detailquellen für einzelne Phasen.
+Das Master-Handbuch arbeitet mit **15 Entwicklungs-Gates** von Produktanforderungen bis Production Operations.
+
+Der aktuelle Projektstatus steht in:
+
+**[`docs/DEVELOPMENT_GATES_STATUS.md`](docs/DEVELOPMENT_GATES_STATUS.md)**
+
+Wichtige neue Detailverträge:
+
+- [`docs/PRODUCT_REQUIREMENTS.md`](docs/PRODUCT_REQUIREMENTS.md) – PR-01 bis PR-18, v1-Scope und Akzeptanzkriterien
+- [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) – Trust Boundaries, Missbrauchs-/Fehlermodelle und P0–P3
+- [`docs/SUPPLY_CHAIN_SECURITY.md`](docs/SUPPLY_CHAIN_SECURITY.md) – npm/Gradle/GitHub-Actions-/Dependency-Regeln
+- [`docs/PERFORMANCE_RELIABILITY.md`](docs/PERFORMANCE_RELIABILITY.md) – Performance-, Batterie- und 12h-Messvertrag
+- [`docs/INCIDENT_RESPONSE.md`](docs/INCIDENT_RESPONSE.md) – Rollout-Stopp, Triage und Hotfix-Prozess
+
+Die übrigen Dokumente sind Detailquellen für einzelne Gates.
 
 ## Current Scope
 
-- App and short-video protection profiles
+- Android whole-app protection for user-selected supported apps
 - Intentional opening delay and emergency unlock flows
 - Focus sessions and local history/statistics
 - Local-only storage with transactional saves, legacy migration, export, and reset support
@@ -31,25 +45,26 @@ Das Master-Handbuch legt die verbindliche Reihenfolge vom Produktproblem über A
 - Persistent protection lifecycle diagnostics with last start time, last stop time, stable stop code, and readable stop reason
 - Explicit recovery failure codes for missing target apps, Usage Access, notifications, overlays, and Android service-start failures
 - Explicit `migration_recovery` diagnostics when data recovery stops native protection
-- Native session duration, daily limits, recurring weekly schedules, Anti-Binge thresholds, and emergency-unlock counters
-- The running service uses the same pure Java rule policy covered by JUnit boundary tests
+- Native session duration, daily limits, recurring weekly schedules, Anti-Binge thresholds, adaptive friction, and emergency-unlock counters
+- Commitment mode with bounded voluntary configuration freeze and recovery access
 - Scoped installed-app validation for supported Android packages
 - Import of measured native usage and protection decisions into local React statistics and history
 - Native Android diagnostics with device, OS, version name, build number, permission, protection-channel, service, installed-target, and lifecycle status
 - Copyable diagnostic JSON for reproducible real-device reports
-- React and TypeScript tests for critical setup, permission-prompt, channel-routing, diagnostic, lifecycle, migration, export, and browser-fallback behavior
-- Mandatory Android device matrix with manufacturer, Android-version, migration, lifecycle, battery, time-boundary, tablet, and accessibility coverage
-- Explicit release approval manifest and strict gate before release APK or AAB generation
+- React and TypeScript tests for critical setup, permission-prompt, channel-routing, diagnostic, lifecycle, migration, export, commitment, and browser-fallback behavior
+- Mandatory Android device matrix with manufacturer, Android-version, migration, lifecycle, battery, time-boundary, tablet, accessibility, commitment, and adaptive-friction coverage
+- Explicit release approval manifest and strict candidate-bound evidence gate before release APK or AAB generation
 - CI prepared to run web verification, Android JUnit tests, debug APK compilation, and artifact upload
 - External GitHub Actions pinned to immutable commit SHAs
+- Android v1 manifest intentionally omits `android.permission.INTERNET`; the privacy build check blocks undocumented network APIs, tracker markers, and silent reintroduction of that permission
 
 The browser/PWA version cannot physically block other installed apps. Native whole-app protection is available only in the installed Android build and still requires successful compilation, real-device validation, battery testing, schedule edge-case testing, migration validation, legal completion, and Play Console review preparation before release.
 
-The lifecycle implementation, JUnit classifier, TypeScript bridge tests, App integration tests, Debug component tests, complete verification chain, and Android compilation are prepared but have not yet executed successfully in a working runner or local Android environment. The lifecycle source block is frozen until that execution and physical-device evidence exist.
+The complete verification chain and Android compilation are prepared but have not yet executed successfully in a working runner or local Android environment. GitHub-hosted Actions are currently prevented from starting by an account billing/spending-limit restriction. A workflow job that never starts is not evidence that application tests passed or failed.
 
-Reels-only protection remains an Android beta target because Usage Access identifies the foreground app but not the exact short-video screen inside a third-party app.
+Reels-only protection remains outside the v1 production claim because Usage Access identifies the foreground app but not the exact short-video screen inside a third-party app.
 
-For iOS, real enforcement requires the Screen Time / Family Controls entitlement and native Managed Settings integration.
+For iOS, real enforcement requires the Screen Time / Family Controls entitlement and native Managed Settings integration and is not part of the Android-v1 release gate.
 
 The Android app id is currently `app.scrollshield.mobile`. Confirm this id before the first Play Console upload because package names are difficult to change after release.
 
@@ -58,7 +73,7 @@ The Android app id is currently `app.scrollshield.mobile`. Confirm this id befor
 Prerequisites: Node.js 22.12+ and npm 10+.
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -97,16 +112,21 @@ npm run android:bundle
 
 ## Product and Release References
 
-- `docs/APP_DEVELOPMENT_A_TO_Z.md` – master process from idea to production
-- `docs/COMPETITOR_PRODUCT_BLUEPRINT.md`
+- `docs/APP_DEVELOPMENT_A_TO_Z.md` – master process
+- `docs/DEVELOPMENT_GATES_STATUS.md` – live project status
+- `docs/PRODUCT_REQUIREMENTS.md`
+- `docs/THREAT_MODEL.md`
+- `docs/SUPPLY_CHAIN_SECURITY.md`
+- `docs/PERFORMANCE_RELIABILITY.md`
 - `docs/NATIVE_ANDROID.md`
 - `docs/DATA_MIGRATION.md`
 - `docs/ANDROID_DEVICE_TEST_MATRIX.md`
+- `docs/ENGINEERING_CHECKS.md`
 - `docs/RELEASE_CHECKLIST.md`
 - `docs/RELEASE_EVIDENCE.md`
-- `docs/ROLLOUT_PLAN.md`
 - `docs/STORE_SUBMISSION_PACKET.md`
-- `docs/ENGINEERING_CHECKS.md`
+- `docs/ROLLOUT_PLAN.md`
+- `docs/INCIDENT_RESPONSE.md`
 - `config/release-approval.json`
 
-Before release, replace legal placeholders, run `npm run verify`, compile and inspect the Android debug build, validate lifecycle reason persistence, validate the legacy upgrade and export/import round trip on the exact candidate, complete the physical-device matrix with current-build diagnostic evidence, record reviewer evidence showing the matching Debug stop code and copied JSON, finalize store declarations and videos, inspect the signed binary, and complete the release approval manifest.
+Before release, the exact candidate must pass the automatic verification chain, Android JUnit/compilation, critical instrumentation, the physical device matrix, V0.7 migration evidence, reliability/battery testing, final privacy/legal/store review, signed-binary inspection, candidate-bound evidence, and the strict release gate.
