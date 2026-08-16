@@ -1,6 +1,6 @@
 # ScrollShield – Native Persistence Audit
 
-Status: **G8-Engineering-Audit; ACK-Datenpfad im Source implementiert, Ausführungsevidenz offen**
+Status: **G8-Engineering-Audit; ACK + Retention im Source implementiert, Ausführungsevidenz offen**
 
 Letzte Aktualisierung: **16. August 2026**
 
@@ -30,7 +30,7 @@ Primäre Dateien:
 
 ## 2. NP-01 – synchroner Usage-Commit im Service-Main-Thread
 
-Weiterhin offen.
+**Weiterhin offen.**
 
 Aktueller Pfad:
 
@@ -38,15 +38,15 @@ Aktueller Pfad:
 - Usage wird im Speicher gebündelt;
 - `USAGE_FLUSH_INTERVAL_MS = 10_000L`;
 - `flushPendingUsage()` führt `SharedPreferences.Editor.commit()` aus;
-- der Service besitzt für diesen Flush noch keinen eigenen seriellen Worker.
+- der Service besitzt für diesen periodischen Flush noch keinen eigenen seriellen Worker.
 
 Android-Services laufen standardmäßig im Main Thread. Der periodische synchrone Disk-I/O bleibt deshalb ein potenzielles Jank-/ANR-Risiko.
 
 ### Warum kein blindes `commit()` → `apply()`?
 
-Die Werte beeinflussen Tageslimits und den späteren Native→React-Export. Ein bloßer API-Austausch würde Persistenzfehler nicht mehr synchron sichtbar machen und könnte Crash-/Durability-Semantik verändern.
+Die Werte beeinflussen Tageslimits und den Native→React-Export. Ein bloßer API-Austausch würde Persistenzfehler nicht mehr synchron sichtbar machen und könnte Crash-/Durability-Semantik verändern.
 
-### Zielrichtung
+### Sichere Zielrichtung
 
 1. periodische Usage-Persistenz auf einen dedizierten seriellen Worker verschieben;
 2. nur einen Flush gleichzeitig zulassen;
@@ -55,7 +55,9 @@ Die Werte beeinflussen Tageslimits und den späteren Native→React-Export. Ein 
 5. finalen Service-Ende-Flush ohne Doppelzählung sicherstellen;
 6. Prozesskill-/Crash-Grenzen testen.
 
-## 3. NP-02 – Retention datumsbezogener Counter
+Dieser 49-KB-Service wird nicht ohne erfolgreichen Java-/Gradle-Ausführungspfad großflächig umgebaut.
+
+## 3. NP-02 – Retention datumsbezogener Counter im Source verdrahtet
 
 Aktuelle Schlüsseltypen:
 
@@ -66,19 +68,43 @@ open_events_<yyyy-MM-dd>_<appId>
 emergency_count_<yyyy-MM-dd>_<appId>
 ```
 
-`NativeCounterRetentionPolicy.java` und JUnit-Grenztests definieren bereits konservative Regeln:
+`NativeCounterRetentionPolicy.java` definiert konservative Regeln:
 
 - aktuelle und vorherige Open-/Emergency-Partitionen bleiben;
 - malformed/fremde Keys werden nicht gelöscht;
-- historische Usage ist nur grundsätzlich löschbar, wenn `current == exported`, die Werte gültig sind und der Retention-Horizont überschritten ist.
+- historische Usage ist nur löschbar, wenn `current == exported`, beide Werte gültig sind und der Retention-Horizont überschritten ist.
 
-Die Policy ist noch **nicht produktiv verdrahtet**. Das bleibt absichtlich so, bis der neue ACK-Pfad real ausgeführt und regressionsgeprüft wurde.
+### Runtime-Verdrahtung
+
+`NativeDrainBatchStore.cleanupConfirmedCounters(...)` ist jetzt **nach durablem ACK** verdrahtet.
+
+Regeln:
+
+- Raw-Usage-Retention: **30 lokale Kalendertage nach bestätigter Übergabe**;
+- Open-/Emergency-Counter: aktueller + vorheriger lokaler Tag bleiben;
+- alte `usage_ms_*`-Werte werden nur gelöscht, wenn der zugehörige `exported_usage_ms_*`-Wert exakt gleich ist;
+- bei einem neueren/unbestätigten Delta bleibt das Paar unangetastet;
+- beim Löschen bestätigter alter Usage werden Raw-Counter und Exportcursor gemeinsam entfernt;
+- malformed/unrelated Keys bleiben unangetastet;
+- Cleanup läuft erst, nachdem Pending-Batch-Entfernung und Exportcursor-ACK erfolgreich committed wurden;
+- schlägt nur der Cleanup fehl, wird ein bereits erfolgreich bestätigter React-Batch nicht wieder „unbestätigt“ gemacht.
+
+Damit kann Datenminimierung keinen neuen Doppelimport erzeugen.
+
+### Tests/Checker
+
+- `NativeCounterRetentionPolicyTest.java` – Pure-Java-Grenzfälle;
+- `NativeRetentionInstrumentedTest.java` – aktuelle/Vortags-Counter, alte bestätigte Usage, unbestätigte Deltas, malformed Keys;
+- `scripts/check-native-retention.ts`;
+- `npm run check:native-retention` ist Bestandteil von `npm run verify`.
+
+**Noch nicht real ausgeführt.**
 
 ## 4. NP-03 – Native→React-Drain/ACK im Source implementiert
 
 Der frühere Datenweg war at-most-once-nah: Native leerte Event Queue und rückte Usage-Exportmarker bereits während des Drains vor. Ein Crash vor React-Persistenz konnte dadurch Daten verlieren.
 
-Diese Source-Architektur wurde ersetzt.
+Diese Architektur wurde ersetzt.
 
 ### 4.1 Native Pending Batch
 
@@ -103,7 +129,7 @@ Neue Events können während eines Pending-Batches weiter in der Live-Queue ents
 
 `acknowledgeProtectionEvents(batchId)` akzeptiert nur den passenden Pending-Batch.
 
-Vor Mutation werden die Usage-Cursor vollständig validiert:
+Vor Mutation werden Usage-Cursor validiert:
 
 - Snapshot nicht negativ;
 - aktueller Counter darf nicht unter Snapshot liegen;
@@ -113,7 +139,8 @@ Erst beim gültigen ACK:
 
 - Exportcursor → eingefrorener Snapshot;
 - Pending-Batch wird entfernt;
-- neue Usage oberhalb des Snapshots bleibt für den nächsten Batch erhalten.
+- neue Usage oberhalb des Snapshots bleibt für den nächsten Batch erhalten;
+- danach darf die Retention bestätigte alte Rohdaten prüfen.
 
 ACK nach bereits erfolgreicher Entfernung ist idempotent.
 
@@ -146,7 +173,9 @@ StorageService.saveState(appState) === true
   ↓
 NativeProtection.acknowledgeDrain(batchId)
   ↓
-Native export cursor + pending batch finalisieren
+Native Exportcursor + Pending Batch finalisieren
+  ↓
+Best-effort Retention bestätigter alter Rohcounter
 ```
 
 ACK wird **nicht** gesendet, wenn der Batch-tragende State nicht erfolgreich gespeichert wurde.
@@ -177,7 +206,7 @@ ACK wird **nicht** gesendet, wenn der Batch-tragende State nicht erfolgreich ges
 
 Ein Vollreset darf keinen alten Pending-Batch oder finalen `onDestroy()`-Usage-Flush in den frischen App-State zurückbringen.
 
-Native Reset verwendet deshalb:
+Native Reset verwendet:
 
 ```text
 factory_reset_pending_v1
@@ -188,7 +217,7 @@ Ablauf:
 1. `factoryResetProtectionData()` löscht Native-Preferences und setzt den Tombstone atomar;
 2. danach wird der Schutzdienst gestoppt;
 3. ein verspäteter finaler Service-Flush darf noch in dieselben Preferences schreiben;
-4. bevor ein späterer Drain etwas ausliefern kann, gewinnt der Tombstone und löscht diese Restdaten;
+4. vor jedem späteren Drain gewinnt der Tombstone und löscht diese Restdaten;
 5. falls nach Reset bereits eine **frische** Schutzkonfiguration synchronisiert wurde, bleiben ausschließlich die neuen Config-/Unavailable-Werte erhalten;
 6. Usage, Events, alte Lifecycle-Werte und Pending-Batches werden nicht wiederhergestellt.
 
@@ -196,7 +225,7 @@ React löscht Web-State und Commitment erst **nach** erfolgreicher Native-Reset-
 
 Native Config-Sync und Drain laufen außerdem erst nach abgeschlossenem Onboarding.
 
-## 6. Test-/Source-Vertrag für NP-03
+## 6. Test-/Source-Vertrag
 
 Vorbereitet:
 
@@ -206,8 +235,13 @@ Vorbereitet:
   - neue Events während Pending-Batch;
   - Usage oberhalb Snapshot;
   - idempotentes ACK;
-  - Reset-Tombstone gegen late writes;
+  - Reset-Tombstone gegen Late Writes;
   - Erhalt ausschließlich frischer Post-Reset-Konfiguration.
+- `NativeRetentionInstrumentedTest.java`
+  - Current/Previous-Day Retention;
+  - alte vollständig bestätigte Usage;
+  - unbestätigte Usage;
+  - malformed/fremde Keys.
 - `nativeDrainJournal.test.ts`
   - genau-einmalige React-Anwendung;
   - Batch-Wechsel;
@@ -220,17 +254,17 @@ Vorbereitet:
   - Factory-Reset-Bestätigung;
   - Browser-No-op.
 - `App.nativeDrainAck.test.tsx`
-  - gespeicherte Stats/History/Batch-ID vor ACK;
+  - Stats/History/Batch-ID vor ACK;
   - kein ACK bei fehlgeschlagener Persistenz.
 - `App.commitmentActivation.test.tsx`
   - Vollreset verwendet Native Factory Reset;
   - Native-Reset-Fehler lässt Web-State/Commitment unangetastet.
-- `scripts/check-native-drain-ack.ts`
-  - schützt die Source-Reihenfolge und Pflichtfälle.
-- `npm run check:native-drain-ack`
-  - Bestandteil von `npm run verify`.
+- `scripts/check-native-drain-ack.ts`;
+- `scripts/check-native-retention.ts`.
 
-**Wichtig:** Diese Tests sind im Source vorhanden, aber aufgrund des GitHub-Actions-Billing-Blockers noch nicht real ausgeführt. Implementierung ist deshalb nicht gleich Release-Evidence.
+Beide Source-Gates sind Bestandteil von `npm run verify`.
+
+**Wichtig:** Die Tests sind im Source vorhanden, aber aufgrund des GitHub-Actions-Billing-Blockers noch nicht real ausgeführt. Implementierung ist deshalb nicht gleich Release-Evidence.
 
 ## 7. NP-04 – Lifecycle-Diagnostik bewusst synchron
 
@@ -246,19 +280,20 @@ Diese Writes sind selten und besitzen hohe Durability-Bedeutung. Sie werden nich
 - UUID-Batch-ID;
 - Replay vor ACK;
 - Usage-Cursor erst beim ACK;
-- React-Dedup-Marker in transaktionalem Settings-Chunk;
+- React-Dedup-Marker im transaktionalen Settings-Chunk;
 - Save-before-ACK;
 - Crash-Replay ohne Doppeladdition;
 - Factory-Reset-Tombstone;
 - Reset fail closed bei Native-Cleanup-Fehler;
+- Retention für alte Ephemeral-Counter und vollständig bestätigte Raw-Usage;
+- 30-Tage-Native-Raw-Usage-Horizont;
 - Source-/Vitest-/Instrumentation-Verträge vorbereitet.
 
 ### Vor v1 weiterhin zwingend
 
-- neue ACK-/Reset-Tests real ausführen;
+- ACK-/Reset-/Retention-Tests real ausführen;
 - `npm run verify` + Android JUnit + Instrumentation + `assembleDebug` erfolgreich durchführen;
-- Retention-Policy nach erfolgreicher Regression sicher verdrahten;
-- periodischen Main-Thread-Usage-Commit technisch entschärfen;
+- periodischen Main-Thread-Usage-Commit technisch entschärfen oder auf realen Geräten belastbar als unkritisch nachweisen;
 - Prozesskill-/Mitternacht-/DST-Fälle auf Gerät ausführen;
 - 12h-/OEM-Batterie-/Reliability-Baseline durchführen.
 
@@ -268,10 +303,10 @@ Diese Writes sind selten und besitzen hohe Durability-Bedeutung. Sie werden nich
 
 ## 9. Nächste Engineering-Schritte
 
-1. ACK-/Reset-Source und Testkette auf einem echten Runner ausführen.
+1. ACK-/Reset-/Retention-Kette auf einem echten Runner ausführen.
 2. Fehler beheben, bis Verify/JUnit/Instrumentation/Debug-Build grün sind.
-3. Retention für alte Open-/Emergency-Counter und vollständig bestätigte Usage sicher verdrahten.
-4. periodischen Usage-Flush vom Service-Main-Thread entkoppeln.
+3. periodischen Usage-Flush als isolierten Worker-/In-Flight-Block umbauen.
+4. Tageslimit-Korrektheit während In-Flight-Flush explizit testen.
 5. reale Process-Kill-/Crash-Replay-Fälle durchführen.
 6. 12h/OEM-/Mitternacht-/DST-Evidence erfassen.
 
