@@ -257,6 +257,24 @@ public class ScrollShieldNativePlugin extends Plugin {
         call.resolve(result);
     }
 
+    @PluginMethod
+    public void factoryResetProtectionData(PluginCall call) {
+        Context context = getContext();
+        synchronized (EVENT_LOCK) {
+            if (!NativeDrainBatchStore.markFactoryReset(getPreferences())) {
+                call.reject("Native protection data could not be marked for factory reset");
+                return;
+            }
+        }
+
+        // The tombstone survives any final service onDestroy usage flush. NativeDrainBatchStore
+        // clears it together with any such late writes before a future drain can expose data.
+        context.stopService(new Intent(context, ScrollShieldProtectionService.class));
+        JSObject result = new JSObject();
+        result.put("resetPendingCleanup", true);
+        call.resolve(result);
+    }
+
     public static void appendProtectionEvent(
         Context context,
         String type,
