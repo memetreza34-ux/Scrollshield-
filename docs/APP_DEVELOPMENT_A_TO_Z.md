@@ -8,13 +8,11 @@ Dieses Dokument ist der Einstiegspunkt für die gesamte ScrollShield-Entwicklung
 
 > **Was müssen wir von der Produktidee bis zur veröffentlichten und wartbaren App tun, in welcher Reihenfolge und welcher Nachweis beendet jede Stufe?**
 
-Die frühere lange A–Z-Liste wurde bewusst zu **15 Entwicklungs-Gates** verdichtet. Spezialthemen besitzen eigene Detaildokumente. Dadurch bleibt der Prozess klar, während technische Tiefe nicht verloren geht.
-
-Der aktuelle Live-Status aller Gates steht in `docs/DEVELOPMENT_GATES_STATUS.md`.
+ScrollShield arbeitet mit **15 Entwicklungs-Gates**. Der aktuelle Ist-Stand steht in `docs/DEVELOPMENT_GATES_STATUS.md`. Detailthemen besitzen eigene Spezialdokumente, damit dieses Master-Handbuch kurz genug bleibt, um tatsächlich benutzt zu werden.
 
 ---
 
-# 0. Nicht verhandelbare Grundregel
+# 0. Grundregel
 
 Eine Funktion oder Release-Stufe ist nur abgeschlossen, wenn drei Dinge zusammenpassen:
 
@@ -24,7 +22,7 @@ Eine Funktion oder Release-Stufe ist nur abgeschlossen, wenn drei Dinge zusammen
 
 Source-Code, Dokumentation, ein Source-Checker oder eine grüne UI-Anzeige allein sind kein vollständiger Release-Nachweis.
 
-Für sicherheitsrelevante Zustände gilt zusätzlich:
+Für sicherheitsrelevante Zustände gilt:
 
 > **Die UI darf niemals mehr Schutz behaupten, als Android tatsächlich bestätigt.**
 
@@ -57,7 +55,7 @@ ScrollShield legt auf Android eine vom Nutzer konfigurierte Entscheidungsebene v
 - AI-/ML-Suchtklassifikation;
 - kaufbares Pro ohne vollständigen Billing-/Entitlement-Lifecycle.
 
-Die prüfbaren Anforderungen stehen in `docs/PRODUCT_REQUIREMENTS.md`.
+Prüfbare Anforderungen: `docs/PRODUCT_REQUIREMENTS.md`.
 
 ---
 
@@ -114,42 +112,33 @@ React verwaltet Produktzustand, Einstellungen, Historie, Backup und verständlic
 
 ---
 
-# 3. Das 15-Gate-System
+# 3. Die 15 Entwicklungs-Gates
 
 ## G0 – Produkt & Requirements
 
-### Ziel
+**Ziel:** Problem, Zielgruppe, v1-Scope, Nicht-Ziele, User Stories und Akzeptanzkriterien festlegen.
 
-Problem, Zielgruppe, v1-Scope, Nicht-Ziele, User Stories und messbare Akzeptanzkriterien festlegen.
+Pflicht:
 
-### Pflicht
-
-- Produktproblem in einem Satz;
-- primäre Zielgruppe;
-- Must-have-/Nicht-Ziel-Liste;
-- jede v1-Kernfunktion mit Akzeptanzkriterien;
+- Produktproblem und Zielgruppe;
+- Must-have-/Nicht-Ziele;
+- jede v1-Kernfunktion mit messbaren Akzeptanzkriterien;
 - keine Store-Claims ohne Build-Funktion;
-- reale Nutzerforschung planen und später durchführen.
+- reale Nutzerforschung vor breitem Production-Rollout.
 
-### ScrollShield-Dokumente
+Dokumente:
 
 - `docs/PRODUCT_REQUIREMENTS.md`
 - `ROADMAP.md`
 - `docs/COMPETITIVE_PRODUCT_STRATEGY.md`
 
-### Gate-Ende
-
-Requirements sind formalisiert. G0 bleibt für v1 so lange **TEILWEISE**, bis reale Nutzerforschung mit neuen Nutzern dokumentiert wurde.
+G0 bleibt für v1 **TEILWEISE**, bis echte Nutzerforschung dokumentiert ist.
 
 ---
 
 ## G1 – Architektur & Repo-Prozess
 
-### Ziel
-
-Verantwortlichkeiten und Änderungspfad vor Feature-Coding festlegen.
-
-### Repo-Struktur
+**Ziel:** Verantwortlichkeiten und Änderungspfad vor Feature-Coding festlegen.
 
 ```text
 src/                      React/TypeScript Produktcode
@@ -157,13 +146,13 @@ src/screens/              Screens
 src/components/           UI-Komponenten
 src/lib/                  Storage, Policies, Bridges, Logik
 android/                  natives Android-Projekt
-scripts/                  überprüfbare Source-/Release-Verträge
+scripts/                  Source-/Release-Verträge
 docs/                     Produkt, Technik, Tests, Release
 config/                   Release-Freigabe
 .github/workflows/         CI
 ```
 
-### Branch-Regel aktueller Release
+Aktueller Release-Pfad:
 
 ```text
 main
@@ -175,50 +164,31 @@ Draft PR #8
 agent/release-foundation
 ```
 
-Keine direkte Produktion aus einem ungetesteten Arbeitsstand. Keine Evidence auf `true`, solange sie nicht real existiert.
+Keine positive Release-Evidence ohne reale Ausführung.
 
 ---
 
 ## G2 – Datenmodell & Migration
 
-### Ziel
+**Ziel:** Datenverlust und stillen Schema-Drift verhindern.
 
-Datenverlust und stillen Schema-Drift verhindern.
+Für neue Funktionen definieren:
 
-Für jedes neue Feature vor UI-Arbeit definieren:
-
-- TypeScript-Datentyp;
-- Default;
-- Validierungsgrenzen;
-- alte Daten;
-- Export/Import;
-- Reset;
+- Datentyp/Default/Validierung;
+- Verhalten alter Daten;
+- Export/Import/Reset;
 - Native-Sync;
-- Downgrade-/Deaktivierungsverhalten.
+- Downgrade-/Feature-Deaktivierung.
 
-### ScrollShield-Sonderregel
+ScrollShield-Sonderregel: V0.7-/Legacy-Daten dürfen nicht still verloren gehen. Source-Migration, Recovery und bytegenaues Archiv sind bereits stark; das Gate endet erst nach realem V0.7-Gerätetest mit Evidence.
 
-V0.7-/Legacy-Daten besitzen hohen Schutzstatus.
-
-Nicht erlaubt:
-
-- Legacy-Daten still löschen;
-- beschädigte Migration als Erfolg markieren;
-- alte generierte Regeln automatisch aktivieren;
-- bytegenaues Legacy-Archiv überschreiben;
-- normale Saves während ungelöster Migration erzwingen.
-
-Details: `docs/DATA_MIGRATION.md`.
-
-### Gate-Ende
-
-Source-Migration + Regressionstests + realer V0.7-Gerätetest + bytegenaue Evidence.
+Detail: `docs/DATA_MIGRATION.md`.
 
 ---
 
 ## G3 – UI/UX & Accessibility
 
-### Reihenfolge pro Feature
+Reihenfolge pro Feature:
 
 1. Zustand und Nutzerziel;
 2. Happy Path;
@@ -228,27 +198,14 @@ Source-Migration + Regressionstests + realer V0.7-Gerätetest + bytegenaue Evide
 6. Accessibility;
 7. erst danach Animation/Polish.
 
-### ScrollShield-Prinzipien
+Prinzipien:
 
-- ruhig und klar;
-- keine Fake-Erfolgsmeldung;
-- reale Systemzustände statt simulierte Berechtigungen;
+- keine Fake-Erfolgsmeldungen;
+- echte Systemzustände statt simulierte Berechtigungen;
 - kritische Exit-/Recovery-Aktionen erreichbar;
 - keine Trap-UX.
 
-### Kritische Statuswahrheit
-
-`running=false` darf nie als aktiver Android-Schutz erscheinen. Ein Stop ist erst bestätigt, wenn Android den Dienst tatsächlich nicht mehr als laufend meldet.
-
-### Pflicht-Evidenz
-
-- React-/Source-A11y;
-- große Schrift;
-- Display Scaling;
-- Tastatur im Emergency Flow;
-- Rotation/Multi Window;
-- TalkBack Smoke Test;
-- neue Nutzer ohne Vorwissen.
+Pflicht-Evidenz umfasst große Schrift, Display Scaling, Tastatur im Emergency Flow, Rotation/Multi Window, TalkBack-Smoke-Test und Beobachtung neuer Nutzer.
 
 ---
 
@@ -256,19 +213,8 @@ Source-Migration + Regressionstests + realer V0.7-Gerätetest + bytegenaue Evide
 
 Native Android ist der sicherheitskritischste Produktteil.
 
-### Pflichtprinzipien
+Aktuell notwendige Manifest-Berechtigungen:
 
-- Schutz wird bewusst eingerichtet;
-- laufender Foreground Service ist sichtbar;
-- sicherer Stop/Exit existiert;
-- Permission-Verlust führt zu ehrlichem Zustand;
-- Boot/App-Update-Recovery nur bei gültigen Voraussetzungen;
-- keine breite Package-Inventarisierung;
-- Whole-App-Scope ehrlich kommunizieren.
-
-Aktuelle relevante Permissions:
-
-- `INTERNET`
 - `RECEIVE_BOOT_COMPLETED`
 - `PACKAGE_USAGE_STATS`
 - `SYSTEM_ALERT_WINDOW`
@@ -276,7 +222,18 @@ Aktuelle relevante Permissions:
 - `FOREGROUND_SERVICE`
 - `FOREGROUND_SERVICE_SPECIAL_USE`
 
-Jede Permission muss technisch, in der UI und im Store dieselbe Begründung besitzen.
+**Bewusste v1-Entscheidung:** `android.permission.INTERNET` ist aus dem Android-Manifest entfernt. ScrollShield v1 besitzt keine dokumentierte Runtime-Netzwerkfunktion; der Privacy-Checker verhindert eine stille Wiedereinführung ohne vorherige Revision des Privacy-/Store-Vertrags.
+
+Weitere Regeln:
+
+- Schutz wird bewusst eingerichtet;
+- Foreground Service ist sichtbar;
+- sicherer Stop/Exit existiert;
+- Permission-Verlust führt zu ehrlichem Zustand;
+- Boot/App-Update-Recovery nur bei gültigen Voraussetzungen;
+- scoped Package Visibility statt `QUERY_ALL_PACKAGES`;
+- kein Accessibility Service in Android v1;
+- Whole-App-Scope ehrlich kommunizieren.
 
 Details:
 
@@ -289,22 +246,24 @@ Details:
 
 ## G5 – Security, Privacy & Supply Chain
 
-### Ziel
-
-Nicht nur Features bauen, sondern Trust Boundaries, Missbrauch, Dependencies und reale Privacy-Auswirkungen prüfen.
-
-### Pflicht
+Pflicht:
 
 - Threat Model;
 - P0–P3-Sicherheitsseverity;
-- Eingabe-/Import-Validierung;
+- Import-/Eingabevalidierung;
 - sichere Exit-Pfade;
 - Secret-Schutz;
 - minimale Permissions;
 - Dependency-Prüfung;
-- GitHub Actions pinnen;
+- GitHub Actions auf immutable SHA;
 - finaler Dependency-/Manifest-/Binary-Audit;
-- Data Safety nach jeder relevanten SDK-Änderung neu prüfen.
+- Data Safety nach relevanten SDK-Änderungen neu prüfen.
+
+Aktuelle Offline-First-Härtung:
+
+- keine `INTERNET`-Permission im Android-v1-Manifest;
+- Production-CSP `connect-src 'self'`;
+- Privacy-Checker blockiert `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, bekannte Tracking-SDKs/-Marker und die erneute Android-INTERNET-Permission.
 
 Details:
 
@@ -314,64 +273,30 @@ Details:
 - `PRIVACY_POLICY_STRUCTURE.md`
 - `STORE_PRIVACY_LABELS.md`
 
-### Besonderer offener Auditpunkt
-
-ScrollShield ist offline-first, besitzt aber `INTERNET`. Vor v1 muss bewusst bestätigt werden, ob die Permission im finalen Android-Produkt technisch benötigt wird. Der signierte AAB darf keine unerwarteten Netzwerk-/SDK-Eigenschaften besitzen.
-
 ---
 
 ## G6 – Automatisierte Verifikation
 
-Zentraler Befehl:
+Zentrale Befehle:
 
 ```bash
 npm ci
 npm run verify
-```
-
-Der Verify-Vertrag umfasst unter anderem:
-
-- Runtime;
-- TypeScript/ESLint/Prettier;
-- Versionskonsistenz;
-- Android-Source-Verträge;
-- Device-Matrix-Vertrag;
-- Lifecycle;
-- Diagnose-Normalisierung;
-- Overlay Accessibility;
-- Usage Accounting;
-- Protection Config;
-- Commitment;
-- Subscription Safety;
-- Migration;
-- Release Approval;
-- Transparency;
-- SDK/Notices/Secrets;
-- Store/Privacy;
-- Vitest;
-- Production Build/PWA;
-- Bundle Budget.
-
-Danach Android:
-
-```bash
 cd android
 ./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace
 ```
 
-Ein Source-Checker beweist nur einen Source-Vertrag. Er ersetzt keine Android-Ausführung.
+`npm run verify` schützt unter anderem Runtime, TypeScript, Lint/Format, Android-Verträge, Lifecycle, Diagnose, Usage Accounting, Protection Config, Commitment, Subscription Safety, Migration, Release Approval, Transparency, SDKs/Notices/Secrets, Store/Privacy, Tests, Production Build, PWA und Bundle Budget.
 
-### Aktueller externer Blocker
+Ein Source-Checker ersetzt keine Android-Ausführung.
 
-GitHub Actions wird derzeit vor Step 1 wegen Account-Billing/Spending-Limit beendet. Solange kein echter Lauf stattgefunden hat, ist G6 **BLOCKIERT**, nicht bestanden.
+**Aktueller externer Blocker:** GitHub Actions wird derzeit vor Step 1 wegen Account-Billing/Spending-Limit beendet. Bis ein echter Lauf existiert, ist G6 **BLOCKIERT**, nicht bestanden.
 
-Details: `docs/ENGINEERING_CHECKS.md`.
+Detail: `docs/ENGINEERING_CHECKS.md`.
 
 ---
 
 ## G7 – Android Instrumentation / E2E
-
-Pure Java-Policies und React-Tests reichen für kritische Android-Systemflüsse nicht allein.
 
 Vor Production ausbauen für:
 
@@ -405,7 +330,7 @@ Messbereiche:
 
 Keine erfundenen Batterie-Prozentbudgets. Erst reale Baseline, dann Grenzwert.
 
-Details: `docs/PERFORMANCE_RELIABILITY.md`.
+Detail: `docs/PERFORMANCE_RELIABILITY.md`.
 
 ---
 
@@ -423,46 +348,28 @@ Pflichtgeräte/-klassen:
 - API 26;
 - Android 13+.
 
-Pflichtszenarien umfassen unter anderem:
-
-- Permissions erteilen/entziehen;
-- Notification Channel verlieren;
-- letzte Ziel-App entfernen;
-- letzte Regel entfernen;
-- Reboot/App-Update/Force Stop;
-- Migration;
-- Commitment;
-- Adaptive Friction;
-- Emergency;
-- Battery Saver/12h;
-- Uhr/Zeitzone/DST;
-- Accessibility.
+Pflichtszenarien: Permissions, Channel-Verlust, letzte Ziel-App/Regel, Reboot/App-Update/Force Stop, Migration, Commitment, Adaptive Friction, Emergency, 12h/Battery Saver, Uhr/Zeitzone/DST und Accessibility.
 
 Jeder Test gehört zu exakter Version, Build und Candidate SHA.
 
-Details: `docs/ANDROID_DEVICE_TEST_MATRIX.md`.
+Detail: `docs/ANDROID_DEVICE_TEST_MATRIX.md`.
 
 ---
 
 ## G10 – Release Candidate Freeze & Evidence
 
-Sobald ernsthaft Release-Evidence gesammelt wird:
+Sobald Release-Evidence gesammelt wird:
 
 - `versionName` festlegen;
 - `versionCode` festlegen;
 - Candidate Commit SHA festhalten;
 - danach keine heimlichen Produktänderungen.
 
-`config/release-approval.json` verwendet Evidence-Schema v2.
-
-Ein positives Flag braucht:
-
-- passende Candidate SHA;
-- konkrete Evidence-Referenz.
+`config/release-approval.json` verwendet Evidence-Schema v2. Ein positives Flag braucht passende Candidate SHA und konkrete Evidence-Referenz.
 
 Nach finalem Candidate-Test darf nur die Approval-Datei fortgeschrieben werden. Jede andere Produkt-/Releaseänderung verlangt einen neuen Kandidaten und Retest.
 
-Details: `docs/RELEASE_EVIDENCE.md`.
+Detail: `docs/RELEASE_EVIDENCE.md`.
 
 ---
 
@@ -476,9 +383,7 @@ Vor Store-Einreichung:
 - App-interner Privacy-Zugang;
 - Daten-/Permission-Erklärungen;
 - keine Platzhalter;
-- finale Angaben gegen den signierten Build prüfen.
-
-Keine Rechts-/Store-Aussage nur aus altem Quellcode übernehmen.
+- finale Angaben gegen signierten Build prüfen.
 
 ---
 
@@ -486,9 +391,7 @@ Keine Rechts-/Store-Aussage nur aus altem Quellcode übernehmen.
 
 Benötigt:
 
-- App-Name und Kategorie;
-- Store Listing;
-- Icon/Screenshots/ggf. Feature Graphic;
+- Store Listing/Assets;
 - Content Rating;
 - Data Safety;
 - App Access;
@@ -505,34 +408,25 @@ Details:
 - `docs/STORE_SUBMISSION_PACKET.md`
 - `docs/store-assets/`
 
-### Zeitabhängige Regeln
-
-Play-Regeln ändern sich. Vor jedem Release erneut aktuelle offizielle Anforderungen prüfen. Der derzeit dokumentierte Stand ist auf 16. August 2026 datiert; targetSdk 36 ist für die unmittelbar bevorstehende API-Frist bereits vorbereitet.
+Play-Regeln sind zeitabhängig und werden vor jedem Release erneut gegen offizielle Quellen geprüft.
 
 ---
 
 ## G13 – Signing, AAB, Internal & Closed Testing
 
-### Signing
-
 - Keystore niemals committen;
 - sichere Backups;
 - Play App Signing bewusst konfigurieren;
-- Package-ID vor erstem öffentlichen Release endgültig bestätigen.
-
-### Artefakte
-
-- Debug APK zum Engineering-Test;
-- signierter AAB für Play;
+- Package-ID vor erstem öffentlichen Release endgültig bestätigen;
 - finalen Manifest-/Dependency-/Permission-Snapshot archivieren.
 
-### Testtracks
+Testtracks:
 
 1. Internal Testing;
 2. Closed Testing;
 3. erst danach Production.
 
-Für betroffene neue private Play-Konten muss die eigene Play Console bestätigen, ob die derzeit geltende 12-Tester-/14-Tage-Regel erfüllt werden muss.
+Kontoabhängige Play-Testanforderungen werden in der eigenen Console erneut bestätigt.
 
 ---
 
@@ -540,16 +434,12 @@ Für betroffene neue private Play-Konten muss die eigene Play Console bestätige
 
 Nicht direkt 100 % ausrollen.
 
-### Production
-
 - kleiner Rollout;
 - Android Vitals/Support beobachten;
 - bei kritischer Verschlechterung pausieren;
 - stufenweise erhöhen.
 
-### Incident Response
-
-P0/P1 kann Rollout stoppen. Hotfix ist immer ein neuer Kandidat mit neuer `versionCode`, Candidate SHA und passender Regression/Evidence.
+P0/P1 kann Rollout stoppen. Ein Hotfix ist ein neuer Kandidat mit neuer `versionCode`, Candidate SHA und passender Regression/Evidence.
 
 Details:
 
@@ -562,12 +452,11 @@ Details:
 
 Ein Feature ist erst fertig, wenn:
 
-- [ ] Produktanforderung/User Story vorhanden oder Scope-Erweiterung bewusst dokumentiert ist.
+- [ ] Produktanforderung/User Story oder bewusste Scope-Erweiterung dokumentiert ist.
 - [ ] Akzeptanzkriterien definiert sind.
 - [ ] Datenmodell/Default/Validierung definiert sind.
 - [ ] Migrations-/Bestandsdatenwirkung geprüft ist.
-- [ ] Happy Path funktioniert.
-- [ ] Fehler-/Busy-/Empty-Zustände funktionieren.
+- [ ] Happy Path und Fehler-/Busy-/Empty-Zustände funktionieren.
 - [ ] Accessibility berücksichtigt ist.
 - [ ] Persistenz/Import/Export/Reset berücksichtigt sind.
 - [ ] Native Android-Auswirkung geprüft ist.
@@ -587,28 +476,22 @@ Ein Feature ist erst fertig, wenn:
 Ein Release ist erst fertig, wenn:
 
 - [ ] v1-Scope eingefroren ist.
-- [ ] Package-ID final ist.
-- [ ] Version Name/Code final sind.
+- [ ] Package-ID und Version Name/Code final sind.
 - [ ] Requirements/Claims zum Build passen.
-- [ ] `npm ci` erfolgreich ist.
-- [ ] `npm run verify` vollständig erfolgreich ist.
-- [ ] Android JUnit erfolgreich ist.
-- [ ] `assembleDebug` erfolgreich ist.
+- [ ] `npm ci` und `npm run verify` vollständig erfolgreich sind.
+- [ ] Android JUnit und `assembleDebug` erfolgreich sind.
 - [ ] kritische Android-Instrumentation erfolgreich ist.
 - [ ] Debug APK auf echter Hardware läuft.
 - [ ] Physical Device Matrix vollständig ist.
 - [ ] Lifecycle-/Commitment-/Adaptive-Fälle je aktivem Feature bestanden sind.
-- [ ] V0.7-Migration real validiert ist.
-- [ ] Export/Reset/Import real validiert ist.
+- [ ] V0.7-Migration und Export/Reset/Import real validiert sind.
 - [ ] 12h-/Performance-/Reliability-Evidence vorliegt.
 - [ ] Threat-Model-Blocker geschlossen sind.
 - [ ] Dependency-/Manifest-/Supply-Chain-Audit vorliegt.
 - [ ] Privacy Policy öffentlich erreichbar und final ist.
-- [ ] Support-Adresse funktioniert.
-- [ ] rechtliche Angaben final sind.
+- [ ] Support-/Legal-Angaben final sind.
 - [ ] Store Listing/Screenshots zum finalen Build passen.
-- [ ] Data Safety gegen finalen Binary geprüft ist.
-- [ ] Foreground-Service-/Permission-Deklarationen final sind.
+- [ ] Data Safety und Permission-/FGS-Deklarationen gegen finalen Binary geprüft sind.
 - [ ] Reviewer-Videos denselben Kandidaten zeigen.
 - [ ] signierter AAB geprüft ist.
 - [ ] erforderliche Play-Testtrack-Bedingungen erfüllt sind.
@@ -619,12 +502,12 @@ Ein Release ist erst fertig, wenn:
 
 ---
 
-# 6. Pflichtdokumente und Zuständigkeit
+# 6. Pflichtdokumente
 
 ## Master / Status
 
-- `docs/APP_DEVELOPMENT_A_TO_Z.md` – Prozess und Reihenfolge
-- `docs/DEVELOPMENT_GATES_STATUS.md` – aktueller Ist-Stand
+- `docs/APP_DEVELOPMENT_A_TO_Z.md`
+- `docs/DEVELOPMENT_GATES_STATUS.md`
 
 ## Produkt
 
@@ -644,7 +527,7 @@ Ein Release ist erst fertig, wenn:
 - `docs/COMMITMENT_MODE.md`
 - `docs/ADAPTIVE_FRICTION.md`
 
-## Security / Privacy
+## Security / Privacy / Supply Chain
 
 - `docs/THREAT_MODEL.md`
 - `docs/SUPPLY_CHAIN_SECURITY.md`
@@ -680,11 +563,9 @@ Ein Release ist erst fertig, wenn:
 
 Der nächste Arbeitsblock kommt grundsätzlich aus dem **frühesten offenen Gate**, nicht aus dem spannendsten neuen Feature.
 
-Aktuelle Reihenfolge:
-
 1. G0 Requirements formal halten und User-Research-Evidence vorbereiten.
-2. G5 Security/Supply-Chain-Audit weiter schließen.
-3. G8 Performance-/Retention-Messvertrag in Source/Tests übersetzen.
+2. G5 Security/Supply-Chain weiter schließen.
+3. G8 Performance-/Retention-Vertrag in Source/Tests übersetzen.
 4. G6 GitHub-Actions-Blocker extern beheben und vollständigen Verify-Lauf ausführen.
 5. Fehler aus G6 reparieren und wiederholen.
 6. G7 kritische Android-Instrumentation ausbauen.
@@ -701,10 +582,6 @@ Bis G6–G9 belastbar sind, keine unnötigen großen Produktblöcke beginnen, di
 ---
 
 # 8. Wichtigster Projektgrundsatz
-
-ScrollShield soll nicht nur „im Store sein“.
-
-Das Ziel ist:
 
 > **Wir wissen, welche Funktionen im Build sind, welche Anforderungen sie erfüllen, welche Daten und Berechtigungen sie berühren, welche Risiken existieren, wie jede kritische Funktion getestet wurde und welcher konkrete Kandidat diese Nachweise bestanden hat.**
 
