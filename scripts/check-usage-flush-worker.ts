@@ -2,14 +2,20 @@ import { readFile } from 'node:fs/promises';
 
 const coordinatorPath =
   'android/app/src/main/java/app/scrollshield/mobile/UsageFlushCoordinator.java';
-const testPath =
+const coordinatorTestPath =
   'android/app/src/test/java/app/scrollshield/mobile/UsageFlushCoordinatorTest.java';
+const workerPath =
+  'android/app/src/main/java/app/scrollshield/mobile/UsageFlushWorker.java';
+const workerTestPath =
+  'android/app/src/test/java/app/scrollshield/mobile/UsageFlushWorkerTest.java';
 const servicePath =
   'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldProtectionService.java';
 
-const [coordinator, tests, service] = await Promise.all([
+const [coordinator, coordinatorTests, worker, workerTests, service] = await Promise.all([
   readFile(coordinatorPath, 'utf8'),
-  readFile(testPath, 'utf8'),
+  readFile(coordinatorTestPath, 'utf8'),
+  readFile(workerPath, 'utf8'),
+  readFile(workerTestPath, 'utf8'),
   readFile(servicePath, 'utf8'),
 ]);
 
@@ -41,7 +47,7 @@ requirePattern(
   coordinatorPath,
   coordinator,
   /getUnpersistedUsageMs\([\s\S]*pendingUsageMs\.getOrDefault[\s\S]*activeBatch\.increments\.getOrDefault[\s\S]*saturatingAdd/,
-  'Daily-limit accounting must be able to include both pending and in-flight usage.',
+  'Daily-limit accounting must include both pending and in-flight usage.',
 );
 requirePattern(
   coordinatorPath,
@@ -61,16 +67,68 @@ for (const testName of [
   'accountingSaturatesInsteadOfOverflowingNegative',
 ]) {
   requirePattern(
-    testPath,
-    tests,
+    coordinatorTestPath,
+    coordinatorTests,
     new RegExp(`void\\s+${testName}\\s*\\(`),
-    `JUnit must cover ${testName}.`,
+    `Coordinator JUnit must cover ${testName}.`,
+  );
+}
+
+requirePattern(
+  workerPath,
+  worker,
+  /Executors\.newSingleThreadExecutor/,
+  'Production worker factory must use a serialized single-thread executor.',
+);
+requirePattern(
+  workerPath,
+  worker,
+  /executor\.execute\(\(\) -> persistAndComplete\(batch\)\)/,
+  'Batch persistence must be dispatched to the worker executor.',
+);
+requirePattern(
+  workerPath,
+  worker,
+  /catch \(RejectedExecutionException error\)[\s\S]*completeFlush\(batch\.id, false/,
+  'Executor rejection must return the active batch to pending accounting.',
+);
+requirePattern(
+  workerPath,
+  worker,
+  /persistAndComplete\([\s\S]*writer\.write\(batch\)[\s\S]*catch \(RuntimeException error\)[\s\S]*finally[\s\S]*completeFlush\(batch\.id, success/,
+  'Writer failure or exception must always complete the coordinator with an explicit result.',
+);
+requirePattern(
+  workerPath,
+  worker,
+  /persistBatch\([\s\S]*preferences\.getLong\(key, 0L\)[\s\S]*editor\.putLong[\s\S]*return editor\.commit\(\)/,
+  'SharedPreferences persistence must remain synchronous inside the worker so commit failure is observable.',
+);
+requirePattern(
+  workerPath,
+  worker,
+  /public void close\(\)[\s\S]*executor\.shutdown\(\)/,
+  'Worker must expose orderly executor shutdown.',
+);
+
+for (const testName of [
+  'successfulBackgroundWriteCompletesMatchingBatch',
+  'commitFailureMergesBatchBackIntoPendingAccounting',
+  'writerExceptionAlsoMergesBatchBack',
+  'newUsageRemainsCountedWhileWorkerIsBlocked',
+  'closedWorkerRejectsBatchAndReturnsItToPending',
+]) {
+  requirePattern(
+    workerTestPath,
+    workerTests,
+    new RegExp(`void\\s+${testName}\\s*\\(`),
+    `Worker JUnit must cover ${testName}.`,
   );
 }
 
 // This checker deliberately records the remaining integration boundary instead of pretending the
 // main-thread problem is already solved. Once the service is migrated, this marker must disappear
-// and the checker will be tightened to require the executor-backed integration.
+// and the checker must be tightened to require actual coordinator/worker wiring in the service.
 requirePattern(
   servicePath,
   service,
@@ -85,5 +143,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Usage flush worker foundation check passed. Lossless pending/in-flight/failure semantics are present; service executor integration remains explicitly open.',
+  'Usage flush worker foundation check passed. Coordinator + serialized writer are guarded; productive service integration remains explicitly open.',
 );
