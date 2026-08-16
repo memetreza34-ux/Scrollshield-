@@ -131,4 +131,36 @@ public class NativeDrainBatchInstrumentedTest {
         assertTrue(NativeDrainBatchStore.acknowledge(preferences, batch.batchId));
         assertTrue(NativeDrainBatchStore.acknowledge(preferences, batch.batchId));
     }
+
+    @Test
+    public void factoryResetTombstoneDeletesLateServiceFlushBeforeAnyReplay() throws Exception {
+        NativeDrainBatchStore.getOrCreate(preferences);
+        assertTrue(NativeDrainBatchStore.markFactoryReset(preferences));
+        assertTrue(preferences.getBoolean(NativeDrainBatchStore.FACTORY_RESET_PENDING_KEY, false));
+
+        // Simulate ScrollShieldProtectionService.onDestroy writing a final usage/event payload after
+        // the reset request. The tombstone must win before a future drain can expose this data.
+        preferences
+            .edit()
+            .putLong(USAGE_KEY, 240_000L)
+            .putString(
+                NativeDrainBatchStore.EVENT_QUEUE_KEY,
+                new JSONArray()
+                    .put(
+                        new JSONObject()
+                            .put("timestamp", 1_786_000_200_000L)
+                            .put("type", "warning")
+                            .put("appId", "system")
+                            .put("desc", "late flush")
+                    )
+                    .toString()
+            )
+            .commit();
+
+        NativeDrainBatchStore.DrainBatch afterReset = NativeDrainBatchStore.getOrCreate(preferences);
+        assertEquals("", afterReset.batchId);
+        assertEquals("[]", afterReset.eventsJson);
+        assertEquals("[]", afterReset.usageJson);
+        assertTrue(preferences.getAll().isEmpty());
+    }
 }
