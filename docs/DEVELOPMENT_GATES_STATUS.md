@@ -26,8 +26,8 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 | G4 | Native Android Schutz | **TEILWEISE** | Usage Access, Overlay, FGS, Regeln, Recovery, Diagnostik und crash-sicherer Native-Datentransfer sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + reale Geräte |
 | G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First-Manifest, Privacy-Guard, gepinnter Gradle-SHA256 und `check:supply-chain` existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-Check + Dependency-/Manifest-Snapshot + finaler Binary-Audit + Threat-Review |
 | G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` und Android-Stufen sind vorbereitet; GitHub Runner stoppt vor Step 1 wegen Billing/Spending-Limit | kompletter echter Verify-Lauf auf exaktem Head |
-| G7 | Android Instrumentation/E2E | **TEILWEISE** | Runtime-State/Lifecycle, Manifest/Permissions, Boot-Recovery, Native-Drain/ACK/Reset und Retention besitzen echte `androidTest`-Verträge; Ausführung sowie weitere Overlay-/Permission-Loss-End-to-End-Fälle fehlen | Instrumentation real ausführen + verbleibende kritische Android-Flows ergänzen |
-| G8 | Performance & Batterie | **TEILWEISE** | `ScrollShieldProtectionService` ist jetzt auf `UsageFlushCoordinator` + `UsageFlushWorker` verdrahtet. Periodische Usage-`commit()`-Writes laufen nicht mehr im Service-Main-Thread; Pending/In-Flight bleibt im Tageslimit sichtbar und Shutdown besitzt einen seriellen Final-Drain. Reale JUnit-/Gradle-/Device-Evidenz fehlt weiterhin | Worker-/Coordinator-JUnit real ausführen + `assembleDebug` + Shutdown/Process-Kill-Regressions + 12h-Baseline |
+| G7 | Android Instrumentation/E2E | **TEILWEISE** | Runtime-State/Lifecycle, Manifest/Permissions, Boot-Recovery, Native-Drain/ACK/Reset, Retention und echter Android-SharedPreferences-Usage-Flush besitzen `androidTest`-Verträge; Ausführung sowie weitere Overlay-/Permission-Loss-/Service-End-to-End-Fälle fehlen | `connectedDebugAndroidTest` real ausführen + verbleibende kritische Android-Flows ergänzen |
+| G8 | Performance & Batterie | **TEILWEISE** | `ScrollShieldProtectionService` ist auf `UsageFlushCoordinator` + `UsageFlushWorker` verdrahtet. Periodische Usage-`commit()`-Writes laufen nicht mehr im Service-Main-Thread; Pending/In-Flight bleibt im Tageslimit sichtbar, Shutdown besitzt einen seriellen Final-Drain und `UsageFlushInstrumentedTest` prüft den Android-SharedPreferences-Pfad im Testvertrag. Reale JUnit-/Instrumentation-/Gradle-/Device-Evidenz fehlt weiterhin | Worker-/Coordinator-JUnit + Usage-Flush-Instrumentation real ausführen + `assembleDebug` + Process-Kill-Regressions + 12h-Baseline |
 | G9 | Physical Device Matrix | **FEHLT** | Matrix ist definiert, aber nicht vollständig ausgeführt | Pflichtgeräte/Szenarien mit Build-ID/Evidenz vollständig dokumentieren |
 | G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Evidence-Schema v2 existiert; Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Kandidaten-SHA + echte Referenzen |
 | G11 | Legal / Privacy / Support | **TEILWEISE** | Dokumente/Struktur existieren; finale reale Identität, Support-Mailbox und öffentliche Privacy-Domain fehlen | keine Platzhalter + überprüfbare öffentliche Angaben |
@@ -62,16 +62,18 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
   - beim Service-Shutdown wird der letzte Usage-Tick erfasst, ein Force-Flush angefordert und danach ein serieller Worker-Drain eingeplant;
   - der Shutdown-Drain verarbeitet Usage, die während eines früheren In-Flight-Writes neu eingetroffen ist, und kann einen fehlgeschlagenen In-Flight-Batch einmal über den finalen Drain erneut versuchen;
   - `UsageFlushCoordinatorTest.java` und `UsageFlushWorkerTest.java` decken State-Machine, Worker-Grenzen und Shutdown-Drain ab;
-  - `check:usage-flush-worker` verlangt jetzt die echte Service-Verdrahtung und verbietet einen direkten `SharedPreferences.commit()` im Protection Service.
-- `check:native-drain-ack`, `check:native-retention` und `check:usage-flush-worker` sind Bestandteil von `npm run verify`.
+  - `UsageFlushInstrumentedTest.java` prüft den Produktions-Worker mit echten Android-`SharedPreferences` sowie Pending Usage während eines blockierten In-Flight-Writes;
+  - `check:usage-flush-worker` verlangt die echte Service-Verdrahtung und verbietet einen direkten `SharedPreferences.commit()` im Protection Service;
+  - `check:android-instrumentation` verlangt den Android-Usage-Flush-Testvertrag.
+- `check:native-drain-ack`, `check:native-retention`, `check:usage-flush-worker` und `check:android-instrumentation` sind Bestandteil von `npm run verify`.
 
 ## Aktueller Arbeitsfokus
 
 ### Jetzt aktiv
 
 1. **G6 extern entsperren:** GitHub Actions Billing/Spending-Limit korrigieren; danach vollständige Verify-/Android-JUnit-/Debug-Build-Kette real ausführen.
-2. **G8 verifizieren:** Coordinator-/Worker-JUnit einschließlich Shutdown-Drain real ausführen, Android-Kompilierung bestätigen und anschließend Shutdown/Process-Kill/12h-Batterie-Evidenz erfassen.
-3. **G7:** verbleibende Overlay-/Permission-Loss-/Service-E2E-Fälle ergänzen und reale Instrumentation ausführen.
+2. **G8 verifizieren:** Coordinator-/Worker-JUnit einschließlich Shutdown-Drain real ausführen, Android-Kompilierung bestätigen und `UsageFlushInstrumentedTest` auf Emulator/Gerät ausführen.
+3. **G7:** verbleibende Permission-Loss-/Service-/Overlay-End-to-End-Fälle ergänzen und anschließend `connectedDebugAndroidTest` real ausführen.
 4. **G9:** stabilen Debug-Kandidaten auf der physischen Device Matrix testen.
 5. **G2:** reale V0.7-Migration mit bytegenauer Evidence durchführen.
 6. **G8/G9:** 12h/OEM-/Mitternacht-/DST-/Prozesskill-Evidence erfassen.
