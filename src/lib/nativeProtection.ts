@@ -61,6 +61,7 @@ interface NativeProtectionPlugin {
   }>;
   drainProtectionEvents(): Promise<{ batchId: string; eventsJson: string; usageJson: string }>;
   acknowledgeProtectionEvents(options: { batchId: string }): Promise<{ acknowledged: boolean }>;
+  factoryResetProtectionData(): Promise<{ resetPendingCleanup: boolean }>;
 }
 
 interface NativeProtectionConfig {
@@ -286,6 +287,14 @@ export const NativeProtection = {
       reasonCode: reason.code.trim() || DEFAULT_STOP_REASON.code,
       reasonMessage: reason.message.trim() || DEFAULT_STOP_REASON.message,
     });
+  },
+
+  async factoryReset(): Promise<void> {
+    if (!this.isAvailable()) return;
+    const result = await AndroidProtection.factoryResetProtectionData();
+    if (result.resetPendingCleanup !== true) {
+      throw new Error('Android did not confirm native factory-reset protection');
+    }
   },
 
   async getStatus(): Promise<NativeProtectionStatus> {
