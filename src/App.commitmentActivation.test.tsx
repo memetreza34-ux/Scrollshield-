@@ -5,8 +5,19 @@ import { createCommitmentLock, saveCommitmentLock } from './lib/commitmentLock';
 import { StorageService } from './lib/storage';
 import { DEFAULT_APP_CONFIG, DEFAULT_STATE } from './types';
 
-const { drainMock, getStatusMock, isAvailableMock, startMock, stopMock, syncMock } = vi.hoisted(() => ({
+const {
+  acknowledgeDrainMock,
+  drainMock,
+  factoryResetMock,
+  getStatusMock,
+  isAvailableMock,
+  startMock,
+  stopMock,
+  syncMock,
+} = vi.hoisted(() => ({
+  acknowledgeDrainMock: vi.fn(),
   drainMock: vi.fn(),
+  factoryResetMock: vi.fn(),
   getStatusMock: vi.fn(),
   isAvailableMock: vi.fn(),
   startMock: vi.fn(),
@@ -22,6 +33,8 @@ vi.mock('./lib/nativeProtection', () => ({
     stop: (...args: unknown[]) => stopMock(...args),
     getStatus: (...args: unknown[]) => getStatusMock(...args),
     drain: (...args: unknown[]) => drainMock(...args),
+    acknowledgeDrain: (...args: unknown[]) => acknowledgeDrainMock(...args),
+    factoryReset: (...args: unknown[]) => factoryResetMock(...args),
   },
 }));
 
@@ -70,13 +83,17 @@ describe('App commitment activation', () => {
     syncMock.mockReset();
     getStatusMock.mockReset();
     drainMock.mockReset();
+    acknowledgeDrainMock.mockReset();
+    factoryResetMock.mockReset();
     startMock.mockReset();
     stopMock.mockReset();
 
     isAvailableMock.mockReturnValue(true);
     syncMock.mockResolvedValue([]);
     getStatusMock.mockResolvedValue(healthyStatus());
-    drainMock.mockResolvedValue({ events: [], usage: [] });
+    drainMock.mockResolvedValue({ batchId: '', events: [], usage: [] });
+    acknowledgeDrainMock.mockResolvedValue(undefined);
+    factoryResetMock.mockResolvedValue(undefined);
     startMock.mockResolvedValue(undefined);
     stopMock.mockResolvedValue(undefined);
 
@@ -134,7 +151,7 @@ describe('App commitment activation', () => {
     expect(localStorage.getItem('scrollshield_commitment_lock_v1')).toBeNull();
   });
 
-  it('stops native protection with a deliberate factory-reset reason and clears commitment on full reset', async () => {
+  it('clears native protection data before web state and commitment on full reset', async () => {
     expect(saveCommitmentLock(createCommitmentLock(480, Date.now()))).toBe(true);
 
     render(<App />);
@@ -147,14 +164,31 @@ describe('App commitment activation', () => {
     fireEvent.click(screen.getByRole('button', { name: /App zurücksetzen/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Ja, Reset' }));
 
+    await waitFor(() => expect(factoryResetMock).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole('heading', { name: 'ScrollShield' })).toBeInTheDocument();
-    expect(stopMock).toHaveBeenCalledWith({
-      code: 'factory_reset',
-      message: 'Der Android-Schutz wurde wegen eines vollständigen ScrollShield-Resets beendet',
-    });
+    expect(stopMock).not.toHaveBeenCalledWith(expect.objectContaining({ code: 'factory_reset' }));
     expect(localStorage.getItem('scrollshield_commitment_lock_v1')).toBeNull();
     await waitFor(() => {
       expect(Object.keys(localStorage).filter((key) => key.startsWith('scrollshield_'))).toEqual([]);
     });
+  });
+
+  it('aborts full reset when native data cannot be protected against resurrection', async () => {
+    factoryResetMock.mockRejectedValue(new Error('native reset failed'));
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => undefined);
+    expect(saveCommitmentLock(createCommitmentLock(60, Date.now()))).toBe(true);
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Einstellungen' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Datenschutz & lokale Daten/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /App zurücksetzen/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ja, Reset' }));
+
+    await waitFor(() => expect(factoryResetMock).toHaveBeenCalledTimes(1));
+    expect(alertSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/Reset wurde aus Sicherheitsgründen abgebrochen/),
+    );
+    expect(localStorage.getItem('scrollshield_commitment_lock_v1')).not.toBeNull();
+    expect(screen.queryByRole('heading', { name: 'ScrollShield' })).not.toBeInTheDocument();
   });
 });
