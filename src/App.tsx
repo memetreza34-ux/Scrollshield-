@@ -215,17 +215,11 @@ export default function App() {
         const nativeDrain = await NativeProtection.drain();
         if (cancelled || !nativeDrain.batchId) return;
 
-        // Crash recovery: if this id is known to have reached StorageService successfully, the
-        // payload was already applied before the previous process died. Only ACK it; never add it
-        // to stats/history again.
         if (persistedNativeDrainBatchIdRef.current === nativeDrain.batchId) {
           await NativeProtection.acknowledgeDrain(nativeDrain.batchId);
           return;
         }
 
-        // A previous save attempt may have failed in this process. If the in-memory state already
-        // carries the id, retry the transactional save explicitly instead of relying on another
-        // React state change to retrigger the save effect.
         const currentState = appStateRef.current;
         if (getLastProcessedNativeDrainBatchId(currentState) === nativeDrain.batchId) {
           if (StorageService.saveState(currentState)) {
@@ -343,15 +337,19 @@ export default function App() {
     }
   };
 
-  const resetApp = () => {
+  const resetApp = async () => {
     if (NativeProtection.isAvailable()) {
-      void NativeProtection.stop({
-        code: 'factory_reset',
-        message: 'Der Android-Schutz wurde wegen eines vollständigen ScrollShield-Resets beendet',
-      }).catch((error) => {
-        console.error('Failed to stop native protection during app reset', error);
-      });
+      try {
+        await NativeProtection.factoryReset();
+      } catch (error) {
+        console.error('Failed to clear native protection data during app reset', error);
+        window.alert(
+          'Die lokalen Android-Schutzdaten konnten nicht vollständig gelöscht werden. Der Reset wurde aus Sicherheitsgründen abgebrochen.',
+        );
+        return;
+      }
     }
+
     skipNextSaveRef.current = true;
     pendingNativeDrainAckRef.current = null;
     persistedNativeDrainBatchIdRef.current = null;
