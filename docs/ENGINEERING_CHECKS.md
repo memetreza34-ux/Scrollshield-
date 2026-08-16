@@ -34,7 +34,7 @@ Ein Source-Checker ist niemals ein ausgeführter Android-Test.
 - Supply Chain;
 - Native Drain/ACK/Factory Reset;
 - Native Retention;
-- **Usage Flush Coordinator + serialized Worker**;
+- **Usage Flush Coordinator + Worker + produktive Service-Verdrahtung**;
 - Device Matrix;
 - Lifecycle/Diagnostik;
 - Overlay Accessibility;
@@ -70,7 +70,17 @@ Vorhandene `androidTest`-Verträge:
 - `ManifestSecurityInstrumentedTest.java`;
 - `BootRecoveryInstrumentedTest.java`;
 - `NativeDrainBatchInstrumentedTest.java`;
-- `NativeRetentionInstrumentedTest.java`.
+- `NativeRetentionInstrumentedTest.java`;
+- `UsageFlushInstrumentedTest.java`.
+
+`UsageFlushInstrumentedTest` verlangt auf Android:
+
+- den Produktionsfactory-Pfad `UsageFlushWorker.forSharedPreferences(...)` gegen echte `SharedPreferences`;
+- persistierten Coordinator-Batch nach Worker-Abschluss;
+- Shutdown-Drain, während ein erster Write künstlich In-Flight gehalten wird;
+- Erhalt und anschließende Persistenz von Usage, die während dieses In-Flight-Writes neu eintrifft.
+
+`check:android-instrumentation` verlangt diese Methoden im Sourcevertrag ausdrücklich. Das ist noch keine ausgeführte Instrumentation.
 
 G7 bleibt **TEILWEISE**, weil reale Instrumentation sowie verbleibende Service-/Overlay-/Permission-Loss-/Notification-/OEM-E2E-Fälle fehlen.
 
@@ -127,7 +137,7 @@ Vertrag:
 npm run check:usage-flush-worker
 ```
 
-Dieser Checker schützt die Korrektheitsbasis für den noch offenen Service-Thread-Umbau.
+Dieser Checker schützt jetzt die **produktive Service-Integration** und nicht mehr nur eine vorbereitete Foundation.
 
 ### `UsageFlushCoordinator.java`
 
@@ -147,7 +157,7 @@ Pure-Java-State-Machine:
 
 ### `UsageFlushWorker.java`
 
-Produktionsnaher serieller Writer:
+Produktiver serieller Writer:
 
 - `Executors.newSingleThreadExecutor(...)`;
 - eingefrorene Batches werden im Worker geschrieben;
@@ -156,7 +166,23 @@ Produktionsnaher serieller Writer:
 - Runtime-Exception → Failure/Mergeback;
 - `RejectedExecutionException` → Batch zurück nach Pending;
 - `close()` → orderly `shutdown()`;
-- `awaitTermination(...)` für späteren kontrollierten Service-Shutdown.
+- `closeAfterDrainingPending()` queued einen finalen Drain vor dem Executor-Shutdown;
+- der Final-Drain verarbeitet Pending Usage nach einem vorherigen In-Flight-Write;
+- ein fehlgeschlagener In-Flight-Batch kann im Final-Drain erneut versucht werden;
+- `awaitTermination(...)` steht für Tests/kontrollierte Diagnosepfade zur Verfügung.
+
+### Produktive `ScrollShieldProtectionService`-Verdrahtung
+
+Der Checker verlangt:
+
+- Coordinator + Worker werden beim Start initialisiert;
+- die alte Service-eigene `pendingUsageMs`-Map ist entfernt;
+- der alte Service-eigene `lastUsageFlushMs`-Timer ist entfernt;
+- `addPendingUsageBucket()` delegiert an den Coordinator;
+- `flushPendingUsage()` startet nur einen Coordinator-Batch und submitted ihn an den Worker;
+- Daily Limit = persisted + Coordinator Pending/In-Flight, saturierend;
+- direkter periodischer `SharedPreferences.commit()` ist aus dem Protection Service entfernt;
+- `onDestroy()` erfasst den letzten Tick, fordert einen Force-Flush an und startet den seriellen Shutdown-Drain.
 
 ### JUnit
 
@@ -178,20 +204,15 @@ Produktionsnaher serieller Writer:
 - Commit-Failure;
 - Writer-Exception;
 - blockierter Worker + gleichzeitig neue Usage;
+- Shutdown-Drain mit neuer Pending Usage während In-Flight;
+- Retry eines beim Shutdown fehlgeschlagenen In-Flight-Batches;
 - Rejection nach Worker-Shutdown.
 
-### Bewusst noch offen
+### Android Instrumentation
 
-`ScrollShieldProtectionService.flushPendingUsage()` enthält aktuell weiterhin den alten synchronen `editor.commit()`-Pfad im Service-Main-Thread. Der Checker erwartet diese Grenze absichtlich, damit sie nicht fälschlich als gelöst gilt.
+`UsageFlushInstrumentedTest.java` ergänzt den Pure-Java-Vertrag mit echten Android-`SharedPreferences`.
 
-Nach realem Java-/Gradle-Pass muss `check:usage-flush-worker` verschärft werden und künftig im Service verlangen:
-
-- Coordinator + Worker werden beim Start initialisiert;
-- `addPendingUsageBucket()` delegiert an Coordinator;
-- `flushPendingUsage()` startet nur einen Coordinator-Batch und submitted ihn an Worker;
-- Daily Limit = persisted + Coordinator Pending/In-Flight;
-- periodischer Main-Thread-`commit()` ist entfernt;
-- Shutdown koordiniert In-Flight + finalen Force-Flush + Worker-Close.
+Noch offen ist die **reale Ausführung** dieser Tests sowie echte Service-/Process-Kill-/Restart-Evidence.
 
 ## 8. Storage Migration
 
@@ -213,7 +234,7 @@ npm run check:usage-accounting
 
 Schützt Lifecycle-Wahrheit, stabile Diagnosecodes, lokale Tagesgrenzen, keine negative Usage bei rückwärts laufender Uhr, Tag+App-Bucketing, Tageslimit und Anti-Binge über Mitternacht.
 
-Nach Worker-Service-Integration werden Usage-Accounting und Worker-Checker gemeinsam auf die neue Coordinator-Semantik verschärft.
+Die Worker-/Usage-Checker müssen gemeinsam verhindern, dass die neue Persistenzarchitektur Tageslimits während Pending/In-Flight-Zuständen unterzählt oder Usage bei kontrolliertem Shutdown verliert.
 
 ## 10. Device Matrix / Privacy / Release Gate
 
@@ -237,35 +258,44 @@ cd android
 ./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace
 ```
 
-Instrumentation benötigt zusätzlich Emulator/Gerät.
+Damit werden die Coordinator-/Worker-JUnit und der Android-Debug-Build ausgeführt.
+
+Instrumentation benötigt zusätzlich Emulator/Gerät, zum Beispiel:
+
+```bash
+cd android
+./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+```
+
+Ein erfolgreicher Source-Checker ersetzt diesen Lauf nicht.
 
 ## 12. Aktuelle Ausführungsgrenze
 
-GitHub-hosted Actions starten derzeit wegen Billing-/Spending-Limit nicht und enden vor Step 1 mit `steps: null`.
+GitHub-hosted Actions starten derzeit wegen Billing-/Spending-Limit nicht und enden vor Step 1 mit leerer Step-Liste und ohne Runner.
 
 Deshalb sind aktuell **nicht als bestanden belegt**:
 
 - `npm run verify`;
 - `check:usage-flush-worker`;
+- `check:android-instrumentation`;
 - `UsageFlushCoordinatorTest`;
 - `UsageFlushWorkerTest`;
+- `UsageFlushInstrumentedTest`;
 - TypeScript/Lint/Prettier/Vitest;
 - Android JUnit/Instrumentation;
 - Gradle Debug Build;
 - APK;
 - physische Geräte-Matrix.
 
-Eine isolierte lokale `javac`-Plausibilitätsprüfung des Coordinators ist keine Release-Evidence.
-
 ## 13. Reihenfolge nach Entsperrung
 
 1. sauberer Checkout + `npm ci`;
 2. `npm run verify`;
-3. `./gradlew testDebugUnitTest assembleDebug`;
-4. Coordinator-/Worker-JUnit bestätigen;
-5. Coordinator + Worker als kleinen Patch in `ScrollShieldProtectionService` verdrahten;
-6. Verify/JUnit/Debug-Build auf Integrations-Head erneut;
-7. Shutdown/In-Flight/Drain-Races testen;
-8. Android Instrumentation;
+3. `./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace`;
+4. Coordinator-/Worker-JUnit und Service-Kompilierung bestätigen;
+5. reale Fehler beheben und erneut ausführen;
+6. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace` auf Emulator/Gerät;
+7. `UsageFlushInstrumentedTest` + Native Drain/Retention/Recovery-Instrumentation bestätigen;
+8. Shutdown/In-Flight/Process-Kill/Restart-Races testen;
 9. Debug APK auf Device Matrix;
 10. erst danach Release-Evidence hochstufen.
