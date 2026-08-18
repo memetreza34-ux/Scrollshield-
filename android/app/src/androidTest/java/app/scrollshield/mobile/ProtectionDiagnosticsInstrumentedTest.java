@@ -1,6 +1,7 @@
 package app.scrollshield.mobile;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
@@ -9,6 +10,8 @@ import android.content.SharedPreferences;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -32,6 +35,36 @@ public class ProtectionDiagnosticsInstrumentedTest {
     @After
     public void tearDown() {
         preferences.edit().clear().commit();
+    }
+
+    @Test
+    public void atomicPrerequisiteStopPersistsDisabledStateEventAndExactCode() throws Exception {
+        ScrollShieldNativePlugin.setProtectionEnabled(context, true);
+        long before = System.currentTimeMillis();
+        String message = "Usage access revoked while protection was active";
+
+        assertTrue(
+            ScrollShieldNativePlugin.recordProtectionPrerequisiteStop(
+                context,
+                ProtectionStopReasonPolicy.USAGE_ACCESS_MISSING,
+                message
+            )
+        );
+
+        assertFalse(ScrollShieldNativePlugin.isProtectionEnabled(context));
+        assertEquals(
+            ProtectionStopReasonPolicy.USAGE_ACCESS_MISSING,
+            ScrollShieldNativePlugin.getLastProtectionStopCode(context)
+        );
+        assertEquals(message, ScrollShieldNativePlugin.getLastProtectionStopMessage(context));
+        assertTrue(ScrollShieldNativePlugin.getLastProtectionStopAt(context) >= before);
+
+        JSONArray events = new JSONArray(preferences.getString("protection_events", "[]"));
+        assertTrue(events.length() > 0);
+        JSONObject event = events.getJSONObject(events.length() - 1);
+        assertEquals("warning", event.getString("type"));
+        assertEquals("system", event.getString("appId"));
+        assertEquals(message, event.getString("desc"));
     }
 
     @Test
@@ -108,9 +141,13 @@ public class ProtectionDiagnosticsInstrumentedTest {
     }
 
     private void assertExplicitStop(String code, String message) {
+        ScrollShieldNativePlugin.setProtectionEnabled(context, true);
         long before = System.currentTimeMillis();
-        ScrollShieldNativePlugin.recordProtectionStop(context, code, message);
+        assertTrue(
+            ScrollShieldNativePlugin.recordProtectionPrerequisiteStop(context, code, message)
+        );
 
+        assertFalse(ScrollShieldNativePlugin.isProtectionEnabled(context));
         assertEquals(code, ScrollShieldNativePlugin.getLastProtectionStopCode(context));
         assertEquals(message, ScrollShieldNativePlugin.getLastProtectionStopMessage(context));
         assertTrue(ScrollShieldNativePlugin.getLastProtectionStopAt(context) >= before);
