@@ -130,6 +130,7 @@ if (findings.length === 0) {
   }
 
   for (const [method, description] of [
+    ['atomicPrerequisiteStopPersistsDisabledStateEventAndExactCode', 'atomic disabled-state/event/diagnostic persistence'],
     ['explicitPrerequisiteCodesPersistIndependentOfMessageLanguage', 'language-independent explicit prerequisite diagnostics'],
     ['legacySystemPermissionWarningsStillPersistStableStopDiagnostics', 'legacy permission-warning diagnostic compatibility'],
     ['legacySystemConfigurationWarningsStillPersistStableStopDiagnostics', 'legacy configuration-warning diagnostic compatibility'],
@@ -161,8 +162,8 @@ if (findings.length === 0) {
   requireMatch(
     diagnosticsTestPath,
     diagnosticsTest,
-    /recordProtectionStop\(context, code, message\)[\s\S]*getLastProtectionStopCode\(context\)/,
-    'On-device diagnostics instrumentation must prove explicit codes persist independently of localized text.',
+    /recordProtectionPrerequisiteStop\([\s\S]*assertFalse\(ScrollShieldNativePlugin\.isProtectionEnabled\(context\)\)[\s\S]*new JSONArray\(preferences\.getString\("protection_events"/,
+    'On-device diagnostics instrumentation must prove the atomic prerequisite transaction persists disabled state and the warning event.',
   );
   requireMatch(
     diagnosticsTestPath,
@@ -211,5 +212,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android instrumentation contract check passed. Runtime state, recovery, merged-manifest, usage-persistence, and explicit/legacy protection-diagnostic tests are present.',
+  'Android instrumentation contract check passed. Runtime state, recovery, merged-manifest, usage-persistence, atomic prerequisite stops, and legacy diagnostic compatibility tests are present.',
 );
