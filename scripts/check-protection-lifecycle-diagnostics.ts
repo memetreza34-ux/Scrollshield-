@@ -234,8 +234,8 @@ requirePattern(
 requirePattern(
   servicePath,
   service,
-  /stopForMissingPermission[\s\S]*explicitStopRequested = true[\s\S]*setProtectionEnabled\(this, false\)[\s\S]*appendProtectionEvent/,
-  'Controlled permission and configuration shutdowns must not be overwritten as unexpected destruction.',
+  /stopForProtectionPrerequisite\(String reasonCode, String description\)[\s\S]*explicitStopRequested = true[\s\S]*setProtectionEnabled\(this, false\)[\s\S]*appendProtectionEvent[\s\S]*recordProtectionStop\(this, reasonCode, description\)/,
+  'Controlled permission and configuration shutdowns must persist an explicit terminal reason and must not be overwritten as unexpected destruction.',
 );
 
 requirePattern(
