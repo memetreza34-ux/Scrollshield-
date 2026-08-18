@@ -149,21 +149,29 @@ public class ScrollShieldProtectionService extends Service {
             return START_NOT_STICKY;
         }
         if (!ScrollShieldNativePlugin.hasConfiguredApps(this)) {
-            stopForMissingPermission(
+            stopForProtectionPrerequisite(
+                ProtectionStopReasonPolicy.TARGET_APP_MISSING,
                 "Keine aktive installierte Ziel-App ist mehr konfiguriert; der Android-Schutz wurde gestoppt"
             );
             return START_NOT_STICKY;
         }
         if (!ScrollShieldNativePlugin.hasUsageAccess(this)) {
-            stopForMissingPermission("Nutzungszugriff fehlt; der Android-Schutz wurde gestoppt");
+            stopForProtectionPrerequisite(
+                ProtectionStopReasonPolicy.USAGE_ACCESS_MISSING,
+                "Nutzungszugriff fehlt; der Android-Schutz wurde gestoppt"
+            );
             return START_NOT_STICKY;
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            stopForMissingPermission("Overlay-Berechtigung fehlt; der Android-Schutz wurde gestoppt");
+            stopForProtectionPrerequisite(
+                ProtectionStopReasonPolicy.OVERLAY_PERMISSION_MISSING,
+                "Overlay-Berechtigung fehlt; der Android-Schutz wurde gestoppt"
+            );
             return START_NOT_STICKY;
         }
         if (!ScrollShieldNativePlugin.hasNotificationsEnabled(this)) {
-            stopForMissingPermission(
+            stopForProtectionPrerequisite(
+                ProtectionStopReasonPolicy.NOTIFICATIONS_MISSING,
                 "Benachrichtigungen fehlen; der Android-Schutz wurde beendet, damit er nicht unsichtbar läuft"
             );
             return START_NOT_STICKY;
@@ -219,21 +227,29 @@ public class ScrollShieldProtectionService extends Service {
             return;
         }
         if (!ScrollShieldNativePlugin.hasNotificationsEnabled(this)) {
-            stopForMissingPermission(
+            stopForProtectionPrerequisite(
+                ProtectionStopReasonPolicy.NOTIFICATIONS_MISSING,
                 "Benachrichtigungen wurden entzogen; der Android-Schutz wurde beendet, damit er nicht unsichtbar läuft"
             );
             return;
         }
         if (!ScrollShieldNativePlugin.hasUsageAccess(this)) {
-            stopForMissingPermission("Nutzungszugriff wurde entzogen; der Android-Schutz wurde gestoppt");
+            stopForProtectionPrerequisite(
+                ProtectionStopReasonPolicy.USAGE_ACCESS_MISSING,
+                "Nutzungszugriff wurde entzogen; der Android-Schutz wurde gestoppt"
+            );
             return;
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            stopForMissingPermission("Overlay-Berechtigung wurde entzogen; der Android-Schutz wurde gestoppt");
+            stopForProtectionPrerequisite(
+                ProtectionStopReasonPolicy.OVERLAY_PERMISSION_MISSING,
+                "Overlay-Berechtigung wurde entzogen; der Android-Schutz wurde gestoppt"
+            );
             return;
         }
         if (!hasActiveConfiguredRule) {
-            stopForMissingPermission(
+            stopForProtectionPrerequisite(
+                ProtectionStopReasonPolicy.NO_ACTIVE_RULES,
                 "Keine aktive Schutzregel ist mehr konfiguriert; der Android-Schutz wurde gestoppt"
             );
             return;
@@ -243,7 +259,8 @@ public class ScrollShieldProtectionService extends Service {
         if (now - lastConfigurationHealthCheckMs >= CONFIGURATION_HEALTH_INTERVAL_MS) {
             lastConfigurationHealthCheckMs = now;
             if (!ScrollShieldNativePlugin.hasConfiguredApps(this)) {
-                stopForMissingPermission(
+                stopForProtectionPrerequisite(
+                    ProtectionStopReasonPolicy.TARGET_APP_MISSING,
                     "Keine aktive installierte Ziel-App ist mehr verfügbar; der Android-Schutz wurde gestoppt"
                 );
                 return;
@@ -309,11 +326,12 @@ public class ScrollShieldProtectionService extends Service {
         }
     }
 
-    private void stopForMissingPermission(String description) {
+    private void stopForProtectionPrerequisite(String reasonCode, String description) {
         explicitStopRequested = true;
         hideOverlay();
         ScrollShieldNativePlugin.setProtectionEnabled(this, false);
         ScrollShieldNativePlugin.appendProtectionEvent(this, "warning", "system", description);
+        ScrollShieldNativePlugin.recordProtectionStop(this, reasonCode, description);
         stopSelf();
     }
 
