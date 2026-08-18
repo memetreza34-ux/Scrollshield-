@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 
 const servicePath =
   'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldProtectionService.java';
+const pluginPath =
+  'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldNativePlugin.java';
 const policyPath =
   'android/app/src/main/java/app/scrollshield/mobile/ProtectionStopReasonPolicy.java';
 const policyTestPath =
@@ -9,8 +11,9 @@ const policyTestPath =
 const diagnosticsTestPath =
   'android/app/src/androidTest/java/app/scrollshield/mobile/ProtectionDiagnosticsInstrumentedTest.java';
 
-const [service, policy, policyTest, diagnosticsTest] = await Promise.all([
+const [service, plugin, policy, policyTest, diagnosticsTest] = await Promise.all([
   readFile(servicePath, 'utf8'),
+  readFile(pluginPath, 'utf8'),
   readFile(policyPath, 'utf8'),
   readFile(policyTestPath, 'utf8'),
   readFile(diagnosticsTestPath, 'utf8'),
@@ -47,11 +50,37 @@ requirePattern(
 );
 
 requirePattern(
+  pluginPath,
+  plugin,
+  /recordProtectionPrerequisiteStop\([\s\S]*synchronized \(EVENT_LOCK\)[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, false\)[\s\S]*putString\(EVENT_QUEUE_KEY, events\.toString\(\)\)[\s\S]*putLong\(LAST_STOP_AT_KEY, timestamp\)[\s\S]*putString\(LAST_STOP_CODE_KEY, normalizedCode\)[\s\S]*putString\(LAST_STOP_MESSAGE_KEY, normalizedMessage\)[\s\S]*\.commit\(\)/,
+  'Prerequisite stop persistence must atomically commit disabled state, event queue, timestamp, exact code, and message under EVENT_LOCK.',
+);
+requirePattern(
+  pluginPath,
+  plugin,
+  /recordProtectionPrerequisiteStop[\s\S]*event\.put\("type", "warning"\)[\s\S]*event\.put\("appId", "system"\)[\s\S]*event\.put\("desc", normalizedMessage\)/,
+  'The atomic prerequisite transaction must append the user-visible system warning to the same event queue write.',
+);
+
+requirePattern(
   servicePath,
   service,
-  /stopForProtectionPrerequisite\(String reasonCode, String description\)[\s\S]*setProtectionEnabled\(this, false\)[\s\S]*appendProtectionEvent\(this, "warning", "system", description\)[\s\S]*recordProtectionStop\(this, reasonCode, description\)[\s\S]*stopSelf\(\)/,
-  'Prerequisite shutdown must persist the explicit reason code after the warning event and fail closed.',
+  /stopForProtectionPrerequisite\(String reasonCode, String description\)[\s\S]*recordProtectionPrerequisiteStop\([\s\S]*reasonCode,[\s\S]*description[\s\S]*if \(!persisted\)[\s\S]*setProtectionEnabled\(this, false\)[\s\S]*recordProtectionStop\(this, reasonCode, description\)[\s\S]*stopSelf\(\)/,
+  'Service prerequisite shutdown must use the atomic native transaction first and retain an explicit fail-closed fallback only for commit failure.',
 );
+
+const helperStart = service.indexOf('private void stopForProtectionPrerequisite');
+const nextMethod = service.indexOf('private String getForegroundPackage', helperStart + 1);
+if (helperStart < 0 || nextMethod <= helperStart) {
+  findings.push(`${servicePath}: Could not isolate stopForProtectionPrerequisite helper.`);
+} else {
+  const helperBody = service.slice(helperStart, nextMethod);
+  if (helperBody.includes('appendProtectionEvent(')) {
+    findings.push(
+      `${servicePath}: Prerequisite helper must not perform a separate warning-event commit before the atomic transaction.`,
+    );
+  }
+}
 
 for (const constant of [
   'USAGE_ACCESS_MISSING',
@@ -89,14 +118,20 @@ requirePattern(
 requirePattern(
   diagnosticsTestPath,
   diagnosticsTest,
-  /void\s+explicitPrerequisiteCodesPersistIndependentOfMessageLanguage\s*\(/,
-  'Android instrumentation must prove explicit codes do not depend on localized human-readable messages.',
+  /void\s+atomicPrerequisiteStopPersistsDisabledStateEventAndExactCode\s*\(/,
+  'Android instrumentation must cover the atomic disabled-state + event + exact-code transaction.',
 );
 requirePattern(
   diagnosticsTestPath,
   diagnosticsTest,
-  /recordProtectionStop\(context, code, message\)[\s\S]*getLastProtectionStopCode\(context\)/,
-  'Android instrumentation must exercise the actual persisted explicit-code path.',
+  /recordProtectionPrerequisiteStop\([\s\S]*assertFalse\(ScrollShieldNativePlugin\.isProtectionEnabled\(context\)\)[\s\S]*new JSONArray\(preferences\.getString\("protection_events"/,
+  'Android instrumentation must inspect disabled state and the real event queue after the atomic prerequisite stop.',
+);
+requirePattern(
+  diagnosticsTestPath,
+  diagnosticsTest,
+  /void\s+explicitPrerequisiteCodesPersistIndependentOfMessageLanguage\s*\(/,
+  'Android instrumentation must prove explicit codes do not depend on localized human-readable messages.',
 );
 
 if (findings.length > 0) {
@@ -106,5 +141,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Prerequisite stop-code contract check passed. Active-service prerequisite failures use explicit stable codes; localized text parsing is legacy-only.',
+  'Prerequisite stop-code contract check passed. Active-service prerequisite failures use one atomic native transaction for disabled state, event, and exact diagnostics; localized text parsing is legacy-only.',
 );
