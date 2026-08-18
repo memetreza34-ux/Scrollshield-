@@ -2,7 +2,7 @@
 
 Status: **lebende Projektsteuerung**
 
-Letzte Aktualisierung: **16. August 2026**
+Letzte Aktualisierung: **18. August 2026**
 
 Dieses Dokument beantwortet: **Wo steht ScrollShield jetzt, was ist belegt und was ist der nächste erlaubte Schritt?**
 
@@ -23,10 +23,10 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 | G1 | Architektur & Repo-Prozess | **FERTIG** | React/TS, lokale Daten, Capacitor/Native Android, Draft-PR-Prozess und Verantwortungsgrenzen sind dokumentiert | bei Architekturänderung erneut öffnen |
 | G2 | Datenmodell & Migration | **TEILWEISE** | starke transaktionale/V0.7-Migration im Source; reale Alt-Daten-Evidenz fehlt | echter V0.7-Upgrade-Test + bytegenauer Archivvergleich |
 | G3 | Kern-UI/UX & Accessibility | **TEILWEISE** | Release-Screens und Source-A11y-Checks existieren; reale Usability-/Large-Font-/TalkBack-Evidenz fehlt | physische Accessibility- und User-Research-Sessions |
-| G4 | Native Android Schutz | **TEILWEISE** | Usage Access, Overlay, FGS, Regeln, Recovery, Diagnostik und crash-sicherer Native-Datentransfer sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + reale Geräte |
+| G4 | Native Android Schutz | **TEILWEISE** | Usage Access, Overlay, FGS, Regeln, Recovery, Diagnostik, strukturierte Prerequisite-Stop-Codes und crash-sicherer Native-Datentransfer sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + reale Geräte |
 | G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First-Manifest, Privacy-Guard, gepinnter Gradle-SHA256 und `check:supply-chain` existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-Check + Dependency-/Manifest-Snapshot + finaler Binary-Audit + Threat-Review |
 | G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` und Android-Stufen sind vorbereitet; GitHub Runner stoppt vor Step 1 wegen Billing/Spending-Limit | kompletter echter Verify-Lauf auf exaktem Head |
-| G7 | Android Instrumentation/E2E | **TEILWEISE** | Runtime-State/Lifecycle, Manifest/Permissions, Boot-Recovery, Native-Drain/ACK/Reset, Retention und echter Android-SharedPreferences-Usage-Flush besitzen `androidTest`-Verträge; Ausführung sowie weitere Overlay-/Permission-Loss-/Service-End-to-End-Fälle fehlen | `connectedDebugAndroidTest` real ausführen + verbleibende kritische Android-Flows ergänzen |
+| G7 | Android Instrumentation/E2E | **TEILWEISE** | Runtime-State/Lifecycle, Manifest/Permissions, Boot-Recovery, Native-Drain/ACK/Reset, Retention, echter Android-SharedPreferences-Usage-Flush sowie explizite sprachunabhängige Prerequisite-Stop-Codes besitzen Source-/`androidTest`-Verträge. Reale Permission-Loss-/Overlay-/Service-Ausführung fehlt | `connectedDebugAndroidTest` real ausführen + echte Berechtigungsentziehung während laufendem Service + Overlay-/Notification-/Service-Flows |
 | G8 | Performance & Batterie | **TEILWEISE** | `ScrollShieldProtectionService` ist auf `UsageFlushCoordinator` + `UsageFlushWorker` verdrahtet. Periodische Usage-`commit()`-Writes laufen nicht mehr im Service-Main-Thread; Pending/In-Flight bleibt im Tageslimit sichtbar, Shutdown besitzt einen seriellen Final-Drain und `UsageFlushInstrumentedTest` prüft den Android-SharedPreferences-Pfad im Testvertrag. Reale JUnit-/Instrumentation-/Gradle-/Device-Evidenz fehlt weiterhin | Worker-/Coordinator-JUnit + Usage-Flush-Instrumentation real ausführen + `assembleDebug` + Process-Kill-Regressions + 12h-Baseline |
 | G9 | Physical Device Matrix | **FEHLT** | Matrix ist definiert, aber nicht vollständig ausgeführt | Pflichtgeräte/Szenarien mit Build-ID/Evidenz vollständig dokumentieren |
 | G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Evidence-Schema v2 existiert; Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Kandidaten-SHA + echte Referenzen |
@@ -65,20 +65,32 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
   - `UsageFlushInstrumentedTest.java` prüft den Produktions-Worker mit echten Android-`SharedPreferences` sowie Pending Usage während eines blockierten In-Flight-Writes;
   - `check:usage-flush-worker` verlangt die echte Service-Verdrahtung und verbietet einen direkten `SharedPreferences.commit()` im Protection Service;
   - `check:android-instrumentation` verlangt den Android-Usage-Flush-Testvertrag.
-- `check:native-drain-ack`, `check:native-retention`, `check:usage-flush-worker` und `check:android-instrumentation` sind Bestandteil von `npm run verify`.
+- Prerequisite-/Permission-Loss-Diagnostik gehärtet:
+  - `ProtectionStopReasonPolicy` besitzt zentrale stabile Codes für Usage Access, Overlay, Notifications, aktive Regeln und Ziel-App;
+  - `ScrollShieldProtectionService.onStartCommand()` verwendet diese Codes explizit bei fehlenden Startvoraussetzungen;
+  - `enforceCurrentApp()` verwendet dieselben Codes bei Laufzeitverlust;
+  - `stopForProtectionPrerequisite(reasonCode, description)` setzt Schutz fail-closed auf inaktiv, schreibt die Warnung und persistiert anschließend den expliziten terminalen Code;
+  - lokalisierter Meldungstext entscheidet nicht mehr über den neuen produktiven Service-Stop-Code;
+  - `classifySystemWarning(...)` bleibt nur als Legacy-/Kompatibilitäts-Fallback bestehen;
+  - `ProtectionStopReasonPolicyTest.java` sperrt die stabilen Werte;
+  - `ProtectionDiagnosticsInstrumentedTest.java` prüft explizite Codes mit anderssprachigem Meldungstext und den Legacy-Fallback;
+  - `check:prerequisite-stop-codes` schützt die Service-Verdrahtung und ist Teil von `npm run verify` sowie des Readiness-Reports;
+  - `check:lifecycle` und `check:android-instrumentation` wurden auf den neuen Vertrag umgestellt.
+- `check:native-drain-ack`, `check:native-retention`, `check:usage-flush-worker`, `check:prerequisite-stop-codes` und `check:android-instrumentation` sind Bestandteil von `npm run verify`.
 
 ## Aktueller Arbeitsfokus
 
 ### Jetzt aktiv
 
 1. **G6 extern entsperren:** GitHub Actions Billing/Spending-Limit korrigieren; danach vollständige Verify-/Android-JUnit-/Debug-Build-Kette real ausführen.
-2. **G8 verifizieren:** Coordinator-/Worker-JUnit einschließlich Shutdown-Drain real ausführen, Android-Kompilierung bestätigen und `UsageFlushInstrumentedTest` auf Emulator/Gerät ausführen.
-3. **G7:** verbleibende Permission-Loss-/Service-/Overlay-End-to-End-Fälle ergänzen und anschließend `connectedDebugAndroidTest` real ausführen.
-4. **G9:** stabilen Debug-Kandidaten auf der physischen Device Matrix testen.
-5. **G2:** reale V0.7-Migration mit bytegenauer Evidence durchführen.
-6. **G8/G9:** 12h/OEM-/Mitternacht-/DST-/Prozesskill-Evidence erfassen.
-7. **G5:** finalen Dependency-/SBOM-/Manifest-Snapshot für Release-Evidence erzeugen.
-8. **G0/G3:** reale User-Research-/Accessibility-Sessions mit stabilem APK durchführen.
+2. **G7 echte Permission-Loss-E2E:** auf Emulator/Gerät Schutz starten und Usage Access / Overlay / Notifications während laufendem Service entziehen; Stop-Code, Aktivierungsstatus, Event und UI-Recovery prüfen.
+3. **G8 verifizieren:** Coordinator-/Worker-JUnit einschließlich Shutdown-Drain real ausführen, Android-Kompilierung bestätigen und `UsageFlushInstrumentedTest` auf Emulator/Gerät ausführen.
+4. **G7:** echte Overlay-/Service-/Notification-End-to-End-Fälle ergänzen und anschließend `connectedDebugAndroidTest` real ausführen.
+5. **G9:** stabilen Debug-Kandidaten auf der physischen Device Matrix testen.
+6. **G2:** reale V0.7-Migration mit bytegenauer Evidence durchführen.
+7. **G8/G9:** 12h/OEM-/Mitternacht-/DST-/Prozesskill-Evidence erfassen.
+8. **G5:** finalen Dependency-/SBOM-/Manifest-Snapshot für Release-Evidence erzeugen.
+9. **G0/G3:** reale User-Research-/Accessibility-Sessions mit stabilem APK durchführen.
 
 ### Nicht jetzt anfangen
 
