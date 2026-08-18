@@ -130,8 +130,9 @@ if (findings.length === 0) {
   }
 
   for (const [method, description] of [
-    ['systemPermissionWarningsPersistStableStopDiagnostics', 'permission-loss diagnostic persistence'],
-    ['systemConfigurationWarningsPersistStableStopDiagnostics', 'configuration-loss diagnostic persistence'],
+    ['explicitPrerequisiteCodesPersistIndependentOfMessageLanguage', 'language-independent explicit prerequisite diagnostics'],
+    ['legacySystemPermissionWarningsStillPersistStableStopDiagnostics', 'legacy permission-warning diagnostic compatibility'],
+    ['legacySystemConfigurationWarningsStillPersistStableStopDiagnostics', 'legacy configuration-warning diagnostic compatibility'],
     ['appSpecificWarningsDoNotOverwriteTerminalSystemStopDiagnostics', 'terminal diagnostic isolation from app warnings'],
   ]) {
     requireMatch(
@@ -142,26 +143,32 @@ if (findings.length === 0) {
     );
   }
 
-  for (const code of [
-    'usage_access_missing',
-    'overlay_permission_missing',
-    'notifications_missing',
-    'no_active_rules',
-    'target_app_missing',
+  for (const constant of [
+    'USAGE_ACCESS_MISSING',
+    'OVERLAY_PERMISSION_MISSING',
+    'NOTIFICATIONS_MISSING',
+    'NO_ACTIVE_RULES',
+    'TARGET_APP_MISSING',
   ]) {
     requireMatch(
       diagnosticsTestPath,
       diagnosticsTest,
-      new RegExp(`\\b${code}\\b`),
-      `On-device diagnostics instrumentation must assert stable code ${code}.`,
+      new RegExp(`ProtectionStopReasonPolicy\\.${constant}`),
+      `On-device diagnostics instrumentation must exercise stable constant ${constant}.`,
     );
   }
 
   requireMatch(
     diagnosticsTestPath,
     diagnosticsTest,
+    /recordProtectionStop\(context, code, message\)[\s\S]*getLastProtectionStopCode\(context\)/,
+    'On-device diagnostics instrumentation must prove explicit codes persist independently of localized text.',
+  );
+  requireMatch(
+    diagnosticsTestPath,
+    diagnosticsTest,
     /appendProtectionEvent\([\s\S]*"warning",[\s\S]*"system"/,
-    'On-device diagnostics instrumentation must exercise the same system-warning persistence path used by controlled service stops.',
+    'On-device diagnostics instrumentation must retain the legacy system-warning compatibility path.',
   );
   requireMatch(
     diagnosticsTestPath,
@@ -204,5 +211,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android instrumentation contract check passed. Runtime state, recovery, merged-manifest, usage-persistence, and protection-diagnostic tests are present.',
+  'Android instrumentation contract check passed. Runtime state, recovery, merged-manifest, usage-persistence, and explicit/legacy protection-diagnostic tests are present.',
 );
