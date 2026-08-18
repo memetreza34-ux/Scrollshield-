@@ -165,7 +165,13 @@ requirePattern(
   pluginPath,
   plugin,
   /appendProtectionEvent[\s\S]*ProtectionStopReasonPolicy\.classifySystemWarning[\s\S]*LAST_STOP_MESSAGE_KEY/,
-  'System warning events must update persistent stop diagnostics.',
+  'Legacy system warning events must keep persistent stop diagnostics for compatibility.',
+);
+requirePattern(
+  pluginPath,
+  plugin,
+  /recordProtectionPrerequisiteStop[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, false\)[\s\S]*putString\(EVENT_QUEUE_KEY, events\.toString\(\)\)[\s\S]*putString\(LAST_STOP_CODE_KEY, normalizedCode\)[\s\S]*\.commit\(\)/,
+  'Controlled prerequisite stops must have an atomic native persistence path for activation, event, and exact diagnostics.',
 );
 requirePattern(
   pluginPath,
@@ -234,8 +240,8 @@ requirePattern(
 requirePattern(
   servicePath,
   service,
-  /stopForProtectionPrerequisite\(String reasonCode, String description\)[\s\S]*explicitStopRequested = true[\s\S]*setProtectionEnabled\(this, false\)[\s\S]*appendProtectionEvent[\s\S]*recordProtectionStop\(this, reasonCode, description\)/,
-  'Controlled permission and configuration shutdowns must persist an explicit terminal reason and must not be overwritten as unexpected destruction.',
+  /stopForProtectionPrerequisite\(String reasonCode, String description\)[\s\S]*explicitStopRequested = true[\s\S]*recordProtectionPrerequisiteStop\([\s\S]*reasonCode,[\s\S]*description[\s\S]*if \(!persisted\)[\s\S]*setProtectionEnabled\(this, false\)[\s\S]*recordProtectionStop\(this, reasonCode, description\)/,
+  'Controlled permission and configuration shutdowns must use the atomic exact-code persistence path first and retain only a fail-closed fallback.',
 );
 
 requirePattern(
@@ -454,5 +460,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection lifecycle diagnostics check passed. Actual foreground starts, native fields, terminal stops, emergency friction, inconsistent service states, and physical evidence requirements remain guarded.',
+  'Protection lifecycle diagnostics check passed. Actual foreground starts, atomic prerequisite stops, native fields, terminal stops, emergency friction, inconsistent service states, and physical evidence requirements remain guarded.',
 );
