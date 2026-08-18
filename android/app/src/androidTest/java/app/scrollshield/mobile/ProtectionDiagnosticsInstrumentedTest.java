@@ -35,30 +35,54 @@ public class ProtectionDiagnosticsInstrumentedTest {
     }
 
     @Test
-    public void systemPermissionWarningsPersistStableStopDiagnostics() {
-        assertSystemWarning(
-            "Nutzungszugriff wurde entzogen; der Android-Schutz wurde gestoppt",
-            "usage_access_missing"
+    public void explicitPrerequisiteCodesPersistIndependentOfMessageLanguage() {
+        assertExplicitStop(
+            ProtectionStopReasonPolicy.USAGE_ACCESS_MISSING,
+            "Usage access revoked while protection was active"
         );
-        assertSystemWarning(
-            "Overlay-Berechtigung wurde entzogen; der Android-Schutz wurde gestoppt",
-            "overlay_permission_missing"
+        assertExplicitStop(
+            ProtectionStopReasonPolicy.OVERLAY_PERMISSION_MISSING,
+            "Overlay permission unavailable"
         );
-        assertSystemWarning(
-            "Benachrichtigungen wurden entzogen; der Android-Schutz wurde beendet, damit er nicht unsichtbar läuft",
-            "notifications_missing"
+        assertExplicitStop(
+            ProtectionStopReasonPolicy.NOTIFICATIONS_MISSING,
+            "Notification visibility unavailable"
+        );
+        assertExplicitStop(
+            ProtectionStopReasonPolicy.NO_ACTIVE_RULES,
+            "No active protection rule remains"
+        );
+        assertExplicitStop(
+            ProtectionStopReasonPolicy.TARGET_APP_MISSING,
+            "No installed target app remains"
         );
     }
 
     @Test
-    public void systemConfigurationWarningsPersistStableStopDiagnostics() {
+    public void legacySystemPermissionWarningsStillPersistStableStopDiagnostics() {
+        assertSystemWarning(
+            "Nutzungszugriff wurde entzogen; der Android-Schutz wurde gestoppt",
+            ProtectionStopReasonPolicy.USAGE_ACCESS_MISSING
+        );
+        assertSystemWarning(
+            "Overlay-Berechtigung wurde entzogen; der Android-Schutz wurde gestoppt",
+            ProtectionStopReasonPolicy.OVERLAY_PERMISSION_MISSING
+        );
+        assertSystemWarning(
+            "Benachrichtigungen wurden entzogen; der Android-Schutz wurde beendet, damit er nicht unsichtbar läuft",
+            ProtectionStopReasonPolicy.NOTIFICATIONS_MISSING
+        );
+    }
+
+    @Test
+    public void legacySystemConfigurationWarningsStillPersistStableStopDiagnostics() {
         assertSystemWarning(
             "Keine aktive Schutzregel ist mehr konfiguriert; der Android-Schutz wurde gestoppt",
-            "no_active_rules"
+            ProtectionStopReasonPolicy.NO_ACTIVE_RULES
         );
         assertSystemWarning(
             "Keine aktive installierte Ziel-App ist mehr verfügbar; der Android-Schutz wurde gestoppt",
-            "target_app_missing"
+            ProtectionStopReasonPolicy.TARGET_APP_MISSING
         );
     }
 
@@ -81,6 +105,15 @@ public class ProtectionDiagnosticsInstrumentedTest {
         assertEquals("manual_app_stop", ScrollShieldNativePlugin.getLastProtectionStopCode(context));
         assertEquals("Bestehender terminaler Stopp", ScrollShieldNativePlugin.getLastProtectionStopMessage(context));
         assertEquals(stopAt, ScrollShieldNativePlugin.getLastProtectionStopAt(context));
+    }
+
+    private void assertExplicitStop(String code, String message) {
+        long before = System.currentTimeMillis();
+        ScrollShieldNativePlugin.recordProtectionStop(context, code, message);
+
+        assertEquals(code, ScrollShieldNativePlugin.getLastProtectionStopCode(context));
+        assertEquals(message, ScrollShieldNativePlugin.getLastProtectionStopMessage(context));
+        assertTrue(ScrollShieldNativePlugin.getLastProtectionStopAt(context) >= before);
     }
 
     private void assertSystemWarning(String description, String expectedCode) {
