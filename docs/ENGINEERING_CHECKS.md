@@ -2,7 +2,7 @@
 
 Status: **verbindlicher technischer Verifikationsvertrag**
 
-Letzte Aktualisierung: **16. August 2026**
+Letzte Aktualisierung: **18. August 2026**
 
 Zentraler Source-/Web-Verifikationsbefehl:
 
@@ -35,6 +35,7 @@ Ein Source-Checker ist niemals ein ausgeführter Android-Test.
 - Native Drain/ACK/Factory Reset;
 - Native Retention;
 - **Usage Flush Coordinator + Worker + produktive Service-Verdrahtung**;
+- **explizite stabile Prerequisite-Stop-Codes im Protection Service**;
 - Device Matrix;
 - Lifecycle/Diagnostik;
 - Overlay Accessibility;
@@ -83,14 +84,16 @@ Vorhandene `androidTest`-Verträge:
 
 `ProtectionDiagnosticsInstrumentedTest` verlangt auf Android:
 
-- stabile persistierte Codes für entzogenen Nutzungszugriff;
-- stabile persistierte Codes für verlorene Overlay-Berechtigung;
-- stabile persistierte Codes für verlorene Benachrichtigungen;
-- stabile persistierte Codes für fehlende aktive Regeln und fehlende Ziel-App;
+- explizite stabile Codes für entzogenen Nutzungszugriff;
+- explizite stabile Codes für verlorene Overlay-Berechtigung;
+- explizite stabile Codes für verlorene Benachrichtigungen;
+- explizite stabile Codes für fehlende aktive Regeln und fehlende Ziel-App;
+- Nachweis, dass der gespeicherte Code **nicht von der Sprache des Meldungstexts abhängt**;
+- Legacy-Systemwarnungen behalten als Kompatibilitätsweg die bisherige Textklassifizierung;
 - persistierte Stop-Nachricht und Stop-Zeitstempel über den realen `SharedPreferences`-Pfad;
 - app-spezifische Warnungen dürfen einen bereits gespeicherten terminalen Stop-Grund nicht überschreiben.
 
-`check:android-instrumentation` verlangt diese Methoden und Codes im Sourcevertrag ausdrücklich. Das ist noch keine ausgeführte Instrumentation.
+`check:android-instrumentation` verlangt diese Methoden und Konstanten im Sourcevertrag ausdrücklich. Das ist noch keine ausgeführte Instrumentation.
 
 G7 bleibt **TEILWEISE**, weil reale Instrumentation sowie verbleibende echte Service-/Overlay-/Permission-Loss-/Notification-/OEM-E2E-Fälle fehlen.
 
@@ -224,7 +227,40 @@ Der Checker verlangt:
 
 Noch offen ist die **reale Ausführung** dieser Tests sowie echte Service-/Process-Kill-/Restart-Evidence.
 
-## 8. Storage Migration
+## 8. Explizite Prerequisite-Stop-Codes
+
+```bash
+npm run check:prerequisite-stop-codes
+```
+
+Der produktive Protection Service leitet terminale Stop-Gründe nicht mehr aus lokalisiertem deutschen Meldungstext ab.
+
+Stabile Codes:
+
+```text
+usage_access_missing
+overlay_permission_missing
+notifications_missing
+no_active_rules
+target_app_missing
+```
+
+Vertrag:
+
+- `ProtectionStopReasonPolicy` hält die stabilen Konstanten zentral;
+- `ScrollShieldProtectionService.onStartCommand()` verwendet die Konstanten für fehlende Startvoraussetzungen;
+- `enforceCurrentApp()` verwendet dieselben Konstanten bei Laufzeitverlust;
+- `stopForProtectionPrerequisite(reasonCode, description)` setzt den Schutz fail-closed auf inaktiv;
+- die Warnung wird lokal in die Event-Historie geschrieben;
+- anschließend wird **der explizite Code** mit `recordProtectionStop(...)` persistiert;
+- `onDestroy()` darf diesen kontrollierten Stop nicht als `unexpected_service_destroy` überschreiben;
+- `classifySystemWarning(description)` bleibt nur als Kompatibilitäts-Fallback für ältere/sonstige Systemwarnungen bestehen;
+- Pure-Java-JUnit sperrt die konstanten Code-Werte gegen versehentliche Änderung;
+- Android-Instrumentation prüft explizite Persistenz mit englischen Meldungstexten, damit die Sprachunabhängigkeit im Testvertrag sichtbar ist.
+
+Der neue Checker ist Bestandteil von `npm run verify` und als Pflichtschritt im `readiness`-Report eingetragen.
+
+## 9. Storage Migration
 
 ```bash
 npm run check:migration
@@ -234,21 +270,22 @@ Schützt V0.7-/Legacy-Migration inklusive `_pending`-Staging, exakter Read-Back-
 
 Reale V0.7-Geräte-Evidence bleibt Pflicht.
 
-## 9. Lifecycle / Usage Accounting
+## 10. Lifecycle / Usage Accounting
 
 ```bash
 npm run check:lifecycle
+npm run check:prerequisite-stop-codes
 npm run check:diagnostic-normalization
 npm run check:usage-accounting
 ```
 
-Schützt Lifecycle-Wahrheit, stabile Diagnosecodes, lokale Tagesgrenzen, keine negative Usage bei rückwärts laufender Uhr, Tag+App-Bucketing, Tageslimit und Anti-Binge über Mitternacht.
+Schützt Lifecycle-Wahrheit, strukturierte stabile Prerequisite-Stop-Codes, lokale Tagesgrenzen, keine negative Usage bei rückwärts laufender Uhr, Tag+App-Bucketing, Tageslimit und Anti-Binge über Mitternacht.
 
-Zusätzlich schützt `ProtectionDiagnosticsInstrumentedTest.java` den realen Android-Persistenzpfad für systemische Stop-Warnungen. Die eigentliche Berechtigungsentziehung während eines laufenden Services bleibt ein separater E2E-Fall und darf durch diesen Test nicht als erledigt gelten.
+`ProtectionDiagnosticsInstrumentedTest.java` schützt zusätzlich den realen Android-Persistenzpfad. Die eigentliche Berechtigungsentziehung während eines laufenden Services bleibt ein separater E2E-Fall und darf durch diesen Test nicht als erledigt gelten.
 
 Die Worker-/Usage-Checker müssen gemeinsam verhindern, dass die neue Persistenzarchitektur Tageslimits während Pending/In-Flight-Zuständen unterzählt oder Usage bei kontrolliertem Shutdown verliert.
 
-## 10. Device Matrix / Privacy / Release Gate
+## 11. Device Matrix / Privacy / Release Gate
 
 ```bash
 npm run check:device-matrix
@@ -261,7 +298,7 @@ npm run release:gate
 - Privacy blockiert Tracking-/Netzwerkpfade und `android.permission.INTERNET`.
 - Release Approval Schema v2 verlangt kandidatgebundene Evidence.
 
-## 11. Android CI Stage
+## 12. Android CI Stage
 
 Nach `npm run verify` soll CI ausführen:
 
@@ -281,7 +318,7 @@ cd android
 
 Ein erfolgreicher Source-Checker ersetzt diesen Lauf nicht.
 
-## 12. Aktuelle Ausführungsgrenze
+## 13. Aktuelle Ausführungsgrenze
 
 GitHub-hosted Actions starten derzeit wegen Billing-/Spending-Limit nicht und enden vor Step 1 mit leerer Step-Liste und ohne Runner.
 
@@ -289,9 +326,11 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 
 - `npm run verify`;
 - `check:usage-flush-worker`;
+- `check:prerequisite-stop-codes`;
 - `check:android-instrumentation`;
 - `UsageFlushCoordinatorTest`;
 - `UsageFlushWorkerTest`;
+- `ProtectionStopReasonPolicyTest`;
 - `UsageFlushInstrumentedTest`;
 - `ProtectionDiagnosticsInstrumentedTest`;
 - TypeScript/Lint/Prettier/Vitest;
@@ -300,12 +339,12 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - APK;
 - physische Geräte-Matrix.
 
-## 13. Reihenfolge nach Entsperrung
+## 14. Reihenfolge nach Entsperrung
 
 1. sauberer Checkout + `npm ci`;
 2. `npm run verify`;
 3. `./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace`;
-4. Coordinator-/Worker-JUnit und Service-Kompilierung bestätigen;
+4. Coordinator-/Worker-/Stop-Code-JUnit und Service-Kompilierung bestätigen;
 5. reale Fehler beheben und erneut ausführen;
 6. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace` auf Emulator/Gerät;
 7. `UsageFlushInstrumentedTest`, `ProtectionDiagnosticsInstrumentedTest` + Native Drain/Retention/Recovery-Instrumentation bestätigen;
