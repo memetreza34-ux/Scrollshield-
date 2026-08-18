@@ -23,10 +23,10 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 | G1 | Architektur & Repo-Prozess | **FERTIG** | React/TS, lokale Daten, Capacitor/Native Android, Draft-PR-Prozess und Verantwortungsgrenzen sind dokumentiert | bei Architekturänderung erneut öffnen |
 | G2 | Datenmodell & Migration | **TEILWEISE** | starke transaktionale/V0.7-Migration im Source; reale Alt-Daten-Evidenz fehlt | echter V0.7-Upgrade-Test + bytegenauer Archivvergleich |
 | G3 | Kern-UI/UX & Accessibility | **TEILWEISE** | Release-Screens und Source-A11y-Checks existieren; reale Usability-/Large-Font-/TalkBack-Evidenz fehlt | physische Accessibility- und User-Research-Sessions |
-| G4 | Native Android Schutz | **TEILWEISE** | Usage Access, Overlay, FGS, Regeln, Recovery, Diagnostik, strukturierte Prerequisite-Stop-Codes und crash-sicherer Native-Datentransfer sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + reale Geräte |
+| G4 | Native Android Schutz | **TEILWEISE** | Usage Access, Overlay, FGS, Regeln, Recovery, Diagnostik, stabile atomar persistierte Prerequisite-Stop-Codes und crash-sicherer Native-Datentransfer sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + reale Geräte |
 | G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First-Manifest, Privacy-Guard, gepinnter Gradle-SHA256 und `check:supply-chain` existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-Check + Dependency-/Manifest-Snapshot + finaler Binary-Audit + Threat-Review |
 | G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` und Android-Stufen sind vorbereitet; GitHub Runner stoppt vor Step 1 wegen Billing/Spending-Limit | kompletter echter Verify-Lauf auf exaktem Head |
-| G7 | Android Instrumentation/E2E | **TEILWEISE** | Runtime-State/Lifecycle, Manifest/Permissions, Boot-Recovery, Native-Drain/ACK/Reset, Retention, echter Android-SharedPreferences-Usage-Flush sowie explizite sprachunabhängige Prerequisite-Stop-Codes besitzen Source-/`androidTest`-Verträge. Reale Permission-Loss-/Overlay-/Service-Ausführung fehlt | `connectedDebugAndroidTest` real ausführen + echte Berechtigungsentziehung während laufendem Service + Overlay-/Notification-/Service-Flows |
+| G7 | Android Instrumentation/E2E | **TEILWEISE** | Runtime-State/Lifecycle, Manifest/Permissions, Boot-Recovery, Native-Drain/ACK/Reset, Retention, Android-SharedPreferences-Usage-Flush sowie sprachunabhängige und atomar persistierte Prerequisite-Stop-Codes besitzen Source-/`androidTest`-Verträge. Reale Permission-Loss-/Overlay-/Service-Ausführung fehlt | `connectedDebugAndroidTest` real ausführen + echte Berechtigungsentziehung während laufendem Service + Overlay-/Notification-/Service-Flows |
 | G8 | Performance & Batterie | **TEILWEISE** | `ScrollShieldProtectionService` ist auf `UsageFlushCoordinator` + `UsageFlushWorker` verdrahtet. Periodische Usage-`commit()`-Writes laufen nicht mehr im Service-Main-Thread; Pending/In-Flight bleibt im Tageslimit sichtbar, Shutdown besitzt einen seriellen Final-Drain und `UsageFlushInstrumentedTest` prüft den Android-SharedPreferences-Pfad im Testvertrag. Reale JUnit-/Instrumentation-/Gradle-/Device-Evidenz fehlt weiterhin | Worker-/Coordinator-JUnit + Usage-Flush-Instrumentation real ausführen + `assembleDebug` + Process-Kill-Regressions + 12h-Baseline |
 | G9 | Physical Device Matrix | **FEHLT** | Matrix ist definiert, aber nicht vollständig ausgeführt | Pflichtgeräte/Szenarien mit Build-ID/Evidenz vollständig dokumentieren |
 | G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Evidence-Schema v2 existiert; Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Kandidaten-SHA + echte Referenzen |
@@ -69,13 +69,15 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
   - `ProtectionStopReasonPolicy` besitzt zentrale stabile Codes für Usage Access, Overlay, Notifications, aktive Regeln und Ziel-App;
   - `ScrollShieldProtectionService.onStartCommand()` verwendet diese Codes explizit bei fehlenden Startvoraussetzungen;
   - `enforceCurrentApp()` verwendet dieselben Codes bei Laufzeitverlust;
-  - `stopForProtectionPrerequisite(reasonCode, description)` setzt Schutz fail-closed auf inaktiv, schreibt die Warnung und persistiert anschließend den expliziten terminalen Code;
+  - `ScrollShieldNativePlugin.recordProtectionPrerequisiteStop(...)` persistiert unter `EVENT_LOCK` in **einem** synchronen Commit: `enabled=false`, Warn-Event, Stop-Zeitpunkt, exakten Stop-Code und Stop-Nachricht;
+  - dadurch existiert im Primärpfad kein Crash-Fenster mehr zwischen separaten Deaktivierungs-/Event-/Diagnose-Commits;
+  - `stopForProtectionPrerequisite(reasonCode, description)` verwendet zuerst die atomare Native-Operation und greift nur bei `commit=false` auf einen expliziten Best-Effort-Fallback zurück;
   - lokalisierter Meldungstext entscheidet nicht mehr über den neuen produktiven Service-Stop-Code;
   - `classifySystemWarning(...)` bleibt nur als Legacy-/Kompatibilitäts-Fallback bestehen;
   - `ProtectionStopReasonPolicyTest.java` sperrt die stabilen Werte;
-  - `ProtectionDiagnosticsInstrumentedTest.java` prüft explizite Codes mit anderssprachigem Meldungstext und den Legacy-Fallback;
-  - `check:prerequisite-stop-codes` schützt die Service-Verdrahtung und ist Teil von `npm run verify` sowie des Readiness-Reports;
-  - `check:lifecycle` und `check:android-instrumentation` wurden auf den neuen Vertrag umgestellt.
+  - `ProtectionDiagnosticsInstrumentedTest.java` prüft die atomare Transaktion (`enabled=false`, Event-Queue, Code, Nachricht, Zeitstempel), anderssprachige Meldungstexte und den Legacy-Fallback;
+  - `check:prerequisite-stop-codes` erzwingt die atomare Service-/Plugin-Verdrahtung und ist Teil von `npm run verify` sowie des Readiness-Reports;
+  - `check:lifecycle` und `check:android-instrumentation` wurden auf denselben atomaren Vertrag umgestellt.
 - `check:native-drain-ack`, `check:native-retention`, `check:usage-flush-worker`, `check:prerequisite-stop-codes` und `check:android-instrumentation` sind Bestandteil von `npm run verify`.
 
 ## Aktueller Arbeitsfokus
