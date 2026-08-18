@@ -328,6 +328,62 @@ public class ScrollShieldNativePlugin extends Plugin {
         }
     }
 
+    /**
+     * Atomically records a controlled protection prerequisite stop. The enabled flag, terminal
+     * diagnostics, and user-visible system warning are committed together so a process death cannot
+     * leave a localized text-derived stop code between separate writes.
+     */
+    public static boolean recordProtectionPrerequisiteStop(
+        Context context,
+        String reasonCode,
+        String description
+    ) {
+        synchronized (EVENT_LOCK) {
+            SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+            JSONArray events;
+            try {
+                String existing = preferences.getString(EVENT_QUEUE_KEY, "[]");
+                events = new JSONArray(existing == null ? "[]" : existing);
+            } catch (JSONException error) {
+                events = new JSONArray();
+            }
+
+            try {
+                long timestamp = System.currentTimeMillis();
+                String normalizedCode = ProtectionDiagnosticPolicy.normalizeCode(
+                    reasonCode,
+                    ProtectionStopReasonPolicy.SYSTEM_WARNING
+                );
+                String normalizedMessage = ProtectionDiagnosticPolicy.normalizeMessage(
+                    description,
+                    "Systemwarnung"
+                );
+
+                JSONObject event = new JSONObject();
+                event.put("timestamp", timestamp);
+                event.put("type", "warning");
+                event.put("appId", "system");
+                event.put("desc", normalizedMessage);
+                events.put(event);
+                while (events.length() > MAX_QUEUED_EVENTS) {
+                    events.remove(0);
+                }
+
+                return preferences
+                    .edit()
+                    .putBoolean(SERVICE_ENABLED_KEY, false)
+                    .putString(EVENT_QUEUE_KEY, events.toString())
+                    .putLong(LAST_STOP_AT_KEY, timestamp)
+                    .putString(LAST_STOP_CODE_KEY, normalizedCode)
+                    .putString(LAST_STOP_MESSAGE_KEY, normalizedMessage)
+                    .commit();
+            } catch (JSONException error) {
+                error.printStackTrace();
+                return false;
+            }
+        }
+    }
+
     public static boolean hasUsageAccess(Context context) {
         AppOpsManager appOps = (AppOpsManager) context.getSystemService(Context.APP_OPS_SERVICE);
         if (appOps == null) return false;
