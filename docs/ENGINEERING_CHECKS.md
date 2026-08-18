@@ -35,7 +35,7 @@ Ein Source-Checker ist niemals ein ausgeführter Android-Test.
 - Native Drain/ACK/Factory Reset;
 - Native Retention;
 - **Usage Flush Coordinator + Worker + produktive Service-Verdrahtung**;
-- **explizite stabile Prerequisite-Stop-Codes im Protection Service**;
+- **explizite stabile und atomar persistierte Prerequisite-Stop-Codes**;
 - Device Matrix;
 - Lifecycle/Diagnostik;
 - Overlay Accessibility;
@@ -88,9 +88,9 @@ Vorhandene `androidTest`-Verträge:
 - explizite stabile Codes für verlorene Overlay-Berechtigung;
 - explizite stabile Codes für verlorene Benachrichtigungen;
 - explizite stabile Codes für fehlende aktive Regeln und fehlende Ziel-App;
+- eine atomare Prerequisite-Stop-Transaktion, die deaktivierten Zustand, Warn-Event, Stop-Zeitpunkt, exakten Code und Nachricht gemeinsam persistiert;
 - Nachweis, dass der gespeicherte Code **nicht von der Sprache des Meldungstexts abhängt**;
 - Legacy-Systemwarnungen behalten als Kompatibilitätsweg die bisherige Textklassifizierung;
-- persistierte Stop-Nachricht und Stop-Zeitstempel über den realen `SharedPreferences`-Pfad;
 - app-spezifische Warnungen dürfen einen bereits gespeicherten terminalen Stop-Grund nicht überschreiben.
 
 `check:android-instrumentation` verlangt diese Methoden und Konstanten im Sourcevertrag ausdrücklich. Das ist noch keine ausgeführte Instrumentation.
@@ -227,7 +227,7 @@ Der Checker verlangt:
 
 Noch offen ist die **reale Ausführung** dieser Tests sowie echte Service-/Process-Kill-/Restart-Evidence.
 
-## 8. Explizite Prerequisite-Stop-Codes
+## 8. Explizite und atomare Prerequisite-Stop-Codes
 
 ```bash
 npm run check:prerequisite-stop-codes
@@ -250,15 +250,22 @@ Vertrag:
 - `ProtectionStopReasonPolicy` hält die stabilen Konstanten zentral;
 - `ScrollShieldProtectionService.onStartCommand()` verwendet die Konstanten für fehlende Startvoraussetzungen;
 - `enforceCurrentApp()` verwendet dieselben Konstanten bei Laufzeitverlust;
-- `stopForProtectionPrerequisite(reasonCode, description)` setzt den Schutz fail-closed auf inaktiv;
-- die Warnung wird lokal in die Event-Historie geschrieben;
-- anschließend wird **der explizite Code** mit `recordProtectionStop(...)` persistiert;
+- `ScrollShieldNativePlugin.recordProtectionPrerequisiteStop(...)` läuft unter `EVENT_LOCK` und schreibt in **einem synchronen `SharedPreferences.commit()`**:
+  - `SERVICE_ENABLED_KEY=false`;
+  - die aktualisierte `protection_events`-Queue mit `warning/system`;
+  - `LAST_STOP_AT_KEY`;
+  - den explizit normalisierten `LAST_STOP_CODE_KEY`;
+  - `LAST_STOP_MESSAGE_KEY`;
+- damit gibt es im Primärpfad kein Crash-Fenster mehr zwischen Deaktivierung, Warn-Event und exaktem Stop-Code;
+- `stopForProtectionPrerequisite(reasonCode, description)` ruft zuerst diese atomare Operation auf;
+- nur bei `commit=false` folgt ein Best-Effort-Fallback aus `setProtectionEnabled(false)` + `recordProtectionStop(...)`;
 - `onDestroy()` darf diesen kontrollierten Stop nicht als `unexpected_service_destroy` überschreiben;
 - `classifySystemWarning(description)` bleibt nur als Kompatibilitäts-Fallback für ältere/sonstige Systemwarnungen bestehen;
 - Pure-Java-JUnit sperrt die konstanten Code-Werte gegen versehentliche Änderung;
-- Android-Instrumentation prüft explizite Persistenz mit englischen Meldungstexten, damit die Sprachunabhängigkeit im Testvertrag sichtbar ist.
+- Android-Instrumentation prüft die atomare Transaktion inklusive `enabled=false`, Event-Queue, exaktem Code, Nachricht und Zeitstempel;
+- dieselbe Instrumentation prüft mit englischen Meldungstexten, dass der Code nicht von lokalisierter Prosa abhängt.
 
-Der neue Checker ist Bestandteil von `npm run verify` und als Pflichtschritt im `readiness`-Report eingetragen.
+`check:prerequisite-stop-codes` erzwingt die atomare Native-Transaktion, die Service-Verdrahtung und den Instrumentation-Vertrag. Der Checker ist Bestandteil von `npm run verify` und als Pflichtschritt im `readiness`-Report eingetragen.
 
 ## 9. Storage Migration
 
@@ -279,7 +286,7 @@ npm run check:diagnostic-normalization
 npm run check:usage-accounting
 ```
 
-Schützt Lifecycle-Wahrheit, strukturierte stabile Prerequisite-Stop-Codes, lokale Tagesgrenzen, keine negative Usage bei rückwärts laufender Uhr, Tag+App-Bucketing, Tageslimit und Anti-Binge über Mitternacht.
+Schützt Lifecycle-Wahrheit, strukturierte stabile und atomar gespeicherte Prerequisite-Stop-Codes, lokale Tagesgrenzen, keine negative Usage bei rückwärts laufender Uhr, Tag+App-Bucketing, Tageslimit und Anti-Binge über Mitternacht.
 
 `ProtectionDiagnosticsInstrumentedTest.java` schützt zusätzlich den realen Android-Persistenzpfad. Die eigentliche Berechtigungsentziehung während eines laufenden Services bleibt ein separater E2E-Fall und darf durch diesen Test nicht als erledigt gelten.
 
