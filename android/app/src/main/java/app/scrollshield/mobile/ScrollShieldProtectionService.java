@@ -329,9 +329,17 @@ public class ScrollShieldProtectionService extends Service {
     private void stopForProtectionPrerequisite(String reasonCode, String description) {
         explicitStopRequested = true;
         hideOverlay();
-        ScrollShieldNativePlugin.setProtectionEnabled(this, false);
-        ScrollShieldNativePlugin.appendProtectionEvent(this, "warning", "system", description);
-        ScrollShieldNativePlugin.recordProtectionStop(this, reasonCode, description);
+        boolean persisted = ScrollShieldNativePlugin.recordProtectionPrerequisiteStop(
+            this,
+            reasonCode,
+            description
+        );
+        if (!persisted) {
+            // Best-effort fallback after an atomic commit failure. Keep fail-closed activation and
+            // explicit diagnostics even if the event queue itself cannot be durably updated.
+            ScrollShieldNativePlugin.setProtectionEnabled(this, false);
+            ScrollShieldNativePlugin.recordProtectionStop(this, reasonCode, description);
+        }
         stopSelf();
     }
 
