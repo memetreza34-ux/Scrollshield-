@@ -2,7 +2,7 @@
 
 Status: **verbindlicher technischer Verifikationsvertrag**
 
-Letzte Aktualisierung: **18. August 2026**
+Letzte Aktualisierung: **19. August 2026**
 
 Zentraler Source-/Web-Verifikationsbefehl:
 
@@ -36,6 +36,7 @@ Ein Source-Checker ist niemals ein ausgeführter Android-Test.
 - Native Retention;
 - **Usage Flush Coordinator + Worker + produktive Service-Verdrahtung**;
 - **explizite stabile und atomar persistierte Prerequisite-Stop-Codes**;
+- **Process-Loss-Erkennung + kontrollierter Restart-Recovery**;
 - Device Matrix;
 - Lifecycle/Diagnostik;
 - Overlay Accessibility;
@@ -95,7 +96,7 @@ Vorhandene `androidTest`-Verträge:
 
 `check:android-instrumentation` verlangt diese Methoden und Konstanten im Sourcevertrag ausdrücklich. Das ist noch keine ausgeführte Instrumentation.
 
-G7 bleibt **TEILWEISE**, weil reale Instrumentation sowie verbleibende echte Service-/Overlay-/Permission-Loss-/Notification-/OEM-E2E-Fälle fehlen.
+G7 bleibt **TEILWEISE**, weil reale Instrumentation sowie verbleibende echte Service-/Overlay-/Permission-Loss-/Process-Kill-/Notification-/OEM-E2E-Fälle fehlen.
 
 ## 4. Supply Chain
 
@@ -267,7 +268,39 @@ Vertrag:
 
 `check:prerequisite-stop-codes` erzwingt die atomare Native-Transaktion, die Service-Verdrahtung und den Instrumentation-Vertrag. Der Checker ist Bestandteil von `npm run verify` und als Pflichtschritt im `readiness`-Report eingetragen.
 
-## 9. Storage Migration
+## 9. Process-Loss / kontrollierter Restart-Recovery
+
+```bash
+npm run check:process-loss
+```
+
+`unclean-process-stop` wird ausschließlich aus persistierter Lifecycle-Wahrheit abgeleitet:
+
+```text
+running == false
+enabled == true
+lastStartAt > 0
+lastStartAt > lastStopAt
+```
+
+Der Vertrag verlangt:
+
+- Process-Loss bleibt getrennt von gewöhnlicher `stale-activation`;
+- ältere Stop-Evidence wird nicht als aktuelle Ursache dargestellt;
+- UI-Aktion lautet `Schutz wiederherstellen`;
+- `NativeProtection.recoverAfterProcessLoss(...)` liest den Native-Status vor dem Recovery erneut;
+- ist der Dienst inzwischen `running && enabled`, wird kein zweiter Start ausgelöst;
+- jeder Zustand außer `unclean-process-stop` wird für diesen Recovery-Pfad abgelehnt;
+- aktuelle Protection-Config wird neu synchronisiert;
+- der vorhandene Native-Startpfad wird verwendet, sodass Usage Access, Overlay, Notifications und installierte Ziel-App erneut geprüft werden;
+- nach dem Start wird Native-Wahrheit erneut gelesen;
+- die UI meldet Erfolg nur bei `running && enabled && health == active`;
+- Bridge-, Health-, StatusPanel- und Permissions-Tests schützen diesen Ablauf;
+- `docs/PROCESS_LOSS_RECOVERY.md` hält Source-Vertrag und reale Evidence-Grenze fest.
+
+Der Source-Vertrag beweist keinen echten Android-Prozesskill. Reale Kill/Restart-Evidence bleibt für G7/G8/G9 verpflichtend.
+
+## 10. Storage Migration
 
 ```bash
 npm run check:migration
@@ -277,22 +310,23 @@ Schützt V0.7-/Legacy-Migration inklusive `_pending`-Staging, exakter Read-Back-
 
 Reale V0.7-Geräte-Evidence bleibt Pflicht.
 
-## 10. Lifecycle / Usage Accounting
+## 11. Lifecycle / Usage Accounting
 
 ```bash
 npm run check:lifecycle
 npm run check:prerequisite-stop-codes
+npm run check:process-loss
 npm run check:diagnostic-normalization
 npm run check:usage-accounting
 ```
 
-Schützt Lifecycle-Wahrheit, strukturierte stabile und atomar gespeicherte Prerequisite-Stop-Codes, lokale Tagesgrenzen, keine negative Usage bei rückwärts laufender Uhr, Tag+App-Bucketing, Tageslimit und Anti-Binge über Mitternacht.
+Schützt Lifecycle-Wahrheit, strukturierte stabile und atomar gespeicherte Prerequisite-Stop-Codes, Process-Loss-/Recovery-Grenzen, lokale Tagesgrenzen, keine negative Usage bei rückwärts laufender Uhr, Tag+App-Bucketing, Tageslimit und Anti-Binge über Mitternacht.
 
-`ProtectionDiagnosticsInstrumentedTest.java` schützt zusätzlich den realen Android-Persistenzpfad. Die eigentliche Berechtigungsentziehung während eines laufenden Services bleibt ein separater E2E-Fall und darf durch diesen Test nicht als erledigt gelten.
+`ProtectionDiagnosticsInstrumentedTest.java` schützt zusätzlich den realen Android-Persistenzpfad. Die eigentliche Berechtigungsentziehung während eines laufenden Services sowie ein echter Prozesskill bleiben separate E2E-Fälle und dürfen durch Source-/Component-Tests nicht als erledigt gelten.
 
 Die Worker-/Usage-Checker müssen gemeinsam verhindern, dass die neue Persistenzarchitektur Tageslimits während Pending/In-Flight-Zuständen unterzählt oder Usage bei kontrolliertem Shutdown verliert.
 
-## 11. Device Matrix / Privacy / Release Gate
+## 12. Device Matrix / Privacy / Release Gate
 
 ```bash
 npm run check:device-matrix
@@ -305,7 +339,7 @@ npm run release:gate
 - Privacy blockiert Tracking-/Netzwerkpfade und `android.permission.INTERNET`.
 - Release Approval Schema v2 verlangt kandidatgebundene Evidence.
 
-## 12. Android CI Stage
+## 13. Android CI Stage
 
 Nach `npm run verify` soll CI ausführen:
 
@@ -325,7 +359,7 @@ cd android
 
 Ein erfolgreicher Source-Checker ersetzt diesen Lauf nicht.
 
-## 13. Aktuelle Ausführungsgrenze
+## 14. Aktuelle Ausführungsgrenze
 
 GitHub-hosted Actions starten derzeit wegen Billing-/Spending-Limit nicht und enden vor Step 1 mit leerer Step-Liste und ohne Runner.
 
@@ -334,10 +368,12 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - `npm run verify`;
 - `check:usage-flush-worker`;
 - `check:prerequisite-stop-codes`;
+- `check:process-loss`;
 - `check:android-instrumentation`;
 - `UsageFlushCoordinatorTest`;
 - `UsageFlushWorkerTest`;
 - `ProtectionStopReasonPolicyTest`;
+- Process-Loss-/Restart-Recovery-Vitest- und Component-Tests;
 - `UsageFlushInstrumentedTest`;
 - `ProtectionDiagnosticsInstrumentedTest`;
 - TypeScript/Lint/Prettier/Vitest;
@@ -346,7 +382,7 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - APK;
 - physische Geräte-Matrix.
 
-## 14. Reihenfolge nach Entsperrung
+## 15. Reihenfolge nach Entsperrung
 
 1. sauberer Checkout + `npm ci`;
 2. `npm run verify`;
@@ -355,7 +391,8 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 5. reale Fehler beheben und erneut ausführen;
 6. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace` auf Emulator/Gerät;
 7. `UsageFlushInstrumentedTest`, `ProtectionDiagnosticsInstrumentedTest` + Native Drain/Retention/Recovery-Instrumentation bestätigen;
-8. echte Permission-Loss-/Overlay-/Service-E2E-Fälle ausführen;
-9. Shutdown/In-Flight/Process-Kill/Restart-Races testen;
-10. Debug APK auf Device Matrix;
-11. erst danach Release-Evidence hochstufen.
+8. echten Process-Kill nach bestätigtem Dienststart reproduzieren und `unclean-process-stop` → `Schutz wiederherstellen` → `active` auf Android belegen;
+9. echte Permission-Loss-/Overlay-/Service-E2E-Fälle ausführen;
+10. Shutdown/In-Flight/Process-Kill/Restart-Races testen;
+11. Debug APK auf Device Matrix;
+12. erst danach Release-Evidence hochstufen.
