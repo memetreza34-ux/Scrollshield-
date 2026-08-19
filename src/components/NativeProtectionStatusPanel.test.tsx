@@ -41,6 +41,41 @@ describe('NativeProtectionStatusPanel', () => {
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 
+  it('offers a dedicated recovery action after an unclean process stop', () => {
+    const onToggle = vi.fn();
+    render(
+      <NativeProtectionStatusPanel
+        status={makeStatus({
+          enabled: true,
+          running: false,
+          lastStartAt: 200,
+          lastStopAt: 100,
+          health: 'unclean-process-stop',
+        })}
+        busy={false}
+        onToggle={onToggle}
+      />,
+    );
+
+    expect(screen.getByText('PROZESS ABGEBROCHEN')).toBeInTheDocument();
+    const recoveryButton = screen.getByRole('button', { name: 'Schutz wiederherstellen' });
+    expect(recoveryButton).toBeEnabled();
+    fireEvent.click(recoveryButton);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a dedicated busy label while process-loss recovery is running', () => {
+    render(
+      <NativeProtectionStatusPanel
+        status={makeStatus({ enabled: true, health: 'unclean-process-stop' })}
+        busy
+        onToggle={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Wiederherstellung läuft…' })).toBeDisabled();
+  });
+
   it('shows active state and a stop action', () => {
     render(
       <NativeProtectionStatusPanel
