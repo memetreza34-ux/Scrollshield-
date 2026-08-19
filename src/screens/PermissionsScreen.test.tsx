@@ -181,7 +181,7 @@ describe('PermissionsScreen', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Schutzdienst starten' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Start blockiert: Benachrichtigungen fehlt/)).toBeInTheDocument();
+      expect(screen.getByText(/Start blockiert: Benachrichtigungsfreigabe fehlt/)).toBeInTheDocument();
     });
     expect(startProtectionMock).not.toHaveBeenCalled();
     expect(recoverProtectionMock).not.toHaveBeenCalled();
@@ -297,7 +297,9 @@ describe('PermissionsScreen', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Schutz wiederherstellen' }));
 
-    expect(await screen.findByText(/Wiederherstellung blockiert: Benachrichtigungen fehlt/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Wiederherstellung blockiert: Benachrichtigungsfreigabe fehlt/),
+    ).toBeInTheDocument();
     expect(recoverProtectionMock).toHaveBeenCalledTimes(1);
   });
 
