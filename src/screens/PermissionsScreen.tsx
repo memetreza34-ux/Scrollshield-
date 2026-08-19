@@ -14,6 +14,11 @@ import {
 } from 'lucide-react';
 import { NativeProtectionStatusPanel } from '../components/NativeProtectionStatusPanel';
 import { Header } from '../components/ui';
+import {
+  describeMissingAndroidProtectionPrerequisites,
+  getAndroidProtectionPrerequisiteForStopCode,
+  getMissingAndroidProtectionPrerequisites,
+} from '../lib/androidProtectionPrerequisites';
 import { NativePermissions } from '../lib/nativePermissions';
 import { NativeProtection } from '../lib/nativeProtection';
 import type { NativeProtectionStatus } from '../lib/nativeProtection';
@@ -39,6 +44,16 @@ interface PermissionCardSpec {
 
 const isAndroidSettingKey = (key: keyof AppPermissions): key is AndroidSettingKey =>
   ['usageAccess', 'overlay', 'notifications', 'ignoreBatteryOptimization', 'backgroundActivity'].includes(key);
+
+const describeProtectionPrerequisiteBlock = (
+  missing: ReturnType<typeof getMissingAndroidProtectionPrerequisites>,
+  recovering: boolean,
+): string => {
+  const labels = describeMissingAndroidProtectionPrerequisites(missing);
+  const verb = missing.length === 1 ? 'fehlt' : 'fehlen';
+  const object = missing.length === 1 ? 'diesen Zugriff' : 'diese Zugriffe';
+  return `${recovering ? 'Wiederherstellung' : 'Start'} blockiert: ${labels} ${verb}. Aktiviere ${object} in Android und prüfe den Status erneut.`;
+};
 
 export function PermissionsScreen({
   state,
@@ -162,9 +177,18 @@ export function PermissionsScreen({
       }
 
       const nativeStatus = await NativePermissions.getAndroidStatus();
-      if (!nativeStatus?.usageAccess || !nativeStatus.overlay || !nativeStatus.notifications) {
+      applyNativePermissionStatus(nativeStatus);
+      if (!nativeStatus) {
         setStatusMessage(
-          'Aktiviere zuerst App-Nutzungszugriff, den Hinweis über anderen Apps und Benachrichtigungen.',
+          `${recoveringFromProcessLoss ? 'Wiederherstellung' : 'Start'} blockiert: Der Android-Berechtigungsstatus konnte nicht bestätigt werden. Prüfe den Status erneut.`,
+        );
+        return;
+      }
+
+      const missingPrerequisites = getMissingAndroidProtectionPrerequisites(nativeStatus);
+      if (missingPrerequisites.length > 0) {
+        setStatusMessage(
+          describeProtectionPrerequisiteBlock(missingPrerequisites, recoveringFromProcessLoss),
         );
         return;
       }
@@ -181,10 +205,22 @@ export function PermissionsScreen({
           state.isFocusModeActive,
         );
         setServiceStatus(nextStatus);
+
+        if (nextStatus.running && nextStatus.enabled && nextStatus.health === 'active') {
+          setStatusMessage(
+            `Android-Schutz wurde nach dem Prozessabbruch für ${activeApps} App${activeApps === 1 ? '' : 's'} wiederhergestellt.`,
+          );
+          return;
+        }
+
+        const blockedPrerequisite = getAndroidProtectionPrerequisiteForStopCode(nextStatus.lastStopCode);
+        if (blockedPrerequisite) {
+          setStatusMessage(describeProtectionPrerequisiteBlock([blockedPrerequisite], true));
+          return;
+        }
+
         setStatusMessage(
-          nextStatus.running && nextStatus.enabled && nextStatus.health === 'active'
-            ? `Android-Schutz wurde nach dem Prozessabbruch für ${activeApps} App${activeApps === 1 ? '' : 's'} wiederhergestellt.`
-            : 'Android hat die Wiederherstellung angefordert, der Dienst ist aber noch nicht als aktiv bestätigt. Prüfe den Status erneut.',
+          'Android hat die Wiederherstellung angefordert, der Dienst ist aber noch nicht als aktiv bestätigt. Prüfe den Status erneut.',
         );
         return;
       }
@@ -199,6 +235,36 @@ export function PermissionsScreen({
       );
     } catch (error) {
       console.error('Could not change Android protection service', error);
+
+      if (recoveringFromProcessLoss) {
+        try {
+          const [latestPermissions, latestServiceStatus] = await Promise.all([
+            NativePermissions.getAndroidStatus(),
+            NativeProtection.getStatus(),
+          ]);
+          applyNativePermissionStatus(latestPermissions);
+          setServiceStatus(latestServiceStatus);
+
+          if (latestPermissions) {
+            const missingPrerequisites = getMissingAndroidProtectionPrerequisites(latestPermissions);
+            if (missingPrerequisites.length > 0) {
+              setStatusMessage(describeProtectionPrerequisiteBlock(missingPrerequisites, true));
+              return;
+            }
+          }
+
+          const blockedPrerequisite = getAndroidProtectionPrerequisiteForStopCode(
+            latestServiceStatus.lastStopCode,
+          );
+          if (blockedPrerequisite) {
+            setStatusMessage(describeProtectionPrerequisiteBlock([blockedPrerequisite], true));
+            return;
+          }
+        } catch (diagnosticError) {
+          console.error('Could not diagnose Android process-loss recovery failure', diagnosticError);
+        }
+      }
+
       setStatusMessage(
         recoveringFromProcessLoss
           ? 'Der Android-Schutz konnte nach dem Prozessabbruch nicht wiederhergestellt werden. Prüfe die Zugriffe und den Status erneut.'
