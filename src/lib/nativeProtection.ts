@@ -287,6 +287,23 @@ export const NativeProtection = {
     await AndroidProtection.startProtectionService();
   },
 
+  async recoverAfterProcessLoss(
+    appsConfig: Record<string, AppConfig>,
+    focusMode: boolean,
+  ): Promise<NativeProtectionStatus> {
+    if (!this.isAvailable()) return { ...EMPTY_STATUS, unavailableAppIds: [] };
+
+    const before = await this.getStatus();
+    if (before.running && before.enabled) return before;
+    if (before.health !== 'unclean-process-stop') {
+      throw new Error('Android process-loss recovery requires an unclean-process-stop state');
+    }
+
+    await this.sync(appsConfig, focusMode);
+    await AndroidProtection.startProtectionService();
+    return this.getStatus();
+  },
+
   async stop(reason: NativeProtectionStopReason = DEFAULT_STOP_REASON): Promise<void> {
     if (!this.isAvailable()) return;
     await AndroidProtection.stopProtectionService({
