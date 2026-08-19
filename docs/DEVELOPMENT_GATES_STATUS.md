@@ -26,7 +26,7 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 | G4 | Native Android Schutz | **TEILWEISE** | Usage Access, Overlay, FGS, Regeln, Recovery, Diagnostik, stabile atomar persistierte Prerequisite-Stop-Codes und crash-sicherer Native-Datentransfer sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + reale Geräte |
 | G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First-Manifest, Privacy-Guard, gepinnter Gradle-SHA256 und `check:supply-chain` existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-Check + Dependency-/Manifest-Snapshot + finaler Binary-Audit + Threat-Review |
 | G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` und Android-Stufen sind vorbereitet; GitHub Runner stoppt vor Step 1 wegen Billing/Spending-Limit | kompletter echter Verify-Lauf auf exaktem Head |
-| G7 | Android Instrumentation/E2E | **TEILWEISE** | Runtime-State/Lifecycle, Manifest/Permissions, Boot-Recovery, Native-Drain/ACK/Reset, Retention, Android-SharedPreferences-Usage-Flush, sprachunabhängige atomare Prerequisite-Stops sowie `unclean-process-stop` mit kontrolliertem Restart-Recovery besitzen Source-/Testverträge. Reale Permission-Loss-/Process-Kill-/Overlay-/Service-Ausführung fehlt | `connectedDebugAndroidTest` real ausführen + echten Prozesskill nach bestätigtem Dienststart reproduzieren + `Schutz wiederherstellen` auf Android bestätigen + Berechtigungsentziehung/Overlay-/Notification-/Service-Flows |
+| G7 | Android Instrumentation/E2E | **TEILWEISE** | Runtime-State/Lifecycle, Manifest/Permissions, Boot-Recovery, Native-Drain/ACK/Reset, Retention, Android-SharedPreferences-Usage-Flush, sprachunabhängige atomare Prerequisite-Stops sowie `unclean-process-stop` mit kontrolliertem Restart-Recovery und exakter Prerequisite-/Race-Diagnose besitzen Source-/Testverträge. Reale Permission-Loss-/Process-Kill-/Overlay-/Service-Ausführung fehlt | `connectedDebugAndroidTest` real ausführen + echten Prozesskill reproduzieren + `Schutz wiederherstellen` bestätigen + Usage Access/Overlay/Notifications vor und während Recovery real entziehen |
 | G8 | Performance & Batterie | **TEILWEISE** | `ScrollShieldProtectionService` ist auf `UsageFlushCoordinator` + `UsageFlushWorker` verdrahtet. Periodische Usage-`commit()`-Writes laufen nicht mehr im Service-Main-Thread; Pending/In-Flight bleibt im Tageslimit sichtbar, Shutdown besitzt einen seriellen Final-Drain und `UsageFlushInstrumentedTest` prüft den Android-SharedPreferences-Pfad im Testvertrag. Reale JUnit-/Instrumentation-/Gradle-/Device-Evidenz fehlt weiterhin | Worker-/Coordinator-JUnit + Usage-Flush-Instrumentation real ausführen + `assembleDebug` + Process-Kill-Regressions + 12h-Baseline |
 | G9 | Physical Device Matrix | **FEHLT** | Matrix ist definiert, aber nicht vollständig ausgeführt | Pflichtgeräte/Szenarien mit Build-ID/Evidenz vollständig dokumentieren |
 | G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Evidence-Schema v2 existiert; Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Kandidaten-SHA + echte Referenzen |
@@ -68,7 +68,7 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 - Prerequisite-/Permission-Loss-Diagnostik gehärtet:
   - `ProtectionStopReasonPolicy` besitzt zentrale stabile Codes für Usage Access, Overlay, Notifications, aktive Regeln und Ziel-App;
   - `ScrollShieldProtectionService.onStartCommand()` verwendet diese Codes explizit bei fehlenden Startvoraussetzungen;
-  - `enforceCurrentApp()` verwendet dieselben Codes bei Laufzeitverlust;
+  - `enforceCurrentApp()` verwendet dieselben Konstanten bei Laufzeitverlust;
   - `ScrollShieldNativePlugin.recordProtectionPrerequisiteStop(...)` persistiert unter `EVENT_LOCK` in **einem** synchronen Commit: `enabled=false`, Warn-Event, Stop-Zeitpunkt, exakten Stop-Code und Stop-Nachricht;
   - dadurch existiert im Primärpfad kein Crash-Fenster mehr zwischen separaten Deaktivierungs-/Event-/Diagnose-Commits;
   - `stopForProtectionPrerequisite(reasonCode, description)` verwendet zuerst die atomare Native-Operation und greift nur bei `commit=false` auf einen expliziten Best-Effort-Fallback zurück;
@@ -90,9 +90,13 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
   - der bestehende Native-Startpfad prüft Usage Access, Overlay, Notifications und installierte Ziel-App erneut;
   - nach dem Start wird der Native-Status erneut gelesen;
   - die UI meldet `wiederhergestellt` nur bei `running && enabled && health == active`;
-  - `nativeProtection.test.ts`, `nativeProtectionHealth.test.ts`, `NativeProtectionStatusPanel.test.tsx` und `PermissionsScreen.test.tsx` schützen Erkennung, Doppelstart-Grenze, fail-closed Recovery und Nutzerfluss;
+  - `androidProtectionPrerequisites.ts` zentralisiert Pflichtzugriffe und ordnet `usage_access_missing`, `overlay_permission_missing` und `notifications_missing` denselben UI-Prerequisites zu;
+  - der Permissions-Screen benennt bereits vor Recovery exakt fehlende Pflichtzugriffe und startet in diesem Fall **nicht** nativ;
+  - wirft Recovery einen Fehler, werden Permission- und Service-Status erneut parallel gelesen, um einen Entzug zwischen Precheck und Start zu erkennen;
+  - liefert der gestartete Service einen frischen stabilen Prerequisite-Stop-Code zurück, wird dieser ebenfalls als konkreter Recovery-Blocker dargestellt;
+  - `androidProtectionPrerequisites.test.ts` sowie erweiterte `PermissionsScreen.test.tsx`-Fälle schützen Reihenfolge, Stop-Code-Mapping, Precheck, Permission-Race und frischen Native-Stop-Code;
   - `docs/PROCESS_LOSS_RECOVERY.md` dokumentiert den vollständigen Vertrag und die noch fehlende reale Android-Evidence;
-  - `check:process-loss` erzwingt Erkennung + kontrollierten Restart-Recovery und ist Teil von `npm run verify` sowie des Readiness-Reports.
+  - `check:process-loss` erzwingt Erkennung, kontrollierten Restart-Recovery und exakte Blocker-Diagnose und ist Teil von `npm run verify` sowie des Readiness-Reports.
 - `check:native-drain-ack`, `check:native-retention`, `check:usage-flush-worker`, `check:prerequisite-stop-codes`, `check:process-loss` und `check:android-instrumentation` sind Bestandteil von `npm run verify`.
 
 ## Aktueller Arbeitsfokus
@@ -100,7 +104,7 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 ### Jetzt aktiv
 
 1. **G6 extern entsperren:** GitHub Actions Billing/Spending-Limit korrigieren; danach vollständige Verify-/Android-JUnit-/Debug-Build-Kette real ausführen.
-2. **G7 echte Process-Kill-/Recovery-Evidence:** laufenden Schutz mit bestätigtem `lastStartAt` hart beenden, danach `unclean-process-stop` beobachten, `Schutz wiederherstellen` ausführen und den realen Übergang zu `active` bestätigen.
+2. **G7 echte Process-Kill-/Recovery-Evidence:** laufenden Schutz mit bestätigtem `lastStartAt` hart beenden, danach `unclean-process-stop` beobachten, `Schutz wiederherstellen` ausführen und Usage Access / Overlay / Notifications vor bzw. während Recovery einzeln entziehen; konkrete Blocker und erfolgreichen Übergang zu `active` bestätigen.
 3. **G7 echte Permission-Loss-E2E:** auf Emulator/Gerät Schutz starten und Usage Access / Overlay / Notifications während laufendem Service entziehen; Stop-Code, Aktivierungsstatus, Event und UI-Recovery prüfen.
 4. **G8 verifizieren:** Coordinator-/Worker-JUnit einschließlich Shutdown-Drain real ausführen, Android-Kompilierung bestätigen und `UsageFlushInstrumentedTest` auf Emulator/Gerät ausführen.
 5. **G7:** echte Overlay-/Service-/Notification-End-to-End-Fälle ergänzen und anschließend `connectedDebugAndroidTest` real ausführen.
