@@ -44,6 +44,7 @@ describe('NativeProtection lifecycle reasons', () => {
 
     isNativePlatformMock.mockReturnValue(true);
     getPlatformMock.mockReturnValue('android');
+    startProtectionServiceMock.mockResolvedValue(undefined);
     stopProtectionServiceMock.mockResolvedValue(undefined);
     syncProtectionConfigMock.mockResolvedValue({ unavailableAppIdsJson: '[]' });
   });
@@ -154,6 +155,82 @@ describe('NativeProtection lifecycle reasons', () => {
       lastStopAt: 1_786_000_100_000,
       health: 'unclean-process-stop',
     });
+  });
+
+  it('recovers only from a confirmed unclean process stop and re-reads native truth', async () => {
+    getProtectionServiceStatusMock
+      .mockResolvedValueOnce({
+        running: false,
+        enabled: true,
+        unavailableAppIdsJson: '[]',
+        lastStartAt: 200,
+        lastStopAt: 100,
+        lastStopCode: 'notification_action_stop',
+        lastStopMessage: 'Ein älterer sauberer Stopp',
+      })
+      .mockResolvedValueOnce({
+        running: true,
+        enabled: true,
+        unavailableAppIdsJson: '[]',
+        lastStartAt: 300,
+        lastStopAt: 100,
+        lastStopCode: 'notification_action_stop',
+        lastStopMessage: 'Ein älterer sauberer Stopp',
+      });
+
+    const result = await NativeProtection.recoverAfterProcessLoss(
+      {
+        instagram: {
+          id: 'instagram',
+          ...DEFAULT_APP_CONFIG,
+          active: true,
+        },
+      },
+      false,
+    );
+
+    expect(syncProtectionConfigMock).toHaveBeenCalledTimes(1);
+    expect(startProtectionServiceMock).toHaveBeenCalledTimes(1);
+    expect(getProtectionServiceStatusMock).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({ running: true, enabled: true, health: 'active' });
+  });
+
+  it('does not restart when process-loss recovery finds the service already active', async () => {
+    getProtectionServiceStatusMock.mockResolvedValue({
+      running: true,
+      enabled: true,
+      unavailableAppIdsJson: '[]',
+      lastStartAt: 300,
+      lastStopAt: 100,
+      lastStopCode: '',
+      lastStopMessage: '',
+    });
+
+    await expect(NativeProtection.recoverAfterProcessLoss({}, false)).resolves.toMatchObject({
+      running: true,
+      enabled: true,
+      health: 'active',
+    });
+    expect(syncProtectionConfigMock).not.toHaveBeenCalled();
+    expect(startProtectionServiceMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses process-loss recovery from an unrelated stopped state', async () => {
+    getProtectionServiceStatusMock.mockResolvedValue({
+      running: false,
+      enabled: false,
+      unavailableAppIdsJson: '[]',
+      lastStartAt: 100,
+      lastStopAt: 200,
+      lastStopCode: 'manual_app_stop',
+      lastStopMessage: 'Bewusst gestoppt',
+    });
+
+    await expect(NativeProtection.recoverAfterProcessLoss({}, false)).rejects.toThrow(
+      'unclean-process-stop',
+    );
+    expect(syncProtectionConfigMock).not.toHaveBeenCalled();
+    expect(startProtectionServiceMock).not.toHaveBeenCalled();
   });
 
   it('normalizes malformed lifecycle values instead of exposing invalid diagnostics', async () => {
