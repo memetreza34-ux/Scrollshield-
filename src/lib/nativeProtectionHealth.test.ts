@@ -49,6 +49,7 @@ describe('describeNativeProtectionHealth', () => {
     expect(presentation.title).toContain('ohne sauberen Stopp');
     expect(presentation.message).toContain('letzte bestätigte Dienststart');
     expect(presentation.message).toContain('System-Kill');
+    expect(presentation.message).toContain('Schutz wiederherstellen');
     expect(presentation.tone).toBe('warning');
     expect(presentation.showLastStop).toBe(false);
   });
