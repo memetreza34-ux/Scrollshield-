@@ -45,6 +45,55 @@ Für `unclean-process-stop` zeigt ScrollShield:
 
 Der Permissions-Screen prüft zusätzlich vor dem Recovery-Aufruf die aktuell sichtbaren Pflichtzugriffe und mindestens eine aktive App.
 
+## Exakte Prerequisite-Diagnose
+
+Die UI verwendet eine zentrale Pure-TypeScript-Policy in `androidProtectionPrerequisites.ts`.
+
+Pflichtzugriffe werden in stabiler Reihenfolge ausgewertet:
+
+```text
+usageAccess
+overlay
+notifications
+```
+
+Die stabilen nativen Stop-Codes werden auf dieselben UI-Prerequisites zurückgeführt:
+
+```text
+usage_access_missing       -> usageAccess
+overlay_permission_missing -> overlay
+notifications_missing      -> notifications
+```
+
+Damit kann ScrollShield drei unterschiedliche Timing-Fälle präzise behandeln.
+
+### 1. Zugriff fehlt bereits vor Recovery
+
+Vor `recoverAfterProcessLoss(...)` wird `NativePermissions.getAndroidStatus()` frisch gelesen und in den sichtbaren App-State übernommen. Fehlt ein Pflichtzugriff, wird **kein Native-Start versucht**.
+
+Beispiele:
+
+```text
+Wiederherstellung blockiert: App-Nutzungszugriff fehlt.
+Wiederherstellung blockiert: Hinweis über anderen Apps fehlt.
+Wiederherstellung blockiert: Benachrichtigungsfreigabe fehlt.
+```
+
+### 2. Zugriff geht zwischen Vorprüfung und Start verloren
+
+Wenn der Recovery-Aufruf einen Fehler wirft, liest der Screen erneut parallel:
+
+- `NativePermissions.getAndroidStatus()`;
+- `NativeProtection.getStatus()`.
+
+Dadurch wird ein Permission-Race nicht auf eine generische Fehlermeldung reduziert. Ein inzwischen entzogener Zugriff wird konkret benannt und der sichtbare Permission-State wird aktualisiert.
+
+### 3. Native-Start wurde angenommen, Service stoppt sofort wieder
+
+Falls `recoverAfterProcessLoss(...)` einen neuen Native-Status zurückliefert, der nicht `active` ist, wird dessen frischer `lastStopCode` ausgewertet. Ein stabiler Prerequisite-Code wird sofort auf den zugehörigen Zugriff gemappt und als Recovery-Blocker angezeigt.
+
+Damit deckt der Source-Vertrag auch das Fenster ab, in dem die Plugin-Vorprüfung erfolgreich war, der gestartete Service die Berechtigung aber unmittelbar danach als verloren erkennt.
+
 ## Erfolgsregel
 
 Die UI darf `wiederhergestellt` nur melden, wenn der zurückgelesene Zustand gleichzeitig erfüllt:
@@ -55,7 +104,7 @@ enabled == true
 health == active
 ```
 
-Andernfalls wird nur gemeldet, dass die Wiederherstellung angefordert wurde, aber noch nicht als aktiv bestätigt ist.
+Andernfalls wird entweder ein konkreter Prerequisite-Blocker oder nur ein nicht bestätigter Recovery-Status angezeigt.
 
 ## Source-Verifikation
 
@@ -69,6 +118,11 @@ Andernfalls wird nur gemeldet, dass die Wiederherstellung angefordert wurde, abe
 - fail-closed Recovery aus falschem Zustand;
 - Config-Resync + nativen Startpfad;
 - Status-Readback;
+- zentrale Prerequisite-Policy und stabile Reihenfolge;
+- Mapping der nativen Stop-Codes auf UI-Prerequisites;
+- konkreten Precheck-Block vor Recovery;
+- Permission-Recheck nach Recovery-Fehler;
+- Auswertung eines frischen Native-Prerequisite-Stop-Codes;
 - Permissions-Screen-Verdrahtung;
 - zugehörige Vitest-/Component-Verträge.
 
@@ -82,7 +136,9 @@ Dieser Source-Vertrag ersetzt keine reale Android-Evidence. Weiter offen:
 - sicherstellen, dass `onDestroy()` dabei nicht als Voraussetzung für die Erkennung benötigt wird;
 - App erneut öffnen und `unclean-process-stop` beobachten;
 - `Schutz wiederherstellen` ausführen;
-- reale Native-Prerequisite-Checks bestätigen;
+- Usage Access vor Recovery real entziehen und exakten Blocker beobachten;
+- Overlay vor/zwischen Recovery-Prüfung und Start real entziehen;
+- Notifications vor/zwischen Recovery-Prüfung und Start real entziehen;
+- frischen nativen Prerequisite-Stop nach angenommenem Start beobachten;
 - erfolgreichen Übergang zu `active` bestätigen;
-- fehlende Berechtigung während Recovery separat prüfen;
 - OEM-/Background-Kill-Verhalten auf der Device Matrix prüfen.
