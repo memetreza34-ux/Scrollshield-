@@ -20,6 +20,7 @@ export function NativeProtectionStatusPanel({
 }) {
   const presentation = describeNativeProtectionHealth(status);
   const running = status?.running ?? false;
+  const processRecovery = status?.health === 'unclean-process-stop';
   const stopActionLocked = running && stopLocked;
   const toneClasses =
     presentation.tone === 'positive'
@@ -105,12 +106,16 @@ export function NativeProtectionStatusPanel({
             }`}
           >
             {busy
-              ? 'Wird geändert…'
+              ? processRecovery
+                ? 'Wiederherstellung läuft…'
+                : 'Wird geändert…'
               : stopActionLocked
                 ? 'Stop während Commitment gesperrt'
                 : running
                   ? 'Schutzdienst stoppen'
-                  : 'Schutzdienst starten'}
+                  : processRecovery
+                    ? 'Schutz wiederherstellen'
+                    : 'Schutzdienst starten'}
           </button>
         </div>
       </div>
