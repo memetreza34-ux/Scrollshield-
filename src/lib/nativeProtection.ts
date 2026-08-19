@@ -25,6 +25,7 @@ export interface NativeProtectionDrain {
 export type NativeProtectionHealth =
   | 'active'
   | 'running-without-activation'
+  | 'unclean-process-stop'
   | 'stale-activation'
   | 'stopped-with-reason'
   | 'stopped-without-reason'
@@ -219,7 +220,12 @@ export const assessNativeProtectionHealth = (status: {
 }): NativeProtectionHealth => {
   if (status.running && status.enabled) return 'active';
   if (status.running && !status.enabled) return 'running-without-activation';
-  if (!status.running && status.enabled) return 'stale-activation';
+  if (!status.running && status.enabled) {
+    if (status.lastStartAt > 0 && status.lastStartAt > status.lastStopAt) {
+      return 'unclean-process-stop';
+    }
+    return 'stale-activation';
+  }
   if (status.lastStopAt > 0 && (status.lastStopCode.length > 0 || status.lastStopMessage.length > 0)) {
     return 'stopped-with-reason';
   }
