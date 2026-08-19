@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   describeMissingAndroidProtectionPrerequisites,
+  getAndroidProtectionPrerequisiteForStopCode,
   getMissingAndroidProtectionPrerequisites,
 } from './androidProtectionPrerequisites';
 
@@ -32,5 +33,17 @@ describe('Android protection prerequisite diagnostics', () => {
     expect(describeMissingAndroidProtectionPrerequisites(['usageAccess'])).toBe('App-Nutzungszugriff');
     expect(describeMissingAndroidProtectionPrerequisites(['overlay'])).toBe('Hinweis über anderen Apps');
     expect(describeMissingAndroidProtectionPrerequisites(['notifications'])).toBe('Benachrichtigungen');
+  });
+
+  it('maps stable native prerequisite stop codes back to the same UI prerequisite keys', () => {
+    expect(getAndroidProtectionPrerequisiteForStopCode('usage_access_missing')).toBe('usageAccess');
+    expect(getAndroidProtectionPrerequisiteForStopCode('overlay_permission_missing')).toBe('overlay');
+    expect(getAndroidProtectionPrerequisiteForStopCode('notifications_missing')).toBe('notifications');
+  });
+
+  it('does not treat unrelated terminal stop codes as permission prerequisites', () => {
+    expect(getAndroidProtectionPrerequisiteForStopCode('unexpected_service_destroy')).toBeNull();
+    expect(getAndroidProtectionPrerequisiteForStopCode('target_app_missing')).toBeNull();
+    expect(getAndroidProtectionPrerequisiteForStopCode('')).toBeNull();
   });
 });
