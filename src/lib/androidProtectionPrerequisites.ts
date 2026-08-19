@@ -10,7 +10,7 @@ export type AndroidProtectionPrerequisiteStatus = Pick<
 const PREREQUISITE_LABELS: Record<AndroidProtectionPrerequisiteKey, string> = {
   usageAccess: 'App-Nutzungszugriff',
   overlay: 'Hinweis über anderen Apps',
-  notifications: 'Benachrichtigungen',
+  notifications: 'Benachrichtigungsfreigabe',
 };
 
 const STOP_CODE_TO_PREREQUISITE: Record<string, AndroidProtectionPrerequisiteKey> = {
