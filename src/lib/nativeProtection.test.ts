@@ -136,6 +136,26 @@ describe('NativeProtection lifecycle reasons', () => {
     });
   });
 
+  it('detects an unclean process stop when the last start has no later stop record', async () => {
+    getProtectionServiceStatusMock.mockResolvedValue({
+      running: false,
+      enabled: true,
+      unavailableAppIdsJson: '[]',
+      lastStartAt: 1_786_000_200_000,
+      lastStopAt: 1_786_000_100_000,
+      lastStopCode: 'notification_action_stop',
+      lastStopMessage: 'Ein älterer sauberer Stopp',
+    });
+
+    await expect(NativeProtection.getStatus()).resolves.toMatchObject({
+      running: false,
+      enabled: true,
+      lastStartAt: 1_786_000_200_000,
+      lastStopAt: 1_786_000_100_000,
+      health: 'unclean-process-stop',
+    });
+  });
+
   it('normalizes malformed lifecycle values instead of exposing invalid diagnostics', async () => {
     getProtectionServiceStatusMock.mockResolvedValue({
       running: false,
@@ -159,7 +179,7 @@ describe('NativeProtection lifecycle reasons', () => {
     });
   });
 
-  it('distinguishes active, inconsistent, and stopped states deterministically', () => {
+  it('distinguishes active, process-loss, inconsistent, and stopped states deterministically', () => {
     const base = {
       lastStartAt: 0,
       lastStopAt: 0,
@@ -172,6 +192,15 @@ describe('NativeProtection lifecycle reasons', () => {
       'running-without-activation',
     );
     expect(assessNativeProtectionHealth({ ...base, running: false, enabled: true })).toBe('stale-activation');
+    expect(
+      assessNativeProtectionHealth({
+        ...base,
+        running: false,
+        enabled: true,
+        lastStartAt: 200,
+        lastStopAt: 100,
+      }),
+    ).toBe('unclean-process-stop');
     expect(
       assessNativeProtectionHealth({
         ...base,
