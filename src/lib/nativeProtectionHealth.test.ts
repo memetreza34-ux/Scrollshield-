@@ -33,6 +33,26 @@ describe('describeNativeProtectionHealth', () => {
     expect(presentation.showLastStop).toBe(true);
   });
 
+  it('explains an unclean process stop without trusting an older stop record', () => {
+    const presentation = describeNativeProtectionHealth(
+      makeStatus({
+        enabled: true,
+        health: 'unclean-process-stop',
+        lastStartAt: 1_786_000_200_000,
+        lastStopAt: 1_786_000_100_000,
+        lastStopCode: 'manual_app_stop',
+        lastStopMessage: 'Dieser Stopp gehört zu einer älteren Dienstinstanz',
+      }),
+    );
+
+    expect(presentation.badge).toBe('PROZESS ABGEBROCHEN');
+    expect(presentation.title).toContain('ohne sauberen Stopp');
+    expect(presentation.message).toContain('letzte bestätigte Dienststart');
+    expect(presentation.message).toContain('System-Kill');
+    expect(presentation.tone).toBe('warning');
+    expect(presentation.showLastStop).toBe(false);
+  });
+
   it('keeps deliberate user stops neutral', () => {
     const presentation = describeNativeProtectionHealth(
       makeStatus({
