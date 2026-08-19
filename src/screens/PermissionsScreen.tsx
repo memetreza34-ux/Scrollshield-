@@ -61,6 +61,7 @@ export function PermissionsScreen({
   const updateStateRef = useRef(updateState);
   const permissionsRef = useRef(permissions);
   const serviceRunning = serviceStatus?.running ?? false;
+  const recoveringFromProcessLoss = serviceStatus?.health === 'unclean-process-stop';
 
   updateStateRef.current = updateState;
   permissionsRef.current = permissions;
@@ -174,6 +175,20 @@ export function PermissionsScreen({
         return;
       }
 
+      if (recoveringFromProcessLoss) {
+        const nextStatus = await NativeProtection.recoverAfterProcessLoss(
+          state.appsConfig,
+          state.isFocusModeActive,
+        );
+        setServiceStatus(nextStatus);
+        setStatusMessage(
+          nextStatus.running && nextStatus.enabled && nextStatus.health === 'active'
+            ? `Android-Schutz wurde nach dem Prozessabbruch für ${activeApps} App${activeApps === 1 ? '' : 's'} wiederhergestellt.`
+            : 'Android hat die Wiederherstellung angefordert, der Dienst ist aber noch nicht als aktiv bestätigt. Prüfe den Status erneut.',
+        );
+        return;
+      }
+
       await NativeProtection.start(state.appsConfig, state.isFocusModeActive);
       const nextStatus = await NativeProtection.getStatus();
       setServiceStatus(nextStatus);
@@ -184,7 +199,11 @@ export function PermissionsScreen({
       );
     } catch (error) {
       console.error('Could not change Android protection service', error);
-      setStatusMessage('Der Android-Schutzdienst konnte nicht geändert werden. Prüfe die erforderlichen Zugriffe.');
+      setStatusMessage(
+        recoveringFromProcessLoss
+          ? 'Der Android-Schutz konnte nach dem Prozessabbruch nicht wiederhergestellt werden. Prüfe die Zugriffe und den Status erneut.'
+          : 'Der Android-Schutzdienst konnte nicht geändert werden. Prüfe die erforderlichen Zugriffe.',
+      );
     } finally {
       setServiceBusy(false);
     }
