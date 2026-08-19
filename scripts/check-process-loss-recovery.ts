@@ -6,6 +6,8 @@ const healthPath = 'src/lib/nativeProtectionHealth.ts';
 const healthTestPath = 'src/lib/nativeProtectionHealth.test.ts';
 const statusPanelPath = 'src/components/NativeProtectionStatusPanel.tsx';
 const statusPanelTestPath = 'src/components/NativeProtectionStatusPanel.test.tsx';
+const prerequisitePolicyPath = 'src/lib/androidProtectionPrerequisites.ts';
+const prerequisitePolicyTestPath = 'src/lib/androidProtectionPrerequisites.test.ts';
 const permissionsPath = 'src/screens/PermissionsScreen.tsx';
 const permissionsTestPath = 'src/screens/PermissionsScreen.test.tsx';
 
@@ -16,6 +18,8 @@ const [
   healthTest,
   statusPanel,
   statusPanelTest,
+  prerequisitePolicy,
+  prerequisitePolicyTest,
   permissions,
   permissionsTest,
 ] = await Promise.all([
@@ -25,6 +29,8 @@ const [
   readFile(healthTestPath, 'utf8'),
   readFile(statusPanelPath, 'utf8'),
   readFile(statusPanelTestPath, 'utf8'),
+  readFile(prerequisitePolicyPath, 'utf8'),
+  readFile(prerequisitePolicyTestPath, 'utf8'),
   readFile(permissionsPath, 'utf8'),
   readFile(permissionsTestPath, 'utf8'),
 ]);
@@ -105,6 +111,37 @@ requirePattern(
 );
 
 requirePattern(
+  prerequisitePolicyPath,
+  prerequisitePolicy,
+  /REQUIRED_PREREQUISITES[\s\S]*'usageAccess'[\s\S]*'overlay'[\s\S]*'notifications'/,
+  'Android prerequisite policy must keep a stable required-access order.',
+);
+requirePattern(
+  prerequisitePolicyPath,
+  prerequisitePolicy,
+  /usage_access_missing: 'usageAccess'[\s\S]*overlay_permission_missing: 'overlay'[\s\S]*notifications_missing: 'notifications'/,
+  'Stable native permission-loss stop codes must map back to the same UI prerequisite keys.',
+);
+requirePattern(
+  prerequisitePolicyPath,
+  prerequisitePolicy,
+  /getMissingAndroidProtectionPrerequisites[\s\S]*status\[key\] !== true/,
+  'Prerequisite evaluation must fail closed for every required access that is not explicitly true.',
+);
+requirePattern(
+  prerequisitePolicyTestPath,
+  prerequisitePolicyTest,
+  /returns missing prerequisites in a stable user-facing order[\s\S]*usageAccess[\s\S]*overlay[\s\S]*notifications/,
+  'Prerequisite policy tests must lock missing-access ordering and labels.',
+);
+requirePattern(
+  prerequisitePolicyTestPath,
+  prerequisitePolicyTest,
+  /maps stable native prerequisite stop codes back to the same UI prerequisite keys[\s\S]*usage_access_missing[\s\S]*overlay_permission_missing[\s\S]*notifications_missing/,
+  'Prerequisite policy tests must lock native stop-code mapping.',
+);
+
+requirePattern(
   permissionsPath,
   permissions,
   /recoveringFromProcessLoss = serviceStatus\?\.health === 'unclean-process-stop'/,
@@ -113,20 +150,56 @@ requirePattern(
 requirePattern(
   permissionsPath,
   permissions,
-  /getAndroidStatus\(\)[\s\S]*usageAccess[\s\S]*overlay[\s\S]*notifications[\s\S]*activeApps[\s\S]*recoveringFromProcessLoss[\s\S]*NativeProtection\.recoverAfterProcessLoss\([\s\S]*state\.appsConfig[\s\S]*state\.isFocusModeActive/,
-  'Recovery UI must re-check critical permissions and app selection before invoking controlled recovery.',
+  /const nativeStatus = await NativePermissions\.getAndroidStatus\(\)[\s\S]*applyNativePermissionStatus\(nativeStatus\)[\s\S]*getMissingAndroidProtectionPrerequisites\(nativeStatus\)[\s\S]*describeProtectionPrerequisiteBlock/,
+  'Recovery/start preflight must refresh native permission truth, update visible state, and name exact blockers.',
 );
 requirePattern(
   permissionsPath,
   permissions,
-  /nextStatus\.running && nextStatus\.enabled && nextStatus\.health === 'active'[\s\S]*wiederhergestellt[\s\S]*noch nicht als aktiv bestätigt/,
+  /activeApps[\s\S]*recoveringFromProcessLoss[\s\S]*NativeProtection\.recoverAfterProcessLoss\([\s\S]*state\.appsConfig[\s\S]*state\.isFocusModeActive/,
+  'Recovery UI must require app selection before invoking controlled recovery.',
+);
+requirePattern(
+  permissionsPath,
+  permissions,
+  /nextStatus\.running && nextStatus\.enabled && nextStatus\.health === 'active'[\s\S]*wiederhergestellt/,
   'Recovery UI must claim success only after native status is re-read as active.',
+);
+requirePattern(
+  permissionsPath,
+  permissions,
+  /getAndroidProtectionPrerequisiteForStopCode\(nextStatus\.lastStopCode\)[\s\S]*describeProtectionPrerequisiteBlock\(\[blockedPrerequisite\], true\)/,
+  'A service that immediately stops with a stable prerequisite code must surface the exact recovery blocker.',
+);
+requirePattern(
+  permissionsPath,
+  permissions,
+  /catch \(error\)[\s\S]*Promise\.all\(\[[\s\S]*NativePermissions\.getAndroidStatus\(\)[\s\S]*NativeProtection\.getStatus\(\)[\s\S]*getMissingAndroidProtectionPrerequisites\(latestPermissions\)[\s\S]*getAndroidProtectionPrerequisiteForStopCode/,
+  'Recovery errors must re-read both permissions and service diagnostics to close permission-loss races.',
 );
 requirePattern(
   permissionsTestPath,
   permissionsTest,
   /uses controlled recovery instead of the normal start path after process loss[\s\S]*recoverProtectionMock[\s\S]*startProtectionMock\)\.not\.toHaveBeenCalled[\s\S]*wiederhergestellt/,
   'Permissions integration tests must prove process loss uses recovery rather than the generic start path.',
+);
+requirePattern(
+  permissionsTestPath,
+  permissionsTest,
+  /names the exact missing permission before process-loss recovery starts[\s\S]*App-Nutzungszugriff fehlt[\s\S]*recoverProtectionMock\)\.not\.toHaveBeenCalled/,
+  'Permissions tests must prove a missing prerequisite blocks recovery before native start.',
+);
+requirePattern(
+  permissionsTestPath,
+  permissionsTest,
+  /rechecks Android permissions after a recovery error to diagnose a permission race[\s\S]*overlay: false[\s\S]*Hinweis über anderen Apps fehlt/,
+  'Permissions tests must cover permission revocation between preflight and recovery failure handling.',
+);
+requirePattern(
+  permissionsTestPath,
+  permissionsTest,
+  /maps a fresh native prerequisite stop code to an exact recovery blocker[\s\S]*notifications_missing[\s\S]*Benachrichtigungsfreigabe fehlt/,
+  'Permissions tests must cover stable native stop-code diagnostics after an accepted recovery start.',
 );
 
 requirePattern(
@@ -155,5 +228,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Process-loss recovery contract check passed. Unclean process loss is detected separately and can only use controlled, prerequisite-checked, status-verified restart recovery.',
+  'Process-loss recovery contract check passed. Unclean process loss is detected separately and recovery names exact Android prerequisite blockers before start, after races, and from fresh native stop diagnostics.',
 );
