@@ -73,6 +73,17 @@ const grantedAndroidStatus = {
   notifications: true,
 };
 
+const processLossProtectionStatus = {
+  running: false,
+  enabled: true,
+  unavailableAppIds: [],
+  lastStartAt: 200,
+  lastStopAt: 100,
+  lastStopCode: 'notification_action_stop',
+  lastStopMessage: 'Ein älterer sauberer Stopp',
+  health: 'unclean-process-stop' as const,
+};
+
 const neverStartedProtectionStatus = {
   running: false,
   enabled: false,
@@ -170,7 +181,7 @@ describe('PermissionsScreen', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Schutzdienst starten' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Aktiviere zuerst App-Nutzungszugriff/)).toBeInTheDocument();
+      expect(screen.getByText(/Start blockiert: Benachrichtigungen fehlt/)).toBeInTheDocument();
     });
     expect(startProtectionMock).not.toHaveBeenCalled();
     expect(recoverProtectionMock).not.toHaveBeenCalled();
@@ -204,16 +215,7 @@ describe('PermissionsScreen', () => {
     isAndroidNativeMock.mockReturnValue(true);
     protectionAvailableMock.mockReturnValue(true);
     getAndroidStatusMock.mockResolvedValue(grantedAndroidStatus);
-    getProtectionStatusMock.mockResolvedValue({
-      running: false,
-      enabled: true,
-      unavailableAppIds: [],
-      lastStartAt: 200,
-      lastStopAt: 100,
-      lastStopCode: 'notification_action_stop',
-      lastStopMessage: 'Ein älterer sauberer Stopp',
-      health: 'unclean-process-stop',
-    });
+    getProtectionStatusMock.mockResolvedValue(processLossProtectionStatus);
     recoverProtectionMock.mockResolvedValue(activeProtectionStatus);
 
     render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} />);
@@ -229,6 +231,74 @@ describe('PermissionsScreen', () => {
     });
     expect(startProtectionMock).not.toHaveBeenCalled();
     expect(await screen.findByText(/nach dem Prozessabbruch.*wiederhergestellt/)).toBeInTheDocument();
+  });
+
+  it('names the exact missing permission before process-loss recovery starts', async () => {
+    isAndroidNativeMock.mockReturnValue(true);
+    protectionAvailableMock.mockReturnValue(true);
+    getProtectionStatusMock.mockResolvedValue(processLossProtectionStatus);
+    getAndroidStatusMock.mockResolvedValue({
+      ...grantedAndroidStatus,
+      usageAccess: false,
+      overlay: true,
+      notifications: true,
+    });
+
+    render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Schutz wiederherstellen' }));
+
+    expect(await screen.findByText(/Wiederherstellung blockiert: App-Nutzungszugriff fehlt/)).toBeInTheDocument();
+    expect(recoverProtectionMock).not.toHaveBeenCalled();
+    expect(startProtectionMock).not.toHaveBeenCalled();
+  });
+
+  it('rechecks Android permissions after a recovery error to diagnose a permission race', async () => {
+    isAndroidNativeMock.mockReturnValue(true);
+    protectionAvailableMock.mockReturnValue(true);
+    getProtectionStatusMock.mockResolvedValue(processLossProtectionStatus);
+    getAndroidStatusMock
+      .mockResolvedValueOnce(grantedAndroidStatus)
+      .mockResolvedValueOnce(grantedAndroidStatus)
+      .mockResolvedValueOnce({
+        ...grantedAndroidStatus,
+        overlay: false,
+      });
+    recoverProtectionMock.mockRejectedValue(new Error('native recovery failed'));
+
+    render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Schutz wiederherstellen' }));
+
+    expect(
+      await screen.findByText(/Wiederherstellung blockiert: Hinweis über anderen Apps fehlt/),
+    ).toBeInTheDocument();
+    expect(recoverProtectionMock).toHaveBeenCalledTimes(1);
+    expect(startProtectionMock).not.toHaveBeenCalled();
+  });
+
+  it('maps a fresh native prerequisite stop code to an exact recovery blocker', async () => {
+    isAndroidNativeMock.mockReturnValue(true);
+    protectionAvailableMock.mockReturnValue(true);
+    getAndroidStatusMock.mockResolvedValue(grantedAndroidStatus);
+    getProtectionStatusMock.mockResolvedValue(processLossProtectionStatus);
+    recoverProtectionMock.mockResolvedValue({
+      running: false,
+      enabled: false,
+      unavailableAppIds: [],
+      lastStartAt: 300,
+      lastStopAt: 301,
+      lastStopCode: 'notifications_missing',
+      lastStopMessage: 'Benachrichtigungen wurden entzogen',
+      health: 'stopped-with-reason' as const,
+    });
+
+    render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Schutz wiederherstellen' }));
+
+    expect(await screen.findByText(/Wiederherstellung blockiert: Benachrichtigungen fehlt/)).toBeInTheDocument();
+    expect(recoverProtectionMock).toHaveBeenCalledTimes(1);
   });
 
   it('uses the native Android notification prompt before opening settings', async () => {
