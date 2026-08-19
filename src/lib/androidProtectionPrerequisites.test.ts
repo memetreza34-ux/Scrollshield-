@@ -25,14 +25,14 @@ describe('Android protection prerequisite diagnostics', () => {
 
     expect(missing).toEqual(['usageAccess', 'overlay', 'notifications']);
     expect(describeMissingAndroidProtectionPrerequisites(missing)).toBe(
-      'App-Nutzungszugriff, Hinweis über anderen Apps, Benachrichtigungen',
+      'App-Nutzungszugriff, Hinweis über anderen Apps, Benachrichtigungsfreigabe',
     );
   });
 
   it('describes each missing prerequisite independently', () => {
     expect(describeMissingAndroidProtectionPrerequisites(['usageAccess'])).toBe('App-Nutzungszugriff');
     expect(describeMissingAndroidProtectionPrerequisites(['overlay'])).toBe('Hinweis über anderen Apps');
-    expect(describeMissingAndroidProtectionPrerequisites(['notifications'])).toBe('Benachrichtigungen');
+    expect(describeMissingAndroidProtectionPrerequisites(['notifications'])).toBe('Benachrichtigungsfreigabe');
   });
 
   it('maps stable native prerequisite stop codes back to the same UI prerequisite keys', () => {
