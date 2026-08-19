@@ -53,7 +53,7 @@ export const describeNativeProtectionHealth = (
         badge: 'PROZESS ABGEBROCHEN',
         title: 'Schutzprozess endete ohne sauberen Stopp',
         message:
-          'Der letzte bestätigte Dienststart ist neuer als jeder gespeicherte Stopp, obwohl der Dienst nicht mehr läuft. Das deutet auf einen Prozessabbruch oder System-Kill hin. Prüfe die Android-Zugriffe und starte den Schutz erneut.',
+          'Der letzte bestätigte Dienststart ist neuer als jeder gespeicherte Stopp, obwohl der Dienst nicht mehr läuft. Das deutet auf einen Prozessabbruch oder System-Kill hin. Prüfe die Android-Zugriffe und tippe anschließend auf „Schutz wiederherstellen“.',
         tone: 'warning',
         showLastStop: false,
       };
