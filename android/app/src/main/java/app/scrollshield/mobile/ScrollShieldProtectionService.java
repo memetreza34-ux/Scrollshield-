@@ -188,9 +188,7 @@ public class ScrollShieldProtectionService extends Service {
         if (unexpectedDestroy) {
             String description =
                 "Android hat den Schutzdienst unerwartet beendet; die gespeicherte Aktivierung wurde aus Sicherheitsgründen zurückgesetzt";
-            ScrollShieldNativePlugin.setProtectionEnabled(this, false);
-            ScrollShieldNativePlugin.appendProtectionEvent(this, "warning", "system", description);
-            ScrollShieldNativePlugin.recordProtectionStop(
+            ScrollShieldNativePlugin.persistProtectionSystemStopWithFallback(
                 this,
                 ProtectionServiceLifecyclePolicy.UNEXPECTED_SERVICE_DESTROY_CODE,
                 description
@@ -832,7 +830,7 @@ public class ScrollShieldProtectionService extends Service {
                     updateContinueButtonState(
                         continueButton,
                         eligibleWhenFinished,
-                        true,
+                        countdownFinished[0],
                         requireReason,
                         reasonInput
                     );
