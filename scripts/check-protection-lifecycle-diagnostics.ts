@@ -247,9 +247,29 @@ requirePattern(
 requirePattern(
   servicePath,
   service,
-  /onDestroy\(\)[\s\S]*shouldRecordUnexpectedDestroy[\s\S]*isProtectionEnabled\(this\)[\s\S]*explicitStopRequested[\s\S]*UNEXPECTED_SERVICE_DESTROY_CODE[\s\S]*recordProtectionStop/,
-  'Unexpected service destruction must clear stale activation and retain an exact terminal stop reason.',
+  /onDestroy\(\)[\s\S]*shouldRecordUnexpectedDestroy[\s\S]*isProtectionEnabled\(this\)[\s\S]*explicitStopRequested[\s\S]*if \(unexpectedDestroy\)[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*UNEXPECTED_SERVICE_DESTROY_CODE[\s\S]*description/,
+  'Unexpected service destruction must atomically clear stale activation, queue its warning, and retain the exact terminal stop reason.',
 );
+
+const onDestroyStart = service.indexOf('public void onDestroy()');
+const onBindStart = service.indexOf('public IBinder onBind', onDestroyStart + 1);
+if (onDestroyStart < 0 || onBindStart <= onDestroyStart) {
+  findings.push(`${servicePath}: Could not isolate service onDestroy lifecycle.`);
+} else {
+  const onDestroyBody = service.slice(onDestroyStart, onBindStart);
+  for (const forbiddenWrite of [
+    'setProtectionEnabled(this, false)',
+    'appendProtectionEvent(this, "warning", "system"',
+    'recordProtectionStop(',
+  ]) {
+    if (onDestroyBody.includes(forbiddenWrite)) {
+      findings.push(
+        `${servicePath}: Unexpected onDestroy must not restore separate terminal writes (${forbiddenWrite}); use the shared atomic system-stop wrapper.`,
+      );
+    }
+  }
+}
+
 requirePattern(
   servicePath,
   service,
@@ -473,5 +493,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection lifecycle diagnostics check passed. Actual foreground starts, atomic system stops, native fields, terminal stops, emergency friction, inconsistent service states, and physical evidence requirements remain guarded.',
+  'Protection lifecycle diagnostics check passed. Actual foreground starts, atomic system stops including unexpected destroy, native fields, terminal stops, emergency friction, inconsistent service states, and physical evidence requirements remain guarded.',
 );
