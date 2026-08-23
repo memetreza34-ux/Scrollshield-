@@ -46,6 +46,35 @@ Für `unclean-process-stop` zeigt ScrollShield:
 
 Der Permissions-Screen prüft zusätzlich vor dem Recovery-Aufruf die aktuell sichtbaren Pflichtzugriffe und mindestens eine aktive App-Auswahl.
 
+## Atomarer Native-Start-Preflight
+
+Der Capacitor-Plugin-Pfad `ScrollShieldNativePlugin.startProtectionService()` ist selbst eine Sicherheitsgrenze. React-Vorprüfungen dienen nur der Nutzerführung und dürfen nicht die letzte Wahrheit sein.
+
+Für diese vier nativen Startvoraussetzungen gilt jetzt derselbe stabile Vertrag:
+
+```text
+usage_access_missing
+overlay_permission_missing
+notifications_missing
+target_app_missing
+```
+
+Fehlt eine davon, ruft `startProtectionService()` `rejectProtectionStartPrerequisite(...)` auf. Dieser Helper:
+
+1. ruft zuerst `recordProtectionPrerequisiteStop(context, reasonCode, description)` auf;
+2. persistiert im Primärpfad unter `EVENT_LOCK` in **einem** synchronen Commit:
+   - `enabled=false`;
+   - `warning/system` in der Event-Queue;
+   - Stop-Zeitpunkt;
+   - exakten stabilen Stop-Code;
+   - Stop-Nachricht;
+3. verwendet nur bei `commit=false` den Best-Effort-Fallback aus `setProtectionEnabled(false)` + `recordProtectionStop(...)`;
+4. lehnt **erst danach** den Capacitor-Aufruf über `call.reject(...)` ab.
+
+Damit kann ein fehlgeschlagener Native-Start nicht mehr lediglich einen JavaScript-Fehler werfen, während eine frühere `enabled=true`-Aktivierung und ein alter Stop-Grund stehen bleiben.
+
+Der gleiche Persistenzvertrag gilt auch beim normalen First Start, wenn `enabled` vor dem Versuch bereits `false` war. Ein fehlgeschlagener Start erhält trotzdem einen neuen terminalen Stop-Zeitpunkt, exakten Code und Warn-Event.
+
 ## Exakte Prerequisite-Diagnose
 
 Die UI verwendet eine zentrale Pure-TypeScript-Policy in `androidProtectionPrerequisites.ts`.
@@ -89,6 +118,8 @@ Wenn der Recovery-Aufruf einen Fehler wirft, liest der Screen erneut parallel:
 
 Dadurch wird ein Permission-Race nicht auf eine generische Fehlermeldung reduziert. Ein inzwischen entzogener Zugriff wird konkret benannt und der sichtbare Permission-State wird aktualisiert.
 
+Durch den atomaren Native-Start-Preflight liegt in diesem Race jetzt zusätzlich ein frischer persistierter Stop-Code vor, sofern der Plugin-Preflight den Verlust erkennt.
+
 ### 3. Native-Start wurde angenommen, Service stoppt sofort wieder
 
 Falls `recoverAfterProcessLoss(...)` einen neuen Native-Status zurückliefert, der nicht `active` ist, wird dessen frischer `lastStopCode` ausgewertet. Ein stabiler Prerequisite-Code wird sofort auf den zugehörigen Zugriff gemappt und als Recovery-Blocker angezeigt.
@@ -117,6 +148,8 @@ Keine installierte Ziel-App verfügbar
 mit der Anweisung, mindestens eine installierte geschützte App auszuwählen.
 
 Wichtig: **Teilweise** Unverfügbarkeit blockiert Recovery nicht. Wenn zum Beispiel Instagram fehlt, TikTok aber ebenfalls aktiv konfiguriert und installiert ist, darf der Schutz für das verbleibende Ziel wieder anlaufen.
+
+Zusätzlich prüft `startProtectionService()` die installierte Ziel-App nochmals nativ. Verändert sich der Zustand zwischen Config-Sync und Start, persistiert dieser zweite Preflight ebenfalls `target_app_missing` atomar, bevor der Aufruf abgelehnt wird.
 
 ## Erfolgsregel
 
@@ -154,7 +187,16 @@ Andernfalls wird entweder ein konkreter Prerequisite-/Ziel-App-Blocker oder nur 
 - Permissions-Screen-Verdrahtung;
 - zugehörige Vitest-/Component-Verträge.
 
-`check:process-loss` ist Bestandteil von `npm run verify` und des Readiness-Reports.
+`npm run check:prerequisite-stop-codes` schützt zusätzlich:
+
+- die atomare `recordProtectionPrerequisiteStop(...)`-Transaktion;
+- die Service-Runtime-Verdrahtung;
+- die vier atomaren Native-Start-Preflight-Codes;
+- den `rejectProtectionStartPrerequisite(...)`-Fallback;
+- das Verbot der alten nackten Prerequisite-`call.reject()`-Pfade;
+- den Instrumentation-Vertrag für bereits deaktivierte First-Start-Fehler.
+
+Beide Checker sind Bestandteil von `npm run verify` und des Readiness-Reports.
 
 ## Noch nicht bewiesen
 
@@ -164,6 +206,7 @@ Dieser Source-Vertrag ersetzt keine reale Android-Evidence. Weiter offen:
 - sicherstellen, dass `onDestroy()` dabei nicht als Voraussetzung für die Erkennung benötigt wird;
 - App erneut öffnen und `unclean-process-stop` beobachten;
 - `Schutz wiederherstellen` ausführen;
+- **Native First-Start-Preflight real prüfen:** Usage Access, Overlay, Notifications und Ziel-App jeweils fehlen lassen und `enabled=false + Warn-Event + exakten Stop-Code` bestätigen;
 - Usage Access vor Recovery real entziehen und exakten Blocker beobachten;
 - Overlay vor/zwischen Recovery-Prüfung und Start real entziehen;
 - Notifications vor/zwischen Recovery-Prüfung und Start real entziehen;
