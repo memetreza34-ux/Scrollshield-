@@ -36,6 +36,7 @@ Ein Source-Checker ist niemals ein ausgeführter Android-Test.
 - Native Retention;
 - **Usage Flush Coordinator + Worker + produktive Service-Verdrahtung**;
 - **generischen atomaren System-Stop für Prerequisites, Native-/Foreground-Startfehler, Boot-/Update-Recovery und unerwarteten Service-Destroy**;
+- **atomaren expliziten Terminal-Stop ohne Warn-Event für App-/Notification-/caller-supplied Stop-Gründe**;
 - **Process-Loss-Erkennung + kontrollierter Restart-Recovery**;
 - **Protection-Recovery inklusive Boot/App-Update**;
 - Device Matrix;
@@ -97,6 +98,9 @@ Vorhandene `androidTest`-Verträge:
 - Nachweis, dass dieselbe atomare Persistenz auch funktioniert, wenn `enabled` vor einem fehlgeschlagenen First-Start bereits `false` war;
 - einen direkten `START_FAILED`-Instrumentation-Fall über `recordProtectionSystemStop(...)`;
 - einen direkten `UNEXPECTED_SERVICE_DESTROY_CODE`-Instrumentation-Fall über dieselbe atomare Transaktion;
+- einen direkten Terminal-Stop-Vertrag für `manual_app_stop` und `notification_action_stop` über `recordProtectionTerminalStop(...)`;
+- dabei müssen `enabled=false`, Stop-Zeitpunkt, exakter Code und Nachricht gemeinsam persistiert werden;
+- die bestehende `protection_events`-Queue muss bei expliziten Terminal-Stopps **unverändert** bleiben;
 - Legacy-Systemwarnungen behalten als Kompatibilitätsweg die bisherige Textklassifizierung;
 - app-spezifische Warnungen dürfen einen bereits gespeicherten terminalen Stop-Grund nicht überschreiben.
 
@@ -234,15 +238,16 @@ Der Checker verlangt:
 
 Noch offen ist die **reale Ausführung** dieser Tests sowie echte Service-/Process-Kill-/Restart-Evidence.
 
-## 8. Generischer atomarer System-Stop
+## 8. Atomare System- und Terminal-Stops
 
 ```bash
 npm run check:prerequisite-stop-codes
+npm run check:lifecycle
 ```
 
-Prerequisite- und technische Systemfehler verwenden denselben atomaren Native-Persistenzpfad. Produktive Stop-Codes werden nicht aus lokalisiertem Meldungstext abgeleitet.
+Systemfehler und explizite Terminal-Stopps verwenden getrennte Semantik, aber jeweils einen atomaren Native-Persistenzpfad. Produktive Stop-Codes werden nicht aus lokalisiertem Meldungstext abgeleitet.
 
-Stabile Codes dieses Vertrags:
+Stabile System-Codes dieses Vertrags:
 
 ```text
 usage_access_missing
@@ -251,14 +256,20 @@ notifications_missing
 no_active_rules
 target_app_missing
 start_failed
+unexpected_service_destroy
 ```
 
-Zusätzlich bleibt `unexpected_service_destroy` als stabiler Lifecycle-Code in `ProtectionServiceLifecyclePolicy` definiert und nutzt denselben atomaren Persistenzkern.
+Stabile explizite Terminal-Codes:
+
+```text
+manual_app_stop
+notification_action_stop
+```
 
 Vertrag:
 
 - `ProtectionStopReasonPolicy` hält die stabilen Prerequisite-/Start-Konstanten zentral;
-- `ProtectionServiceLifecyclePolicy` hält `notification_action_stop` und `unexpected_service_destroy` getrennt von Prerequisite-Codes;
+- `ProtectionServiceLifecyclePolicy` hält `manual_app_stop`, `notification_action_stop` und `unexpected_service_destroy` getrennt von Prerequisite-Codes;
 - `ScrollShieldNativePlugin.recordProtectionSystemStop(...)` läuft unter `EVENT_LOCK` und schreibt in **einem synchronen `SharedPreferences.commit()`**:
   - `SERVICE_ENABLED_KEY=false`;
   - die aktualisierte `protection_events`-Queue mit `warning/system`;
@@ -266,22 +277,32 @@ Vertrag:
   - den explizit normalisierten `LAST_STOP_CODE_KEY`;
   - `LAST_STOP_MESSAGE_KEY`;
 - `recordProtectionPrerequisiteStop(...)` bleibt als kompatibler Alias auf `recordProtectionSystemStop(...)` erhalten;
-- `persistProtectionSystemStopWithFallback(...)` ruft zuerst die atomare Transaktion auf und verwendet nur bei `commit=false` `setProtectionEnabled(false)` + `recordProtectionStop(...)` als Best-Effort-Fallback;
+- `persistProtectionSystemStopWithFallback(...)` ruft zuerst die atomare System-Transaktion auf und verwendet nur bei `commit=false` `setProtectionEnabled(false)` + `recordProtectionStop(...)` als Best-Effort-Fallback;
+- `ScrollShieldNativePlugin.recordProtectionTerminalStop(...)` schreibt ebenfalls unter `EVENT_LOCK` in **einem Commit**:
+  - `SERVICE_ENABLED_KEY=false`;
+  - `LAST_STOP_AT_KEY`;
+  - den exakten `LAST_STOP_CODE_KEY`;
+  - `LAST_STOP_MESSAGE_KEY`;
+- der Terminal-Stop schreibt bewusst **nicht** `EVENT_QUEUE_KEY` und erzeugt kein `warning/system`-Event;
+- `persistProtectionTerminalStopWithFallback(...)` ist der Atomic-First-Wrapper für explizite/caller-supplied Terminal-Stopps;
+- `ScrollShieldNativePlugin.stopProtectionService(...)` nutzt diesen Terminal-Wrapper und `MANUAL_APP_STOP_CODE` als stabilen Default;
+- dadurch werden auch explizite React→Native-Stop-Gründe atomar statt über `setProtectionEnabled(false)` + `recordProtectionStop(...)` gespeichert;
+- der Notification-Button in `ScrollShieldProtectionService.onStartCommand()` nutzt denselben Terminal-Wrapper mit `NOTIFICATION_ACTION_STOP_CODE`;
+- `explicitStopRequested=true` bleibt gesetzt, damit der folgende `onDestroy()` keinen falschen Systemfehler erzeugt;
 - `ScrollShieldProtectionService.onStartCommand()` und `enforceCurrentApp()` verwenden stabile Prerequisite-Codes;
-- `stopForProtectionPrerequisite(...)` delegiert vollständig an den zentralen Wrapper;
+- `stopForProtectionPrerequisite(...)` delegiert vollständig an den zentralen System-Wrapper;
 - `ScrollShieldNativePlugin.startProtectionService()` persistiert fehlende Usage-/Overlay-/Notification-/Target-Voraussetzungen vor dem `call.reject()`;
-- wirft `startForegroundService/startService` nach bestandenen Voraussetzungen, wird `START_FAILED` über denselben atomaren Wrapper persistiert;
+- wirft `startForegroundService/startService` nach bestandenen Voraussetzungen, wird `START_FAILED` über denselben atomaren System-Wrapper persistiert;
 - wirft `startForeground()` in `ScrollShieldProtectionService.onCreate()`, wird ebenfalls `START_FAILED` atomar persistiert;
 - der Foreground-Startfehler setzt `explicitStopRequested=true`, damit der anschließende kontrollierte `onDestroy()` die Diagnose nicht als `unexpected_service_destroy` überschreibt;
-- `ScrollShieldProtectionService.onDestroy()` verwendet bei `enabled=true && explicitStopRequested=false` jetzt ebenfalls `persistProtectionSystemStopWithFallback(... UNEXPECTED_SERVICE_DESTROY_CODE ...)`;
-- der Lifecycle-Checker isoliert den `onDestroy()`-Body und verbietet dort separate `setProtectionEnabled(false)`, `appendProtectionEvent(... warning/system ...)` und `recordProtectionStop(...)`-Writes;
+- `ScrollShieldProtectionService.onDestroy()` verwendet bei `enabled=true && explicitStopRequested=false` `persistProtectionSystemStopWithFallback(... UNEXPECTED_SERVICE_DESTROY_CODE ...)`;
+- der Lifecycle-Checker isoliert App-/Notification-/Destroy-Pfade und verbietet dort die jeweils alten separaten Terminal-Writes;
 - harte Prozessbeendigung ist davon getrennt: ein echter Process-Kill muss keinen `onDestroy()`-Callback liefern und wird weiter über `unclean-process-stop` erkannt;
-- damit existiert im Primärpfad kein Crash-Fenster mehr zwischen Deaktivierung, Warn-Event und exaktem Stop-Code;
 - `classifySystemWarning(description)` bleibt nur als Kompatibilitäts-Fallback für ältere/sonstige Systemwarnungen bestehen;
-- Pure-Java-JUnit sperrt `start_failed` und die Lifecycle-Policy sperrt `unexpected_service_destroy`;
-- Android-Instrumentation prüft die generische Transaktion direkt mit `START_FAILED` und mit `UNEXPECTED_SERVICE_DESTROY_CODE` sowie weiterhin die Prerequisite-Alias-Pfade.
+- Pure-Java-JUnit sperrt `start_failed` und die Lifecycle-Policy sperrt `manual_app_stop`, `notification_action_stop` und `unexpected_service_destroy`;
+- Android-Instrumentation prüft die System-Transaktion mit `START_FAILED` und `UNEXPECTED_SERVICE_DESTROY_CODE` sowie die Terminal-Transaktion mit beiden bewussten Stop-Codes und unveränderter Event-Queue.
 
-`check:prerequisite-stop-codes` schützt die generische atomare Transaktion und Startgrenzen. `check:lifecycle` schützt zusätzlich den atomaren unerwarteten Destroy-Pfad und das Verbot der alten Einzelwrites. Beide sind Bestandteil von `npm run verify`; `check:lifecycle` ist ebenfalls Pflichtschritt im `readiness`-Report.
+`check:prerequisite-stop-codes` schützt die generische atomare System-Transaktion und Startgrenzen. `check:lifecycle` schützt zusätzlich atomare explizite Terminal-Stopps, den unerwarteten Destroy-Pfad und das Verbot der alten Einzelwrites. Beide sind Bestandteil von `npm run verify`; `check:lifecycle` ist ebenfalls Pflichtschritt im `readiness`-Report.
 
 ## 9. Process-Loss / kontrollierter Restart-Recovery
 
@@ -341,9 +362,9 @@ npm run check:diagnostic-normalization
 npm run check:usage-accounting
 ```
 
-Schützt Lifecycle-Wahrheit, generische atomare System-Stops, Native-/Foreground-Startfehler, atomaren unerwarteten Service-Destroy, Prerequisites, Boot-/App-Update-Recovery, Process-Loss-/Recovery-Grenzen, lokale Tagesgrenzen, keine negative Usage bei rückwärts laufender Uhr, Tag+App-Bucketing, Tageslimit und Anti-Binge über Mitternacht.
+Schützt Lifecycle-Wahrheit, generische atomare System-Stops, atomare explizite Terminal-Stopps ohne Warn-Event, Native-/Foreground-Startfehler, atomaren unerwarteten Service-Destroy, Prerequisites, Boot-/App-Update-Recovery, Process-Loss-/Recovery-Grenzen, lokale Tagesgrenzen, keine negative Usage bei rückwärts laufender Uhr, Tag+App-Bucketing, Tageslimit und Anti-Binge über Mitternacht.
 
-`ProtectionDiagnosticsInstrumentedTest.java` schützt zusätzlich den Android-Persistenzvertrag. Die eigentliche Berechtigungsentziehung, reale Startfehler-/Destroy-Injektion und ein echter Prozesskill bleiben separate E2E-Fälle und dürfen durch Source-/Component-Tests nicht als erledigt gelten.
+`ProtectionDiagnosticsInstrumentedTest.java` schützt zusätzlich den Android-Persistenzvertrag. Die eigentliche Berechtigungsentziehung, reale App-/Notification-Stop-Ausführung, Startfehler-/Destroy-Injektion und ein echter Prozesskill bleiben separate E2E-Fälle und dürfen durch Source-/Component-Tests nicht als erledigt gelten.
 
 Die Worker-/Usage-Checker müssen gemeinsam verhindern, dass die neue Persistenzarchitektur Tageslimits während Pending/In-Flight-Zuständen unterzählt oder Usage bei kontrolliertem Shutdown verliert.
 
@@ -396,9 +417,10 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - `UsageFlushCoordinatorTest`;
 - `UsageFlushWorkerTest`;
 - `ProtectionStopReasonPolicyTest` inklusive `start_failed`;
+- `ProtectionServiceLifecyclePolicyTest` inklusive `manual_app_stop`;
 - Process-Loss-/Restart-Recovery-/Target-App-Vitest- und Component-Tests;
 - `UsageFlushInstrumentedTest`;
-- `ProtectionDiagnosticsInstrumentedTest` inklusive First-Start-, `START_FAILED`- und `UNEXPECTED_SERVICE_DESTROY_CODE`-System-Stop-Fällen;
+- `ProtectionDiagnosticsInstrumentedTest` inklusive First-Start-, `START_FAILED`-, `UNEXPECTED_SERVICE_DESTROY_CODE`- und expliziten Terminal-Stop-Fällen;
 - TypeScript/Lint/Prettier/Vitest;
 - Android JUnit/Instrumentation;
 - Gradle Debug Build;
@@ -414,12 +436,14 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 5. reale Fehler beheben und erneut ausführen;
 6. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace` auf Emulator/Gerät;
 7. `UsageFlushInstrumentedTest`, `ProtectionDiagnosticsInstrumentedTest` + Native Drain/Retention/Recovery-Instrumentation bestätigen;
-8. technische Native-/Foreground-Startfehler real injizieren und `enabled=false`, `start_failed`, Warn-Event und kein Diagnose-Overwrite bestätigen;
-9. unerwarteten Lifecycle-Destroy bei aktivem Schutz real auslösen und `enabled=false`, `unexpected_service_destroy`, Warn-Event und exakte Diagnose bestätigen;
-10. Native First-Start-Preflight real mit fehlendem Usage Access, Overlay, Notifications und Ziel-App prüfen;
-11. echten Process-Kill nach bestätigtem Dienststart **ohne vorausgesetzten `onDestroy()`** reproduzieren und `unclean-process-stop` → `Schutz wiederherstellen` → `active` auf Android belegen;
-12. Boot-/App-Update-Recovery und Target-App-Deinstallation vollständig/teilweise testen;
-13. echte Permission-Loss-/Overlay-/Service-E2E-Fälle ausführen;
-14. Shutdown/In-Flight/Process-Kill/Restart-Races testen;
-15. Debug APK auf Device Matrix;
-16. erst danach Release-Evidence hochstufen.
+8. normalen App-Stopp real ausführen → `enabled=false`, `manual_app_stop`, exakte Nachricht und **kein neues warning/system-Event** bestätigen;
+9. Notification „Schutz stoppen“ real ausführen → `enabled=false`, `notification_action_stop`, exakte Nachricht und **kein neues warning/system-Event** bestätigen;
+10. technische Native-/Foreground-Startfehler real injizieren und `enabled=false`, `start_failed`, Warn-Event und kein Diagnose-Overwrite bestätigen;
+11. unerwarteten Lifecycle-Destroy bei aktivem Schutz real auslösen und `enabled=false`, `unexpected_service_destroy`, Warn-Event und exakte Diagnose bestätigen;
+12. Native First-Start-Preflight real mit fehlendem Usage Access, Overlay, Notifications und Ziel-App prüfen;
+13. echten Process-Kill nach bestätigtem Dienststart **ohne vorausgesetzten `onDestroy()`** reproduzieren und `unclean-process-stop` → `Schutz wiederherstellen` → `active` auf Android belegen;
+14. Boot-/App-Update-Recovery und Target-App-Deinstallation vollständig/teilweise testen;
+15. echte Permission-Loss-/Overlay-/Service-E2E-Fälle ausführen;
+16. Shutdown/In-Flight/Process-Kill/Restart-Races testen;
+17. Debug APK auf Device Matrix;
+18. erst danach Release-Evidence hochstufen.
