@@ -66,17 +66,6 @@ public class ScrollShieldBootReceiver extends BroadcastReceiver {
     }
 
     private void stopRecovery(Context context, String code, String message) {
-        boolean persisted = ScrollShieldNativePlugin.recordProtectionPrerequisiteStop(
-            context,
-            code,
-            message
-        );
-        if (!persisted) {
-            // Best-effort fallback only after the atomic disabled-state + event + diagnostics commit
-            // fails. The normal recovery-stop path has no crash window between these writes.
-            ScrollShieldNativePlugin.setProtectionEnabled(context, false);
-            ScrollShieldNativePlugin.appendProtectionEvent(context, "warning", "system", message);
-            ScrollShieldNativePlugin.recordProtectionStop(context, code, message);
-        }
+        ScrollShieldNativePlugin.persistProtectionSystemStopWithFallback(context, code, message);
     }
 }
