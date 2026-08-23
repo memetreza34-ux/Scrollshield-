@@ -8,6 +8,7 @@ final class ProtectionStopReasonPolicy {
     static final String NOTIFICATIONS_MISSING = "notifications_missing";
     static final String NO_ACTIVE_RULES = "no_active_rules";
     static final String TARGET_APP_MISSING = "target_app_missing";
+    static final String START_FAILED = "start_failed";
     static final String RECOVERY_START_FAILED = "recovery_start_failed";
     static final String SYSTEM_WARNING = "system_warning";
 
@@ -15,7 +16,7 @@ final class ProtectionStopReasonPolicy {
 
     /**
      * Compatibility fallback for legacy callers that only provide a human-readable description.
-     * New protection-service prerequisite stops must persist one of the stable constants directly.
+     * New protection-service prerequisite and technical system stops must persist a stable constant directly.
      */
     static String classifySystemWarning(String description) {
         if (description == null || description.trim().isEmpty()) return SYSTEM_WARNING;
@@ -30,6 +31,9 @@ final class ProtectionStopReasonPolicy {
         if (normalized.contains("ziel-app") || normalized.contains("ziel app")) return TARGET_APP_MISSING;
         if (normalized.contains("neustart") || normalized.contains("app-update")) {
             return RECOVERY_START_FAILED;
+        }
+        if (normalized.contains("schutzdienst") && normalized.contains("nicht starten")) {
+            return START_FAILED;
         }
         return SYSTEM_WARNING;
     }
