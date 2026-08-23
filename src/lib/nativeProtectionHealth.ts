@@ -68,6 +68,17 @@ export const describeNativeProtectionHealth = (
         showLastStop: status.lastStopAt > 0,
       };
     case 'stopped-with-reason': {
+      if (status.lastStopCode === 'target_app_missing') {
+        return {
+          badge: 'ZIEL-APP FEHLT',
+          title: 'Keine installierte Ziel-App verfügbar',
+          message:
+            'Keine aktiv geschützte Android-App ist aktuell installiert oder für ScrollShield sichtbar. Wähle mindestens eine installierte App aus und starte den Schutz danach erneut.',
+          tone: 'warning',
+          showLastStop: true,
+        };
+      }
+
       const userInitiated = USER_STOP_CODES.has(status.lastStopCode);
       return {
         badge: userInitiated ? 'GESTOPPT' : 'PRÜFEN',
