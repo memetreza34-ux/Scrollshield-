@@ -99,6 +99,24 @@ describe('describeNativeProtectionHealth', () => {
     expect(presentation.message).toContain('ScrollShield-Resets');
   });
 
+  it('shows an explicit target-app blocker after recovery cannot find any installed active target', () => {
+    const presentation = describeNativeProtectionHealth(
+      makeStatus({
+        health: 'stopped-with-reason',
+        lastStopAt: 1_786_000_000_000,
+        lastStopCode: 'target_app_missing',
+        lastStopMessage: 'Keine aktive installierte Ziel-App ist mehr verfügbar',
+        unavailableAppIds: ['instagram'],
+      }),
+    );
+
+    expect(presentation.badge).toBe('ZIEL-APP FEHLT');
+    expect(presentation.title).toBe('Keine installierte Ziel-App verfügbar');
+    expect(presentation.message).toContain('mindestens eine installierte App');
+    expect(presentation.tone).toBe('warning');
+    expect(presentation.showLastStop).toBe(true);
+  });
+
   it('marks permission and system stops as requiring attention', () => {
     const presentation = describeNativeProtectionHealth(
       makeStatus({
