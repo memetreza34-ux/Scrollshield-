@@ -133,8 +133,7 @@ public class ScrollShieldProtectionService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             explicitStopRequested = true;
-            ScrollShieldNativePlugin.setProtectionEnabled(this, false);
-            ScrollShieldNativePlugin.recordProtectionStop(
+            ScrollShieldNativePlugin.persistProtectionTerminalStopWithFallback(
                 this,
                 ProtectionServiceLifecyclePolicy.NOTIFICATION_ACTION_STOP_CODE,
                 "Der Android-Schutz wurde über die Dauerbenachrichtigung manuell gestoppt"
@@ -830,7 +829,7 @@ public class ScrollShieldProtectionService extends Service {
                     updateContinueButtonState(
                         continueButton,
                         eligibleWhenFinished,
-                        countdownFinished[0],
+                        true,
                         requireReason,
                         reasonInput
                     );
