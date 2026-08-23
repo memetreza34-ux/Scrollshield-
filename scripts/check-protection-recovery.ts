@@ -6,13 +6,16 @@ const policyTestPath = 'src/lib/protectionRecovery.test.ts';
 const appTestPath = 'src/App.protectionRecovery.test.tsx';
 const bootReceiverPath =
   'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldBootReceiver.java';
+const bootRecoveryTestPath =
+  'android/app/src/androidTest/java/app/scrollshield/mobile/BootRecoveryInstrumentedTest.java';
 
-const [app, policy, policyTest, appTest, bootReceiver] = await Promise.all([
+const [app, policy, policyTest, appTest, bootReceiver, bootRecoveryTest] = await Promise.all([
   readFile(appPath, 'utf8'),
   readFile(policyPath, 'utf8'),
   readFile(policyTestPath, 'utf8'),
   readFile(appTestPath, 'utf8'),
   readFile(bootReceiverPath, 'utf8'),
+  readFile(bootRecoveryTestPath, 'utf8'),
 ]);
 
 const findings: string[] = [];
@@ -57,6 +60,48 @@ requirePattern(
   /BOOT_COMPLETED|MY_PACKAGE_REPLACED|ACTION_LOCKED_BOOT_COMPLETED|PACKAGE_REPLACED|recovery_/,
   'Boot/update recovery must remain present alongside foreground app-open recovery.',
 );
+requirePattern(
+  bootReceiverPath,
+  bootReceiver,
+  /private void stopRecovery\([\s\S]*boolean persisted = ScrollShieldNativePlugin\.recordProtectionPrerequisiteStop\([\s\S]*context,[\s\S]*code,[\s\S]*message[\s\S]*if \(!persisted\)[\s\S]*setProtectionEnabled\(context, false\)[\s\S]*appendProtectionEvent\(context, "warning", "system", message\)[\s\S]*recordProtectionStop\(context, code, message\)/,
+  'Boot/update recovery failures must use the atomic native stop transaction first and retain separate writes only as a commit-failure fallback.',
+);
+
+const stopRecoveryStart = bootReceiver.indexOf('private void stopRecovery');
+if (stopRecoveryStart < 0) {
+  findings.push(`${bootReceiverPath}: Could not isolate stopRecovery helper.`);
+} else {
+  const stopRecoveryBody = bootReceiver.slice(stopRecoveryStart);
+  const atomicIndex = stopRecoveryBody.indexOf('recordProtectionPrerequisiteStop');
+  const fallbackIndex = stopRecoveryBody.indexOf('if (!persisted)');
+  const directDisableIndex = stopRecoveryBody.indexOf('setProtectionEnabled(context, false)');
+  const eventIndex = stopRecoveryBody.indexOf('appendProtectionEvent(context, "warning", "system", message)');
+  const stopIndex = stopRecoveryBody.indexOf('recordProtectionStop(context, code, message)');
+  if (
+    atomicIndex < 0 ||
+    fallbackIndex <= atomicIndex ||
+    directDisableIndex <= fallbackIndex ||
+    eventIndex <= fallbackIndex ||
+    stopIndex <= fallbackIndex
+  ) {
+    findings.push(
+      `${bootReceiverPath}: Legacy recovery writes must not run before the atomic stop transaction succeeds or fails.`,
+    );
+  }
+}
+
+requirePattern(
+  bootRecoveryTestPath,
+  bootRecoveryTest,
+  /bootRecoveryFailsClosedWhenNoInstalledTargetExists[\s\S]*getLastProtectionStopCode[\s\S]*getLastProtectionStopMessage[\s\S]*getLastProtectionStopAt[\s\S]*new JSONArray\(preferences\.getString\("protection_events"[\s\S]*"warning"[\s\S]*"system"/,
+  'Boot recovery instrumentation must inspect disabled state, exact stop diagnostics, timestamp, and the persisted system warning event.',
+);
+requirePattern(
+  bootRecoveryTestPath,
+  bootRecoveryTest,
+  /packageReplacementRecoveryAlsoFailsClosedWithoutTarget[\s\S]*ACTION_MY_PACKAGE_REPLACED[\s\S]*recovery_target_app_missing[\s\S]*protection_events/,
+  'Package-replacement recovery must retain instrumentation coverage for the same fail-closed persisted warning contract.',
+);
 
 if (findings.length > 0) {
   console.log('Protection recovery check failed:\n');
@@ -65,5 +110,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection recovery check passed. Boot/update recovery and app-open stale-service recovery remain separate, and automatic restart cannot enable an intentionally disabled service or run without an installed active target.',
+  'Protection recovery check passed. Boot/update recovery uses the atomic native stop transaction before any fallback writes, while app-open stale-service recovery remains fail-closed and target-aware.',
 );
