@@ -158,8 +158,8 @@ if (onCreateStart < 0 || onStartCommandStart <= onCreateStart) {
 requirePattern(
   servicePath,
   service,
-  /catch \(RuntimeException error\)[\s\S]*RUNNING\.set\(false\)[\s\S]*setProtectionEnabled\(this, false\)[\s\S]*"start_failed"[\s\S]*stopSelf\(\)[\s\S]*return/,
-  'A foreground-start failure must fail closed without creating false start evidence.',
+  /catch \(RuntimeException error\)[\s\S]*RUNNING\.set\(false\)[\s\S]*explicitStopRequested = true[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*ProtectionStopReasonPolicy\.START_FAILED[\s\S]*stopSelf\(\)[\s\S]*return/,
+  'A foreground-start failure must atomically fail closed with START_FAILED and must not create false start evidence.',
 );
 requirePattern(
   pluginPath,
@@ -170,8 +170,20 @@ requirePattern(
 requirePattern(
   pluginPath,
   plugin,
-  /recordProtectionPrerequisiteStop[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, false\)[\s\S]*putString\(EVENT_QUEUE_KEY, events\.toString\(\)\)[\s\S]*putString\(LAST_STOP_CODE_KEY, normalizedCode\)[\s\S]*\.commit\(\)/,
-  'Controlled prerequisite stops must have an atomic native persistence path for activation, event, and exact diagnostics.',
+  /recordProtectionSystemStop[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, false\)[\s\S]*putString\(EVENT_QUEUE_KEY, events\.toString\(\)\)[\s\S]*putString\(LAST_STOP_CODE_KEY, normalizedCode\)[\s\S]*\.commit\(\)/,
+  'Controlled system stops must have one atomic native persistence path for activation, event, and exact diagnostics.',
+);
+requirePattern(
+  pluginPath,
+  plugin,
+  /persistProtectionSystemStopWithFallback[\s\S]*recordProtectionSystemStop[\s\S]*if \(!persisted\)[\s\S]*setProtectionEnabled[\s\S]*recordProtectionStop/,
+  'All controlled system-stop callers must have a shared atomic-first fail-closed fallback wrapper.',
+);
+requirePattern(
+  pluginPath,
+  plugin,
+  /recordProtectionPrerequisiteStop[\s\S]*return recordProtectionSystemStop/,
+  'Existing prerequisite callers/tests must remain compatible through the generic system-stop transaction.',
 );
 requirePattern(
   pluginPath,
@@ -182,8 +194,8 @@ requirePattern(
 requirePattern(
   pluginPath,
   plugin,
-  /start_failed[\s\S]*Android konnte den Schutzdienst nicht starten/,
-  'Native start request exceptions must retain a stable diagnostic reason.',
+  /startProtectionService[\s\S]*catch \(RuntimeException error\)[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*ProtectionStopReasonPolicy\.START_FAILED[\s\S]*Android konnte den Schutzdienst nicht starten/,
+  'Native start request exceptions must atomically retain the stable START_FAILED diagnostic reason.',
 );
 
 for (const code of [
@@ -192,6 +204,7 @@ for (const code of [
   'notifications_missing',
   'no_active_rules',
   'target_app_missing',
+  'start_failed',
   'recovery_start_failed',
   'system_warning',
 ]) {
@@ -240,8 +253,8 @@ requirePattern(
 requirePattern(
   servicePath,
   service,
-  /stopForProtectionPrerequisite\(String reasonCode, String description\)[\s\S]*explicitStopRequested = true[\s\S]*recordProtectionPrerequisiteStop\([\s\S]*reasonCode,[\s\S]*description[\s\S]*if \(!persisted\)[\s\S]*setProtectionEnabled\(this, false\)[\s\S]*recordProtectionStop\(this, reasonCode, description\)/,
-  'Controlled permission and configuration shutdowns must use the atomic exact-code persistence path first and retain only a fail-closed fallback.',
+  /stopForProtectionPrerequisite\(String reasonCode, String description\)[\s\S]*explicitStopRequested = true[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*reasonCode,[\s\S]*description/,
+  'Controlled permission and configuration shutdowns must delegate to the shared atomic system-stop wrapper.',
 );
 
 requirePattern(
@@ -302,8 +315,8 @@ requirePattern(
 requirePattern(
   bootReceiverPath,
   bootReceiver,
-  /stopRecovery[\s\S]*setProtectionEnabled\(context, false\)[\s\S]*appendProtectionEvent[\s\S]*recordProtectionStop/,
-  'Failed recovery must clear activation, queue a warning, and persist the exact reason.',
+  /stopRecovery[\s\S]*persistProtectionSystemStopWithFallback\(context, code, message\)/,
+  'Failed boot/update recovery must delegate to the shared atomic system-stop wrapper.',
 );
 
 requirePattern(
@@ -460,5 +473,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection lifecycle diagnostics check passed. Actual foreground starts, atomic prerequisite stops, native fields, terminal stops, emergency friction, inconsistent service states, and physical evidence requirements remain guarded.',
+  'Protection lifecycle diagnostics check passed. Actual foreground starts, atomic system stops, native fields, terminal stops, emergency friction, inconsistent service states, and physical evidence requirements remain guarded.',
 );
