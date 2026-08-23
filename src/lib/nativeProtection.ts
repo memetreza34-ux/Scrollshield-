@@ -135,6 +135,11 @@ const DEFAULT_STOP_REASON: NativeProtectionStopReason = {
   message: 'Der Android-Schutz wurde in ScrollShield manuell gestoppt',
 };
 
+const TARGET_APP_MISSING_STOP_REASON: NativeProtectionStopReason = {
+  code: 'target_app_missing',
+  message: 'Keine aktive installierte Ziel-App ist mehr verfügbar; die Wiederherstellung wurde blockiert',
+};
+
 const EMPTY_STATUS: NativeProtectionStatus = {
   running: false,
   enabled: false,
@@ -268,6 +273,9 @@ const buildConfig = (appsConfig: Record<string, AppConfig>, focusMode: boolean):
   }),
 });
 
+const getActiveAndroidAppIds = (appsConfig: Record<string, AppConfig>, focusMode: boolean): string[] =>
+  buildConfig(appsConfig, focusMode).apps.filter((app) => app.active).map((app) => app.id);
+
 export const NativeProtection = {
   isAvailable(): boolean {
     return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
@@ -299,7 +307,17 @@ export const NativeProtection = {
       throw new Error('Android process-loss recovery requires an unclean-process-stop state');
     }
 
-    await this.sync(appsConfig, focusMode);
+    const activeAndroidAppIds = getActiveAndroidAppIds(appsConfig, focusMode);
+    const unavailableAppIds = await this.sync(appsConfig, focusMode);
+    const noInstalledActiveTarget =
+      activeAndroidAppIds.length === 0 ||
+      activeAndroidAppIds.every((appId) => unavailableAppIds.includes(appId));
+
+    if (noInstalledActiveTarget) {
+      await this.stop(TARGET_APP_MISSING_STOP_REASON);
+      return this.getStatus();
+    }
+
     await AndroidProtection.startProtectionService();
     return this.getStatus();
   },
