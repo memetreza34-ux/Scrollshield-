@@ -35,7 +35,7 @@ Ein Source-Checker ist niemals ein ausgeführter Android-Test.
 - Native Drain/ACK/Factory Reset;
 - Native Retention;
 - **Usage Flush Coordinator + Worker + produktive Service-Verdrahtung**;
-- **generischen atomaren System-Stop für Prerequisites, Native-/Foreground-Startfehler und Recovery**;
+- **generischen atomaren System-Stop für Prerequisites, Native-/Foreground-Startfehler, Boot-/Update-Recovery und unerwarteten Service-Destroy**;
 - **Process-Loss-Erkennung + kontrollierter Restart-Recovery**;
 - **Protection-Recovery inklusive Boot/App-Update**;
 - Device Matrix;
@@ -96,12 +96,13 @@ Vorhandene `androidTest`-Verträge:
 - Nachweis, dass der gespeicherte Code **nicht von der Sprache des Meldungstexts abhängt**;
 - Nachweis, dass dieselbe atomare Persistenz auch funktioniert, wenn `enabled` vor einem fehlgeschlagenen First-Start bereits `false` war;
 - einen direkten `START_FAILED`-Instrumentation-Fall über `recordProtectionSystemStop(...)`;
+- einen direkten `UNEXPECTED_SERVICE_DESTROY_CODE`-Instrumentation-Fall über dieselbe atomare Transaktion;
 - Legacy-Systemwarnungen behalten als Kompatibilitätsweg die bisherige Textklassifizierung;
 - app-spezifische Warnungen dürfen einen bereits gespeicherten terminalen Stop-Grund nicht überschreiben.
 
 `check:android-instrumentation` verlangt diese Methoden und Konstanten im Sourcevertrag ausdrücklich. Das ist noch keine ausgeführte Instrumentation.
 
-G7 bleibt **TEILWEISE**, weil reale Instrumentation sowie verbleibende echte Service-/Overlay-/Permission-Loss-/Process-Kill-/Notification-/Target-App-/Startfehler-/OEM-E2E-Fälle fehlen.
+G7 bleibt **TEILWEISE**, weil reale Instrumentation sowie verbleibende echte Service-/Overlay-/Permission-Loss-/Process-Kill-/Notification-/Target-App-/Start-/Destroy-/OEM-E2E-Fälle fehlen.
 
 ## 4. Supply Chain
 
@@ -252,9 +253,12 @@ target_app_missing
 start_failed
 ```
 
+Zusätzlich bleibt `unexpected_service_destroy` als stabiler Lifecycle-Code in `ProtectionServiceLifecyclePolicy` definiert und nutzt denselben atomaren Persistenzkern.
+
 Vertrag:
 
-- `ProtectionStopReasonPolicy` hält die stabilen Konstanten zentral;
+- `ProtectionStopReasonPolicy` hält die stabilen Prerequisite-/Start-Konstanten zentral;
+- `ProtectionServiceLifecyclePolicy` hält `notification_action_stop` und `unexpected_service_destroy` getrennt von Prerequisite-Codes;
 - `ScrollShieldNativePlugin.recordProtectionSystemStop(...)` läuft unter `EVENT_LOCK` und schreibt in **einem synchronen `SharedPreferences.commit()`**:
   - `SERVICE_ENABLED_KEY=false`;
   - die aktualisierte `protection_events`-Queue mit `warning/system`;
@@ -269,12 +273,15 @@ Vertrag:
 - wirft `startForegroundService/startService` nach bestandenen Voraussetzungen, wird `START_FAILED` über denselben atomaren Wrapper persistiert;
 - wirft `startForeground()` in `ScrollShieldProtectionService.onCreate()`, wird ebenfalls `START_FAILED` atomar persistiert;
 - der Foreground-Startfehler setzt `explicitStopRequested=true`, damit der anschließende kontrollierte `onDestroy()` die Diagnose nicht als `unexpected_service_destroy` überschreibt;
+- `ScrollShieldProtectionService.onDestroy()` verwendet bei `enabled=true && explicitStopRequested=false` jetzt ebenfalls `persistProtectionSystemStopWithFallback(... UNEXPECTED_SERVICE_DESTROY_CODE ...)`;
+- der Lifecycle-Checker isoliert den `onDestroy()`-Body und verbietet dort separate `setProtectionEnabled(false)`, `appendProtectionEvent(... warning/system ...)` und `recordProtectionStop(...)`-Writes;
+- harte Prozessbeendigung ist davon getrennt: ein echter Process-Kill muss keinen `onDestroy()`-Callback liefern und wird weiter über `unclean-process-stop` erkannt;
 - damit existiert im Primärpfad kein Crash-Fenster mehr zwischen Deaktivierung, Warn-Event und exaktem Stop-Code;
 - `classifySystemWarning(description)` bleibt nur als Kompatibilitäts-Fallback für ältere/sonstige Systemwarnungen bestehen;
-- Pure-Java-JUnit sperrt auch `start_failed` gegen versehentliche Änderung;
-- Android-Instrumentation prüft die generische Transaktion direkt mit `START_FAILED` sowie weiterhin die Prerequisite-Alias-Pfade.
+- Pure-Java-JUnit sperrt `start_failed` und die Lifecycle-Policy sperrt `unexpected_service_destroy`;
+- Android-Instrumentation prüft die generische Transaktion direkt mit `START_FAILED` und mit `UNEXPECTED_SERVICE_DESTROY_CODE` sowie weiterhin die Prerequisite-Alias-Pfade.
 
-`check:prerequisite-stop-codes` erzwingt die generische atomare Transaktion, den zentralen Fallback-Wrapper, Service-/Plugin-Startgrenzen, die stabilen Codes und den Instrumentation-Vertrag. Der Checker ist Bestandteil von `npm run verify` und als Pflichtschritt im `readiness`-Report eingetragen.
+`check:prerequisite-stop-codes` schützt die generische atomare Transaktion und Startgrenzen. `check:lifecycle` schützt zusätzlich den atomaren unerwarteten Destroy-Pfad und das Verbot der alten Einzelwrites. Beide sind Bestandteil von `npm run verify`; `check:lifecycle` ist ebenfalls Pflichtschritt im `readiness`-Report.
 
 ## 9. Process-Loss / kontrollierter Restart-Recovery
 
@@ -294,6 +301,7 @@ lastStartAt > lastStopAt
 Der Vertrag verlangt:
 
 - Process-Loss bleibt getrennt von gewöhnlicher `stale-activation`;
+- Process-Loss bleibt auch getrennt von `unexpected_service_destroy`, weil ein harter Prozesskill `onDestroy()` nicht zuverlässig ausführt;
 - ältere Stop-Evidence wird nicht als aktuelle Ursache dargestellt;
 - UI-Aktion lautet `Schutz wiederherstellen`;
 - `NativeProtection.recoverAfterProcessLoss(...)` liest den Native-Status vor dem Recovery erneut;
@@ -333,9 +341,9 @@ npm run check:diagnostic-normalization
 npm run check:usage-accounting
 ```
 
-Schützt Lifecycle-Wahrheit, generische atomare System-Stops, Native-/Foreground-Startfehler, Prerequisites, Boot-/App-Update-Recovery, Process-Loss-/Recovery-Grenzen, lokale Tagesgrenzen, keine negative Usage bei rückwärts laufender Uhr, Tag+App-Bucketing, Tageslimit und Anti-Binge über Mitternacht.
+Schützt Lifecycle-Wahrheit, generische atomare System-Stops, Native-/Foreground-Startfehler, atomaren unerwarteten Service-Destroy, Prerequisites, Boot-/App-Update-Recovery, Process-Loss-/Recovery-Grenzen, lokale Tagesgrenzen, keine negative Usage bei rückwärts laufender Uhr, Tag+App-Bucketing, Tageslimit und Anti-Binge über Mitternacht.
 
-`ProtectionDiagnosticsInstrumentedTest.java` schützt zusätzlich den Android-Persistenzvertrag. Die eigentliche Berechtigungsentziehung, reale Startfehler-Injektion und ein echter Prozesskill bleiben separate E2E-Fälle und dürfen durch Source-/Component-Tests nicht als erledigt gelten.
+`ProtectionDiagnosticsInstrumentedTest.java` schützt zusätzlich den Android-Persistenzvertrag. Die eigentliche Berechtigungsentziehung, reale Startfehler-/Destroy-Injektion und ein echter Prozesskill bleiben separate E2E-Fälle und dürfen durch Source-/Component-Tests nicht als erledigt gelten.
 
 Die Worker-/Usage-Checker müssen gemeinsam verhindern, dass die neue Persistenzarchitektur Tageslimits während Pending/In-Flight-Zuständen unterzählt oder Usage bei kontrolliertem Shutdown verliert.
 
@@ -390,7 +398,7 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - `ProtectionStopReasonPolicyTest` inklusive `start_failed`;
 - Process-Loss-/Restart-Recovery-/Target-App-Vitest- und Component-Tests;
 - `UsageFlushInstrumentedTest`;
-- `ProtectionDiagnosticsInstrumentedTest` inklusive First-Start- und `START_FAILED`-System-Stop-Fällen;
+- `ProtectionDiagnosticsInstrumentedTest` inklusive First-Start-, `START_FAILED`- und `UNEXPECTED_SERVICE_DESTROY_CODE`-System-Stop-Fällen;
 - TypeScript/Lint/Prettier/Vitest;
 - Android JUnit/Instrumentation;
 - Gradle Debug Build;
@@ -407,10 +415,11 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 6. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace` auf Emulator/Gerät;
 7. `UsageFlushInstrumentedTest`, `ProtectionDiagnosticsInstrumentedTest` + Native Drain/Retention/Recovery-Instrumentation bestätigen;
 8. technische Native-/Foreground-Startfehler real injizieren und `enabled=false`, `start_failed`, Warn-Event und kein Diagnose-Overwrite bestätigen;
-9. Native First-Start-Preflight real mit fehlendem Usage Access, Overlay, Notifications und Ziel-App prüfen;
-10. echten Process-Kill nach bestätigtem Dienststart reproduzieren und `unclean-process-stop` → `Schutz wiederherstellen` → `active` auf Android belegen;
-11. Boot-/App-Update-Recovery und Target-App-Deinstallation vollständig/teilweise testen;
-12. echte Permission-Loss-/Overlay-/Service-E2E-Fälle ausführen;
-13. Shutdown/In-Flight/Process-Kill/Restart-Races testen;
-14. Debug APK auf Device Matrix;
-15. erst danach Release-Evidence hochstufen.
+9. unerwarteten Lifecycle-Destroy bei aktivem Schutz real auslösen und `enabled=false`, `unexpected_service_destroy`, Warn-Event und exakte Diagnose bestätigen;
+10. Native First-Start-Preflight real mit fehlendem Usage Access, Overlay, Notifications und Ziel-App prüfen;
+11. echten Process-Kill nach bestätigtem Dienststart **ohne vorausgesetzten `onDestroy()`** reproduzieren und `unclean-process-stop` → `Schutz wiederherstellen` → `active` auf Android belegen;
+12. Boot-/App-Update-Recovery und Target-App-Deinstallation vollständig/teilweise testen;
+13. echte Permission-Loss-/Overlay-/Service-E2E-Fälle ausführen;
+14. Shutdown/In-Flight/Process-Kill/Restart-Races testen;
+15. Debug APK auf Device Matrix;
+16. erst danach Release-Evidence hochstufen.
