@@ -10,6 +10,10 @@ public class ProtectionServiceLifecyclePolicyTest {
     @Test
     public void exposesStableTerminalStopCodes() {
         assertEquals(
+            "manual_app_stop",
+            ProtectionServiceLifecyclePolicy.MANUAL_APP_STOP_CODE
+        );
+        assertEquals(
             "notification_action_stop",
             ProtectionServiceLifecyclePolicy.NOTIFICATION_ACTION_STOP_CODE
         );
