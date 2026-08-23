@@ -31,6 +31,7 @@ for (const [constant, value] of [
   ['NOTIFICATIONS_MISSING', 'notifications_missing'],
   ['NO_ACTIVE_RULES', 'no_active_rules'],
   ['TARGET_APP_MISSING', 'target_app_missing'],
+  ['START_FAILED', 'start_failed'],
   ['RECOVERY_START_FAILED', 'recovery_start_failed'],
   ['SYSTEM_WARNING', 'system_warning'],
 ]) {
@@ -46,27 +47,39 @@ requirePattern(
   policyPath,
   policy,
   /Compatibility fallback[\s\S]*classifySystemWarning/,
-  'Text classification must remain documented as a compatibility fallback, not the new service contract.',
+  'Text classification must remain documented as a compatibility fallback, not the primary stop contract.',
 );
 
 requirePattern(
   pluginPath,
   plugin,
-  /recordProtectionPrerequisiteStop\([\s\S]*synchronized \(EVENT_LOCK\)[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, false\)[\s\S]*putString\(EVENT_QUEUE_KEY, events\.toString\(\)\)[\s\S]*putLong\(LAST_STOP_AT_KEY, timestamp\)[\s\S]*putString\(LAST_STOP_CODE_KEY, normalizedCode\)[\s\S]*putString\(LAST_STOP_MESSAGE_KEY, normalizedMessage\)[\s\S]*\.commit\(\)/,
-  'Prerequisite stop persistence must atomically commit disabled state, event queue, timestamp, exact code, and message under EVENT_LOCK.',
+  /recordProtectionSystemStop\([\s\S]*synchronized \(EVENT_LOCK\)[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, false\)[\s\S]*putString\(EVENT_QUEUE_KEY, events\.toString\(\)\)[\s\S]*putLong\(LAST_STOP_AT_KEY, timestamp\)[\s\S]*putString\(LAST_STOP_CODE_KEY, normalizedCode\)[\s\S]*putString\(LAST_STOP_MESSAGE_KEY, normalizedMessage\)[\s\S]*\.commit\(\)/,
+  'System-stop persistence must atomically commit disabled state, event queue, timestamp, exact code, and message under EVENT_LOCK.',
 );
 requirePattern(
   pluginPath,
   plugin,
-  /recordProtectionPrerequisiteStop[\s\S]*event\.put\("type", "warning"\)[\s\S]*event\.put\("appId", "system"\)[\s\S]*event\.put\("desc", normalizedMessage\)/,
-  'The atomic prerequisite transaction must append the user-visible system warning to the same event queue write.',
+  /recordProtectionSystemStop[\s\S]*event\.put\("type", "warning"\)[\s\S]*event\.put\("appId", "system"\)[\s\S]*event\.put\("desc", normalizedMessage\)/,
+  'The atomic system-stop transaction must append the user-visible warning to the same event-queue commit.',
+);
+requirePattern(
+  pluginPath,
+  plugin,
+  /recordProtectionPrerequisiteStop\([\s\S]*return recordProtectionSystemStop\(context, reasonCode, description\)/,
+  'The prerequisite helper must remain a compatibility alias to the generic atomic system-stop transaction.',
+);
+requirePattern(
+  pluginPath,
+  plugin,
+  /persistProtectionSystemStopWithFallback\([\s\S]*recordProtectionSystemStop\(context, reasonCode, description\)[\s\S]*if \(!persisted\)[\s\S]*setProtectionEnabled\(context, false\)[\s\S]*recordProtectionStop\(context, reasonCode, description\)/,
+  'The shared system-stop wrapper must use the atomic transaction first and retain only an explicit fail-closed fallback for commit failure.',
 );
 
 requirePattern(
   servicePath,
   service,
-  /stopForProtectionPrerequisite\(String reasonCode, String description\)[\s\S]*recordProtectionPrerequisiteStop\([\s\S]*reasonCode,[\s\S]*description[\s\S]*if \(!persisted\)[\s\S]*setProtectionEnabled\(this, false\)[\s\S]*recordProtectionStop\(this, reasonCode, description\)[\s\S]*stopSelf\(\)/,
-  'Service prerequisite shutdown must use the atomic native transaction first and retain an explicit fail-closed fallback only for commit failure.',
+  /stopForProtectionPrerequisite\(String reasonCode, String description\)[\s\S]*explicitStopRequested = true[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*reasonCode,[\s\S]*description[\s\S]*stopSelf\(\)/,
+  'Service prerequisite shutdown must delegate to the shared atomic system-stop wrapper.',
 );
 
 const helperStart = service.indexOf('private void stopForProtectionPrerequisite');
@@ -75,10 +88,12 @@ if (helperStart < 0 || nextMethod <= helperStart) {
   findings.push(`${servicePath}: Could not isolate stopForProtectionPrerequisite helper.`);
 } else {
   const helperBody = service.slice(helperStart, nextMethod);
-  if (helperBody.includes('appendProtectionEvent(')) {
-    findings.push(
-      `${servicePath}: Prerequisite helper must not perform a separate warning-event commit before the atomic transaction.`,
-    );
+  for (const forbidden of ['appendProtectionEvent(', 'setProtectionEnabled(', 'recordProtectionStop(']) {
+    if (helperBody.includes(forbidden)) {
+      findings.push(
+        `${servicePath}: Prerequisite helper must delegate to the shared atomic wrapper instead of performing '${forbidden}' itself.`,
+      );
+    }
   }
 }
 
@@ -106,8 +121,20 @@ if (/stopForMissingPermission\s*\(/.test(service)) {
 requirePattern(
   pluginPath,
   plugin,
-  /private static void rejectProtectionStartPrerequisite\([\s\S]*recordProtectionPrerequisiteStop\(context, reasonCode, description\)[\s\S]*if \(!persisted\)[\s\S]*setProtectionEnabled\(context, false\)[\s\S]*recordProtectionStop\(context, reasonCode, description\)[\s\S]*call\.reject\(rejectionMessage\)/,
-  'Native start preflight must atomically persist a stable prerequisite stop before rejecting and keep only an explicit fail-closed fallback for commit failure.',
+  /private static void rejectProtectionStartPrerequisite\([\s\S]*persistProtectionSystemStopWithFallback\(context, reasonCode, description\)[\s\S]*call\.reject\(rejectionMessage\)/,
+  'Native start preflight must persist through the shared atomic system-stop wrapper before rejecting.',
+);
+requirePattern(
+  pluginPath,
+  plugin,
+  /catch \(RuntimeException error\)[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*ProtectionStopReasonPolicy\.START_FAILED[\s\S]*Android konnte den Schutzdienst nicht starten[\s\S]*call\.reject\("Protection service could not be started", error\)/,
+  'Native service-start request exceptions must atomically persist START_FAILED before rejecting.',
+);
+requirePattern(
+  servicePath,
+  service,
+  /catch \(RuntimeException error\)[\s\S]*RUNNING\.set\(false\)[\s\S]*explicitStopRequested = true[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*ProtectionStopReasonPolicy\.START_FAILED[\s\S]*Android konnte den Foreground-Schutzdienst nicht starten[\s\S]*stopSelf\(\)/,
+  'Foreground start failure must atomically persist START_FAILED and mark the stop explicit before stopSelf().',
 );
 
 const startMethodStart = plugin.indexOf('public void startProtectionService');
@@ -150,8 +177,8 @@ if (startMethodStart < 0 || startHelperStart <= startMethodStart) {
 requirePattern(
   policyTestPath,
   policyTest,
-  /void\s+exposesStablePrerequisiteStopCodes\s*\(/,
-  'Pure-Java JUnit must lock the stable prerequisite code values.',
+  /void\s+exposesStablePrerequisiteStopCodes\s*\([\s\S]*START_FAILED/,
+  'Pure-Java JUnit must lock prerequisite and technical start-failure code values.',
 );
 requirePattern(
   policyTestPath,
@@ -169,7 +196,7 @@ requirePattern(
   diagnosticsTestPath,
   diagnosticsTest,
   /recordProtectionPrerequisiteStop\([\s\S]*assertFalse\(ScrollShieldNativePlugin\.isProtectionEnabled\(context\)\)[\s\S]*new JSONArray\(preferences\.getString\("protection_events"/,
-  'Android instrumentation must inspect disabled state and the real event queue after the atomic prerequisite stop.',
+  'Android instrumentation must inspect disabled state and the real event queue after the compatibility prerequisite stop.',
 );
 requirePattern(
   diagnosticsTestPath,
@@ -185,11 +212,11 @@ requirePattern(
 );
 
 if (findings.length > 0) {
-  console.log('Prerequisite stop-code contract check failed:\n');
+  console.log('Prerequisite/system stop-code contract check failed:\n');
   for (const finding of findings) console.log(`- ${finding}`);
   process.exit(1);
 }
 
 console.log(
-  'Prerequisite stop-code contract check passed. Service runtime loss and native start preflight both use the atomic prerequisite transaction for disabled state, event, and exact diagnostics; localized text parsing is legacy-only.',
+  'Prerequisite/system stop-code contract check passed. Runtime prerequisites, native preflight, and technical start failures share one atomic system-stop transaction with stable diagnostics.',
 );
