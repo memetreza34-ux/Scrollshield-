@@ -145,6 +145,7 @@ if (findings.length === 0) {
   for (const [method, description] of [
     ['atomicPrerequisiteStopPersistsDisabledStateEventAndExactCode', 'atomic disabled-state/event/diagnostic persistence'],
     ['atomicPrerequisiteStopAlsoPersistsWhenProtectionWasAlreadyDisabled', 'first-start prerequisite persistence while activation is already false'],
+    ['atomicSystemStartFailurePersistsDisabledStateEventAndStableCode', 'technical START_FAILED system-stop persistence'],
     ['explicitPrerequisiteCodesPersistIndependentOfMessageLanguage', 'language-independent explicit prerequisite diagnostics'],
     ['legacySystemPermissionWarningsStillPersistStableStopDiagnostics', 'legacy permission-warning diagnostic compatibility'],
     ['legacySystemConfigurationWarningsStillPersistStableStopDiagnostics', 'legacy configuration-warning diagnostic compatibility'],
@@ -164,6 +165,7 @@ if (findings.length === 0) {
     'NOTIFICATIONS_MISSING',
     'NO_ACTIVE_RULES',
     'TARGET_APP_MISSING',
+    'START_FAILED',
   ]) {
     requireMatch(
       diagnosticsTestPath,
@@ -177,7 +179,13 @@ if (findings.length === 0) {
     diagnosticsTestPath,
     diagnosticsTest,
     /recordProtectionPrerequisiteStop\([\s\S]*assertFalse\(ScrollShieldNativePlugin\.isProtectionEnabled\(context\)\)[\s\S]*new JSONArray\(preferences\.getString\("protection_events"/,
-    'On-device diagnostics instrumentation must prove the atomic prerequisite transaction persists disabled state and the warning event.',
+    'On-device diagnostics instrumentation must prove the compatibility prerequisite transaction persists disabled state and the warning event.',
+  );
+  requireMatch(
+    diagnosticsTestPath,
+    diagnosticsTest,
+    /atomicSystemStartFailurePersistsDisabledStateEventAndStableCode[\s\S]*recordProtectionSystemStop\([\s\S]*START_FAILED[\s\S]*assertFalse\(ScrollShieldNativePlugin\.isProtectionEnabled\(context\)\)[\s\S]*protection_events/,
+    'On-device diagnostics instrumentation must prove the generic system-stop transaction persists START_FAILED atomically.',
   );
   requireMatch(
     diagnosticsTestPath,
@@ -226,5 +234,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android instrumentation contract check passed. Runtime state, atomic boot/update recovery, merged-manifest, usage-persistence, atomic prerequisite stops, and legacy diagnostic compatibility tests are present.',
+  'Android instrumentation contract check passed. Runtime state, atomic boot/update recovery, merged-manifest, usage-persistence, atomic prerequisite and technical system stops, and legacy diagnostic compatibility tests are present.',
 );
