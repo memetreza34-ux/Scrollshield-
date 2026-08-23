@@ -104,6 +104,50 @@ if (/stopForMissingPermission\s*\(/.test(service)) {
 }
 
 requirePattern(
+  pluginPath,
+  plugin,
+  /private static void rejectProtectionStartPrerequisite\([\s\S]*recordProtectionPrerequisiteStop\(context, reasonCode, description\)[\s\S]*if \(!persisted\)[\s\S]*setProtectionEnabled\(context, false\)[\s\S]*recordProtectionStop\(context, reasonCode, description\)[\s\S]*call\.reject\(rejectionMessage\)/,
+  'Native start preflight must atomically persist a stable prerequisite stop before rejecting and keep only an explicit fail-closed fallback for commit failure.',
+);
+
+const startMethodStart = plugin.indexOf('public void startProtectionService');
+const startHelperStart = plugin.indexOf('private static void rejectProtectionStartPrerequisite', startMethodStart + 1);
+if (startMethodStart < 0 || startHelperStart <= startMethodStart) {
+  findings.push(`${pluginPath}: Could not isolate startProtectionService preflight.`);
+} else {
+  const startMethodBody = plugin.slice(startMethodStart, startHelperStart);
+  for (const constant of [
+    'USAGE_ACCESS_MISSING',
+    'OVERLAY_PERMISSION_MISSING',
+    'NOTIFICATIONS_MISSING',
+    'TARGET_APP_MISSING',
+  ]) {
+    if (
+      !new RegExp(
+        `rejectProtectionStartPrerequisite\\([\\s\\S]*?ProtectionStopReasonPolicy\\.${constant}`,
+      ).test(startMethodBody)
+    ) {
+      findings.push(
+        `${pluginPath}: startProtectionService must persist ${constant} through rejectProtectionStartPrerequisite before rejecting.`,
+      );
+    }
+  }
+
+  for (const bareReject of [
+    'Usage Access is required before protection can start',
+    'Overlay permission is required before protection can start',
+    'Notifications are required so active protection and its stop action remain visible',
+    'At least one installed active protected app is required',
+  ]) {
+    if (new RegExp(`call\\.reject\\(\"${bareReject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\"`).test(startMethodBody)) {
+      findings.push(
+        `${pluginPath}: startProtectionService must not directly reject prerequisite '${bareReject}' without atomic persistence.`,
+      );
+    }
+  }
+}
+
+requirePattern(
   policyTestPath,
   policyTest,
   /void\s+exposesStablePrerequisiteStopCodes\s*\(/,
@@ -130,6 +174,12 @@ requirePattern(
 requirePattern(
   diagnosticsTestPath,
   diagnosticsTest,
+  /void\s+atomicPrerequisiteStopAlsoPersistsWhenProtectionWasAlreadyDisabled\s*\([\s\S]*TARGET_APP_MISSING[\s\S]*assertFalse\(ScrollShieldNativePlugin\.isProtectionEnabled\(context\)\)[\s\S]*protection_events/,
+  'Android instrumentation must prove first-start prerequisite failures still persist exact diagnostics and a warning when activation was already false.',
+);
+requirePattern(
+  diagnosticsTestPath,
+  diagnosticsTest,
   /void\s+explicitPrerequisiteCodesPersistIndependentOfMessageLanguage\s*\(/,
   'Android instrumentation must prove explicit codes do not depend on localized human-readable messages.',
 );
@@ -141,5 +191,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Prerequisite stop-code contract check passed. Active-service prerequisite failures use one atomic native transaction for disabled state, event, and exact diagnostics; localized text parsing is legacy-only.',
+  'Prerequisite stop-code contract check passed. Service runtime loss and native start preflight both use the atomic prerequisite transaction for disabled state, event, and exact diagnostics; localized text parsing is legacy-only.',
 );
