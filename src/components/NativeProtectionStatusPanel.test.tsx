@@ -76,6 +76,27 @@ describe('NativeProtectionStatusPanel', () => {
     expect(screen.getByRole('button', { name: 'Wiederherstellung läuft…' })).toBeDisabled();
   });
 
+  it('shows a persistent target-app blocker after recovery finds no installed active target', () => {
+    render(
+      <NativeProtectionStatusPanel
+        status={makeStatus({
+          health: 'stopped-with-reason',
+          lastStopAt: 300,
+          lastStopCode: 'target_app_missing',
+          lastStopMessage: 'Keine aktive installierte Ziel-App ist mehr verfügbar',
+          unavailableAppIds: ['instagram'],
+        })}
+        busy={false}
+        onToggle={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('ZIEL-APP FEHLT')).toBeInTheDocument();
+    expect(screen.getByText('Keine installierte Ziel-App verfügbar')).toBeInTheDocument();
+    expect(screen.getByText(/mindestens eine installierte App/)).toBeInTheDocument();
+    expect(screen.getByText('target_app_missing')).toBeInTheDocument();
+  });
+
   it('shows active state and a stop action', () => {
     render(
       <NativeProtectionStatusPanel
