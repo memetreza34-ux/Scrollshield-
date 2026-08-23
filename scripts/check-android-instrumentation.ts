@@ -147,6 +147,7 @@ if (findings.length === 0) {
     ['atomicPrerequisiteStopAlsoPersistsWhenProtectionWasAlreadyDisabled', 'first-start prerequisite persistence while activation is already false'],
     ['atomicSystemStartFailurePersistsDisabledStateEventAndStableCode', 'technical START_FAILED system-stop persistence'],
     ['atomicUnexpectedDestroyPersistsDisabledStateEventAndStableCode', 'unexpected service-destroy system-stop persistence'],
+    ['atomicTerminalStopsPersistExactCodesWithoutWarningEvents', 'manual/notification terminal-stop persistence without warning events'],
     ['explicitPrerequisiteCodesPersistIndependentOfMessageLanguage', 'language-independent explicit prerequisite diagnostics'],
     ['legacySystemPermissionWarningsStillPersistStableStopDiagnostics', 'legacy permission-warning diagnostic compatibility'],
     ['legacySystemConfigurationWarningsStillPersistStableStopDiagnostics', 'legacy configuration-warning diagnostic compatibility'],
@@ -176,6 +177,15 @@ if (findings.length === 0) {
     );
   }
 
+  for (const constant of ['MANUAL_APP_STOP_CODE', 'NOTIFICATION_ACTION_STOP_CODE', 'UNEXPECTED_SERVICE_DESTROY_CODE']) {
+    requireMatch(
+      diagnosticsTestPath,
+      diagnosticsTest,
+      new RegExp(`ProtectionServiceLifecyclePolicy\\.${constant}`),
+      `On-device diagnostics instrumentation must exercise lifecycle constant ${constant}.`,
+    );
+  }
+
   requireMatch(
     diagnosticsTestPath,
     diagnosticsTest,
@@ -197,13 +207,19 @@ if (findings.length === 0) {
   requireMatch(
     diagnosticsTestPath,
     diagnosticsTest,
+    /atomicTerminalStopsPersistExactCodesWithoutWarningEvents[\s\S]*MANUAL_APP_STOP_CODE[\s\S]*NOTIFICATION_ACTION_STOP_CODE[\s\S]*recordProtectionTerminalStop[\s\S]*assertEquals\(expectedEventsJson, preferences\.getString\("protection_events"/,
+    'On-device diagnostics instrumentation must prove manual and notification terminal stops persist atomically without changing the event queue.',
+  );
+  requireMatch(
+    diagnosticsTestPath,
+    diagnosticsTest,
     /appendProtectionEvent\([\s\S]*"warning",[\s\S]*"system"/,
     'On-device diagnostics instrumentation must retain the legacy system-warning compatibility path.',
   );
   requireMatch(
     diagnosticsTestPath,
     diagnosticsTest,
-    /recordProtectionStop\([\s\S]*"manual_app_stop"[\s\S]*appendProtectionEvent\([\s\S]*"instagram"[\s\S]*assertEquals\("manual_app_stop"/,
+    /recordProtectionStop\([\s\S]*MANUAL_APP_STOP_CODE[\s\S]*appendProtectionEvent\([\s\S]*"instagram"[\s\S]*assertEquals\([\s\S]*MANUAL_APP_STOP_CODE/,
     'App-specific warning instrumentation must prove it cannot overwrite an existing terminal stop reason.',
   );
 
@@ -241,5 +257,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android instrumentation contract check passed. Runtime state, atomic boot/update recovery, merged-manifest, usage-persistence, atomic prerequisite and technical system stops including unexpected destroy, and legacy diagnostic compatibility tests are present.',
+  'Android instrumentation contract check passed. Runtime state, atomic boot/update recovery, merged-manifest, usage-persistence, atomic system stops, atomic explicit terminal stops without warning events, and legacy diagnostic compatibility tests are present.',
 );
