@@ -12,6 +12,7 @@ public class ProtectionStopReasonPolicyTest {
         assertEquals("notifications_missing", ProtectionStopReasonPolicy.NOTIFICATIONS_MISSING);
         assertEquals("no_active_rules", ProtectionStopReasonPolicy.NO_ACTIVE_RULES);
         assertEquals("target_app_missing", ProtectionStopReasonPolicy.TARGET_APP_MISSING);
+        assertEquals("start_failed", ProtectionStopReasonPolicy.START_FAILED);
         assertEquals("recovery_start_failed", ProtectionStopReasonPolicy.RECOVERY_START_FAILED);
         assertEquals("system_warning", ProtectionStopReasonPolicy.SYSTEM_WARNING);
     }
@@ -51,7 +52,13 @@ public class ProtectionStopReasonPolicyTest {
     }
 
     @Test
-    public void legacyTextFallbackClassifiesRecoveryAndUnknownWarnings() {
+    public void legacyTextFallbackClassifiesTechnicalRecoveryAndUnknownWarnings() {
+        assertEquals(
+            ProtectionStopReasonPolicy.START_FAILED,
+            ProtectionStopReasonPolicy.classifySystemWarning(
+                "Android konnte den Schutzdienst nicht starten"
+            )
+        );
         assertEquals(
             ProtectionStopReasonPolicy.RECOVERY_START_FAILED,
             ProtectionStopReasonPolicy.classifySystemWarning(
