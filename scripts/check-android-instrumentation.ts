@@ -117,6 +117,19 @@ if (findings.length === 0) {
     );
   }
 
+  requireMatch(
+    recoveryTestPath,
+    recoveryTest,
+    /bootRecoveryFailsClosedWhenNoInstalledTargetExists[\s\S]*assertFalse\(ScrollShieldNativePlugin\.isProtectionEnabled\(context\)\)[\s\S]*getLastProtectionStopCode[\s\S]*getLastProtectionStopMessage[\s\S]*getLastProtectionStopAt[\s\S]*new JSONArray\(preferences\.getString\("protection_events"[\s\S]*"warning"[\s\S]*"system"/,
+    'Boot recovery instrumentation must inspect the fail-closed state, exact diagnostics, timestamp, and persisted system warning event.',
+  );
+  requireMatch(
+    recoveryTestPath,
+    recoveryTest,
+    /packageReplacementRecoveryAlsoFailsClosedWithoutTarget[\s\S]*ACTION_MY_PACKAGE_REPLACED[\s\S]*recovery_target_app_missing[\s\S]*protection_events/,
+    'Package-replacement recovery must retain the persisted warning-event contract.',
+  );
+
   for (const [method, description] of [
     ['productionWorkerPersistsCoordinatorBatchIntoSharedPreferences', 'real SharedPreferences worker persistence'],
     ['shutdownDrainPersistsUsageAddedDuringInFlightAndroidWrite', 'Android shutdown drain with in-flight usage'],
@@ -131,6 +144,7 @@ if (findings.length === 0) {
 
   for (const [method, description] of [
     ['atomicPrerequisiteStopPersistsDisabledStateEventAndExactCode', 'atomic disabled-state/event/diagnostic persistence'],
+    ['atomicPrerequisiteStopAlsoPersistsWhenProtectionWasAlreadyDisabled', 'first-start prerequisite persistence while activation is already false'],
     ['explicitPrerequisiteCodesPersistIndependentOfMessageLanguage', 'language-independent explicit prerequisite diagnostics'],
     ['legacySystemPermissionWarningsStillPersistStableStopDiagnostics', 'legacy permission-warning diagnostic compatibility'],
     ['legacySystemConfigurationWarningsStillPersistStableStopDiagnostics', 'legacy configuration-warning diagnostic compatibility'],
@@ -212,5 +226,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android instrumentation contract check passed. Runtime state, recovery, merged-manifest, usage-persistence, atomic prerequisite stops, and legacy diagnostic compatibility tests are present.',
+  'Android instrumentation contract check passed. Runtime state, atomic boot/update recovery, merged-manifest, usage-persistence, atomic prerequisite stops, and legacy diagnostic compatibility tests are present.',
 );
