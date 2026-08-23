@@ -98,6 +98,36 @@ public class ProtectionDiagnosticsInstrumentedTest {
     }
 
     @Test
+    public void atomicSystemStartFailurePersistsDisabledStateEventAndStableCode() throws Exception {
+        ScrollShieldNativePlugin.setProtectionEnabled(context, true);
+        long before = System.currentTimeMillis();
+        String message = "Foreground protection service could not start";
+
+        assertTrue(
+            ScrollShieldNativePlugin.recordProtectionSystemStop(
+                context,
+                ProtectionStopReasonPolicy.START_FAILED,
+                message
+            )
+        );
+
+        assertFalse(ScrollShieldNativePlugin.isProtectionEnabled(context));
+        assertEquals(
+            ProtectionStopReasonPolicy.START_FAILED,
+            ScrollShieldNativePlugin.getLastProtectionStopCode(context)
+        );
+        assertEquals(message, ScrollShieldNativePlugin.getLastProtectionStopMessage(context));
+        assertTrue(ScrollShieldNativePlugin.getLastProtectionStopAt(context) >= before);
+
+        JSONArray events = new JSONArray(preferences.getString("protection_events", "[]"));
+        assertTrue(events.length() > 0);
+        JSONObject event = events.getJSONObject(events.length() - 1);
+        assertEquals("warning", event.getString("type"));
+        assertEquals("system", event.getString("appId"));
+        assertEquals(message, event.getString("desc"));
+    }
+
+    @Test
     public void explicitPrerequisiteCodesPersistIndependentOfMessageLanguage() {
         assertExplicitStop(
             ProtectionStopReasonPolicy.USAGE_ACCESS_MISSING,
