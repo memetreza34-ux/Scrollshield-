@@ -182,15 +182,53 @@ requirePattern(
 requirePattern(
   pluginPath,
   plugin,
+  /recordProtectionTerminalStop[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, false\)[\s\S]*putLong\(LAST_STOP_AT_KEY, timestamp\)[\s\S]*putString\(LAST_STOP_CODE_KEY, normalizedCode\)[\s\S]*putString\(LAST_STOP_MESSAGE_KEY, normalizedMessage\)[\s\S]*\.commit\(\)/,
+  'Explicit terminal stops must atomically commit disabled state, timestamp, exact code, and message.',
+);
+requirePattern(
+  pluginPath,
+  plugin,
+  /persistProtectionTerminalStopWithFallback[\s\S]*recordProtectionTerminalStop[\s\S]*if \(!persisted\)[\s\S]*setProtectionEnabled[\s\S]*recordProtectionStop/,
+  'Explicit terminal-stop callers must share an atomic-first fallback wrapper.',
+);
+const terminalStopStart = plugin.indexOf('public static boolean recordProtectionTerminalStop');
+const prerequisiteAliasStart = plugin.indexOf('public static boolean recordProtectionPrerequisiteStop', terminalStopStart + 1);
+if (terminalStopStart < 0 || prerequisiteAliasStart <= terminalStopStart) {
+  findings.push(`${pluginPath}: Could not isolate recordProtectionTerminalStop.`);
+} else {
+  const terminalStopBody = plugin.slice(terminalStopStart, prerequisiteAliasStart);
+  if (terminalStopBody.includes('EVENT_QUEUE_KEY') || terminalStopBody.includes('appendProtectionEvent(')) {
+    findings.push(
+      `${pluginPath}: Explicit terminal stops must not append or rewrite protection_events; deliberate stops are not system warnings.`,
+    );
+  }
+}
+requirePattern(
+  pluginPath,
+  plugin,
   /recordProtectionPrerequisiteStop[\s\S]*return recordProtectionSystemStop/,
   'Existing prerequisite callers/tests must remain compatible through the generic system-stop transaction.',
 );
 requirePattern(
   pluginPath,
   plugin,
-  /stopProtectionService[\s\S]*reasonCode[\s\S]*reasonMessage[\s\S]*recordProtectionStop/,
-  'React must be able to pass an explicit stop reason to Android.',
+  /stopProtectionService[\s\S]*reasonCode[\s\S]*reasonMessage[\s\S]*MANUAL_APP_STOP_CODE[\s\S]*persistProtectionTerminalStopWithFallback\(context, reasonCode, reasonMessage\)[\s\S]*stopService/,
+  'React explicit stops must use the stable manual fallback and atomic terminal-stop wrapper before stopping the service.',
 );
+const pluginStopStart = plugin.indexOf('public void stopProtectionService');
+const pluginStatusStart = plugin.indexOf('public void getProtectionServiceStatus', pluginStopStart + 1);
+if (pluginStopStart < 0 || pluginStatusStart <= pluginStopStart) {
+  findings.push(`${pluginPath}: Could not isolate stopProtectionService.`);
+} else {
+  const pluginStopBody = plugin.slice(pluginStopStart, pluginStatusStart);
+  for (const forbiddenWrite of ['setProtectionEnabled(context, false)', 'recordProtectionStop(']) {
+    if (pluginStopBody.includes(forbiddenWrite)) {
+      findings.push(
+        `${pluginPath}: stopProtectionService must not restore separate terminal writes (${forbiddenWrite}); use the atomic terminal-stop wrapper.`,
+      );
+    }
+  }
+}
 requirePattern(
   pluginPath,
   plugin,
@@ -212,7 +250,7 @@ for (const code of [
   requirePattern(policyTestPath, policyTest, new RegExp(`\\b${code}\\b`), `JUnit coverage is missing code ${code}.`);
 }
 
-for (const code of ['notification_action_stop', 'unexpected_service_destroy']) {
+for (const code of ['manual_app_stop', 'notification_action_stop', 'unexpected_service_destroy']) {
   requirePattern(
     serviceLifecyclePolicyPath,
     serviceLifecyclePolicy,
@@ -241,9 +279,23 @@ requirePattern(
 requirePattern(
   servicePath,
   service,
-  /ACTION_STOP[\s\S]*explicitStopRequested = true[\s\S]*NOTIFICATION_ACTION_STOP_CODE[\s\S]*recordProtectionStop[\s\S]*stopSelf\(\)/,
-  'The persistent notification stop action must record notification_action_stop before stopping the service.',
+  /ACTION_STOP[\s\S]*explicitStopRequested = true[\s\S]*persistProtectionTerminalStopWithFallback\([\s\S]*NOTIFICATION_ACTION_STOP_CODE[\s\S]*stopSelf\(\)/,
+  'The persistent notification stop action must atomically persist notification_action_stop before stopping the service.',
 );
+const actionStopStart = service.indexOf('if (intent != null && ACTION_STOP.equals(intent.getAction()))');
+const disabledStart = service.indexOf('if (!ScrollShieldNativePlugin.isProtectionEnabled(this))', actionStopStart + 1);
+if (actionStopStart < 0 || disabledStart <= actionStopStart) {
+  findings.push(`${servicePath}: Could not isolate notification ACTION_STOP branch.`);
+} else {
+  const actionStopBody = service.slice(actionStopStart, disabledStart);
+  for (const forbiddenWrite of ['setProtectionEnabled(this, false)', 'recordProtectionStop(']) {
+    if (actionStopBody.includes(forbiddenWrite)) {
+      findings.push(
+        `${servicePath}: Notification ACTION_STOP must not restore separate terminal writes (${forbiddenWrite}); use the atomic terminal-stop wrapper.`,
+      );
+    }
+  }
+}
 requirePattern(
   servicePath,
   service,
@@ -493,5 +545,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection lifecycle diagnostics check passed. Actual foreground starts, atomic system stops including unexpected destroy, native fields, terminal stops, emergency friction, inconsistent service states, and physical evidence requirements remain guarded.',
+  'Protection lifecycle diagnostics check passed. Actual foreground starts, atomic system stops including unexpected destroy, atomic explicit terminal stops, native fields, emergency friction, inconsistent service states, and physical evidence requirements remain guarded.',
 );
