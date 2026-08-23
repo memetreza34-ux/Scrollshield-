@@ -196,10 +196,9 @@ public class ScrollShieldNativePlugin extends Plugin {
             }
             call.resolve();
         } catch (RuntimeException error) {
-            setProtectionEnabled(context, false);
-            recordProtectionStop(
+            persistProtectionSystemStopWithFallback(
                 context,
-                "start_failed",
+                ProtectionStopReasonPolicy.START_FAILED,
                 "Android konnte den Schutzdienst nicht starten"
             );
             call.reject("Protection service could not be started", error);
@@ -213,14 +212,22 @@ public class ScrollShieldNativePlugin extends Plugin {
         String description,
         String rejectionMessage
     ) {
-        boolean persisted = recordProtectionPrerequisiteStop(context, reasonCode, description);
+        persistProtectionSystemStopWithFallback(context, reasonCode, description);
+        call.reject(rejectionMessage);
+    }
+
+    public static void persistProtectionSystemStopWithFallback(
+        Context context,
+        String reasonCode,
+        String description
+    ) {
+        boolean persisted = recordProtectionSystemStop(context, reasonCode, description);
         if (!persisted) {
-            // Best-effort fallback after an atomic commit failure. Keep the start attempt fail-closed
-            // and preserve the exact stable stop code even when the event queue cannot be committed.
+            // Best-effort fallback after an atomic commit failure. Keep protection fail-closed and
+            // retain the exact stable stop code even if the warning event cannot be committed.
             setProtectionEnabled(context, false);
             recordProtectionStop(context, reasonCode, description);
         }
-        call.reject(rejectionMessage);
     }
 
     @PluginMethod
@@ -370,11 +377,11 @@ public class ScrollShieldNativePlugin extends Plugin {
     }
 
     /**
-     * Atomically records a controlled protection prerequisite stop. The enabled flag, terminal
-     * diagnostics, and user-visible system warning are committed together so a process death cannot
-     * leave a localized text-derived stop code between separate writes.
+     * Atomically records a controlled protection system stop. The enabled flag, terminal
+     * diagnostics, and user-visible system warning are committed together so process death cannot
+     * leave activation, event, and exact stop evidence out of sync.
      */
-    public static boolean recordProtectionPrerequisiteStop(
+    public static boolean recordProtectionSystemStop(
         Context context,
         String reasonCode,
         String description
@@ -423,6 +430,18 @@ public class ScrollShieldNativePlugin extends Plugin {
                 return false;
             }
         }
+    }
+
+    /**
+     * Compatibility alias for existing prerequisite callers and tests. New generic system-stop
+     * callers should use recordProtectionSystemStop(...).
+     */
+    public static boolean recordProtectionPrerequisiteStop(
+        Context context,
+        String reasonCode,
+        String description
+    ) {
+        return recordProtectionSystemStop(context, reasonCode, description);
     }
 
     public static boolean hasUsageAccess(Context context) {
