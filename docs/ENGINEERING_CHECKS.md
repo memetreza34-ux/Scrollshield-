@@ -35,8 +35,9 @@ Ein Source-Checker ist niemals ein ausgeführter Android-Test.
 - Native Drain/ACK/Factory Reset;
 - Native Retention;
 - **Usage Flush Coordinator + Worker + produktive Service-Verdrahtung**;
-- **explizite stabile und atomar persistierte Prerequisite-Stop-Codes für Service-Runtime und Native-Start-Preflight**;
+- **generischen atomaren System-Stop für Prerequisites, Native-/Foreground-Startfehler und Recovery**;
 - **Process-Loss-Erkennung + kontrollierter Restart-Recovery**;
+- **Protection-Recovery inklusive Boot/App-Update**;
 - Device Matrix;
 - Lifecycle/Diagnostik;
 - Overlay Accessibility;
@@ -89,15 +90,18 @@ Vorhandene `androidTest`-Verträge:
 - explizite stabile Codes für verlorene Overlay-Berechtigung;
 - explizite stabile Codes für verlorene Benachrichtigungen;
 - explizite stabile Codes für fehlende aktive Regeln und fehlende Ziel-App;
-- eine atomare Prerequisite-Stop-Transaktion, die deaktivierten Zustand, Warn-Event, Stop-Zeitpunkt, exakten Code und Nachricht gemeinsam persistiert;
+- den stabilen technischen Code `start_failed`;
+- eine generische atomare System-Stop-Transaktion, die deaktivierten Zustand, Warn-Event, Stop-Zeitpunkt, exakten Code und Nachricht gemeinsam persistiert;
+- den kompatiblen Prerequisite-Alias auf dieselbe Transaktion;
 - Nachweis, dass der gespeicherte Code **nicht von der Sprache des Meldungstexts abhängt**;
 - Nachweis, dass dieselbe atomare Persistenz auch funktioniert, wenn `enabled` vor einem fehlgeschlagenen First-Start bereits `false` war;
+- einen direkten `START_FAILED`-Instrumentation-Fall über `recordProtectionSystemStop(...)`;
 - Legacy-Systemwarnungen behalten als Kompatibilitätsweg die bisherige Textklassifizierung;
 - app-spezifische Warnungen dürfen einen bereits gespeicherten terminalen Stop-Grund nicht überschreiben.
 
 `check:android-instrumentation` verlangt diese Methoden und Konstanten im Sourcevertrag ausdrücklich. Das ist noch keine ausgeführte Instrumentation.
 
-G7 bleibt **TEILWEISE**, weil reale Instrumentation sowie verbleibende echte Service-/Overlay-/Permission-Loss-/Process-Kill-/Notification-/Target-App-/OEM-E2E-Fälle fehlen.
+G7 bleibt **TEILWEISE**, weil reale Instrumentation sowie verbleibende echte Service-/Overlay-/Permission-Loss-/Process-Kill-/Notification-/Target-App-/Startfehler-/OEM-E2E-Fälle fehlen.
 
 ## 4. Supply Chain
 
@@ -229,15 +233,15 @@ Der Checker verlangt:
 
 Noch offen ist die **reale Ausführung** dieser Tests sowie echte Service-/Process-Kill-/Restart-Evidence.
 
-## 8. Explizite und atomare Prerequisite-Stop-Codes
+## 8. Generischer atomarer System-Stop
 
 ```bash
 npm run check:prerequisite-stop-codes
 ```
 
-Der produktive Protection Service und der Native-Start-Preflight leiten terminale Prerequisite-Gründe nicht mehr aus lokalisiertem Meldungstext ab.
+Prerequisite- und technische Systemfehler verwenden denselben atomaren Native-Persistenzpfad. Produktive Stop-Codes werden nicht aus lokalisiertem Meldungstext abgeleitet.
 
-Stabile Codes:
+Stabile Codes dieses Vertrags:
 
 ```text
 usage_access_missing
@@ -245,32 +249,32 @@ overlay_permission_missing
 notifications_missing
 no_active_rules
 target_app_missing
+start_failed
 ```
 
 Vertrag:
 
 - `ProtectionStopReasonPolicy` hält die stabilen Konstanten zentral;
-- `ScrollShieldProtectionService.onStartCommand()` verwendet die Konstanten für fehlende Service-Startvoraussetzungen;
-- `enforceCurrentApp()` verwendet dieselben Konstanten bei Laufzeitverlust;
-- `ScrollShieldNativePlugin.recordProtectionPrerequisiteStop(...)` läuft unter `EVENT_LOCK` und schreibt in **einem synchronen `SharedPreferences.commit()`**:
+- `ScrollShieldNativePlugin.recordProtectionSystemStop(...)` läuft unter `EVENT_LOCK` und schreibt in **einem synchronen `SharedPreferences.commit()`**:
   - `SERVICE_ENABLED_KEY=false`;
   - die aktualisierte `protection_events`-Queue mit `warning/system`;
   - `LAST_STOP_AT_KEY`;
   - den explizit normalisierten `LAST_STOP_CODE_KEY`;
   - `LAST_STOP_MESSAGE_KEY`;
-- damit gibt es im Primärpfad kein Crash-Fenster mehr zwischen Deaktivierung, Warn-Event und exaktem Stop-Code;
-- `stopForProtectionPrerequisite(reasonCode, description)` ruft für den laufenden Service zuerst diese atomare Operation auf;
-- `ScrollShieldNativePlugin.startProtectionService()` verwendet für Usage Access, Overlay, Notifications und fehlende installierte Ziel-App `rejectProtectionStartPrerequisite(...)`;
-- `rejectProtectionStartPrerequisite(...)` ruft ebenfalls zuerst `recordProtectionPrerequisiteStop(...)` auf und führt `call.reject(...)` erst **nach** der Persistenz aus;
-- nur bei `commit=false` folgt in Service und Plugin ein Best-Effort-Fallback aus `setProtectionEnabled(false)` + `recordProtectionStop(...)`;
-- dadurch hinterlässt auch ein fehlgeschlagener First Start oder Recovery-Start einen exakten terminalen Zustand, selbst wenn `enabled` vor dem Versuch bereits `false` war;
-- `onDestroy()` darf einen kontrollierten Service-Stopp nicht als `unexpected_service_destroy` überschreiben;
+- `recordProtectionPrerequisiteStop(...)` bleibt als kompatibler Alias auf `recordProtectionSystemStop(...)` erhalten;
+- `persistProtectionSystemStopWithFallback(...)` ruft zuerst die atomare Transaktion auf und verwendet nur bei `commit=false` `setProtectionEnabled(false)` + `recordProtectionStop(...)` als Best-Effort-Fallback;
+- `ScrollShieldProtectionService.onStartCommand()` und `enforceCurrentApp()` verwenden stabile Prerequisite-Codes;
+- `stopForProtectionPrerequisite(...)` delegiert vollständig an den zentralen Wrapper;
+- `ScrollShieldNativePlugin.startProtectionService()` persistiert fehlende Usage-/Overlay-/Notification-/Target-Voraussetzungen vor dem `call.reject()`;
+- wirft `startForegroundService/startService` nach bestandenen Voraussetzungen, wird `START_FAILED` über denselben atomaren Wrapper persistiert;
+- wirft `startForeground()` in `ScrollShieldProtectionService.onCreate()`, wird ebenfalls `START_FAILED` atomar persistiert;
+- der Foreground-Startfehler setzt `explicitStopRequested=true`, damit der anschließende kontrollierte `onDestroy()` die Diagnose nicht als `unexpected_service_destroy` überschreibt;
+- damit existiert im Primärpfad kein Crash-Fenster mehr zwischen Deaktivierung, Warn-Event und exaktem Stop-Code;
 - `classifySystemWarning(description)` bleibt nur als Kompatibilitäts-Fallback für ältere/sonstige Systemwarnungen bestehen;
-- Pure-Java-JUnit sperrt die konstanten Code-Werte gegen versehentliche Änderung;
-- Android-Instrumentation prüft die atomare Transaktion inklusive `enabled=false`, Event-Queue, exaktem Code, Nachricht und Zeitstempel;
-- dieselbe Instrumentation prüft einen bereits deaktivierten First-Start-Zustand und mit englischen Meldungstexten, dass der Code nicht von lokalisierter Prosa abhängt.
+- Pure-Java-JUnit sperrt auch `start_failed` gegen versehentliche Änderung;
+- Android-Instrumentation prüft die generische Transaktion direkt mit `START_FAILED` sowie weiterhin die Prerequisite-Alias-Pfade.
 
-`check:prerequisite-stop-codes` erzwingt die atomare Native-Transaktion, die Service-Verdrahtung, die vier Plugin-Preflight-Codes, den Helper-Fallback, das Verbot nackter Prerequisite-`call.reject()`-Pfade und den Instrumentation-Vertrag. Der Checker ist Bestandteil von `npm run verify` und als Pflichtschritt im `readiness`-Report eingetragen.
+`check:prerequisite-stop-codes` erzwingt die generische atomare Transaktion, den zentralen Fallback-Wrapper, Service-/Plugin-Startgrenzen, die stabilen Codes und den Instrumentation-Vertrag. Der Checker ist Bestandteil von `npm run verify` und als Pflichtschritt im `readiness`-Report eingetragen.
 
 ## 9. Process-Loss / kontrollierter Restart-Recovery
 
@@ -300,6 +304,7 @@ Der Vertrag verlangt:
 - fehlen alle aktiven Ziele, wird vor Service-Start mit `target_app_missing` fail-closed gestoppt;
 - teilweise Target-Unverfügbarkeit blockiert nicht, solange mindestens ein aktives installiertes Ziel übrig ist;
 - der vorhandene Native-Startpfad wird verwendet, sodass Usage Access, Overlay, Notifications und installierte Ziel-App erneut geprüft und Preflight-Fehler atomar persistiert werden;
+- technische Startfehler werden dabei ebenfalls stabil als `start_failed` gespeichert;
 - nach dem Start wird Native-Wahrheit erneut gelesen;
 - die UI meldet Erfolg nur bei `running && enabled && health == active`;
 - Bridge-, Health-, StatusPanel- und Permissions-Tests schützen diesen Ablauf;
@@ -323,13 +328,14 @@ Reale V0.7-Geräte-Evidence bleibt Pflicht.
 npm run check:lifecycle
 npm run check:prerequisite-stop-codes
 npm run check:process-loss
+npm run check:protection-recovery
 npm run check:diagnostic-normalization
 npm run check:usage-accounting
 ```
 
-Schützt Lifecycle-Wahrheit, strukturierte stabile und atomar gespeicherte Prerequisite-Stop-Codes inklusive Native-Start-Preflight, Process-Loss-/Recovery-Grenzen, lokale Tagesgrenzen, keine negative Usage bei rückwärts laufender Uhr, Tag+App-Bucketing, Tageslimit und Anti-Binge über Mitternacht.
+Schützt Lifecycle-Wahrheit, generische atomare System-Stops, Native-/Foreground-Startfehler, Prerequisites, Boot-/App-Update-Recovery, Process-Loss-/Recovery-Grenzen, lokale Tagesgrenzen, keine negative Usage bei rückwärts laufender Uhr, Tag+App-Bucketing, Tageslimit und Anti-Binge über Mitternacht.
 
-`ProtectionDiagnosticsInstrumentedTest.java` schützt zusätzlich den realen Android-Persistenzpfad. Die eigentliche Berechtigungsentziehung während eines laufenden Services, der reale Native-Start mit fehlender Voraussetzung sowie ein echter Prozesskill bleiben separate E2E-Fälle und dürfen durch Source-/Component-Tests nicht als erledigt gelten.
+`ProtectionDiagnosticsInstrumentedTest.java` schützt zusätzlich den Android-Persistenzvertrag. Die eigentliche Berechtigungsentziehung, reale Startfehler-Injektion und ein echter Prozesskill bleiben separate E2E-Fälle und dürfen durch Source-/Component-Tests nicht als erledigt gelten.
 
 Die Worker-/Usage-Checker müssen gemeinsam verhindern, dass die neue Persistenzarchitektur Tageslimits während Pending/In-Flight-Zuständen unterzählt oder Usage bei kontrolliertem Shutdown verliert.
 
@@ -376,13 +382,15 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - `check:usage-flush-worker`;
 - `check:prerequisite-stop-codes`;
 - `check:process-loss`;
+- `check:protection-recovery`;
+- `check:lifecycle`;
 - `check:android-instrumentation`;
 - `UsageFlushCoordinatorTest`;
 - `UsageFlushWorkerTest`;
-- `ProtectionStopReasonPolicyTest`;
+- `ProtectionStopReasonPolicyTest` inklusive `start_failed`;
 - Process-Loss-/Restart-Recovery-/Target-App-Vitest- und Component-Tests;
 - `UsageFlushInstrumentedTest`;
-- `ProtectionDiagnosticsInstrumentedTest` inklusive neuem First-Start-Preflight-Fall;
+- `ProtectionDiagnosticsInstrumentedTest` inklusive First-Start- und `START_FAILED`-System-Stop-Fällen;
 - TypeScript/Lint/Prettier/Vitest;
 - Android JUnit/Instrumentation;
 - Gradle Debug Build;
@@ -398,10 +406,11 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 5. reale Fehler beheben und erneut ausführen;
 6. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace` auf Emulator/Gerät;
 7. `UsageFlushInstrumentedTest`, `ProtectionDiagnosticsInstrumentedTest` + Native Drain/Retention/Recovery-Instrumentation bestätigen;
-8. Native First-Start-Preflight real mit fehlendem Usage Access, Overlay, Notifications und Ziel-App prüfen;
-9. echten Process-Kill nach bestätigtem Dienststart reproduzieren und `unclean-process-stop` → `Schutz wiederherstellen` → `active` auf Android belegen;
-10. Target-App-Deinstallation vollständig/teilweise während Recovery testen;
-11. echte Permission-Loss-/Overlay-/Service-E2E-Fälle ausführen;
-12. Shutdown/In-Flight/Process-Kill/Restart-Races testen;
-13. Debug APK auf Device Matrix;
-14. erst danach Release-Evidence hochstufen.
+8. technische Native-/Foreground-Startfehler real injizieren und `enabled=false`, `start_failed`, Warn-Event und kein Diagnose-Overwrite bestätigen;
+9. Native First-Start-Preflight real mit fehlendem Usage Access, Overlay, Notifications und Ziel-App prüfen;
+10. echten Process-Kill nach bestätigtem Dienststart reproduzieren und `unclean-process-stop` → `Schutz wiederherstellen` → `active` auf Android belegen;
+11. Boot-/App-Update-Recovery und Target-App-Deinstallation vollständig/teilweise testen;
+12. echte Permission-Loss-/Overlay-/Service-E2E-Fälle ausführen;
+13. Shutdown/In-Flight/Process-Kill/Restart-Races testen;
+14. Debug APK auf Device Matrix;
+15. erst danach Release-Evidence hochstufen.
