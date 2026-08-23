@@ -195,6 +195,101 @@ describe('NativeProtection lifecycle reasons', () => {
     expect(result).toMatchObject({ running: true, enabled: true, health: 'active' });
   });
 
+  it('fails closed with target_app_missing when every active Android target is unavailable', async () => {
+    getProtectionServiceStatusMock
+      .mockResolvedValueOnce({
+        running: false,
+        enabled: true,
+        unavailableAppIdsJson: '[]',
+        lastStartAt: 200,
+        lastStopAt: 100,
+        lastStopCode: 'notification_action_stop',
+        lastStopMessage: 'Ein älterer sauberer Stopp',
+      })
+      .mockResolvedValueOnce({
+        running: false,
+        enabled: false,
+        unavailableAppIdsJson: '["instagram"]',
+        lastStartAt: 200,
+        lastStopAt: 250,
+        lastStopCode: 'target_app_missing',
+        lastStopMessage: 'Keine aktive installierte Ziel-App ist mehr verfügbar',
+      });
+    syncProtectionConfigMock.mockResolvedValue({ unavailableAppIdsJson: '["instagram"]' });
+
+    const result = await NativeProtection.recoverAfterProcessLoss(
+      {
+        instagram: {
+          id: 'instagram',
+          ...DEFAULT_APP_CONFIG,
+          active: true,
+        },
+      },
+      false,
+    );
+
+    expect(syncProtectionConfigMock).toHaveBeenCalledTimes(1);
+    expect(startProtectionServiceMock).not.toHaveBeenCalled();
+    expect(stopProtectionServiceMock).toHaveBeenCalledWith({
+      reasonCode: 'target_app_missing',
+      reasonMessage: 'Keine aktive installierte Ziel-App ist mehr verfügbar; die Wiederherstellung wurde blockiert',
+    });
+    expect(result).toMatchObject({
+      running: false,
+      enabled: false,
+      lastStopCode: 'target_app_missing',
+      health: 'stopped-with-reason',
+    });
+  });
+
+  it('still recovers when one active target is unavailable but another remains installed', async () => {
+    getProtectionServiceStatusMock
+      .mockResolvedValueOnce({
+        running: false,
+        enabled: true,
+        unavailableAppIdsJson: '[]',
+        lastStartAt: 200,
+        lastStopAt: 100,
+        lastStopCode: 'notification_action_stop',
+        lastStopMessage: 'Ein älterer sauberer Stopp',
+      })
+      .mockResolvedValueOnce({
+        running: true,
+        enabled: true,
+        unavailableAppIdsJson: '["instagram"]',
+        lastStartAt: 300,
+        lastStopAt: 100,
+        lastStopCode: 'notification_action_stop',
+        lastStopMessage: 'Ein älterer sauberer Stopp',
+      });
+    syncProtectionConfigMock.mockResolvedValue({ unavailableAppIdsJson: '["instagram"]' });
+
+    const result = await NativeProtection.recoverAfterProcessLoss(
+      {
+        instagram: {
+          id: 'instagram',
+          ...DEFAULT_APP_CONFIG,
+          active: true,
+        },
+        tiktok: {
+          id: 'tiktok',
+          ...DEFAULT_APP_CONFIG,
+          active: true,
+        },
+      },
+      false,
+    );
+
+    expect(stopProtectionServiceMock).not.toHaveBeenCalled();
+    expect(startProtectionServiceMock).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      running: true,
+      enabled: true,
+      unavailableAppIds: ['instagram'],
+      health: 'active',
+    });
+  });
+
   it('does not restart when process-loss recovery finds the service already active', async () => {
     getProtectionServiceStatusMock.mockResolvedValue({
       running: true,
