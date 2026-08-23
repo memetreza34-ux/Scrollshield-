@@ -108,10 +108,10 @@ public class ScrollShieldProtectionService extends Service {
             startForeground(NOTIFICATION_ID, createNotification());
         } catch (RuntimeException error) {
             RUNNING.set(false);
-            ScrollShieldNativePlugin.setProtectionEnabled(this, false);
-            ScrollShieldNativePlugin.recordProtectionStop(
+            explicitStopRequested = true;
+            ScrollShieldNativePlugin.persistProtectionSystemStopWithFallback(
                 this,
-                "start_failed",
+                ProtectionStopReasonPolicy.START_FAILED,
                 "Android konnte den Foreground-Schutzdienst nicht starten"
             );
             stopSelf();
@@ -329,17 +329,11 @@ public class ScrollShieldProtectionService extends Service {
     private void stopForProtectionPrerequisite(String reasonCode, String description) {
         explicitStopRequested = true;
         hideOverlay();
-        boolean persisted = ScrollShieldNativePlugin.recordProtectionPrerequisiteStop(
+        ScrollShieldNativePlugin.persistProtectionSystemStopWithFallback(
             this,
             reasonCode,
             description
         );
-        if (!persisted) {
-            // Best-effort fallback after an atomic commit failure. Keep fail-closed activation and
-            // explicit diagnostics even if the event queue itself cannot be durably updated.
-            ScrollShieldNativePlugin.setProtectionEnabled(this, false);
-            ScrollShieldNativePlugin.recordProtectionStop(this, reasonCode, description);
-        }
         stopSelf();
     }
 
