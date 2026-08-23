@@ -6,15 +6,18 @@ const policyTestPath = 'src/lib/protectionRecovery.test.ts';
 const appTestPath = 'src/App.protectionRecovery.test.tsx';
 const bootReceiverPath =
   'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldBootReceiver.java';
+const pluginPath =
+  'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldNativePlugin.java';
 const bootRecoveryTestPath =
   'android/app/src/androidTest/java/app/scrollshield/mobile/BootRecoveryInstrumentedTest.java';
 
-const [app, policy, policyTest, appTest, bootReceiver, bootRecoveryTest] = await Promise.all([
+const [app, policy, policyTest, appTest, bootReceiver, plugin, bootRecoveryTest] = await Promise.all([
   readFile(appPath, 'utf8'),
   readFile(policyPath, 'utf8'),
   readFile(policyTestPath, 'utf8'),
   readFile(appTestPath, 'utf8'),
   readFile(bootReceiverPath, 'utf8'),
+  readFile(pluginPath, 'utf8'),
   readFile(bootRecoveryTestPath, 'utf8'),
 ]);
 
@@ -63,8 +66,14 @@ requirePattern(
 requirePattern(
   bootReceiverPath,
   bootReceiver,
-  /private void stopRecovery\([\s\S]*boolean persisted = ScrollShieldNativePlugin\.recordProtectionPrerequisiteStop\([\s\S]*context,[\s\S]*code,[\s\S]*message[\s\S]*if \(!persisted\)[\s\S]*setProtectionEnabled\(context, false\)[\s\S]*appendProtectionEvent\(context, "warning", "system", message\)[\s\S]*recordProtectionStop\(context, code, message\)/,
-  'Boot/update recovery failures must use the atomic native stop transaction first and retain separate writes only as a commit-failure fallback.',
+  /private void stopRecovery\([\s\S]*persistProtectionSystemStopWithFallback\(context, code, message\)/,
+  'Boot/update recovery failures must delegate to the shared atomic system-stop wrapper.',
+);
+requirePattern(
+  pluginPath,
+  plugin,
+  /persistProtectionSystemStopWithFallback\([\s\S]*recordProtectionSystemStop\(context, reasonCode, description\)[\s\S]*if \(!persisted\)[\s\S]*setProtectionEnabled\(context, false\)[\s\S]*recordProtectionStop\(context, reasonCode, description\)/,
+  'The shared recovery/system-stop wrapper must use the atomic native transaction first and keep separate writes only as a commit-failure fallback.',
 );
 
 const stopRecoveryStart = bootReceiver.indexOf('private void stopRecovery');
@@ -72,21 +81,12 @@ if (stopRecoveryStart < 0) {
   findings.push(`${bootReceiverPath}: Could not isolate stopRecovery helper.`);
 } else {
   const stopRecoveryBody = bootReceiver.slice(stopRecoveryStart);
-  const atomicIndex = stopRecoveryBody.indexOf('recordProtectionPrerequisiteStop');
-  const fallbackIndex = stopRecoveryBody.indexOf('if (!persisted)');
-  const directDisableIndex = stopRecoveryBody.indexOf('setProtectionEnabled(context, false)');
-  const eventIndex = stopRecoveryBody.indexOf('appendProtectionEvent(context, "warning", "system", message)');
-  const stopIndex = stopRecoveryBody.indexOf('recordProtectionStop(context, code, message)');
-  if (
-    atomicIndex < 0 ||
-    fallbackIndex <= atomicIndex ||
-    directDisableIndex <= fallbackIndex ||
-    eventIndex <= fallbackIndex ||
-    stopIndex <= fallbackIndex
-  ) {
-    findings.push(
-      `${bootReceiverPath}: Legacy recovery writes must not run before the atomic stop transaction succeeds or fails.`,
-    );
+  for (const forbidden of ['setProtectionEnabled(', 'appendProtectionEvent(', 'recordProtectionStop(']) {
+    if (stopRecoveryBody.includes(forbidden)) {
+      findings.push(
+        `${bootReceiverPath}: stopRecovery must delegate to the shared atomic wrapper instead of performing '${forbidden}' locally.`,
+      );
+    }
   }
 }
 
@@ -110,5 +110,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection recovery check passed. Boot/update recovery uses the atomic native stop transaction before any fallback writes, while app-open stale-service recovery remains fail-closed and target-aware.',
+  'Protection recovery check passed. Boot/update recovery delegates to the shared atomic system-stop transaction, while app-open stale-service recovery remains fail-closed and target-aware.',
 );
