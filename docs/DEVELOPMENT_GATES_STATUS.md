@@ -23,10 +23,10 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 | G1 | Architektur & Repo-Prozess | **FERTIG** | React/TS, lokale Daten, Capacitor/Native Android, Draft-PR-Prozess und Verantwortungsgrenzen sind dokumentiert | bei Architekturänderung erneut öffnen |
 | G2 | Datenmodell & Migration | **TEILWEISE** | starke transaktionale/V0.7-Migration im Source; reale Alt-Daten-Evidenz fehlt | echter V0.7-Upgrade-Test + bytegenauer Archivvergleich |
 | G3 | Kern-UI/UX & Accessibility | **TEILWEISE** | Release-Screens und Source-A11y-Checks existieren; reale Usability-/Large-Font-/TalkBack-Evidenz fehlt | physische Accessibility- und User-Research-Sessions |
-| G4 | Native Android Schutz | **TEILWEISE** | Usage Access, Overlay, FGS, Regeln, Recovery, Diagnostik, stabile atomar persistierte Prerequisite-Stop-Codes und crash-sicherer Native-Datentransfer sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + reale Geräte |
+| G4 | Native Android Schutz | **TEILWEISE** | Usage Access, Overlay, FGS, Regeln, Recovery, Diagnostik, atomare Prerequisite-Stops inklusive Native-Start-Preflight und crash-sicherer Native-Datentransfer sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + reale Geräte |
 | G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First-Manifest, Privacy-Guard, gepinnter Gradle-SHA256 und `check:supply-chain` existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-Check + Dependency-/Manifest-Snapshot + finaler Binary-Audit + Threat-Review |
 | G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` und Android-Stufen sind vorbereitet; GitHub Runner stoppt vor Step 1 wegen Billing/Spending-Limit | kompletter echter Verify-Lauf auf exaktem Head |
-| G7 | Android Instrumentation/E2E | **TEILWEISE** | Runtime-State/Lifecycle, Manifest/Permissions, Boot-Recovery, Native-Drain/ACK/Reset, Retention, Android-SharedPreferences-Usage-Flush, sprachunabhängige atomare Prerequisite-Stops sowie `unclean-process-stop` mit kontrolliertem Restart-Recovery, exakter Permission-/Race-Diagnose und fail-closed `target_app_missing` bei vollständig fehlenden aktiven Zielen besitzen Source-/Testverträge. Reale Permission-Loss-/Process-Kill-/Ziel-App-Deinstallations-/Overlay-/Service-Ausführung fehlt | `connectedDebugAndroidTest` real ausführen + echten Prozesskill reproduzieren + `Schutz wiederherstellen` bestätigen + Permissions entziehen + aktive Ziel-App(s) vor Recovery deinstallieren |
+| G7 | Android Instrumentation/E2E | **TEILWEISE** | Runtime-State/Lifecycle, Manifest/Permissions, Boot-Recovery, Native-Drain/ACK/Reset, Retention, Android-SharedPreferences-Usage-Flush, atomare Runtime- und Native-Start-Prerequisite-Stops sowie `unclean-process-stop` mit kontrolliertem Restart-Recovery, exakter Permission-/Race-Diagnose und fail-closed `target_app_missing` bei vollständig fehlenden aktiven Zielen besitzen Source-/Testverträge. Reale Permission-Loss-/Process-Kill-/Ziel-App-Deinstallations-/Overlay-/Service-Ausführung fehlt | `connectedDebugAndroidTest` real ausführen + echten Prozesskill reproduzieren + `Schutz wiederherstellen` bestätigen + Start-Preflight/Permissions entziehen + aktive Ziel-App(s) vor Recovery deinstallieren |
 | G8 | Performance & Batterie | **TEILWEISE** | `ScrollShieldProtectionService` ist auf `UsageFlushCoordinator` + `UsageFlushWorker` verdrahtet. Periodische Usage-`commit()`-Writes laufen nicht mehr im Service-Main-Thread; Pending/In-Flight bleibt im Tageslimit sichtbar, Shutdown besitzt einen seriellen Final-Drain und `UsageFlushInstrumentedTest` prüft den Android-SharedPreferences-Pfad im Testvertrag. Reale JUnit-/Instrumentation-/Gradle-/Device-Evidenz fehlt weiterhin | Worker-/Coordinator-JUnit + Usage-Flush-Instrumentation real ausführen + `assembleDebug` + Process-Kill-Regressions + 12h-Baseline |
 | G9 | Physical Device Matrix | **FEHLT** | Matrix ist definiert, aber nicht vollständig ausgeführt | Pflichtgeräte/Szenarien mit Build-ID/Evidenz vollständig dokumentieren |
 | G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Evidence-Schema v2 existiert; Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Kandidaten-SHA + echte Referenzen |
@@ -72,12 +72,16 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
   - `ScrollShieldNativePlugin.recordProtectionPrerequisiteStop(...)` persistiert unter `EVENT_LOCK` in **einem** synchronen Commit: `enabled=false`, Warn-Event, Stop-Zeitpunkt, exakten Stop-Code und Stop-Nachricht;
   - dadurch existiert im Primärpfad kein Crash-Fenster mehr zwischen separaten Deaktivierungs-/Event-/Diagnose-Commits;
   - `stopForProtectionPrerequisite(reasonCode, description)` verwendet zuerst die atomare Native-Operation und greift nur bei `commit=false` auf einen expliziten Best-Effort-Fallback zurück;
-  - lokalisierter Meldungstext entscheidet nicht mehr über den neuen produktiven Service-Stop-Code;
+  - **neu:** `ScrollShieldNativePlugin.startProtectionService()` verwendet für Usage Access, Overlay, Notifications und fehlende installierte Ziel-App ebenfalls `rejectProtectionStartPrerequisite(...)` statt eines nackten `call.reject()`;
+  - dieser Helper persistiert zuerst atomar `enabled=false + warning/system + timestamp + exakten Code + Nachricht` und lehnt den Capacitor-Aufruf erst danach ab;
+  - nur wenn der atomare Commit selbst fehlschlägt, folgt derselbe fail-closed Fallback aus `setProtectionEnabled(false)` + `recordProtectionStop(...)`;
+  - damit ist auch First-Start-/Recovery-Preflight diagnostisch stabil und kann kein altes `enabled=true` mit altem Stop-Grund stehen lassen;
+  - lokalisierter Meldungstext entscheidet nicht mehr über den neuen produktiven Service- oder Start-Preflight-Code;
   - `classifySystemWarning(...)` bleibt nur als Legacy-/Kompatibilitäts-Fallback bestehen;
   - `ProtectionStopReasonPolicyTest.java` sperrt die stabilen Werte;
-  - `ProtectionDiagnosticsInstrumentedTest.java` prüft die atomare Transaktion (`enabled=false`, Event-Queue, Code, Nachricht, Zeitstempel), anderssprachige Meldungstexte und den Legacy-Fallback;
-  - `check:prerequisite-stop-codes` erzwingt die atomare Service-/Plugin-Verdrahtung und ist Teil von `npm run verify` sowie des Readiness-Reports;
-  - `check:lifecycle` und `check:android-instrumentation` wurden auf denselben atomaren Vertrag umgestellt.
+  - `ProtectionDiagnosticsInstrumentedTest.java` prüft die atomare Transaktion (`enabled=false`, Event-Queue, Code, Nachricht, Zeitstempel), anderssprachige Meldungstexte, den Legacy-Fallback und jetzt auch die Persistenz, wenn die Aktivierung bereits vor dem fehlgeschlagenen Start `false` war;
+  - `check:prerequisite-stop-codes` erzwingt atomare Service- **und Native-Start-Preflight**-Verdrahtung und verbietet die vier alten nackten Prerequisite-Rejects;
+  - `check:lifecycle` und `check:android-instrumentation` bleiben auf denselben atomaren Vertrag ausgerichtet.
 - Process-Kill-/Restart-Recovery gehärtet:
   - `NativeProtectionHealth` besitzt den eigenen Zustand `unclean-process-stop`;
   - Bedingung: Schutz ist weiterhin gespeichert aktiv, der Dienst läuft nicht, und `lastStartAt` ist neuer als `lastStopAt`;
@@ -91,7 +95,7 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
   - sind **alle** aktiven Android-Ziele unavailable oder existiert kein gültiges aktives Android-Ziel mehr, wird vor Service-Start fail-closed mit `target_app_missing` gestoppt und der Status erneut gelesen;
   - teilweise Unverfügbarkeit blockiert nicht, solange mindestens ein aktives Ziel installiert bleibt;
   - `target_app_missing` wird in der Statuskarte persistent als `ZIEL-APP FEHLT` / `Keine installierte Ziel-App verfügbar` dargestellt;
-  - der bestehende Native-Startpfad prüft bei verbleibendem Ziel Usage Access, Overlay, Notifications und installierte Ziel-App erneut;
+  - bei verbleibendem Ziel läuft der native Start jetzt ebenfalls über den atomar diagnostizierenden Preflight für Usage Access, Overlay, Notifications und Ziel-App;
   - nach dem Start wird der Native-Status erneut gelesen;
   - die UI meldet `wiederhergestellt` nur bei `running && enabled && health == active`;
   - `androidProtectionPrerequisites.ts` zentralisiert Pflichtzugriffe und ordnet `usage_access_missing`, `overlay_permission_missing` und `notifications_missing` denselben UI-Prerequisites zu;
@@ -111,15 +115,16 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 
 1. **G6 extern entsperren:** GitHub Actions Billing/Spending-Limit korrigieren; danach vollständige Verify-/Android-JUnit-/Debug-Build-Kette real ausführen.
 2. **G7 echte Process-Kill-/Recovery-Evidence:** laufenden Schutz mit bestätigtem `lastStartAt` hart beenden, danach `unclean-process-stop` beobachten und `Schutz wiederherstellen` real ausführen.
-3. **G7 echte Target-App-Recovery-Evidence:** nach bestätigtem Dienststart alle aktiven Ziel-Apps deinstallieren → `target_app_missing`/`ZIEL-APP FEHLT` bestätigen; danach Mehrziel-Fall testen, bei dem nur eine aktive App fehlt und mindestens eine installiert bleibt.
-4. **G7 echte Permission-Loss-E2E:** Usage Access / Overlay / Notifications vor bzw. während Recovery und während laufendem Service einzeln entziehen; Stop-Code, Aktivierungsstatus, Event und konkrete UI-Diagnose prüfen.
-5. **G8 verifizieren:** Coordinator-/Worker-JUnit einschließlich Shutdown-Drain real ausführen, Android-Kompilierung bestätigen und `UsageFlushInstrumentedTest` auf Emulator/Gerät ausführen.
-6. **G7:** echte Overlay-/Service-/Notification-End-to-End-Fälle ergänzen und anschließend `connectedDebugAndroidTest` real ausführen.
-7. **G9:** stabilen Debug-Kandidaten auf der physischen Device Matrix testen.
-8. **G2:** reale V0.7-Migration mit bytegenauer Evidence durchführen.
-9. **G8/G9:** 12h/OEM-/Mitternacht-/DST-/Prozesskill-Evidence erfassen.
-10. **G5:** finalen Dependency-/SBOM-/Manifest-Snapshot für Release-Evidence erzeugen.
-11. **G0/G3:** reale User-Research-/Accessibility-Sessions mit stabilem APK durchführen.
+3. **G7 Native-Start-Preflight real prüfen:** Usage Access / Overlay / Notifications bzw. installierte Ziel-App jeweils vor Start fehlen lassen und `enabled=false`, exakten Stop-Code sowie Warn-Event auf Android bestätigen.
+4. **G7 echte Target-App-Recovery-Evidence:** nach bestätigtem Dienststart alle aktiven Ziel-Apps deinstallieren → `target_app_missing`/`ZIEL-APP FEHLT` bestätigen; danach Mehrziel-Fall testen, bei dem nur eine aktive App fehlt und mindestens eine installiert bleibt.
+5. **G7 echte Permission-Loss-E2E:** Usage Access / Overlay / Notifications vor bzw. während Recovery und während laufendem Service einzeln entziehen; Stop-Code, Aktivierungsstatus, Event und konkrete UI-Diagnose prüfen.
+6. **G8 verifizieren:** Coordinator-/Worker-JUnit einschließlich Shutdown-Drain real ausführen, Android-Kompilierung bestätigen und `UsageFlushInstrumentedTest` auf Emulator/Gerät ausführen.
+7. **G7:** echte Overlay-/Service-/Notification-End-to-End-Fälle ergänzen und anschließend `connectedDebugAndroidTest` real ausführen.
+8. **G9:** stabilen Debug-Kandidaten auf der physischen Device Matrix testen.
+9. **G2:** reale V0.7-Migration mit bytegenauer Evidence durchführen.
+10. **G8/G9:** 12h/OEM-/Mitternacht-/DST-/Prozesskill-Evidence erfassen.
+11. **G5:** finalen Dependency-/SBOM-/Manifest-Snapshot für Release-Evidence erzeugen.
+12. **G0/G3:** reale User-Research-/Accessibility-Sessions mit stabilem APK durchführen.
 
 ### Nicht jetzt anfangen
 
