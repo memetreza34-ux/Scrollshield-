@@ -128,6 +128,36 @@ public class ProtectionDiagnosticsInstrumentedTest {
     }
 
     @Test
+    public void atomicUnexpectedDestroyPersistsDisabledStateEventAndStableCode() throws Exception {
+        ScrollShieldNativePlugin.setProtectionEnabled(context, true);
+        long before = System.currentTimeMillis();
+        String message = "Android unexpectedly destroyed the active protection service";
+
+        assertTrue(
+            ScrollShieldNativePlugin.recordProtectionSystemStop(
+                context,
+                ProtectionServiceLifecyclePolicy.UNEXPECTED_SERVICE_DESTROY_CODE,
+                message
+            )
+        );
+
+        assertFalse(ScrollShieldNativePlugin.isProtectionEnabled(context));
+        assertEquals(
+            ProtectionServiceLifecyclePolicy.UNEXPECTED_SERVICE_DESTROY_CODE,
+            ScrollShieldNativePlugin.getLastProtectionStopCode(context)
+        );
+        assertEquals(message, ScrollShieldNativePlugin.getLastProtectionStopMessage(context));
+        assertTrue(ScrollShieldNativePlugin.getLastProtectionStopAt(context) >= before);
+
+        JSONArray events = new JSONArray(preferences.getString("protection_events", "[]"));
+        assertTrue(events.length() > 0);
+        JSONObject event = events.getJSONObject(events.length() - 1);
+        assertEquals("warning", event.getString("type"));
+        assertEquals("system", event.getString("appId"));
+        assertEquals(message, event.getString("desc"));
+    }
+
+    @Test
     public void explicitPrerequisiteCodesPersistIndependentOfMessageLanguage() {
         assertExplicitStop(
             ProtectionStopReasonPolicy.USAGE_ACCESS_MISSING,
