@@ -92,6 +92,43 @@ requirePattern(
 );
 
 requirePattern(
+  bridgePath,
+  bridge,
+  /TARGET_APP_MISSING_STOP_REASON[\s\S]*code: 'target_app_missing'/,
+  'Process-loss recovery must use the stable target_app_missing stop code when no active installed target remains.',
+);
+requirePattern(
+  bridgePath,
+  bridge,
+  /activeAndroidAppIds[\s\S]*unavailableAppIds = await this\.sync\(appsConfig, focusMode\)[\s\S]*activeAndroidAppIds\.length === 0[\s\S]*activeAndroidAppIds\.every\(\(appId\) => unavailableAppIds\.includes\(appId\)\)[\s\S]*await this\.stop\(TARGET_APP_MISSING_STOP_REASON\)[\s\S]*return this\.getStatus\(\)[\s\S]*AndroidProtection\.startProtectionService\(\)/,
+  'Recovery must fail closed before service start when every active Android target is unavailable, then persist target_app_missing and re-read status.',
+);
+requirePattern(
+  bridgeTestPath,
+  bridgeTest,
+  /fails closed with target_app_missing when every active Android target is unavailable[\s\S]*unavailableAppIdsJson: '\["instagram"\]'[\s\S]*startProtectionServiceMock\)\.not\.toHaveBeenCalled[\s\S]*reasonCode: 'target_app_missing'[\s\S]*health: 'stopped-with-reason'/,
+  'Bridge tests must prove all unavailable active targets block recovery without starting the service.',
+);
+requirePattern(
+  bridgeTestPath,
+  bridgeTest,
+  /still recovers when one active target is unavailable but another remains installed[\s\S]*instagram[\s\S]*tiktok[\s\S]*stopProtectionServiceMock\)\.not\.toHaveBeenCalled[\s\S]*startProtectionServiceMock\)\.toHaveBeenCalledTimes\(1\)/,
+  'Bridge tests must prove partial target unavailability does not block protection for remaining installed active apps.',
+);
+requirePattern(
+  healthPath,
+  health,
+  /lastStopCode === 'target_app_missing'[\s\S]*ZIEL-APP FEHLT[\s\S]*Keine installierte Ziel-App verfügbar[\s\S]*mindestens eine installierte App/,
+  'Persisted target_app_missing status must render a dedicated target-app recovery blocker.',
+);
+requirePattern(
+  healthTestPath,
+  healthTest,
+  /shows an explicit target-app blocker after recovery cannot find any installed active target[\s\S]*target_app_missing[\s\S]*ZIEL-APP FEHLT[\s\S]*mindestens eine installierte App/,
+  'Presentation tests must lock the dedicated target-app recovery message.',
+);
+
+requirePattern(
   statusPanelPath,
   statusPanel,
   /processRecovery = status\?\.health === 'unclean-process-stop'[\s\S]*Schutz wiederherstellen[\s\S]*Wiederherstellung läuft/,
@@ -228,5 +265,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Process-loss recovery contract check passed. Unclean process loss is detected separately and recovery names exact Android prerequisite blockers before start, after races, and from fresh native stop diagnostics.',
+  'Process-loss recovery contract check passed. Unclean process loss is detected separately; recovery names exact permission blockers and fails closed with target_app_missing when no installed active Android target remains.',
 );
