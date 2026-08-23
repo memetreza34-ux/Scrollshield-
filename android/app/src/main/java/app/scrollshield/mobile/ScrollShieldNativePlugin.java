@@ -146,19 +146,43 @@ public class ScrollShieldNativePlugin extends Plugin {
     public void startProtectionService(PluginCall call) {
         Context context = getContext();
         if (!hasUsageAccess(context)) {
-            call.reject("Usage Access is required before protection can start");
+            rejectProtectionStartPrerequisite(
+                call,
+                context,
+                ProtectionStopReasonPolicy.USAGE_ACCESS_MISSING,
+                "Nutzungszugriff fehlt; der Android-Schutz konnte nicht gestartet werden",
+                "Usage Access is required before protection can start"
+            );
             return;
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
-            call.reject("Overlay permission is required before protection can start");
+            rejectProtectionStartPrerequisite(
+                call,
+                context,
+                ProtectionStopReasonPolicy.OVERLAY_PERMISSION_MISSING,
+                "Overlay-Berechtigung fehlt; der Android-Schutz konnte nicht gestartet werden",
+                "Overlay permission is required before protection can start"
+            );
             return;
         }
         if (!hasNotificationsEnabled(context)) {
-            call.reject("Notifications are required so active protection and its stop action remain visible");
+            rejectProtectionStartPrerequisite(
+                call,
+                context,
+                ProtectionStopReasonPolicy.NOTIFICATIONS_MISSING,
+                "Benachrichtigungen fehlen; der Android-Schutz konnte nicht sichtbar gestartet werden",
+                "Notifications are required so active protection and its stop action remain visible"
+            );
             return;
         }
         if (!hasConfiguredApps(context)) {
-            call.reject("At least one installed active protected app is required");
+            rejectProtectionStartPrerequisite(
+                call,
+                context,
+                ProtectionStopReasonPolicy.TARGET_APP_MISSING,
+                "Keine aktive installierte Ziel-App ist verfügbar; der Android-Schutz konnte nicht gestartet werden",
+                "At least one installed active protected app is required"
+            );
             return;
         }
 
@@ -180,6 +204,23 @@ public class ScrollShieldNativePlugin extends Plugin {
             );
             call.reject("Protection service could not be started", error);
         }
+    }
+
+    private static void rejectProtectionStartPrerequisite(
+        PluginCall call,
+        Context context,
+        String reasonCode,
+        String description,
+        String rejectionMessage
+    ) {
+        boolean persisted = recordProtectionPrerequisiteStop(context, reasonCode, description);
+        if (!persisted) {
+            // Best-effort fallback after an atomic commit failure. Keep the start attempt fail-closed
+            // and preserve the exact stable stop code even when the event queue cannot be committed.
+            setProtectionEnabled(context, false);
+            recordProtectionStop(context, reasonCode, description);
+        }
+        call.reject(rejectionMessage);
     }
 
     @PluginMethod
