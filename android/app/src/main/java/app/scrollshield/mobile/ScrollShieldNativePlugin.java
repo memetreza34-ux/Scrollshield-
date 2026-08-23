@@ -230,18 +230,33 @@ public class ScrollShieldNativePlugin extends Plugin {
         }
     }
 
+    public static void persistProtectionTerminalStopWithFallback(
+        Context context,
+        String reasonCode,
+        String description
+    ) {
+        boolean persisted = recordProtectionTerminalStop(context, reasonCode, description);
+        if (!persisted) {
+            // Best-effort fallback after an atomic commit failure. Explicit/manual terminal stops
+            // intentionally do not append warning/system events.
+            setProtectionEnabled(context, false);
+            recordProtectionStop(context, reasonCode, description);
+        }
+    }
+
     @PluginMethod
     public void stopProtectionService(PluginCall call) {
         Context context = getContext();
         String reasonCode = call.getString("reasonCode");
         String reasonMessage = call.getString("reasonMessage");
-        if (reasonCode == null || reasonCode.trim().isEmpty()) reasonCode = "manual_app_stop";
+        if (reasonCode == null || reasonCode.trim().isEmpty()) {
+            reasonCode = ProtectionServiceLifecyclePolicy.MANUAL_APP_STOP_CODE;
+        }
         if (reasonMessage == null || reasonMessage.trim().isEmpty()) {
             reasonMessage = "Der Android-Schutz wurde in ScrollShield manuell gestoppt";
         }
 
-        setProtectionEnabled(context, false);
-        recordProtectionStop(context, reasonCode, reasonMessage);
+        persistProtectionTerminalStopWithFallback(context, reasonCode, reasonMessage);
         context.stopService(new Intent(context, ScrollShieldProtectionService.class));
         call.resolve();
     }
@@ -429,6 +444,38 @@ public class ScrollShieldNativePlugin extends Plugin {
                 error.printStackTrace();
                 return false;
             }
+        }
+    }
+
+    /**
+     * Atomically records an explicit terminal stop without adding a warning event. This is used for
+     * deliberate app/notification stops and other caller-supplied terminal reasons where the stop
+     * itself is expected rather than a system failure.
+     */
+    public static boolean recordProtectionTerminalStop(
+        Context context,
+        String reasonCode,
+        String description
+    ) {
+        synchronized (EVENT_LOCK) {
+            long timestamp = System.currentTimeMillis();
+            String normalizedCode = ProtectionDiagnosticPolicy.normalizeCode(
+                reasonCode,
+                ProtectionServiceLifecyclePolicy.MANUAL_APP_STOP_CODE
+            );
+            String normalizedMessage = ProtectionDiagnosticPolicy.normalizeMessage(
+                description,
+                "Der Android-Schutz wurde gestoppt"
+            );
+
+            return context
+                .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(SERVICE_ENABLED_KEY, false)
+                .putLong(LAST_STOP_AT_KEY, timestamp)
+                .putString(LAST_STOP_CODE_KEY, normalizedCode)
+                .putString(LAST_STOP_MESSAGE_KEY, normalizedMessage)
+                .commit();
         }
     }
 
