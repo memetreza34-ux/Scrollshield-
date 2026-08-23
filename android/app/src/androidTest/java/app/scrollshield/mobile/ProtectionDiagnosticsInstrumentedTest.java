@@ -158,6 +158,28 @@ public class ProtectionDiagnosticsInstrumentedTest {
     }
 
     @Test
+    public void atomicTerminalStopsPersistExactCodesWithoutWarningEvents() throws Exception {
+        ScrollShieldNativePlugin.appendProtectionEvent(
+            context,
+            "open",
+            "instagram",
+            "Existing user history entry"
+        );
+        String eventsBefore = preferences.getString("protection_events", "[]");
+
+        assertAtomicTerminalStopWithoutEvent(
+            ProtectionServiceLifecyclePolicy.MANUAL_APP_STOP_CODE,
+            "Manual stop from the app",
+            eventsBefore
+        );
+        assertAtomicTerminalStopWithoutEvent(
+            ProtectionServiceLifecyclePolicy.NOTIFICATION_ACTION_STOP_CODE,
+            "Manual stop from the persistent notification",
+            eventsBefore
+        );
+    }
+
+    @Test
     public void explicitPrerequisiteCodesPersistIndependentOfMessageLanguage() {
         assertExplicitStop(
             ProtectionStopReasonPolicy.USAGE_ACCESS_MISSING,
@@ -213,7 +235,7 @@ public class ProtectionDiagnosticsInstrumentedTest {
     public void appSpecificWarningsDoNotOverwriteTerminalSystemStopDiagnostics() {
         ScrollShieldNativePlugin.recordProtectionStop(
             context,
-            "manual_app_stop",
+            ProtectionServiceLifecyclePolicy.MANUAL_APP_STOP_CODE,
             "Bestehender terminaler Stopp"
         );
         long stopAt = ScrollShieldNativePlugin.getLastProtectionStopAt(context);
@@ -225,9 +247,29 @@ public class ProtectionDiagnosticsInstrumentedTest {
             "App ist nicht installiert oder für Android nicht sichtbar"
         );
 
-        assertEquals("manual_app_stop", ScrollShieldNativePlugin.getLastProtectionStopCode(context));
+        assertEquals(
+            ProtectionServiceLifecyclePolicy.MANUAL_APP_STOP_CODE,
+            ScrollShieldNativePlugin.getLastProtectionStopCode(context)
+        );
         assertEquals("Bestehender terminaler Stopp", ScrollShieldNativePlugin.getLastProtectionStopMessage(context));
         assertEquals(stopAt, ScrollShieldNativePlugin.getLastProtectionStopAt(context));
+    }
+
+    private void assertAtomicTerminalStopWithoutEvent(
+        String code,
+        String message,
+        String expectedEventsJson
+    ) {
+        ScrollShieldNativePlugin.setProtectionEnabled(context, true);
+        long before = System.currentTimeMillis();
+
+        assertTrue(ScrollShieldNativePlugin.recordProtectionTerminalStop(context, code, message));
+
+        assertFalse(ScrollShieldNativePlugin.isProtectionEnabled(context));
+        assertEquals(code, ScrollShieldNativePlugin.getLastProtectionStopCode(context));
+        assertEquals(message, ScrollShieldNativePlugin.getLastProtectionStopMessage(context));
+        assertTrue(ScrollShieldNativePlugin.getLastProtectionStopAt(context) >= before);
+        assertEquals(expectedEventsJson, preferences.getString("protection_events", "[]"));
     }
 
     private void assertExplicitStop(String code, String message) {
