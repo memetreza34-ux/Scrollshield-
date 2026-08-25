@@ -79,6 +79,29 @@ public class ProtectionConfigDurabilityInstrumentedTest {
     }
 
     @Test
+    public void freshPendingRequestFromPreviousConfigIsNotCurrent() throws Exception {
+        ProtectionConfigDurabilityStore.CommitResult first = ProtectionConfigDurabilityStore.commitConfig(
+            context,
+            VALID_CONFIG,
+            "[]",
+            "[]"
+        );
+        assertTrue(ScrollShieldNativePlugin.recordProtectionStartRequested(context, first.generation));
+        assertTrue(ScrollShieldNativePlugin.hasFreshProtectionStartRequest(context));
+        assertTrue(ScrollShieldNativePlugin.hasFreshProtectionStartRequestForCurrentConfig(context));
+
+        ProtectionConfigDurabilityStore.CommitResult second = ProtectionConfigDurabilityStore.commitConfig(
+            context,
+            VALID_CONFIG,
+            "[]",
+            "[]"
+        );
+        assertNotEquals(first.generation, second.generation);
+        assertTrue(ScrollShieldNativePlugin.hasFreshProtectionStartRequest(context));
+        assertFalse(ScrollShieldNativePlugin.hasFreshProtectionStartRequestForCurrentConfig(context));
+    }
+
+    @Test
     public void configChangeBeforeConfirmationFailsClosedWithoutConfirmingOldRequest() throws Exception {
         ProtectionConfigDurabilityStore.CommitResult first = ProtectionConfigDurabilityStore.commitConfig(
             context,
