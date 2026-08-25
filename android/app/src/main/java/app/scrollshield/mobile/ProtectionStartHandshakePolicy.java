@@ -2,6 +2,7 @@ package app.scrollshield.mobile;
 
 final class ProtectionStartHandshakePolicy {
     static final long CONFIRMATION_GRACE_MS = 15_000L;
+    static final long MAX_FUTURE_CLOCK_SKEW_MS = 5_000L;
 
     private ProtectionStartHandshakePolicy() {}
 
@@ -42,7 +43,10 @@ final class ProtectionStartHandshakePolicy {
         )) {
             return false;
         }
-        if (now <= lastStartRequestAt) return true;
+        if (now < lastStartRequestAt) {
+            long futureSkew = lastStartRequestAt - Math.max(0L, now);
+            return futureSkew <= MAX_FUTURE_CLOCK_SKEW_MS;
+        }
         return now - lastStartRequestAt <= CONFIRMATION_GRACE_MS;
     }
 
