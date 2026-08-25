@@ -13,6 +13,7 @@ const steps: Step[] = [
   { command: 'npm', args: ['run', 'check:device-matrix'], required: true },
   { command: 'npm', args: ['run', 'check:lifecycle'], required: true },
   { command: 'npm', args: ['run', 'check:native-stop-atomicity'], required: true },
+  { command: 'npm', args: ['run', 'check:start-handshake'], required: true },
   { command: 'npm', args: ['run', 'check:prerequisite-stop-codes'], required: true },
   { command: 'npm', args: ['run', 'check:process-loss'], required: true },
   { command: 'npm', args: ['run', 'check:protection-recovery'], required: true },
