@@ -17,6 +17,8 @@ import org.junit.runner.RunWith;
 
 @RunWith(AndroidJUnit4.class)
 public class ProtectionStateInstrumentedTest {
+    private static final String EMPTY_VALID_CONFIG = "{\"focusMode\":false,\"apps\":[]}";
+
     private Context context;
     private SharedPreferences preferences;
 
@@ -45,13 +47,20 @@ public class ProtectionStateInstrumentedTest {
     }
 
     @Test
-    public void successfulStartAndDisablePersistLifecycleTruth() {
+    public void successfulStartAndDisablePersistLifecycleTruth() throws Exception {
         long beforeStart = System.currentTimeMillis();
+        String configGeneration = prepareDurableConfig();
 
-        assertTrue(ScrollShieldNativePlugin.recordProtectionStartRequested(context));
+        assertTrue(
+            ScrollShieldNativePlugin.recordProtectionStartRequested(context, configGeneration)
+        );
         assertTrue(ScrollShieldNativePlugin.isProtectionEnabled(context));
         long requestAt = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(context);
         assertTrue(requestAt >= beforeStart);
+        assertEquals(
+            configGeneration,
+            ProtectionConfigDurabilityStore.getStartRequestGeneration(preferences)
+        );
         assertEquals(0L, ScrollShieldNativePlugin.getLastProtectionStartAt(context));
 
         assertEquals(
@@ -95,5 +104,17 @@ public class ProtectionStateInstrumentedTest {
         String installedConfig = "{\"apps\":[{\"id\":\"self-test\",\"active\":true,\"packages\":[\"app.scrollshield.mobile\"]}]}";
         preferences.edit().putString(ScrollShieldNativePlugin.CONFIG_KEY, installedConfig).commit();
         assertTrue(ScrollShieldNativePlugin.hasConfiguredApps(context));
+    }
+
+    private String prepareDurableConfig() throws Exception {
+        ProtectionConfigDurabilityStore.CommitResult result = ProtectionConfigDurabilityStore.commitConfig(
+            context,
+            EMPTY_VALID_CONFIG,
+            "[]",
+            "[]"
+        );
+        assertTrue(result.persisted);
+        assertFalse(result.generation.isEmpty());
+        return result.generation;
     }
 }
