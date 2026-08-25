@@ -145,6 +145,7 @@ const TARGET_APP_MISSING_STOP_REASON: NativeProtectionStopReason = {
 };
 
 const START_CONFIRMATION_GRACE_MS = 15_000;
+const MAX_FUTURE_CLOCK_SKEW_MS = 5_000;
 
 const EMPTY_STATUS: NativeProtectionStatus = {
   running: false,
@@ -239,6 +240,8 @@ export const assessNativeProtectionHealth = (
   if (!status.running && status.enabled) {
     const latestConfirmedBoundary = Math.max(status.lastStartAt, status.lastStopAt);
     if (status.lastStartRequestAt > latestConfirmedBoundary) {
+      const futureClockSkewMs = status.lastStartRequestAt - now;
+      if (futureClockSkewMs > MAX_FUTURE_CLOCK_SKEW_MS) return 'start-interrupted';
       const requestAgeMs = Math.max(0, now - status.lastStartRequestAt);
       return requestAgeMs <= START_CONFIRMATION_GRACE_MS ? 'start-pending' : 'start-interrupted';
     }
