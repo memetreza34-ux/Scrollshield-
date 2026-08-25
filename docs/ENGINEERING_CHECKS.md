@@ -20,21 +20,7 @@ Ein Source-Checker ist niemals ein ausgeführter Android-Test.
 npm run verify
 ```
 
-Die Kette umfasst unter anderem:
-
-- TypeScript/Lint/Prettier;
-- Android Project + Instrumentation Source Contract;
-- Supply Chain;
-- Native Drain/ACK/Retention;
-- Usage Flush Worker;
-- Prerequisite/System-Stop-Codes;
-- Lifecycle/Diagnostics;
-- **repo-weiten Native-Stop-Atomicity-Guard**;
-- **Android Protection Start Handshake**;
-- Process-Loss + Protection-Recovery;
-- Device Matrix;
-- Migration/Release/Privacy/Store/Security Checks;
-- Vitest, Build, PWA und Bundle Checks.
+Die Kette umfasst unter anderem TypeScript/Lint/Prettier, Android Project/Instrumentation, Supply Chain, Native Drain/ACK/Retention, Usage Flush Worker, Stop-Codes, Lifecycle/Diagnostics, `check:native-stop-atomicity`, `check:start-handshake`, Process-Loss/Recovery, Device Matrix, Migration/Release/Privacy/Store/Security, Vitest, Build, PWA und Bundle Checks.
 
 ## Native Stop Atomicity
 
@@ -42,23 +28,9 @@ Die Kette umfasst unter anderem:
 npm run check:native-stop-atomicity
 ```
 
-Detaillierte Spezifikation: `docs/NATIVE_STOP_ATOMICITY.md`.
+Spezifikation: `docs/NATIVE_STOP_ATOMICITY.md`.
 
-Der Checker scannt rekursiv alle produktiven Java-Dateien unter:
-
-```text
-android/app/src/main/java/app/scrollshield/mobile
-```
-
-Er erzwingt:
-
-- außerhalb `ScrollShieldNativePlugin.java` keine direkten `setProtectionEnabled(...)`-Aufrufe;
-- außerhalb `ScrollShieldNativePlugin.java` keine direkten `recordProtectionStop(...)`-Aufrufe;
-- im Native Plugin genau zwei direkte Disable-Fallback-Writes;
-- `recordProtectionStop(...)` nur als Deklaration plus die zwei zentralen Fallback-Aufrufe;
-- beide Wrapper müssen `atomic primary -> commit failure -> direct fallback` einhalten.
-
-Die zwei erlaubten Fallback-Wrapper sind:
+Direkte produktive Disable-/Stop-Diagnose-Writes sind nur in den zwei zentralen Commit-Failure-Fallbacks erlaubt:
 
 ```text
 persistProtectionSystemStopWithFallback(...)
@@ -68,55 +40,43 @@ persistProtectionTerminalStopWithFallback(...)
 System-Stops schreiben atomar `enabled=false + warning/system + timestamp + code + message`.
 Explizite Terminal-Stopps schreiben atomar `enabled=false + timestamp + code + message` und verändern die Event-Queue nicht.
 
-## Android Protection Start Handshake
+## Android Protection Start Handshake und Race Ordering
 
 ```bash
 npm run check:start-handshake
 ```
 
-Detaillierte Spezifikation: `docs/PROTECTION_START_HANDSHAKE.md`.
+Spezifikation: `docs/PROTECTION_START_HANDSHAKE.md`.
 
-Der Startvertrag trennt Aktivierungsabsicht und bestätigten Foreground-Start:
+Der Startvertrag trennt:
 
 ```text
-recordProtectionStartRequested(...)
-→ enabled=true + lastStartRequestAt in einem Commit
-→ startForegroundService/startService
-→ startForeground(...)
-→ recordProtectionServiceStarted(...)
-→ lastStartAt dauerhaft gespeichert
-→ erst dann RUNNING=true
+lastStartRequestAt  = Start angefordert
+lastStartAt         = Foreground-Start bestätigt
+lastStopAt          = terminaler Stopp
 ```
 
-Pflichtgrenzen:
+Alle relevanten Native-Lifecycle-Writes werden unter `EVENT_LOCK` serialisiert und über `ProtectionStartHandshakePolicy.nextLifecycleTimestamp(...)` logisch streng geordnet.
 
-- kein separates `setProtectionEnabled(context, true)` im produktiven Startpfad;
-- Request-Commit-Fehler → `START_FAILED`, fail-closed, kein Service-Start;
-- bestätigter Start darf erst hinter erfolgreichem `startForeground(...)` persistiert werden;
-- Confirmation-Commit-Fehler → `START_FAILED` + Exception vor `RUNNING=true`;
-- bereits `running && enabled` → Native-Start ist idempotent;
-- `lastStartRequestAt` wird separat im Native-Status an TypeScript geliefert.
+Wichtige Invarianten:
+
+- kein separates `enabled=true` im produktiven Startpfad;
+- Request vor Plugin-/Boot-/Update-Service-Start;
+- frischer Pending-Start <= 15 s wird nativ idempotent behandelt und nicht erneut timestamped;
+- `RUNNING=true` erst nach erfolgreichem `startForeground(...)` und `CONFIRMED`;
+- verspätete Confirmation nach neuerem Stop → `SUPERSEDED_BY_STOP`;
+- der Stop-Code, die Stop-Nachricht und Event-Evidence bleiben dabei unverändert;
+- echter Restart nach Stop erhält strikt `newRequestAt > lastStopAt`;
+- eine bereits existierende Service-Instanz bestätigt einen neuen Restart-Request in `onStartCommand()`;
+- verspätetes `onDestroy()` einer alten Instanz darf eine neue Restart-Generation nicht als `unexpected_service_destroy` überschreiben;
+- Confirmation-Persistenzfehler → `START_FAILED`, fail-closed.
 
 Health-Klassifizierung:
 
 ```text
-neuer Request, <= 15 s, noch keine Bestätigung
-→ start-pending
-
-neuer Request, > 15 s, keine Bestätigung, Dienst läuft nicht
-→ start-interrupted
-
-bestätigter lastStartAt > lastStopAt, Dienst später nicht mehr laufend
-→ unclean-process-stop
-```
-
-Damit darf ein Prozessabbruch **vor** bestätigtem Foreground-Start nicht als echter Post-Start-Process-Kill erscheinen.
-
-`check:start-handshake` ist Pflichtbestandteil von:
-
-```text
-npm run verify
-npm run readiness
+neuer unbestätigter Request <= 15 s → start-pending
+neuer unbestätigter Request > 15 s  → start-interrupted
+bestätigter Start später ohne Stopp  → unclean-process-stop
 ```
 
 ## Android Instrumentation
@@ -127,37 +87,23 @@ cd android
 ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
 ```
 
-Vorhandene Instrumentation-Verträge umfassen u. a.:
-
-- `ProtectionStateInstrumentedTest.java`;
-- `ManifestSecurityInstrumentedTest.java`;
-- `BootRecoveryInstrumentedTest.java`;
-- `NativeDrainBatchInstrumentedTest.java`;
-- `NativeRetentionInstrumentedTest.java`;
-- `UsageFlushInstrumentedTest.java`;
-- `ProtectionDiagnosticsInstrumentedTest.java`.
-
-`ProtectionDiagnosticsInstrumentedTest` schützt:
-
-- getrennte Request-/Confirmed-Start-Evidence über `startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence`;
-- atomare Prerequisite-/System-Stops;
-- `START_FAILED`;
-- `UNEXPECTED_SERVICE_DESTROY_CODE`;
-- atomare `manual_app_stop`-/`notification_action_stop`-Terminal-Stopps;
-- unveränderte Event-Queue bei bewussten Terminal-Stopps;
-- stabile Stop-Codes unabhängig vom Meldungstext.
-
-Der neue Start-Test beweist source-seitig den erwarteten Ablauf:
+`ProtectionDiagnosticsInstrumentedTest` schützt source-seitig jetzt insbesondere:
 
 ```text
-kein Request / kein Start
-→ recordProtectionStartRequested
-→ enabled=true + requestAt > 0 + lastStartAt == 0
-→ recordProtectionServiceStarted
-→ lastStartAt >= requestAt
+startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence
+terminalStopWinsAgainstDelayedStartConfirmationWithoutOverwrite
+restartRequestAdvancesBeyondLatestStopBoundary
 ```
 
-Erst ein real ausgeführter Instrumentation-Lauf macht daraus Evidence.
+Damit wird verlangt:
+
+- Confirmed-Start ist strikt neuer als sein Request;
+- terminaler Stop ist strikt neuer als der vorherige Request;
+- verspätete Confirmation liefert `SUPERSEDED_BY_STOP` und schreibt kein neues `lastStartAt`;
+- Stop-Code/-Nachricht/Event-Queue bleiben unverändert;
+- sofortiger Restart erzeugt eine strikt neuere Request-Generation und kann bestätigt werden.
+
+Zusätzlich bleiben Prerequisite-/System-/Terminal-Stop-, Boot-Recovery-, Usage-Flush- und Manifest-Verträge bestehen.
 
 ## Android JUnit / Build
 
@@ -166,41 +112,51 @@ cd android
 ./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace
 ```
 
-Dieser Lauf muss u. a. Coordinator-/Worker-/Stop-Code-/Lifecycle-Tests sowie den Debug-Build real ausführen.
+Neu relevant sind:
+
+- `ProtectionStartHandshakePolicyTest`;
+- `ProtectionServiceLifecyclePolicyTest` mit Fast-Restart-/Pre-Confirmation-Grenzen;
+- bestehende Coordinator-/Worker-/Stop-Code-/Lifecycle-Tests.
+
+## Device-Evidence
+
+`docs/ANDROID_DEVICE_TEST_MATRIX.md` verlangt zusätzlich:
+
+- `LIFE-12`: terminaler Stop gewinnt vor verspäteter Confirmation;
+- `LIFE-13`: Pending-Doppelstart erzeugt keine neue Generation;
+- `LIFE-14`: sofortiger Stop→Restart wird nicht durch altes `onDestroy()` zerstört.
+
+Der Debug-Screen und der kopierte Native-Snapshot müssen sichtbar enthalten:
+
+```text
+lastProtectionStartRequestAt
+lastProtectionStartAt
+lastProtectionStopAt
+lastProtectionStopCode
+lastProtectionStopMessage
+```
 
 ## Process-Loss / Recovery
 
-Ein harter Process-Kill bleibt getrennt von `unexpected_service_destroy` und von einem abgebrochenen Pre-Confirmation-Start.
-
-### Abbruch vor bestätigtem Start
+Pre-Confirmation-Abbruch und echter Post-Start-Process-Kill bleiben getrennt.
 
 ```text
-running == false
-enabled == true
-lastStartRequestAt > max(lastStartAt, lastStopAt)
+lastStartRequestAt > max(lastStartAt,lastStopAt)
+→ start-pending / start-interrupted
 ```
 
-Innerhalb von 15 Sekunden: `start-pending`.
-Danach: `start-interrupted`.
-
-Dieser Pfad bietet einen normalen Neustart, nicht die Process-Loss-Recovery.
-
-### Abbruch nach bestätigtem Start
-
 ```text
-running == false
-enabled == true
-lastStartAt > 0
 lastStartAt > lastStopAt
 lastStartRequestAt <= lastStartAt
+running=false && enabled=true
 → unclean-process-stop
 ```
 
-Danach muss `Schutz wiederherstellen` real zu `running && enabled && health == active` führen.
+Nur der zweite Fall verwendet `Schutz wiederherstellen`.
 
 ## Aktuelle Ausführungsgrenze
 
-GitHub Actions liefert auf diesem Draft-Branch weiterhin Verify-Jobs ohne ausgeführte Steps (`steps: null`). Die exakte Head-SHA und der zugehörige aktuelle Lauf werden in PR #8 geführt, ohne diesen technischen Vertrag mit jeder Commit-SHA neu schreiben zu müssen.
+GitHub Actions liefert auf diesem Draft-Branch weiterhin Verify-Jobs ohne ausgeführte Steps (`steps: null`). Die exakte aktuelle Head-SHA und der zugehörige Lauf werden in PR #8 geführt.
 
 Deshalb sind aktuell **nicht als bestanden belegt**:
 
@@ -209,14 +165,12 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - `check:start-handshake`;
 - `check:lifecycle`;
 - `check:android-instrumentation`;
-- `check:prerequisite-stop-codes`;
-- `check:process-loss`;
-- `check:protection-recovery`;
 - Android JUnit;
 - Android Instrumentation;
 - Gradle Debug Build;
 - APK;
-- reale Start-Handshake-/Process-Kill-Evidence.
+- `LIFE-12` bis `LIFE-14`;
+- reale Process-Kill-/Start-/Stop-Race-Evidence.
 
 ## Reihenfolge nach Entsperrung
 
@@ -224,12 +178,12 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 2. `npm run verify`;
 3. `./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace`;
 4. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace`;
-5. Prozess zwischen `lastStartRequestAt` und `lastStartAt` beenden → `start-pending` → `start-interrupted` → normaler Retry → `active`;
-6. Prozess **nach** bestätigtem `lastStartAt` hart beenden → `unclean-process-stop` → `Schutz wiederherstellen` → `active`;
-7. realer App-Stopp → `manual_app_stop`, kein neues `warning/system`-Event;
-8. realer Notification-Stopp → `notification_action_stop`, kein neues `warning/system`-Event;
-9. reale Native-/Foreground-/Destroy-Systemfehler → exakter Code + Warn-Event;
-10. Boot/App-Update, Permission-Loss, Target-App-Verlust;
+5. `LIFE-12`: Stop vor verspäteter Confirmation;
+6. `LIFE-13`: doppelter Start während `start-pending`;
+7. `LIFE-14`: sofortiger Stop→Restart vor altem `onDestroy()`;
+8. Pre-Confirmation-Abbruch → `start-interrupted` → Retry;
+9. Post-Start-Process-Kill → `unclean-process-stop` → Recovery;
+10. App-/Notification-Stopp, Start-/Foreground-/Destroy-Fehler, Boot/App-Update, Permission-Loss, Target-App-Verlust;
 11. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
 12. finaler Supply-Chain-/Binary-/Security-Audit;
 13. erst danach Candidate Freeze und Release.
