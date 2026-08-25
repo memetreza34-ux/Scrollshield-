@@ -63,7 +63,30 @@ startRequestConfigGeneration
 
 Damit ist nach Prozessverlust rekonstruierbar, welche Config-Generation den Start ausgelöst hat.
 
-## 5. Foreground-Confirmation prüft erneut
+## 5. Frischer Pending-Start braucht dieselbe Config
+
+Die bisherige 15-Sekunden-Idempotenz gilt nicht allein aufgrund eines frischen `lastStartRequestAt`.
+
+Ein Pending-Start darf nur als derselbe noch laufende Start behandelt werden, wenn zusätzlich gilt:
+
+```text
+startRequestConfigGeneration == protectionConfigGeneration
+```
+
+Beispiel:
+
+```text
+Config A committed
+→ Request A ist frisch/pending
+→ Config B committed
+→ zweiter Startversuch mit B
+```
+
+Der alte Request A darf jetzt **nicht** einfach als „bereits in Arbeit“ akzeptiert werden. App-Start endet sofort fail-closed mit `start_failed`. Boot/App-Update endet mit `recovery_start_failed`.
+
+Damit wird ein Config-Mismatch bereits an der Pending-Grenze erkannt und nicht erst bei einer späteren Foreground-Confirmation.
+
+## 6. Foreground-Confirmation prüft erneut
 
 `recordProtectionServiceStarted(...)` darf `lastStartAt` nur schreiben, wenn:
 
@@ -82,7 +105,7 @@ Config A committed
 
 muss die Confirmation `FAILED_CLOSED` liefern, `enabled=false` persistieren und `start_failed` als Stop-Evidence hinterlassen. `lastStartAt` darf für A nicht fortgeschrieben werden.
 
-## 6. Boot-/App-Update-Kompatibilität
+## 7. Boot-/App-Update-Kompatibilität
 
 Ältere Installationen können bereits ein dauerhaft gespeichertes `protection_config`, aber noch keine Config-Generation besitzen.
 
@@ -95,13 +118,15 @@ Der Boot-/App-Update-Pfad darf deshalb einmalig eine Generation nachrüsten, abe
 
 Fehlt oder scheitert eine dieser Bedingungen, bleibt Recovery fail-closed.
 
-## 7. Laufende Config-Updates
+Ein bereits vorhandener frischer Pending-Request wird bei Recovery ebenfalls nur übernommen, wenn seine gebundene Config-Generation noch aktuell ist.
+
+## 8. Laufende Config-Updates
 
 Nach einem bereits bestätigten Start dürfen normale Config-Syncs weiterhin neue Generationen erzeugen. Der laufende Service lädt die aktuelle durable Config wie bisher nach.
 
 Die Generation-Bindung schützt speziell die Grenze **vor der Startbestätigung**. Sie soll nicht verhindern, dass ein bereits laufender Schutzdienst später legitim neue Regeln übernimmt.
 
-## 8. Diagnose
+## 9. Diagnose
 
 Der Native-Snapshot muss mindestens enthalten:
 
@@ -117,7 +142,7 @@ lastProtectionStopMessage
 
 Für einen bestätigten Start müssen die beiden Config-Generationen übereinstimmen.
 
-## 9. Automatisierte Verträge
+## 10. Automatisierte Verträge
 
 Pflichtcheck:
 
@@ -143,13 +168,14 @@ Android-Instrumentation:
 ```text
 ProtectionConfigDurabilityInstrumentedTest.durableConfigGenerationBindsStartRequestAndConfirmation
 ProtectionConfigDurabilityInstrumentedTest.staleConfigGenerationCannotCreateStartRequest
+ProtectionConfigDurabilityInstrumentedTest.freshPendingRequestFromPreviousConfigIsNotCurrent
 ProtectionConfigDurabilityInstrumentedTest.configChangeBeforeConfirmationFailsClosedWithoutConfirmingOldRequest
 ProtectionConfigDurabilityInstrumentedTest.legacyDurableConfigReceivesGenerationBeforeBootStyleStartRequest
 ```
 
 Diese Verträge sind erst dann Execution-Evidence, wenn sie auf dem exakten Candidate tatsächlich ausgeführt wurden.
 
-## 10. Reale Device-Evidence
+## 11. Reale Device-Evidence
 
 ### APP-07 — Durable config sync before protection start
 
@@ -159,9 +185,17 @@ Bei simuliertem/erzwungenem Commit-Fehler darf kein Service-Startdispatch erfolg
 
 ### APP-08 — Config change before foreground confirmation
 
-Pausiere einen Start nach persistiertem Startrequest, aber vor bestätigtem Foreground-Start. Synchronisiere eine andere Config. Danach die alte Confirmation fortsetzen.
+Pausiere einen Start nach persistiertem Startrequest, aber vor bestätigtem Foreground-Start. Synchronisiere eine andere Config. Danach entweder erneut Start anfordern oder die alte Confirmation fortsetzen.
 
-Erwartung:
+Erwartung für den erneuten Start während alter Request noch frisch ist:
+
+```text
+kein idempotentes Weiterlaufen des alten Requests
+fail-closed
+lastStopCode=start_failed
+```
+
+Erwartung für die verspätete alte Confirmation:
 
 ```text
 FAILED_CLOSED
@@ -170,6 +204,6 @@ lastStartAt unverändert für alte Generation
 lastStopCode=start_failed
 ```
 
-## 11. Gate-Regel
+## 12. Gate-Regel
 
 G4/G7/G9 bleiben unvollständig, bis JUnit/Instrumentation sowie APP-07 und APP-08 auf dem exakten Kandidaten real ausgeführt und dokumentiert wurden.
