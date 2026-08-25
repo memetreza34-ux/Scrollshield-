@@ -25,6 +25,8 @@ export interface NativeProtectionDrain {
 export type NativeProtectionHealth =
   | 'active'
   | 'running-without-activation'
+  | 'start-pending'
+  | 'start-interrupted'
   | 'unclean-process-stop'
   | 'stale-activation'
   | 'stopped-with-reason'
@@ -35,6 +37,7 @@ export interface NativeProtectionStatus {
   running: boolean;
   enabled: boolean;
   unavailableAppIds: string[];
+  lastStartRequestAt: number;
   lastStartAt: number;
   lastStopAt: number;
   lastStopCode: string;
@@ -55,6 +58,7 @@ interface NativeProtectionPlugin {
     running: boolean;
     enabled: boolean;
     unavailableAppIdsJson: string;
+    lastStartRequestAt: number;
     lastStartAt: number;
     lastStopAt: number;
     lastStopCode: string;
@@ -140,10 +144,13 @@ const TARGET_APP_MISSING_STOP_REASON: NativeProtectionStopReason = {
   message: 'Keine aktive installierte Ziel-App ist mehr verfügbar; die Wiederherstellung wurde blockiert',
 };
 
+const START_CONFIRMATION_GRACE_MS = 15_000;
+
 const EMPTY_STATUS: NativeProtectionStatus = {
   running: false,
   enabled: false,
   unavailableAppIds: [],
+  lastStartRequestAt: 0,
   lastStartAt: 0,
   lastStopAt: 0,
   lastStopCode: '',
@@ -215,17 +222,26 @@ const normalizeNativeBatchId = (value: unknown): string => {
   return NATIVE_BATCH_ID_PATTERN.test(normalized) ? normalized.toLowerCase() : '';
 };
 
-export const assessNativeProtectionHealth = (status: {
-  running: boolean;
-  enabled: boolean;
-  lastStartAt: number;
-  lastStopAt: number;
-  lastStopCode: string;
-  lastStopMessage: string;
-}): NativeProtectionHealth => {
+export const assessNativeProtectionHealth = (
+  status: {
+    running: boolean;
+    enabled: boolean;
+    lastStartRequestAt: number;
+    lastStartAt: number;
+    lastStopAt: number;
+    lastStopCode: string;
+    lastStopMessage: string;
+  },
+  now = Date.now(),
+): NativeProtectionHealth => {
   if (status.running && status.enabled) return 'active';
   if (status.running && !status.enabled) return 'running-without-activation';
   if (!status.running && status.enabled) {
+    const latestConfirmedBoundary = Math.max(status.lastStartAt, status.lastStopAt);
+    if (status.lastStartRequestAt > latestConfirmedBoundary) {
+      const requestAgeMs = Math.max(0, now - status.lastStartRequestAt);
+      return requestAgeMs <= START_CONFIRMATION_GRACE_MS ? 'start-pending' : 'start-interrupted';
+    }
     if (status.lastStartAt > 0 && status.lastStartAt > status.lastStopAt) {
       return 'unclean-process-stop';
     }
@@ -345,6 +361,7 @@ export const NativeProtection = {
       running: result.running === true,
       enabled: result.enabled === true,
       unavailableAppIds: parseStringArray(result.unavailableAppIdsJson),
+      lastStartRequestAt: normalizeTimestamp(result.lastStartRequestAt),
       lastStartAt: normalizeTimestamp(result.lastStartAt),
       lastStopAt: normalizeTimestamp(result.lastStopAt),
       lastStopCode: normalizeDiagnosticText(result.lastStopCode),
