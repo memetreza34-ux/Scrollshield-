@@ -48,6 +48,28 @@ public class ProtectionStartHandshakePolicyTest {
     }
 
     @Test
+    public void clockRollbackCannotHoldPendingStartForever() {
+        assertTrue(
+            ProtectionStartHandshakePolicy.hasFreshPendingStartRequest(
+                true,
+                10_000L,
+                9_000L,
+                8_000L,
+                5_001L
+            )
+        );
+        assertFalse(
+            ProtectionStartHandshakePolicy.hasFreshPendingStartRequest(
+                true,
+                10_000L,
+                9_000L,
+                8_000L,
+                4_999L
+            )
+        );
+    }
+
+    @Test
     public void terminalStopSupersedesDelayedConfirmation() {
         assertTrue(ProtectionStartHandshakePolicy.isConfirmationSuperseded(false, 200L, 100L));
         assertTrue(ProtectionStartHandshakePolicy.isConfirmationSuperseded(true, 200L, 200L));
