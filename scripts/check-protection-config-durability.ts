@@ -10,6 +10,7 @@ const paths = {
   plugin: `${javaRoot}/ScrollShieldNativePlugin.java`,
   store: `${javaRoot}/ProtectionConfigDurabilityStore.java`,
   storeTest: `${javaTestRoot}/ProtectionConfigDurabilityStoreTest.java`,
+  service: `${javaRoot}/ScrollShieldProtectionService.java`,
   boot: `${javaRoot}/ScrollShieldBootReceiver.java`,
   bridge: 'src/lib/nativeProtection.ts',
   bridgeTest: 'src/lib/nativeProtection.test.ts',
@@ -41,10 +42,25 @@ requirePattern(
 );
 requirePattern(
   'store',
-  /commitConfig[\s\S]*validateConfig\(configJson\)[\s\S]*UUID\.randomUUID\(\)\.toString\(\)[\s\S]*putString\(ScrollShieldNativePlugin\.CONFIG_KEY, configJson\)[\s\S]*putString\(UNAVAILABLE_APPS_KEY, unavailableJson\)[\s\S]*putString\(UNAVAILABLE_ACTIVE_APPS_KEY, unavailableActiveJson\)[\s\S]*putString\(CONFIG_GENERATION_KEY, generation\)[\s\S]*\.commit\(\)/,
-  'Config JSON, availability metadata and generation must be one synchronous durable commit.',
+  /commitConfig[\s\S]*validateConfig\(configJson\)[\s\S]*PreferenceSnapshot previous[\s\S]*UUID\.randomUUID\(\)\.toString\(\)[\s\S]*putString\(ScrollShieldNativePlugin\.CONFIG_KEY, configJson\)[\s\S]*putString\(UNAVAILABLE_APPS_KEY, unavailableJson\)[\s\S]*putString\(UNAVAILABLE_ACTIVE_APPS_KEY, unavailableActiveJson\)[\s\S]*putString\(CONFIG_GENERATION_KEY, generation\)[\s\S]*\.commit\(\)/,
+  'Config JSON, availability metadata and generation must be one synchronous candidate commit with a pre-write snapshot.',
 );
-forbidText('store', '.apply()', 'Durable protection config storage must never use SharedPreferences.apply().');
+forbidText('store', '.apply()', 'Durability store must not use asynchronous SharedPreferences.apply().');
+requirePattern(
+  'store',
+  /if \(persisted\)[\s\S]*restoreSnapshot\(preferences, previous\)[\s\S]*new CommitResult\([\s\S]*false,[\s\S]*"",[\s\S]*rollbackPersisted/,
+  'A failed candidate commit must restore the previous config tuple before returning failure.',
+);
+requirePattern(
+  'store',
+  /PreferenceSnapshot[\s\S]*hadConfig[\s\S]*hadUnavailableApps[\s\S]*hadUnavailableActiveApps[\s\S]*hadGeneration/,
+  'Rollback must preserve whether every previous config tuple key existed, not just its fallback value.',
+);
+requirePattern(
+  'store',
+  /restoreSnapshot[\s\S]*restoreString\([\s\S]*ScrollShieldNativePlugin\.CONFIG_KEY[\s\S]*UNAVAILABLE_APPS_KEY[\s\S]*UNAVAILABLE_ACTIVE_APPS_KEY[\s\S]*CONFIG_GENERATION_KEY[\s\S]*rollback\.commit\(\)/,
+  'Rollback must restore config, availability metadata and generation together.',
+);
 requirePattern(
   'store',
   /ensureGenerationForExistingConfig[\s\S]*validateConfig\(configJson\)[\s\S]*putString\(CONFIG_GENERATION_KEY, generation\)\.commit\(\)/,
@@ -95,6 +111,22 @@ requirePattern(
 );
 
 requirePattern(
+  'service',
+  /cachedConfigGeneration\s*=\s*""[\s\S]*refreshConfiguration\(\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*CONFIG_GENERATION_KEY[\s\S]*nextRulesByPackage = new HashMap/,
+  'The running service must snapshot config JSON and generation under the dispatch lock before parsing a candidate.',
+);
+requirePattern(
+  'service',
+  /refreshConfiguration\(\)[\s\S]*latestConfigJson[\s\S]*latestConfigGeneration[\s\S]*!configJson\.equals\(latestConfigJson\) \|\| !configGeneration\.equals\(latestConfigGeneration\)[\s\S]*return;[\s\S]*cachedConfigJson = configJson[\s\S]*cachedConfigGeneration = configGeneration[\s\S]*rulesByPackage\.putAll\(nextRulesByPackage\)/,
+  'Parsed rules may publish only if both config JSON and generation are still current at the second locked boundary.',
+);
+requirePattern(
+  'service',
+  /CONFIGURATION_HEALTH_INTERVAL_MS[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*hasConfiguredApps = ScrollShieldNativePlugin\.hasConfiguredApps\(this\)/,
+  'Target-app health must not inspect the config tuple concurrently with a candidate commit/rollback.',
+);
+
+requirePattern(
   'boot',
   /hasFreshProtectionStartRequest\(context\)[\s\S]*hasFreshProtectionStartRequestForCurrentConfig\(context\)[\s\S]*recovery_start_failed[\s\S]*recordProtectionStartRequested\(context\)/,
   'Boot/app-update recovery must reject a fresh pending request whose config generation is stale.',
@@ -113,7 +145,7 @@ requirePattern(
 requirePattern(
   'bridge',
   /recoverAfterProcessLoss[\s\S]*syncCommittedConfig[\s\S]*startProtectionService\(\{[\s\S]*expectedConfigGeneration: synced\.configGeneration/,
-  'Process-loss recovery must forward the exact generation returned by durable sync.',
+  'Process-loss recovery must forward the exact generation returned by its durable sync.',
 );
 requirePattern(
   'bridgeTest',
@@ -162,8 +194,8 @@ for (const id of ['APP-07', 'APP-08']) {
 }
 requirePattern(
   'spec',
-  /commit\(\)[\s\S]*configGeneration[\s\S]*expectedConfigGeneration[\s\S]*startRequestConfigGeneration[\s\S]*APP-07[\s\S]*APP-08/,
-  'Durability spec must document the commit/generation handshake and real device evidence.',
+  /commit\(\)[\s\S]*rollback[\s\S]*configGeneration[\s\S]*expectedConfigGeneration[\s\S]*startRequestConfigGeneration[\s\S]*APP-07[\s\S]*APP-08/,
+  'Durability spec must document rollback, the generation handshake, and real device evidence.',
 );
 
 requirePattern('packageJson', /"check:config-durability":\s*"tsx scripts\/check-protection-config-durability\.ts"/, 'package.json must expose check:config-durability.');
@@ -177,5 +209,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection config durability check passed. Config sync is commit-based; starts, pending idempotency, recovery and confirmation remain bound to the exact durable config generation.',
+  'Protection config durability check passed. Failed candidate commits restore the prior tuple; running rules publish only from a still-current durable config generation; starts, pending idempotency, recovery and confirmation remain generation-bound.',
 );
