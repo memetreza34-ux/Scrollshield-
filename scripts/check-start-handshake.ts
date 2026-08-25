@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 const javaRoot = 'android/app/src/main/java/app/scrollshield/mobile';
 const pluginPath = `${javaRoot}/ScrollShieldNativePlugin.java`;
 const servicePath = `${javaRoot}/ScrollShieldProtectionService.java`;
+const bootReceiverPath = `${javaRoot}/ScrollShieldBootReceiver.java`;
 const diagnosticsPath = `${javaRoot}/ScrollShieldDiagnosticsPlugin.java`;
 const bridgePath = 'src/lib/nativeProtection.ts';
 const bridgeTestPath = 'src/lib/nativeProtection.test.ts';
@@ -17,6 +18,7 @@ const instrumentationPath =
 const [
   plugin,
   service,
+  bootReceiver,
   diagnostics,
   bridge,
   bridgeTest,
@@ -29,6 +31,7 @@ const [
 ] = await Promise.all([
   readFile(pluginPath, 'utf8'),
   readFile(servicePath, 'utf8'),
+  readFile(bootReceiverPath, 'utf8'),
   readFile(diagnosticsPath, 'utf8'),
   readFile(bridgePath, 'utf8'),
   readFile(bridgeTestPath, 'utf8'),
@@ -94,6 +97,19 @@ requirePattern(
   /startForeground\(NOTIFICATION_ID, createNotification\(\)\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*RUNNING\.set\(true\)/,
   'RUNNING=true must remain after successful foreground creation and durable confirmed-start evidence.',
 );
+requirePattern(
+  bootReceiverPath,
+  bootReceiver,
+  /recordProtectionStartRequested\(context\)[\s\S]*recovery_start_failed[\s\S]*return[\s\S]*startForegroundService\(serviceIntent\)/,
+  'Boot/app-update recovery must persist a fresh start request before requesting the foreground service.',
+);
+const bootStartRequestIndex = bootReceiver.indexOf('recordProtectionStartRequested(context)');
+const bootServiceStartIndex = bootReceiver.indexOf('context.startForegroundService(serviceIntent)');
+if (bootStartRequestIndex < 0 || bootServiceStartIndex <= bootStartRequestIndex) {
+  findings.push(
+    `${bootReceiverPath}: Boot/app-update recovery must record start-request evidence before startForegroundService.`,
+  );
+}
 requirePattern(
   diagnosticsPath,
   diagnostics,
@@ -213,5 +229,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection start-handshake check passed. Activation intent, pending confirmation, interrupted pre-start, confirmed service start, exported diagnostics, and later process loss remain distinct source contracts.',
+  'Protection start-handshake check passed. Plugin starts, boot/update recovery, activation intent, pending confirmation, interrupted pre-start, confirmed service start, exported diagnostics, and later process loss remain distinct source contracts.',
 );
