@@ -15,11 +15,23 @@ final class ProtectionServiceLifecyclePolicy {
         long lastStartAt,
         long lastStopAt
     ) {
-        if (!protectionEnabled || explicitStopRequested) return false;
+        if (!protectionEnabled) return false;
 
         boolean terminalStopAfterThisServiceWasRequested =
             serviceStartRequestAtOnCreate > 0L && lastStopAt >= serviceStartRequestAtOnCreate;
         if (terminalStopAfterThisServiceWasRequested) return false;
+
+        boolean currentRequestIsConfirmed =
+            serviceStartRequestAtOnCreate > 0L
+                && latestStartRequestAt == serviceStartRequestAtOnCreate
+                && lastStartAt > serviceStartRequestAtOnCreate
+                && lastStartAt > lastStopAt;
+
+        // ACTION_STOP / prerequisite shutdown can set this flag on an instance that Android keeps
+        // alive long enough to accept a newer restart. Once that same instance owns a newer,
+        // durably confirmed generation, the old explicit-stop flag must not suppress a later real
+        // unexpected destroy of the new activation.
+        if (explicitStopRequested && !currentRequestIsConfirmed) return false;
 
         return !ProtectionStartHandshakePolicy.hasUnconfirmedStartRequest(
             true,
