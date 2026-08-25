@@ -23,7 +23,7 @@ enabled = true
 lastStartRequestAt = now
 ```
 
-Schlägt dieser Commit fehl:
+Schlägt dieser Commit im normalen App-/Recovery-Start fehl:
 
 ```text
 START_FAILED
@@ -33,9 +33,35 @@ START_FAILED
 → Start wird nicht angefordert
 ```
 
-Ein losgelöstes `setProtectionEnabled(context, true)` im produktiven Startpfad ist nicht erlaubt.
+Ein losgelöstes `setProtectionEnabled(context, true)` im produktiven Plugin-Startpfad ist nicht erlaubt.
 
-## 3. Bestätigter Foreground-Start
+## 3. Boot-/App-Update-Recovery nutzt denselben Handshake
+
+`ScrollShieldBootReceiver` darf nach erfolgreichen Recovery-Prerequisites nicht direkt den Service anfordern.
+
+Vor:
+
+```text
+startForegroundService(serviceIntent)
+```
+
+muss ebenfalls gelten:
+
+```text
+recordProtectionStartRequested(context)
+```
+
+Schlägt diese Persistenz fehl, endet die Recovery fail-closed mit:
+
+```text
+recovery_start_failed
+```
+
+und der Service wird nicht angefordert.
+
+Damit erhält auch ein Recovery-Start nach `BOOT_COMPLETED` oder `MY_PACKAGE_REPLACED` eine neue `lastStartRequestAt`-Grenze. Ein Prozessabbruch zwischen Boot-/Update-Recovery-Anforderung und bestätigtem `lastStartAt` kann dadurch als `start-pending` bzw. `start-interrupted` erkannt werden, statt nur ältere Process-Loss-Evidence weiterzuverwenden.
+
+## 4. Bestätigter Foreground-Start
 
 Im Service gilt die Reihenfolge:
 
@@ -58,7 +84,7 @@ Kann `lastStartAt` danach nicht dauerhaft gespeichert werden, muss `recordProtec
 
 Damit existiert keine positive Laufzeit-Evidence ohne dauerhaft bestätigten Start.
 
-## 4. Health-Zustände
+## 5. Health-Zustände
 
 Für `running=false && enabled=true` gelten folgende Grenzen.
 
@@ -123,13 +149,13 @@ PROZESS ABGEBROCHEN
 Schutz wiederherstellen
 ```
 
-## 5. Idempotenz
+## 6. Idempotenz
 
 Wenn der Schutz bereits `running=true && enabled=true` ist, ist ein erneuter Native-Startaufruf idempotent und fordert keinen zweiten Service-Start an.
 
 Die UI blockiert außerdem einen erneuten Start während `start-pending`.
 
-## 6. Source-Gate
+## 7. Source-Gate
 
 Pflichtcheck:
 
@@ -141,18 +167,21 @@ Der Checker erzwingt unter anderem:
 
 - dedizierten `LAST_START_REQUEST_AT_KEY`;
 - atomaren Request-Commit;
-- Request vor `startForegroundService(...)`;
-- kein separates `enabled=true` im Startpfad;
+- Request vor `startForegroundService(...)` im Plugin;
+- denselben Request-Handshake vor Boot-/App-Update-Recovery-Start;
+- `recovery_start_failed`, falls die Recovery-Startanforderung nicht persistiert werden kann;
+- kein separates `enabled=true` im Plugin-Startpfad;
 - bestätigten Start erst nach `startForeground(...)`;
 - `RUNNING=true` erst nach dauerhaft gespeichertem `lastStartAt`;
 - Fail-closed bei Confirmation-Commit-Fehler;
 - getrennte `start-pending`, `start-interrupted` und `unclean-process-stop`-Klassifizierung;
 - UI- und Vitest-Verträge;
-- Android-Instrumentation für Request-vs.-Confirmed-Start.
+- Android-Instrumentation für Request-vs.-Confirmed-Start;
+- `lastProtectionStartRequestAt` im exportierbaren Diagnose-Snapshot.
 
 Der Check ist Pflichtbestandteil von `npm run verify` und `npm run readiness`.
 
-## 7. Android-Instrumentation
+## 8. Android-Instrumentation
 
 `ProtectionDiagnosticsInstrumentedTest.startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence()` muss beweisen:
 
@@ -164,11 +193,11 @@ Der Check ist Pflichtbestandteil von `npm run verify` und `npm run readiness`.
 
 Dieser Test ist vorbereitet, aber erst nach realer Ausführung Evidence.
 
-## 8. Pflicht-E2E nach CI-Entsperrung
+## 9. Pflicht-E2E nach CI-Entsperrung
 
-Auf Emulator/physischem Gerät müssen mindestens diese zwei Crash-Grenzen separat getestet werden:
+Auf Emulator/physischem Gerät müssen mindestens diese Crash-Grenzen separat getestet werden:
 
-### A. Abbruch vor Startbestätigung
+### A. Abbruch vor Startbestätigung aus der App
 
 1. gültige Prerequisites + Ziel-App vorbereiten;
 2. Startanforderung auslösen;
@@ -178,7 +207,16 @@ Auf Emulator/physischem Gerät müssen mindestens diese zwei Crash-Grenzen separ
 6. prüfen, dass **nicht** `unclean-process-stop` angezeigt wird;
 7. `Schutz erneut starten` ausführen und vollständige Aktivierung bestätigen.
 
-### B. Abbruch nach bestätigtem Start
+### B. Abbruch vor Startbestätigung bei Boot/App-Update-Recovery
+
+1. Schutz vorher aktiviert hinterlassen;
+2. Boot oder `MY_PACKAGE_REPLACED` auslösen;
+3. Recovery bis zur neuen `lastStartRequestAt`-Evidence gelangen lassen;
+4. Prozess vor neuer bestätigter `lastStartAt`-Evidence beenden;
+5. `start-pending` → nach Grace `start-interrupted` bestätigen;
+6. sicherstellen, dass ein alter bestätigter Start nicht fälschlich als neuer `unclean-process-stop` verwendet wird.
+
+### C. Abbruch nach bestätigtem Start
 
 1. Dienst vollständig bis `lastStartAt` + `RUNNING=true` starten;
 2. Prozess danach hart beenden, ohne einen `onDestroy()`-Callback vorauszusetzen;
@@ -186,8 +224,8 @@ Auf Emulator/physischem Gerät müssen mindestens diese zwei Crash-Grenzen separ
 4. `Schutz wiederherstellen` ausführen;
 5. erneut `active` bestätigen.
 
-Damit bleiben Pre-Confirmation-Abbruch und echter Post-Start-Process-Kill beweisbar getrennt.
+Damit bleiben App-/Recovery-Pre-Confirmation-Abbruch und echter Post-Start-Process-Kill beweisbar getrennt.
 
-## 9. Evidence-Regel
+## 10. Evidence-Regel
 
 Source-Code, Vitest-Verträge und Instrumentation-Quellcode sind **keine reale Android-Evidence**. G6/G7 dürfen erst hochgestuft werden, wenn die Checks und die beschriebenen Android-Szenarien auf dem exakten Kandidaten-Head tatsächlich ausgeführt und dokumentiert wurden.
