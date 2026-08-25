@@ -143,6 +143,9 @@ if (findings.length === 0) {
   }
 
   for (const [method, description] of [
+    ['startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence', 'start-request versus confirmed-start persistence'],
+    ['terminalStopWinsAgainstDelayedStartConfirmationWithoutOverwrite', 'terminal stop winning a delayed start confirmation race'],
+    ['restartRequestAdvancesBeyondLatestStopBoundary', 'strictly ordered immediate restart generation'],
     ['atomicPrerequisiteStopPersistsDisabledStateEventAndExactCode', 'atomic disabled-state/event/diagnostic persistence'],
     ['atomicPrerequisiteStopAlsoPersistsWhenProtectionWasAlreadyDisabled', 'first-start prerequisite persistence while activation is already false'],
     ['atomicSystemStartFailurePersistsDisabledStateEventAndStableCode', 'technical START_FAILED system-stop persistence'],
@@ -160,6 +163,25 @@ if (findings.length === 0) {
       `Instrumentation must cover ${description}.`,
     );
   }
+
+  requireMatch(
+    diagnosticsTestPath,
+    diagnosticsTest,
+    /startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence[\s\S]*recordProtectionStartRequested[\s\S]*ProtectionStartConfirmationResult\.CONFIRMED[\s\S]*confirmedStartAt > requestAt/,
+    'Instrumentation must prove confirmed-start evidence is strictly newer than its request generation.',
+  );
+  requireMatch(
+    diagnosticsTestPath,
+    diagnosticsTest,
+    /terminalStopWinsAgainstDelayedStartConfirmationWithoutOverwrite[\s\S]*recordProtectionTerminalStop[\s\S]*stopAt > requestAt[\s\S]*ProtectionStartConfirmationResult\.SUPERSEDED_BY_STOP[\s\S]*assertEquals\(0L, ScrollShieldNativePlugin\.getLastProtectionStartAt[\s\S]*getLastProtectionStopCode[\s\S]*getLastProtectionStopMessage[\s\S]*assertEquals\(eventsAfterStop, preferences\.getString\("protection_events"/,
+    'Instrumentation must prove a delayed start cannot overwrite a newer terminal stop, its exact diagnostics, or its event history.',
+  );
+  requireMatch(
+    diagnosticsTestPath,
+    diagnosticsTest,
+    /restartRequestAdvancesBeyondLatestStopBoundary[\s\S]*stopAt > firstRequestAt[\s\S]*restartRequestAt > stopAt[\s\S]*hasFreshProtectionStartRequest\(context\)[\s\S]*ProtectionStartConfirmationResult\.CONFIRMED[\s\S]*getLastProtectionStartAt\(context\) > restartRequestAt/,
+    'Instrumentation must prove a same-session restart creates a strictly newer request that remains confirmable.',
+  );
 
   for (const constant of [
     'USAGE_ACCESS_MISSING',
@@ -257,5 +279,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android instrumentation contract check passed. Runtime state, atomic boot/update recovery, merged-manifest, usage-persistence, atomic system stops, atomic explicit terminal stops without warning events, and legacy diagnostic compatibility tests are present.',
+  'Android instrumentation contract check passed. Runtime state, boot/update recovery, start-stop race ordering, delayed-confirmation stop winner, immediate restart generation, usage persistence, atomic stop diagnostics, and manifest tests are present.',
 );
