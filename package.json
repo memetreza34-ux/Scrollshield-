@@ -28,6 +28,7 @@
     "check:device-matrix": "tsx scripts/check-android-device-matrix.ts",
     "check:lifecycle": "tsx scripts/check-protection-lifecycle-diagnostics.ts",
     "check:native-stop-atomicity": "tsx scripts/check-native-stop-atomicity.ts",
+    "check:start-handshake": "tsx scripts/check-start-handshake.ts",
     "check:diagnostic-normalization": "tsx scripts/check-diagnostic-normalization.ts",
     "check:overlay-accessibility": "tsx scripts/check-overlay-accessibility.ts",
     "check:usage-accounting": "tsx scripts/check-native-usage-accounting.ts",
@@ -64,7 +65,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "verify": "npm run check:runtime && npm run lint && npm run format:check && npm run check:version && npm run check:android && npm run check:android-instrumentation && npm run check:supply-chain && npm run check:native-drain-ack && npm run check:native-retention && npm run check:usage-flush-worker && npm run check:prerequisite-stop-codes && npm run check:process-loss && npm run check:protection-recovery && npm run check:device-matrix && npm run check:lifecycle && npm run check:native-stop-atomicity && npm run check:diagnostic-normalization && npm run check:overlay-accessibility && npm run check:usage-accounting && npm run check:protection-config && npm run check:release-surface && npm run check:commitment && npm run check:subscription-safety && npm run check:migration && npm run check:release-approval && npm run check:transparency && npm run check:sdk && npm run check:notices && npm run check:secrets && npm run check:store && npm run check:release && npm run test && npm run check:a11y && npm run build && npm run check:pwa && npm run check:privacy && npm run check:bundle"
+    "verify": "npm run check:runtime && npm run lint && npm run format:check && npm run check:version && npm run check:android && npm run check:android-instrumentation && npm run check:supply-chain && npm run check:native-drain-ack && npm run check:native-retention && npm run check:usage-flush-worker && npm run check:prerequisite-stop-codes && npm run check:process-loss && npm run check:protection-recovery && npm run check:device-matrix && npm run check:lifecycle && npm run check:native-stop-atomicity && npm run check:start-handshake && npm run check:diagnostic-normalization && npm run check:overlay-accessibility && npm run check:usage-accounting && npm run check:protection-config && npm run check:release-surface && npm run check:commitment && npm run check:subscription-safety && npm run check:migration && npm run check:release-approval && npm run check:transparency && npm run check:sdk && npm run check:notices && npm run check:secrets && npm run check:store && npm run check:release && npm run test && npm run check:a11y && npm run build && npm run check:pwa && npm run check:privacy && npm run check:bundle"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
