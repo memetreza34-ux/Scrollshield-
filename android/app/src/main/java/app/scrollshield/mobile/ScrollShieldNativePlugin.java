@@ -33,6 +33,7 @@ public class ScrollShieldNativePlugin extends Plugin {
     private static final String EVENT_QUEUE_KEY = "protection_events";
     private static final String UNAVAILABLE_APPS_KEY = "unavailable_app_ids";
     private static final String UNAVAILABLE_ACTIVE_APPS_KEY = "unavailable_active_app_ids";
+    private static final String LAST_START_REQUEST_AT_KEY = "protection_last_start_request_at";
     private static final String LAST_START_AT_KEY = "protection_last_start_at";
     private static final String LAST_STOP_AT_KEY = "protection_last_stop_at";
     private static final String LAST_STOP_CODE_KEY = "protection_last_stop_code";
@@ -186,7 +187,21 @@ public class ScrollShieldNativePlugin extends Plugin {
             return;
         }
 
-        setProtectionEnabled(context, true);
+        if (ScrollShieldProtectionService.isRunning() && isProtectionEnabled(context)) {
+            call.resolve();
+            return;
+        }
+
+        if (!recordProtectionStartRequested(context)) {
+            persistProtectionSystemStopWithFallback(
+                context,
+                ProtectionStopReasonPolicy.START_FAILED,
+                "Android konnte die Schutzaktivierung vor dem Dienststart nicht dauerhaft speichern"
+            );
+            call.reject("Protection start request could not be persisted");
+            return;
+        }
+
         Intent intent = new Intent(context, ScrollShieldProtectionService.class);
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -268,6 +283,7 @@ public class ScrollShieldNativePlugin extends Plugin {
         result.put("running", ScrollShieldProtectionService.isRunning());
         result.put("enabled", isProtectionEnabled(context));
         result.put("unavailableAppIdsJson", getPreferences().getString(UNAVAILABLE_APPS_KEY, "[]"));
+        result.put("lastStartRequestAt", getLastProtectionStartRequestAt(context));
         result.put("lastStartAt", getLastProtectionStartAt(context));
         result.put("lastStopAt", getLastProtectionStopAt(context));
         result.put("lastStopCode", getLastProtectionStopCode(context));
@@ -528,6 +544,22 @@ public class ScrollShieldNativePlugin extends Plugin {
             .getBoolean(SERVICE_ENABLED_KEY, false);
     }
 
+    /**
+     * Persists activation intent and its request timestamp in one commit. A later confirmed service
+     * start must write LAST_START_AT_KEY. This lets the UI distinguish an in-flight/interrupted
+     * start request from a service that had actually started and was later killed.
+     */
+    public static boolean recordProtectionStartRequested(Context context) {
+        synchronized (EVENT_LOCK) {
+            return context
+                .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(SERVICE_ENABLED_KEY, true)
+                .putLong(LAST_START_REQUEST_AT_KEY, System.currentTimeMillis())
+                .commit();
+        }
+    }
+
     public static void setProtectionEnabled(Context context, boolean enabled) {
         SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
         boolean wasEnabled = preferences.getBoolean(SERVICE_ENABLED_KEY, false);
@@ -545,12 +577,14 @@ public class ScrollShieldNativePlugin extends Plugin {
         editor.commit();
     }
 
-    public static void recordProtectionServiceStarted(Context context) {
-        context
-            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putLong(LAST_START_AT_KEY, System.currentTimeMillis())
-            .commit();
+    public static boolean recordProtectionServiceStarted(Context context) {
+        synchronized (EVENT_LOCK) {
+            return context
+                .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putLong(LAST_START_AT_KEY, System.currentTimeMillis())
+                .commit();
+        }
     }
 
     public static void recordProtectionStop(Context context, String code, String message) {
@@ -567,6 +601,12 @@ public class ScrollShieldNativePlugin extends Plugin {
                 ProtectionDiagnosticPolicy.normalizeMessage(message, "Unbekannter Stoppgrund")
             )
             .commit();
+    }
+
+    public static long getLastProtectionStartRequestAt(Context context) {
+        return context
+            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .getLong(LAST_START_REQUEST_AT_KEY, 0L);
     }
 
     public static long getLastProtectionStartAt(Context context) {
