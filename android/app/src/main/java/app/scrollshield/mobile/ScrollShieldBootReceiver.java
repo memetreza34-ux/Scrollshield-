@@ -49,6 +49,15 @@ public class ScrollShieldBootReceiver extends BroadcastReceiver {
             return;
         }
 
+        if (!ScrollShieldNativePlugin.recordProtectionStartRequested(context)) {
+            stopRecovery(
+                context,
+                "recovery_start_failed",
+                "Android konnte die Schutzaktivierung nach Neustart oder App-Update nicht dauerhaft als Startanforderung speichern"
+            );
+            return;
+        }
+
         Intent serviceIntent = new Intent(context, ScrollShieldProtectionService.class);
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
