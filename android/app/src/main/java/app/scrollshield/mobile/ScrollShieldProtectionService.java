@@ -76,6 +76,7 @@ public class ScrollShieldProtectionService extends Service {
     private String lastUsagePackage;
     private long lastUsageTickMs;
     private long lastConfigurationHealthCheckMs;
+    private long serviceStartRequestAtOnCreate;
     private UsageFlushCoordinator usageFlushCoordinator;
     private UsageFlushWorker usageFlushWorker;
 
@@ -102,6 +103,7 @@ public class ScrollShieldProtectionService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        serviceStartRequestAtOnCreate = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(this);
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         createNotificationChannel();
         try {
@@ -117,7 +119,16 @@ public class ScrollShieldProtectionService extends Service {
             stopSelf();
             return;
         }
-        ScrollShieldNativePlugin.recordProtectionServiceStarted(this);
+
+        ScrollShieldNativePlugin.ProtectionStartConfirmationResult confirmation =
+            ScrollShieldNativePlugin.recordProtectionServiceStarted(this);
+        if (confirmation != ScrollShieldNativePlugin.ProtectionStartConfirmationResult.CONFIRMED) {
+            RUNNING.set(false);
+            explicitStopRequested = true;
+            stopSelf();
+            return;
+        }
+
         RUNNING.set(true);
         lastUsageTickMs = System.currentTimeMillis();
         usageFlushCoordinator = new UsageFlushCoordinator(lastUsageTickMs);
@@ -175,14 +186,32 @@ public class ScrollShieldProtectionService extends Service {
             );
             return START_NOT_STICKY;
         }
+
+        if (ScrollShieldNativePlugin.hasUnconfirmedProtectionStartRequest(this)) {
+            ScrollShieldNativePlugin.ProtectionStartConfirmationResult confirmation =
+                ScrollShieldNativePlugin.recordProtectionServiceStarted(this);
+            if (confirmation != ScrollShieldNativePlugin.ProtectionStartConfirmationResult.CONFIRMED) {
+                RUNNING.set(false);
+                explicitStopRequested = true;
+                stopSelf();
+                return START_NOT_STICKY;
+            }
+        }
         return START_STICKY;
     }
 
     @Override
     public void onDestroy() {
+        long latestStartRequestAt = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(this);
+        long lastStartAt = ScrollShieldNativePlugin.getLastProtectionStartAt(this);
+        long lastStopAt = ScrollShieldNativePlugin.getLastProtectionStopAt(this);
         boolean unexpectedDestroy = ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(
             ScrollShieldNativePlugin.isProtectionEnabled(this),
-            explicitStopRequested
+            explicitStopRequested,
+            serviceStartRequestAtOnCreate,
+            latestStartRequestAt,
+            lastStartAt,
+            lastStopAt
         );
         if (unexpectedDestroy) {
             String description =
