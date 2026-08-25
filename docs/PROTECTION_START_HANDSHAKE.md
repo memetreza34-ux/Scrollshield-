@@ -2,101 +2,202 @@
 
 Status: **verbindlicher Source-/Evidence-Vertrag**
 
-Diese Spezifikation trennt eine angeforderte Android-Schutzaktivierung von einem tatsächlich bestätigten Foreground-Service-Start. Sie verhindert, dass ein Prozessabbruch zwischen `enabled=true` und `startForeground(...)` fälschlich als bestätigter Dienststart oder als späterer Process-Kill interpretiert wird.
+Diese Spezifikation trennt eine angeforderte Android-Schutzaktivierung von einem tatsächlich bestätigten Foreground-Service-Start und definiert zusätzlich die Gewinnerregel für konkurrierende Start-/Stop-Lifecycle-Ereignisse.
 
-## 1. Persistente Zeitmarken
+## 1. Persistente Lifecycle-Grenzen
 
-ScrollShield verwendet drei getrennte Lifecycle-Zeitmarken:
+ScrollShield verwendet drei getrennte Zeitmarken:
 
 - `protection_last_start_request_at` — eine Startanforderung wurde dauerhaft gespeichert;
-- `protection_last_start_at` — der Foreground-Service wurde tatsächlich erstellt und der bestätigte Start konnte dauerhaft gespeichert werden;
+- `protection_last_start_at` — der Foreground-Service wurde bestätigt;
 - `protection_last_stop_at` — ein terminaler Stopp wurde dauerhaft gespeichert.
 
-`lastStartRequestAt` und `lastStartAt` dürfen nicht dieselbe Bedeutung erhalten.
+Diese Werte sind nicht nur Uhrzeiten, sondern **logische Lifecycle-Grenzen**.
+
+`ProtectionStartHandshakePolicy.nextLifecycleTimestamp(...)` erzeugt jeden neuen Request-/Start-/Stop-Zeitpunkt mindestens eins größer als die höchste bereits gespeicherte Lifecycle-Grenze, sofern `Long.MAX_VALUE` nicht erreicht ist.
+
+Damit gilt auch bei:
+
+- gleicher Millisekunde;
+- sehr schnellem Stop → Restart;
+- rückwärts verstellter Geräteuhr;
+
+weiterhin eine eindeutige Reihenfolge.
 
 ## 2. Atomare Startanforderung
 
-Vor `startForegroundService(...)` bzw. `startService(...)` muss `recordProtectionStartRequested(...)` in **einem synchronen Commit** speichern:
+Vor `startForegroundService(...)` bzw. `startService(...)` muss `recordProtectionStartRequested(...)` in einem synchronen Commit speichern:
 
 ```text
 enabled = true
-lastStartRequestAt = now
+lastStartRequestAt = nextLifecycleTimestamp(...)
 ```
 
-Schlägt dieser Commit im normalen App-/Recovery-Start fehl:
+Schlägt dieser Commit fehl:
 
 ```text
 START_FAILED
 → atomarer System-Stop
 → enabled=false
 → warning/system
-→ Start wird nicht angefordert
+→ kein Service-Start
 ```
 
-Ein losgelöstes `setProtectionEnabled(context, true)` im produktiven Plugin-Startpfad ist nicht erlaubt.
+Ein separates produktives `setProtectionEnabled(context, true)` ist nicht erlaubt.
 
-## 3. Boot-/App-Update-Recovery nutzt denselben Handshake
+## 3. Doppelstart während Pending wird unterdrückt
 
-`ScrollShieldBootReceiver` darf nach erfolgreichen Recovery-Prerequisites nicht direkt den Service anfordern.
-
-Vor:
+Der Native-Start prüft zusätzlich:
 
 ```text
-startForegroundService(serviceIntent)
+running && enabled
+→ idempotent resolve
 ```
 
-muss ebenfalls gelten:
+und:
+
+```text
+frische unbestätigte Startanforderung <= 15 Sekunden
+→ idempotent resolve
+```
+
+Damit darf ein zweiter UI-/Bridge-Aufruf während `start-pending` den vorhandenen `lastStartRequestAt` nicht nach hinten verschieben und keine zusätzliche logische Startgeneration erzeugen.
+
+## 4. Boot-/App-Update-Recovery nutzt denselben Handshake
+
+`ScrollShieldBootReceiver` muss nach erfolgreichen Recovery-Prerequisites ebenfalls zuerst:
 
 ```text
 recordProtectionStartRequested(context)
 ```
 
-Schlägt diese Persistenz fehl, endet die Recovery fail-closed mit:
+ausführen und darf erst danach `startForegroundService(...)` / `startService(...)` aufrufen.
+
+Fehlt die persistierbare Startanforderung:
 
 ```text
 recovery_start_failed
+→ atomarer System-Stop
+→ kein Recovery-Service-Start
 ```
 
-und der Service wird nicht angefordert.
+Damit erhalten `BOOT_COMPLETED` und `MY_PACKAGE_REPLACED` dieselbe Request-vs.-Confirmation-Grenze wie ein normaler App-Start.
 
-Damit erhält auch ein Recovery-Start nach `BOOT_COMPLETED` oder `MY_PACKAGE_REPLACED` eine neue `lastStartRequestAt`-Grenze. Ein Prozessabbruch zwischen Boot-/Update-Recovery-Anforderung und bestätigtem `lastStartAt` kann dadurch als `start-pending` bzw. `start-interrupted` erkannt werden, statt nur ältere Process-Loss-Evidence weiterzuverwenden.
+## 5. Bestätigter Foreground-Start
 
-## 4. Bestätigter Foreground-Start
-
-Im Service gilt die Reihenfolge:
+Für eine neue Service-Instanz gilt:
 
 ```text
+serviceStartRequestAtOnCreate = aktueller lastStartRequestAt
+↓
 startForeground(...)
 ↓
 recordProtectionServiceStarted(...)
 ↓
+CONFIRMED
+↓
 RUNNING=true
 ```
 
-`lastStartAt` darf erst nach erfolgreichem `startForeground(...)` geschrieben werden.
+`recordProtectionServiceStarted(...)` liefert genau einen dieser Zustände:
 
-Kann `lastStartAt` danach nicht dauerhaft gespeichert werden, muss `recordProtectionServiceStarted(...)`:
+```text
+CONFIRMED
+SUPERSEDED_BY_STOP
+FAILED_CLOSED
+```
 
-1. mit `START_FAILED` fail-closed persistieren;
-2. `enabled=false` sicherstellen;
-3. ein `warning/system`-Event hinterlassen, sofern der atomare Primärcommit gelingt;
-4. eine Exception auslösen, bevor `RUNNING=true` erreicht wird.
+Nur `CONFIRMED` darf zu `RUNNING=true` führen.
 
-Damit existiert keine positive Laufzeit-Evidence ohne dauerhaft bestätigten Start.
+Kann die bestätigte Start-Evidence nicht dauerhaft gespeichert werden, endet der Start fail-closed mit `START_FAILED`.
 
-## 5. Health-Zustände
+## 6. Stop gewinnt gegen verspätete Startbestätigung
 
-Für `running=false && enabled=true` gelten folgende Grenzen.
+Alle relevanten Native-Lifecycle-Writes werden unter `EVENT_LOCK` serialisiert.
+
+Wenn nach einer Startanforderung zuerst ein terminaler Stop persistiert wird:
+
+```text
+R1 = lastStartRequestAt
+S1 = lastStopAt > R1
+```
+
+und erst danach die verspätete Service-Bestätigung eintrifft, gilt:
+
+```text
+recordProtectionServiceStarted(...)
+→ SUPERSEDED_BY_STOP
+```
+
+Dann darf der verspätete Start ausdrücklich **nicht**:
+
+- `lastStartAt` fortschreiben;
+- `enabled=true` wiederherstellen;
+- den Stop-Code überschreiben;
+- die Stop-Nachricht überschreiben;
+- die Event-Queue verändern;
+- stattdessen künstlich `start_failed` erzeugen.
+
+Der bereits persistierte terminale Stopp bleibt die aktuelle Wahrheit.
+
+## 7. Schneller Stop → Restart
+
+Ein echter neuer Start nach einem Stopp erhält eine neue Generation:
+
+```text
+R1 < S1 < R2 < C2
+```
+
+mit:
+
+- `R1` = alte Startanforderung;
+- `S1` = terminaler Stopp;
+- `R2` = neuer Restart-Request;
+- `C2` = bestätigter neuer Start.
+
+`R2` muss strikt größer als `S1` sein, selbst wenn beide im selben Millisekunden-Zeitfenster entstehen.
+
+Wenn die alte Service-Instanz noch existiert, kann der neue Start über `onStartCommand()` bei derselben Instanz ankommen. Der Service bestätigt dann die neue unbestätigte Generation über `recordProtectionServiceStarted(...)`, bevor er `START_STICKY` zurückgibt.
+
+## 8. Altes `onDestroy()` darf neuen Restart nicht überschreiben
+
+Jede Service-Instanz merkt sich beim `onCreate()`:
+
+```text
+serviceStartRequestAtOnCreate
+```
+
+Beim `onDestroy()` wird `unexpected_service_destroy` nur geschrieben, wenn die Instanz noch zur **aktuellen bestätigten Aktivierung** gehört.
+
+Kein `unexpected_service_destroy` wird geschrieben, wenn:
+
+- Schutz bereits deaktiviert ist;
+- ein expliziter Stop angefordert wurde;
+- seit der Request-Generation dieser Instanz bereits ein terminaler Stop persistiert wurde;
+- aktuell eine neuere unbestätigte Startgeneration existiert.
+
+Dadurch kann folgende Reihenfolge nicht mehr die neue Aktivierung zerstören:
+
+```text
+alte Instanz R1 aktiv
+→ Stop S1
+→ sofort neuer Start R2
+→ R2/C2 wird neue Wahrheit
+→ altes onDestroy() von R1 kommt verspätet
+→ kein unexpected_service_destroy
+```
+
+## 9. Health-Zustände
+
+Für `running=false && enabled=true` gelten:
 
 ### `start-pending`
 
 ```text
 lastStartRequestAt > max(lastStartAt, lastStopAt)
 UND
-Alter der Startanforderung <= 15 Sekunden
+Request-Alter <= 15 Sekunden
 ```
-
-Bedeutung: Android hat eine neue Startanforderung, der Foreground-Service hat sie aber noch nicht bestätigt. Diese kurze Phase ist noch kein Fehler.
 
 UI:
 
@@ -106,19 +207,13 @@ Android bestätigt den Schutzstart
 Start wird bestätigt…
 ```
 
-Währenddessen wird ein doppelter Start über die Statuskarte blockiert.
-
 ### `start-interrupted`
 
 ```text
 lastStartRequestAt > max(lastStartAt, lastStopAt)
 UND
-Alter der Startanforderung > 15 Sekunden
-UND
-running=false
+Request-Alter > 15 Sekunden
 ```
-
-Bedeutung: Die neueste Startanforderung wurde nie durch einen bestätigten Foreground-Service-Start abgeschlossen. Ein Prozess kann zwischen Startanforderung und Bestätigung beendet worden sein.
 
 UI:
 
@@ -127,8 +222,6 @@ START ABGEBROCHEN
 Schutzstart wurde nicht bestätigt
 Schutz erneut starten
 ```
-
-Dieser Zustand verwendet **nicht** die Process-Kill-Recovery-Semantik.
 
 ### `unclean-process-stop`
 
@@ -140,7 +233,7 @@ running=false
 enabled=true
 ```
 
-Bedeutung: Der Dienst hatte seinen Start bereits bestätigt und ist später ohne terminalen Stopp verschwunden. Erst dieser Zustand darf als bestätigter Prozessabbruch/System-Kill behandelt werden.
+Nur dieser Zustand bedeutet: Der Dienst hatte seinen Start bestätigt und ist später ohne terminalen Stopp verschwunden.
 
 UI:
 
@@ -149,13 +242,7 @@ PROZESS ABGEBROCHEN
 Schutz wiederherstellen
 ```
 
-## 6. Idempotenz
-
-Wenn der Schutz bereits `running=true && enabled=true` ist, ist ein erneuter Native-Startaufruf idempotent und fordert keinen zweiten Service-Start an.
-
-Die UI blockiert außerdem einen erneuten Start während `start-pending`.
-
-## 7. Source-Gate
+## 10. Source-Gates
 
 Pflichtcheck:
 
@@ -163,69 +250,94 @@ Pflichtcheck:
 npm run check:start-handshake
 ```
 
-Der Checker erzwingt unter anderem:
+Er erzwingt unter anderem:
 
-- dedizierten `LAST_START_REQUEST_AT_KEY`;
+- `ProtectionStartHandshakePolicy` + Pure-Java-JUnit;
+- 15-Sekunden-Grace-Window;
+- logisch monotone Lifecycle-Zeitmarken;
 - atomaren Request-Commit;
-- Request vor `startForegroundService(...)` im Plugin;
-- denselben Request-Handshake vor Boot-/App-Update-Recovery-Start;
-- `recovery_start_failed`, falls die Recovery-Startanforderung nicht persistiert werden kann;
-- kein separates `enabled=true` im Plugin-Startpfad;
-- bestätigten Start erst nach `startForeground(...)`;
-- `RUNNING=true` erst nach dauerhaft gespeichertem `lastStartAt`;
-- Fail-closed bei Confirmation-Commit-Fehler;
-- getrennte `start-pending`, `start-interrupted` und `unclean-process-stop`-Klassifizierung;
-- UI- und Vitest-Verträge;
-- Android-Instrumentation für Request-vs.-Confirmed-Start;
-- `lastProtectionStartRequestAt` im exportierbaren Diagnose-Snapshot.
+- Pending-Doppelstartunterdrückung;
+- Request vor Plugin-/Boot-/Update-Service-Start;
+- `CONFIRMED` / `SUPERSEDED_BY_STOP` / `FAILED_CLOSED`;
+- Stop-Winner gegen verspätete Confirmation;
+- `RUNNING=true` nur nach aktuellem bestätigtem Start;
+- Bestätigung einer neuen Generation in `onStartCommand()`;
+- alte-Service-`onDestroy()`-Isolation bei Fast-Restart;
+- UI-/Vitest-Verträge;
+- Android-Instrumentation;
+- Diagnoseexport von `lastProtectionStartRequestAt`.
 
-Der Check ist Pflichtbestandteil von `npm run verify` und `npm run readiness`.
+Zusätzlich erzwingt `npm run check:lifecycle` dieselben Generation-Grenzen im breiteren Lifecycle-/Diagnosevertrag.
 
-## 8. Android-Instrumentation
+Beide sind Bestandteil von `npm run verify`; `check:start-handshake` und `check:lifecycle` laufen außerdem im Readiness-Report.
 
-`ProtectionDiagnosticsInstrumentedTest.startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence()` muss beweisen:
+## 11. Android-Testverträge
 
-1. Ausgangszustand besitzt keine Request-/Start-Evidence;
-2. `recordProtectionStartRequested(...)` setzt `enabled=true` und `lastStartRequestAt`;
-3. danach bleibt `lastStartAt == 0`;
-4. erst `recordProtectionServiceStarted(...)` erzeugt bestätigte Start-Evidence;
-5. `lastStartAt >= lastStartRequestAt`.
+`ProtectionStartHandshakePolicyTest` deckt source-seitig ab:
 
-Dieser Test ist vorbereitet, aber erst nach realer Ausführung Evidence.
+- strikt steigende Lifecycle-Grenzen;
+- frisches Pending-Window;
+- Stop-Winner gegen verspätete Confirmation;
+- Trennung unbestätigter von bestätigter/gestoppter Generation.
 
-## 9. Pflicht-E2E nach CI-Entsperrung
+`ProtectionDiagnosticsInstrumentedTest` enthält insbesondere:
 
-Auf Emulator/physischem Gerät müssen mindestens diese Crash-Grenzen separat getestet werden:
+```text
+startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence
+terminalStopWinsAgainstDelayedStartConfirmationWithoutOverwrite
+restartRequestAdvancesBeyondLatestStopBoundary
+```
 
-### A. Abbruch vor Startbestätigung aus der App
+Der Vertrag verlangt damit:
 
-1. gültige Prerequisites + Ziel-App vorbereiten;
-2. Startanforderung auslösen;
-3. Prozess gezielt nach persistiertem `lastStartRequestAt`, aber **vor** bestätigtem `lastStartAt` beenden;
-4. innerhalb der Grace-Phase `start-pending` beobachten;
-5. nach Ablauf der Grace-Phase `start-interrupted` bestätigen;
-6. prüfen, dass **nicht** `unclean-process-stop` angezeigt wird;
-7. `Schutz erneut starten` ausführen und vollständige Aktivierung bestätigen.
+1. Request-Evidence existiert vor Confirmed-Evidence;
+2. bestätigter Start ist strikt neuer als sein Request;
+3. ein terminaler Stop ist strikt neuer als der vorherige Request;
+4. eine verspätete Confirmation liefert `SUPERSEDED_BY_STOP` und verändert die Stop-Evidence nicht;
+5. ein echter Restart erzeugt wiederum eine strikt neuere Request-Generation und kann bestätigt werden.
 
-### B. Abbruch vor Startbestätigung bei Boot/App-Update-Recovery
+Diese Tests sind vorbereitet, aber erst ihre reale Ausführung ist Evidence.
 
-1. Schutz vorher aktiviert hinterlassen;
-2. Boot oder `MY_PACKAGE_REPLACED` auslösen;
-3. Recovery bis zur neuen `lastStartRequestAt`-Evidence gelangen lassen;
-4. Prozess vor neuer bestätigter `lastStartAt`-Evidence beenden;
-5. `start-pending` → nach Grace `start-interrupted` bestätigen;
-6. sicherstellen, dass ein alter bestätigter Start nicht fälschlich als neuer `unclean-process-stop` verwendet wird.
+## 12. Pflicht-E2E nach CI-Entsperrung
 
-### C. Abbruch nach bestätigtem Start
+Zusätzlich zu normalem Start, Boot/Update und Post-Start-Process-Kill müssen folgende Race-Fälle real ausgeführt werden:
 
-1. Dienst vollständig bis `lastStartAt` + `RUNNING=true` starten;
-2. Prozess danach hart beenden, ohne einen `onDestroy()`-Callback vorauszusetzen;
-3. `unclean-process-stop` bestätigen;
-4. `Schutz wiederherstellen` ausführen;
-5. erneut `active` bestätigen.
+### A. Pre-Confirmation-Abbruch
 
-Damit bleiben App-/Recovery-Pre-Confirmation-Abbruch und echter Post-Start-Process-Kill beweisbar getrennt.
+`lastStartRequestAt` persistieren, Prozess vor `lastStartAt` beenden, `start-pending` → `start-interrupted` beobachten und anschließend normal neu starten.
 
-## 10. Evidence-Regel
+### B. Terminaler Stop vor verspäteter Confirmation
 
-Source-Code, Vitest-Verträge und Instrumentation-Quellcode sind **keine reale Android-Evidence**. G6/G7 dürfen erst hochgestuft werden, wenn die Checks und die beschriebenen Android-Szenarien auf dem exakten Kandidaten-Head tatsächlich ausgeführt und dokumentiert wurden.
+Start zwischen Request und Confirmation anhalten, terminal stoppen, verspätete Confirmation freigeben. Stop-Code/-Nachricht/Event müssen unverändert bleiben und `lastStartAt` darf für diese Generation nicht fortgeschrieben werden.
+
+### C. Pending-Doppelstart
+
+Während `start-pending` erneut Start auslösen. `lastStartRequestAt` darf nicht erneuert werden und es darf keine doppelte logische Service-Aktivierung entstehen.
+
+### D. Sofortiger Stop → Restart vor altem `onDestroy()`
+
+Nach bestätigtem Start kontrolliert stoppen und sofort wieder starten, bevor die alte Instanz vollständig abgebaut ist. Neuer Request/Start müssen gewinnen; verspätetes altes `onDestroy()` darf kein `unexpected_service_destroy` erzeugen.
+
+### E. Post-Start-Process-Kill
+
+Nach bestätigtem `lastStartAt` Prozess hart beenden, ohne `onDestroy()` vorauszusetzen. Danach muss `unclean-process-stop` → `Schutz wiederherstellen` → `active` funktionieren.
+
+Die Device-Matrix führt diese Fälle als `LIFE-12` bis `LIFE-14` sowie die bestehenden Process-Loss-Szenarien.
+
+## 13. Diagnose-Evidence
+
+Der native JSON-Snapshot und der Debug-Screen müssen gemeinsam sichtbar machen:
+
+```text
+lastProtectionStartRequestAt
+lastProtectionStartAt
+lastProtectionStopAt
+lastProtectionStopCode
+lastProtectionStopMessage
+```
+
+Die Reihenfolge dieser drei Zeitgrenzen ist Teil des Prüfergebnisses.
+
+## 14. Evidence-Regel
+
+Source-Code, Source-Checker, JUnit-/Vitest-/Instrumentation-Quellcode sind **keine reale Android-Evidence**. G6/G7 dürfen erst hochgestuft werden, wenn die Checks und die beschriebenen Race-/Lifecycle-Szenarien auf dem exakten Kandidaten-Head tatsächlich ausgeführt und dokumentiert wurden.
