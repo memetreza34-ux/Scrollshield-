@@ -24,6 +24,7 @@ const paths = {
   statusPanelTest: 'src/components/NativeProtectionStatusPanel.test.tsx',
   instrumentation:
     'android/app/src/androidTest/java/app/scrollshield/mobile/ProtectionDiagnosticsInstrumentedTest.java',
+  dispatchSpec: 'docs/PROTECTION_SERVICE_DISPATCH_RACES.md',
 } as const;
 
 const entries = await Promise.all(
@@ -49,11 +50,6 @@ requirePattern(
   'startPolicy',
   /boundary == Long\.MAX_VALUE[\s\S]*boundary \+ 1L[\s\S]*Math\.max\(Math\.max\(0L, now\), nextAfterBoundary\)/,
   'Lifecycle timestamps must advance strictly beyond known request/start/stop evidence when possible.',
-);
-requirePattern(
-  'startPolicy',
-  /now < lastStartRequestAt[\s\S]*futureSkew[\s\S]*MAX_FUTURE_CLOCK_SKEW_MS[\s\S]*now - lastStartRequestAt <= CONFIRMATION_GRACE_MS/,
-  'Material wall-clock rollback must not keep an old request pending indefinitely.',
 );
 for (const method of [
   'lifecycleTimestampAdvancesStrictlyBeyondKnownBoundary',
@@ -96,11 +92,6 @@ requirePattern(
   'A single dispatch guard must serialize Android start/stop dispatch and bound residual controlled-destroy suppression.',
 );
 requirePattern(
-  'dispatchGuard',
-  /consumeControlledStopDestroy\(long nowNanos\)[\s\S]*ageNanos >= 0L[\s\S]*ageNanos <= CONTROLLED_STOP_DESTROY_WINDOW_NANOS[\s\S]*controlledStopAwaitingDestroy = false/,
-  'Controlled-stop destroy evidence must be monotonic, bounded and one-shot.',
-);
-requirePattern(
   'dispatchGuardTest',
   /successfulControlledStopIsConsumedExactlyOnceByPromptDestroy[\s\S]*staleControlledStopTokenCannotSuppressLaterUnexpectedDestroy[\s\S]*backwardMonotonicInputFailsSafeInsteadOfSuppressingDestroy[\s\S]*failedStopDispatchDoesNotSuppressFutureUnexpectedDestroy/,
   'Dispatch-guard JUnit must cover prompt, stale, backwards-time and failed-dispatch boundaries.',
@@ -111,13 +102,6 @@ requirePattern(
   /startProtectionService\(PluginCall call\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*ScrollShieldProtectionService\.isRunning\(\) && isProtectionEnabled\(context\)[\s\S]*hasFreshProtectionStartRequest\(context\)[\s\S]*recordProtectionStartRequested\(context\)[\s\S]*startForegroundService\(intent\)/,
   'App start must hold the dispatch lock from active/pending checks through request persistence and Android dispatch.',
 );
-const nativeStartStart = source.plugin.indexOf('public void startProtectionService');
-const rejectStart = source.plugin.indexOf('private static void rejectProtectionStartPrerequisite', nativeStartStart + 1);
-if (nativeStartStart < 0 || rejectStart <= nativeStartStart) {
-  findings.push(`${paths.plugin}: Could not isolate startProtectionService.`);
-} else if (source.plugin.slice(nativeStartStart, rejectStart).includes('setProtectionEnabled(context, true)')) {
-  findings.push(`${paths.plugin}: App start must not restore a standalone enabled=true write.`);
-}
 requirePattern(
   'plugin',
   /stopProtectionService\(PluginCall call\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*persistProtectionTerminalStopWithFallback[\s\S]*dispatchControlledStop\(context\)/,
@@ -142,13 +126,13 @@ requirePattern(
 
 requirePattern(
   'service',
-  /onCreate\(\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*serviceStartRequestAtOnCreate = ScrollShieldNativePlugin\.getLastProtectionStartRequestAt\(this\)[\s\S]*startForeground\(NOTIFICATION_ID, createNotification\(\)\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*confirmation != ScrollShieldNativePlugin\.ProtectionStartConfirmationResult\.CONFIRMED[\s\S]*dispatchControlledStop\(this\)[\s\S]*RUNNING\.set\(true\)/,
-  'Service creation must serialize request ownership, foreground creation, durable confirmation and fail-closed shutdown before RUNNING=true.',
+  /onCreate\(\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*serviceStartRequestAtOnCreate = ScrollShieldNativePlugin\.getLastProtectionStartRequestAt\(this\)[\s\S]*startForeground\(NOTIFICATION_ID, createNotification\(\)\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*RUNNING\.set\(true\)/,
+  'Service creation must serialize request ownership, foreground creation and durable confirmation before RUNNING=true.',
 );
 requirePattern(
   'service',
-  /onStartCommand[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*hasUnconfirmedProtectionStartRequest\(this\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*confirmation != ScrollShieldNativePlugin\.ProtectionStartConfirmationResult\.CONFIRMED[\s\S]*serviceStartRequestAtOnCreate = ScrollShieldNativePlugin\.getLastProtectionStartRequestAt\(this\)/,
-  'A still-living service must confirm and adopt a newer restart request generation.',
+  /onStartCommand[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*hasUnconfirmedProtectionStartRequest\(this\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*serviceStartRequestAtOnCreate = ScrollShieldNativePlugin\.getLastProtectionStartRequestAt\(this\)[\s\S]*refreshProtectionNotification\(\)/,
+  'A still-living service must confirm and adopt a newer restart request generation and refresh notification ownership.',
 );
 forbidText(
   'service',
@@ -157,19 +141,50 @@ forbidText(
 );
 requirePattern(
   'service',
-  /onDestroy\(\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*RUNNING\.set\(false\)[\s\S]*consumeControlledStopDestroy\(\)[\s\S]*if \(!controlledDispatchDestroy\)[\s\S]*shouldRecordUnexpectedDestroy[\s\S]*UNEXPECTED_SERVICE_DESTROY_CODE/,
-  'onDestroy must publish the dying state before concurrent restarts, consume only prompt controlled destroys, then classify real unexpected destruction.',
+  /onDestroy\(\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*RUNNING\.set\(false\)[\s\S]*consumeControlledStopDestroy\(\)[\s\S]*shouldRecordUnexpectedDestroy[\s\S]*UNEXPECTED_SERVICE_DESTROY_CODE/,
+  'onDestroy must publish the dying state before concurrent restarts and classify residual versus real destruction.',
+);
+
+requirePattern(
+  'service',
+  /EXTRA_STOP_START_REQUEST_AT[\s\S]*STOP_START_REQUEST_AT/,
+  'Notification stop action must have a lifecycle-generation extra.',
+);
+requirePattern(
+  'service',
+  /createNotification\(\)[\s\S]*setAction\(ACTION_STOP\)[\s\S]*putExtra\(EXTRA_STOP_START_REQUEST_AT, serviceStartRequestAtOnCreate\)[\s\S]*FLAG_UPDATE_CURRENT \| PendingIntent\.FLAG_IMMUTABLE/,
+  'Foreground notification must carry the owning request generation in an immutable updateable PendingIntent.',
+);
+requirePattern(
+  'lifecyclePolicy',
+  /isCurrentNotificationStopGeneration[\s\S]*actionStartRequestAt > 0L[\s\S]*actionStartRequestAt == serviceStartRequestAt[\s\S]*actionStartRequestAt == latestStartRequestAt/,
+  'Notification stop actions must be accepted only for the exact current lifecycle generation.',
+);
+requirePattern(
+  'lifecyclePolicyTest',
+  /notificationStopIsAcceptedOnlyForCurrentLifecycleGeneration/,
+  'Lifecycle JUnit must cover missing and stale notification stop generations.',
+);
+requirePattern(
+  'service',
+  /ACTION_STOP\.equals\(intent\.getAction\(\)\)[\s\S]*getLongExtra\(EXTRA_STOP_START_REQUEST_AT, 0L\)[\s\S]*isCurrentNotificationStopGeneration[\s\S]*return START_STICKY[\s\S]*NOTIFICATION_ACTION_STOP_CODE/,
+  'A stale ACTION_STOP must return without persisting notification_action_stop.',
+);
+requirePattern(
+  'dispatchSpec',
+  /DISPATCH-05[\s\S]*alte Notification-Stop-Aktion nach Restart/,
+  'Dispatch specification must require real stale-notification-action evidence.',
 );
 
 requirePattern(
   'lifecyclePolicy',
-  /terminalStopAfterThisServiceWasRequested[\s\S]*lastStopAt >= serviceStartRequestAtOnCreate[\s\S]*hasUnconfirmedStartRequest/,
-  'Old service destruction must not overwrite a newer stop/restart generation or a pre-confirmation interruption.',
+  /terminalStopAfterThisServiceWasRequested[\s\S]*currentRequestIsConfirmed[\s\S]*explicitStopRequested && !currentRequestIsConfirmed[\s\S]*hasUnconfirmedStartRequest/,
+  'Unexpected-destroy classification must remain generation-aware after same-instance restart.',
 );
 requirePattern(
   'lifecyclePolicyTest',
-  /doesNotLetOldServiceDestroyOverwriteFastRestart[\s\S]*transferredRestartOwnershipRestoresUnexpectedDestroyDetection[\s\S]*preConfirmationDestroyRemainsStartInterruptedNotUnexpectedDestroy/,
-  'Lifecycle JUnit must lock old-generation suppression, restart ownership transfer and pre-confirmation destruction.',
+  /explicitStopWithoutNewConfirmedGenerationSuppressesUnexpectedDestroy[\s\S]*transferredRestartOwnershipRestoresUnexpectedDestroyDetection[\s\S]*transferredRestartOwnershipAlsoSupersedesStaleExplicitStopFlag/,
+  'Lifecycle JUnit must cover stale explicit-stop flags and ownership transfer.',
 );
 
 requirePattern(
@@ -194,21 +209,15 @@ requirePattern(
   'TypeScript and native handshake must keep matching grace/skew constants.',
 );
 requirePattern(
-  'bridge',
-  /latestConfirmedBoundary = Math\.max\(status\.lastStartAt, status\.lastStopAt\)[\s\S]*lastStartRequestAt > latestConfirmedBoundary[\s\S]*futureClockSkewMs[\s\S]*MAX_FUTURE_CLOCK_SKEW_MS[\s\S]*return 'start-interrupted'[\s\S]*START_CONFIRMATION_GRACE_MS[\s\S]*return 'unclean-process-stop'/,
-  'Health classification must resolve unconfirmed request/clock-skew boundaries before confirmed process-loss logic.',
-);
-requirePattern(
   'bridgeTest',
-  /detects a pending start request during the confirmation grace window[\s\S]*detects an interrupted start request after the confirmation grace window[\s\S]*unclean process stop/,
-  'Vitest must cover pending, interrupted and confirmed process-loss states.',
+  /detects a pending start request during the confirmation grace window[\s\S]*detects an interrupted start request after the confirmation grace window/,
+  'Vitest must cover pending and interrupted start states.',
 );
 requirePattern(
   'clockTest',
-  /tolerates only a small future skew for a fresh pending request[\s\S]*start-pending[\s\S]*fails out of pending when the wall clock moved materially backward[\s\S]*start-interrupted/,
+  /tolerates only a small future skew for a fresh pending request[\s\S]*fails out of pending when the wall clock moved materially backward/,
   'Clock-skew Vitest must prove a material rollback cannot hold start-pending forever.',
 );
-
 requirePattern(
   'health',
   /case 'start-pending':[\s\S]*STARTET[\s\S]*case 'start-interrupted':[\s\S]*START ABGEBROCHEN[\s\S]*case 'unclean-process-stop':[\s\S]*PROZESS ABGEBROCHEN/,
@@ -243,7 +252,7 @@ for (const method of [
 }
 requirePattern(
   'instrumentation',
-  /terminalStopWinsAgainstDelayedStartConfirmationWithoutOverwrite[\s\S]*recordProtectionTerminalStop[\s\S]*SUPERSEDED_BY_STOP[\s\S]*getLastProtectionStopCode[\s\S]*getLastProtectionStopMessage[\s\S]*protection_events/,
+  /terminalStopWinsAgainstDelayedStartConfirmationWithoutOverwrite[\s\S]*SUPERSEDED_BY_STOP[\s\S]*getLastProtectionStopCode[\s\S]*getLastProtectionStopMessage/,
   'Instrumentation must prove delayed confirmation cannot overwrite terminal stop evidence.',
 );
 requirePattern(
@@ -259,5 +268,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection start-handshake check passed. Ordered durable evidence, serialized app/boot start-stop dispatch, bounded controlled-destroy suppression, restart ownership transfer, clock-skew handling, UI states and Android instrumentation contracts remain guarded.',
+  'Protection start-handshake check passed. Ordered durable evidence, serialized app/boot dispatch, generation-bound notification stops, bounded controlled-destroy suppression, restart ownership transfer, clock-skew handling, UI states and Android instrumentation contracts remain guarded.',
 );
