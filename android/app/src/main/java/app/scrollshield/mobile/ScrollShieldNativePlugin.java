@@ -224,6 +224,16 @@ public class ScrollShieldNativePlugin extends Plugin {
                 return;
             }
             if (hasFreshProtectionStartRequest(context)) {
+                if (!hasFreshProtectionStartRequestForCurrentConfig(context)) {
+                    persistProtectionSystemStopWithFallback(
+                        context,
+                        ProtectionStopReasonPolicy.START_FAILED,
+                        "Eine laufende Startanforderung gehört zu einer älteren Schutzkonfiguration"
+                    );
+                    ProtectionServiceDispatchGuard.dispatchControlledStop(context);
+                    call.reject("Pending protection start belongs to a stale config generation");
+                    return;
+                }
                 call.resolve();
                 return;
             }
@@ -281,8 +291,6 @@ public class ScrollShieldNativePlugin extends Plugin {
         synchronized (EVENT_LOCK) {
             boolean persisted = recordProtectionSystemStop(context, reasonCode, description);
             if (!persisted) {
-                // Best-effort fallback after an atomic commit failure. Keep protection fail-closed and
-                // retain the exact stable stop code even if the warning event cannot be committed.
                 setProtectionEnabled(context, false);
                 recordProtectionStop(context, reasonCode, description);
             }
@@ -297,8 +305,6 @@ public class ScrollShieldNativePlugin extends Plugin {
         synchronized (EVENT_LOCK) {
             boolean persisted = recordProtectionTerminalStop(context, reasonCode, description);
             if (!persisted) {
-                // Best-effort fallback after an atomic commit failure. Explicit/manual terminal stops
-                // intentionally do not append warning/system events.
                 setProtectionEnabled(context, false);
                 recordProtectionStop(context, reasonCode, description);
             }
@@ -399,9 +405,6 @@ public class ScrollShieldNativePlugin extends Plugin {
                     return;
                 }
             }
-
-            // The tombstone survives any final service onDestroy usage flush. NativeDrainBatchStore
-            // clears it together with any such late writes before a future drain can expose data.
             ProtectionServiceDispatchGuard.dispatchControlledStop(context);
         }
         JSObject result = new JSObject();
@@ -409,12 +412,7 @@ public class ScrollShieldNativePlugin extends Plugin {
         call.resolve(result);
     }
 
-    public static void appendProtectionEvent(
-        Context context,
-        String type,
-        String appId,
-        String description
-    ) {
+    public static void appendProtectionEvent(Context context, String type, String appId, String description) {
         synchronized (EVENT_LOCK) {
             SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
             JSONArray events;
@@ -428,21 +426,15 @@ public class ScrollShieldNativePlugin extends Plugin {
             JSONObject event = new JSONObject();
             try {
                 boolean systemWarning = "warning".equals(type) && "system".equals(appId);
-                long timestamp = systemWarning
-                    ? nextLifecycleTimestamp(preferences)
-                    : System.currentTimeMillis();
+                long timestamp = systemWarning ? nextLifecycleTimestamp(preferences) : System.currentTimeMillis();
                 event.put("timestamp", timestamp);
                 event.put("type", type);
                 event.put("appId", appId);
                 event.put("desc", description);
                 events.put(event);
-                while (events.length() > MAX_QUEUED_EVENTS) {
-                    events.remove(0);
-                }
+                while (events.length() > MAX_QUEUED_EVENTS) events.remove(0);
 
-                SharedPreferences.Editor editor = preferences
-                    .edit()
-                    .putString(EVENT_QUEUE_KEY, events.toString());
+                SharedPreferences.Editor editor = preferences.edit().putString(EVENT_QUEUE_KEY, events.toString());
                 if (systemWarning) {
                     editor
                         .putLong(LAST_STOP_AT_KEY, timestamp)
@@ -465,16 +457,7 @@ public class ScrollShieldNativePlugin extends Plugin {
         }
     }
 
-    /**
-     * Atomically records a controlled protection system stop. The enabled flag, terminal
-     * diagnostics, and user-visible system warning are committed together so process death cannot
-     * leave activation, event, and exact stop evidence out of sync.
-     */
-    public static boolean recordProtectionSystemStop(
-        Context context,
-        String reasonCode,
-        String description
-    ) {
+    public static boolean recordProtectionSystemStop(Context context, String reasonCode, String description) {
         synchronized (EVENT_LOCK) {
             SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
             JSONArray events;
@@ -491,20 +474,14 @@ public class ScrollShieldNativePlugin extends Plugin {
                     reasonCode,
                     ProtectionStopReasonPolicy.SYSTEM_WARNING
                 );
-                String normalizedMessage = ProtectionDiagnosticPolicy.normalizeMessage(
-                    description,
-                    "Systemwarnung"
-                );
-
+                String normalizedMessage = ProtectionDiagnosticPolicy.normalizeMessage(description, "Systemwarnung");
                 JSONObject event = new JSONObject();
                 event.put("timestamp", timestamp);
                 event.put("type", "warning");
                 event.put("appId", "system");
                 event.put("desc", normalizedMessage);
                 events.put(event);
-                while (events.length() > MAX_QUEUED_EVENTS) {
-                    events.remove(0);
-                }
+                while (events.length() > MAX_QUEUED_EVENTS) events.remove(0);
 
                 return preferences
                     .edit()
@@ -521,16 +498,7 @@ public class ScrollShieldNativePlugin extends Plugin {
         }
     }
 
-    /**
-     * Atomically records an explicit terminal stop without adding a warning event. This is used for
-     * deliberate app/notification stops and other caller-supplied terminal reasons where the stop
-     * itself is expected rather than a system failure.
-     */
-    public static boolean recordProtectionTerminalStop(
-        Context context,
-        String reasonCode,
-        String description
-    ) {
+    public static boolean recordProtectionTerminalStop(Context context, String reasonCode, String description) {
         synchronized (EVENT_LOCK) {
             SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
             long timestamp = nextLifecycleTimestamp(preferences);
@@ -542,7 +510,6 @@ public class ScrollShieldNativePlugin extends Plugin {
                 description,
                 "Der Android-Schutz wurde gestoppt"
             );
-
             return preferences
                 .edit()
                 .putBoolean(SERVICE_ENABLED_KEY, false)
@@ -553,35 +520,18 @@ public class ScrollShieldNativePlugin extends Plugin {
         }
     }
 
-    /**
-     * Compatibility alias for existing prerequisite callers and tests. New generic system-stop
-     * callers should use recordProtectionSystemStop(...).
-     */
-    public static boolean recordProtectionPrerequisiteStop(
-        Context context,
-        String reasonCode,
-        String description
-    ) {
+    public static boolean recordProtectionPrerequisiteStop(Context context, String reasonCode, String description) {
         return recordProtectionSystemStop(context, reasonCode, description);
     }
 
     public static boolean hasUsageAccess(Context context) {
         AppOpsManager appOps = (AppOpsManager) context.getSystemService(Context.APP_OPS_SERVICE);
         if (appOps == null) return false;
-
         int mode;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            mode = appOps.unsafeCheckOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                context.getPackageName()
-            );
+            mode = appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.getPackageName());
         } else {
-            mode = appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                context.getPackageName()
-            );
+            mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.getPackageName());
         }
         return mode == AppOpsManager.MODE_ALLOWED;
     }
@@ -591,15 +541,12 @@ public class ScrollShieldNativePlugin extends Plugin {
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null || !manager.areNotificationsEnabled()) return false;
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true;
-
         NotificationChannel channel = manager.getNotificationChannel(PROTECTION_CHANNEL_ID);
         return channel == null || channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
     }
 
     public static boolean isProtectionEnabled(Context context) {
-        return context
-            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-            .getBoolean(SERVICE_ENABLED_KEY, false);
+        return context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE).getBoolean(SERVICE_ENABLED_KEY, false);
     }
 
     public static boolean hasFreshProtectionStartRequest(Context context) {
@@ -615,6 +562,20 @@ public class ScrollShieldNativePlugin extends Plugin {
         }
     }
 
+    public static boolean hasFreshProtectionStartRequestForCurrentConfig(Context context) {
+        synchronized (EVENT_LOCK) {
+            SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+            return ProtectionConfigDurabilityStore.isCurrentRequestGeneration(preferences)
+                && ProtectionStartHandshakePolicy.hasFreshPendingStartRequest(
+                    preferences.getBoolean(SERVICE_ENABLED_KEY, false),
+                    preferences.getLong(LAST_START_REQUEST_AT_KEY, 0L),
+                    preferences.getLong(LAST_START_AT_KEY, 0L),
+                    preferences.getLong(LAST_STOP_AT_KEY, 0L),
+                    System.currentTimeMillis()
+                );
+        }
+    }
+
     public static boolean hasUnconfirmedProtectionStartRequest(Context context) {
         synchronized (EVENT_LOCK) {
             SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
@@ -627,19 +588,11 @@ public class ScrollShieldNativePlugin extends Plugin {
         }
     }
 
-    /**
-     * Boot/app-update compatibility path. Existing valid persisted configs receive a generation
-     * before a recovery request is recorded; missing/invalid configs fail closed.
-     */
     public static boolean recordProtectionStartRequested(Context context) {
         String generation = ProtectionConfigDurabilityStore.ensureGenerationForExistingConfig(context);
         return recordProtectionStartRequested(context, generation);
     }
 
-    /**
-     * Persists activation intent, ordered request timestamp, and the exact durable config generation
-     * in one commit. A stale generation can never create a new activation request.
-     */
     public static boolean recordProtectionStartRequested(Context context, String expectedConfigGeneration) {
         synchronized (EVENT_LOCK) {
             SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
@@ -648,7 +601,6 @@ public class ScrollShieldNativePlugin extends Plugin {
                 preferences.getString(ProtectionConfigDurabilityStore.CONFIG_GENERATION_KEY, "")
             );
             if (expected.isEmpty() || !expected.equals(current)) return false;
-
             long requestAt = nextLifecycleTimestamp(preferences);
             return preferences
                 .edit()
@@ -664,31 +616,22 @@ public class ScrollShieldNativePlugin extends Plugin {
             SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
             boolean wasEnabled = preferences.getBoolean(SERVICE_ENABLED_KEY, false);
             SharedPreferences.Editor editor = preferences.edit().putBoolean(SERVICE_ENABLED_KEY, enabled);
-
             if (!enabled && wasEnabled) {
                 editor
                     .putLong(LAST_STOP_AT_KEY, nextLifecycleTimestamp(preferences))
                     .putString(LAST_STOP_CODE_KEY, "protection_disabled")
-                    .putString(
-                        LAST_STOP_MESSAGE_KEY,
-                        "Der Android-Schutz wurde über App, Benachrichtigung oder System deaktiviert"
-                    );
+                    .putString(LAST_STOP_MESSAGE_KEY, "Der Android-Schutz wurde über App, Benachrichtigung oder System deaktiviert");
             }
             editor.commit();
         }
     }
 
-    /**
-     * Confirms that the foreground service reached a current, still-enabled activation. A terminal
-     * stop or config generation change that won first is never overwritten by delayed confirmation.
-     */
     public static ProtectionStartConfirmationResult recordProtectionServiceStarted(Context context) {
         synchronized (EVENT_LOCK) {
             SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
             boolean enabled = preferences.getBoolean(SERVICE_ENABLED_KEY, false);
             long requestAt = preferences.getLong(LAST_START_REQUEST_AT_KEY, 0L);
             long stopAt = preferences.getLong(LAST_STOP_AT_KEY, 0L);
-
             if (ProtectionStartHandshakePolicy.isConfirmationSuperseded(enabled, requestAt, stopAt)) {
                 return ProtectionStartConfirmationResult.SUPERSEDED_BY_STOP;
             }
@@ -708,11 +651,7 @@ public class ScrollShieldNativePlugin extends Plugin {
                 );
                 return ProtectionStartConfirmationResult.FAILED_CLOSED;
             }
-
-            boolean persisted = preferences
-                .edit()
-                .putLong(LAST_START_AT_KEY, nextLifecycleTimestamp(preferences))
-                .commit();
+            boolean persisted = preferences.edit().putLong(LAST_START_AT_KEY, nextLifecycleTimestamp(preferences)).commit();
             if (!persisted) {
                 persistProtectionSystemStopWithFallback(
                     context,
@@ -728,53 +667,36 @@ public class ScrollShieldNativePlugin extends Plugin {
     public static void recordProtectionStop(Context context, String code, String message) {
         synchronized (EVENT_LOCK) {
             SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
-            preferences
-                .edit()
+            preferences.edit()
                 .putLong(LAST_STOP_AT_KEY, nextLifecycleTimestamp(preferences))
-                .putString(
-                    LAST_STOP_CODE_KEY,
-                    ProtectionDiagnosticPolicy.normalizeCode(code, "unknown_stop")
-                )
-                .putString(
-                    LAST_STOP_MESSAGE_KEY,
-                    ProtectionDiagnosticPolicy.normalizeMessage(message, "Unbekannter Stoppgrund")
-                )
+                .putString(LAST_STOP_CODE_KEY, ProtectionDiagnosticPolicy.normalizeCode(code, "unknown_stop"))
+                .putString(LAST_STOP_MESSAGE_KEY, ProtectionDiagnosticPolicy.normalizeMessage(message, "Unbekannter Stoppgrund"))
                 .commit();
         }
     }
 
     public static long getLastProtectionStartRequestAt(Context context) {
-        return context
-            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-            .getLong(LAST_START_REQUEST_AT_KEY, 0L);
+        return context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE).getLong(LAST_START_REQUEST_AT_KEY, 0L);
     }
 
     public static long getLastProtectionStartAt(Context context) {
-        return context
-            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-            .getLong(LAST_START_AT_KEY, 0L);
+        return context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE).getLong(LAST_START_AT_KEY, 0L);
     }
 
     public static long getLastProtectionStopAt(Context context) {
-        return context
-            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-            .getLong(LAST_STOP_AT_KEY, 0L);
+        return context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE).getLong(LAST_STOP_AT_KEY, 0L);
     }
 
     public static String getLastProtectionStopCode(Context context) {
         return ProtectionDiagnosticPolicy.normalizeCode(
-            context
-                .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-                .getString(LAST_STOP_CODE_KEY, ""),
+            context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE).getString(LAST_STOP_CODE_KEY, ""),
             ""
         );
     }
 
     public static String getLastProtectionStopMessage(Context context) {
         return ProtectionDiagnosticPolicy.normalizeMessage(
-            context
-                .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-                .getString(LAST_STOP_MESSAGE_KEY, ""),
+            context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE).getString(LAST_STOP_MESSAGE_KEY, ""),
             ""
         );
     }
@@ -786,12 +708,10 @@ public class ScrollShieldNativePlugin extends Plugin {
             JSONObject root = new JSONObject(configJson == null ? "{}" : configJson);
             JSONArray apps = root.optJSONArray("apps");
             if (apps == null) return false;
-
             for (int index = 0; index < apps.length(); index++) {
                 JSONObject app = apps.optJSONObject(index);
                 if (app == null || !app.optBoolean("active", false)) continue;
-                JSONArray packages = app.optJSONArray("packages");
-                if (hasInstalledPackage(context, packages)) return true;
+                if (hasInstalledPackage(context, app.optJSONArray("packages"))) return true;
             }
             return false;
         } catch (JSONException error) {
@@ -814,19 +734,15 @@ public class ScrollShieldNativePlugin extends Plugin {
             JSONObject root = new JSONObject(configJson);
             JSONArray apps = root.optJSONArray("apps");
             if (apps == null) return unavailable;
-
             for (int index = 0; index < apps.length(); index++) {
                 JSONObject app = apps.optJSONObject(index);
                 if (app == null) continue;
                 if (activeOnly && !app.optBoolean("active", false)) continue;
-                JSONArray packages = app.optJSONArray("packages");
-                if (!hasInstalledPackage(context, packages)) {
+                if (!hasInstalledPackage(context, app.optJSONArray("packages"))) {
                     unavailable.put(app.optString("id", "unknown"));
                 }
             }
-        } catch (JSONException ignored) {
-            // Native durability validation rejects malformed configurations before synchronization resolves.
-        }
+        } catch (JSONException ignored) {}
         return unavailable;
     }
 
@@ -843,9 +759,7 @@ public class ScrollShieldNativePlugin extends Plugin {
                     packageManager.getPackageInfo(packageName, 0);
                 }
                 return true;
-            } catch (PackageManager.NameNotFoundException | SecurityException ignored) {
-                // Try the next known regional package.
-            }
+            } catch (PackageManager.NameNotFoundException | SecurityException ignored) {}
         }
         return false;
     }
