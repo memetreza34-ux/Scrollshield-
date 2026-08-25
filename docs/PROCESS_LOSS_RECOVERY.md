@@ -2,26 +2,93 @@
 
 Status: **Source-Vertrag vorhanden, reale Android-Evidence offen**
 
-Letzte Aktualisierung: **23. August 2026**
+Letzte Aktualisierung: **25. August 2026**
 
 ## Ziel
 
-Ein harter Android-Prozessabbruch darf nicht wie ein normaler manueller oder permission-bedingter Stopp behandelt werden. ScrollShield muss erkennen, wenn der Schutzdienst zuletzt erfolgreich gestartet wurde, danach aber kein sauberer terminaler Stop persistiert wurde und der Prozess nicht mehr läuft.
+Ein harter Android-Prozessabbruch darf nicht wie ein normaler manueller oder permission-bedingter Stopp behandelt werden. Zusätzlich darf ein Prozessabbruch **vor** einem bestätigten Foreground-Service-Start nicht wie ein späterer Kill eines bereits laufenden Schutzdienstes aussehen.
 
-## Erkennung
+ScrollShield trennt deshalb:
 
-Der Health-State `unclean-process-stop` gilt genau dann, wenn:
+1. persistierte Startanforderung;
+2. bestätigten Foreground-Service-Start;
+3. späteren terminalen Stopp.
+
+Detaillierter Startvertrag: `docs/PROTECTION_START_HANDSHAKE.md`.
+
+## Persistente Start-Evidence
+
+Der Native-Layer führt getrennt:
+
+```text
+lastStartRequestAt
+lastStartAt
+lastStopAt
+```
+
+`lastStartRequestAt` bedeutet nur: Aktivierungsabsicht + Startanforderung wurden dauerhaft gespeichert.
+
+`lastStartAt` bedeutet stärker: `startForeground(...)` war erfolgreich und die bestätigte Start-Evidence wurde danach ebenfalls dauerhaft gespeichert.
+
+Ein Request darf daher nie als tatsächlicher Dienststart interpretiert werden.
+
+## Drei relevante Nicht-Laufend-Zustände
+
+### 1. `start-pending`
+
+Gilt bei:
+
+```text
+running == false
+enabled == true
+lastStartRequestAt > max(lastStartAt, lastStopAt)
+Alter der Anfrage <= 15 Sekunden
+```
+
+Die Startanforderung ist frisch und darf noch auf Androids Foreground-Bestätigung warten.
+
+UI:
+
+- Badge `STARTET`;
+- kein alter Stop-Grund als aktuelle Ursache;
+- Doppelstart in der Statuskarte blockiert;
+- Aktion zeigt `Start wird bestätigt…`.
+
+### 2. `start-interrupted`
+
+Gilt bei:
+
+```text
+running == false
+enabled == true
+lastStartRequestAt > max(lastStartAt, lastStopAt)
+Alter der Anfrage > 15 Sekunden
+```
+
+Die neueste Startanforderung wurde nicht durch einen bestätigten `lastStartAt` abgeschlossen. Der Prozess kann zwischen Startanforderung und Foreground-Bestätigung beendet worden sein.
+
+UI:
+
+- Badge `START ABGEBROCHEN`;
+- kein älterer Stop-Grund als aktuelle Ursache;
+- normaler Retry `Schutz erneut starten`;
+- **keine** Process-Loss-Recovery.
+
+### 3. `unclean-process-stop`
+
+Der Health-State `unclean-process-stop` gilt nur bei bestätigtem früheren Dienststart:
 
 ```text
 running == false
 enabled == true
 lastStartAt > 0
 lastStartAt > lastStopAt
+lastStartRequestAt <= lastStartAt
 ```
 
-Damit ist ein bestätigter Dienststart neuer als jede bekannte Stop-Evidence. Ein älterer Stop-Code darf in diesem Zustand nicht als aktuelle Ursache dargestellt werden.
+Damit ist ein **bestätigter** Dienststart neuer als jede bekannte Stop-Evidence. Ein älterer Stop-Code darf in diesem Zustand nicht als aktuelle Ursache dargestellt werden.
 
-## Nutzerführung
+## Nutzerführung für bestätigten Process-Loss
 
 Für `unclean-process-stop` zeigt ScrollShield:
 
@@ -30,6 +97,8 @@ Für `unclean-process-stop` zeigt ScrollShield:
 - keine alte Stop-Evidence als aktuelle Ursache;
 - Aktion `Schutz wiederherstellen` statt generischem `Schutzdienst starten`;
 - Busy-Zustand `Wiederherstellung läuft…`.
+
+Diese Recovery-Aktion ist bewusst nur für einen vorher **bestätigten** Dienststart vorgesehen.
 
 ## Kontrollierte Recovery
 
@@ -44,13 +113,40 @@ Für `unclean-process-stop` zeigt ScrollShield:
 7. nur wenn mindestens ein aktives Ziel verfügbar bleibt, den nativen Service-Start ausführen;
 8. den Native-Status danach erneut lesen und zurückgeben.
 
+`start-pending` und `start-interrupted` dürfen nicht in diese Recovery-Funktion umgeleitet werden.
+
 Der Permissions-Screen prüft zusätzlich vor dem Recovery-Aufruf die aktuell sichtbaren Pflichtzugriffe und mindestens eine aktive App-Auswahl.
+
+## Persistenter Start-Handshake
+
+Vor der eigentlichen Service-Anforderung gilt:
+
+```text
+recordProtectionStartRequested(...)
+→ enabled=true + lastStartRequestAt in einem Commit
+→ startForegroundService/startService
+```
+
+Schlägt dieser Request-Commit fehl, wird mit `START_FAILED` fail-closed gestoppt und Android erhält keinen Service-Startauftrag.
+
+Im Service gilt danach:
+
+```text
+startForeground(...)
+→ recordProtectionServiceStarted(...)
+→ lastStartAt dauerhaft gespeichert
+→ RUNNING=true
+```
+
+Kann `lastStartAt` nicht dauerhaft gespeichert werden, persistiert der Native-Layer `START_FAILED` und wirft eine Exception, bevor `RUNNING=true` erreicht wird.
+
+Damit bleibt ein abgebrochener Start vor der Bestätigung eindeutig von einem späteren Kill eines bestätigten Dienstes unterscheidbar.
 
 ## Atomarer Native-Start-Preflight
 
 Der Capacitor-Plugin-Pfad `ScrollShieldNativePlugin.startProtectionService()` ist selbst eine Sicherheitsgrenze. React-Vorprüfungen dienen nur der Nutzerführung und dürfen nicht die letzte Wahrheit sein.
 
-Für diese vier nativen Startvoraussetzungen gilt jetzt derselbe stabile Vertrag:
+Für diese vier nativen Startvoraussetzungen gilt derselbe stabile Vertrag:
 
 ```text
 usage_access_missing
@@ -61,7 +157,7 @@ target_app_missing
 
 Fehlt eine davon, ruft `startProtectionService()` `rejectProtectionStartPrerequisite(...)` auf. Dieser Helper:
 
-1. ruft zuerst `recordProtectionPrerequisiteStop(context, reasonCode, description)` auf;
+1. ruft den zentralen System-Stop-Wrapper auf;
 2. persistiert im Primärpfad unter `EVENT_LOCK` in **einem** synchronen Commit:
    - `enabled=false`;
    - `warning/system` in der Event-Queue;
@@ -71,7 +167,7 @@ Fehlt eine davon, ruft `startProtectionService()` `rejectProtectionStartPrerequi
 3. verwendet nur bei `commit=false` den Best-Effort-Fallback aus `setProtectionEnabled(false)` + `recordProtectionStop(...)`;
 4. lehnt **erst danach** den Capacitor-Aufruf über `call.reject(...)` ab.
 
-Damit kann ein fehlgeschlagener Native-Start nicht mehr lediglich einen JavaScript-Fehler werfen, während eine frühere `enabled=true`-Aktivierung und ein alter Stop-Grund stehen bleiben.
+Damit kann ein fehlgeschlagener Native-Start nicht lediglich einen JavaScript-Fehler werfen, während eine frühere Aktivierung und ein alter Stop-Grund stehen bleiben.
 
 Der gleiche Persistenzvertrag gilt auch beim normalen First Start, wenn `enabled` vor dem Versuch bereits `false` war. Ein fehlgeschlagener Start erhält trotzdem einen neuen terminalen Stop-Zeitpunkt, exakten Code und Warn-Event.
 
@@ -118,11 +214,13 @@ Wenn der Recovery-Aufruf einen Fehler wirft, liest der Screen erneut parallel:
 
 Dadurch wird ein Permission-Race nicht auf eine generische Fehlermeldung reduziert. Ein inzwischen entzogener Zugriff wird konkret benannt und der sichtbare Permission-State wird aktualisiert.
 
-Durch den atomaren Native-Start-Preflight liegt in diesem Race jetzt zusätzlich ein frischer persistierter Stop-Code vor, sofern der Plugin-Preflight den Verlust erkennt.
+Durch den atomaren Native-Start-Preflight liegt in diesem Race zusätzlich ein frischer persistierter Stop-Code vor, sofern der Plugin-Preflight den Verlust erkennt.
 
 ### 3. Native-Start wurde angenommen, Service stoppt sofort wieder
 
 Falls `recoverAfterProcessLoss(...)` einen neuen Native-Status zurückliefert, der nicht `active` ist, wird dessen frischer `lastStopCode` ausgewertet. Ein stabiler Prerequisite-Code wird sofort auf den zugehörigen Zugriff gemappt und als Recovery-Blocker angezeigt.
+
+Ein frischer `start-pending`-Status ist dagegen noch keine terminale Stoppdiagnose. Er bedeutet nur, dass Androids bestätigte Start-Evidence noch fehlt.
 
 Damit deckt der Source-Vertrag auch das Fenster ab, in dem die Plugin-Vorprüfung erfolgreich war, der gestartete Service die Berechtigung aber unmittelbar danach als verloren erkennt.
 
@@ -161,13 +259,27 @@ enabled == true
 health == active
 ```
 
-Andernfalls wird entweder ein konkreter Prerequisite-/Ziel-App-Blocker oder nur ein nicht bestätigter Recovery-Status angezeigt.
+Andernfalls wird entweder ein konkreter Prerequisite-/Ziel-App-Blocker oder ein noch nicht bestätigter Recovery-Status angezeigt.
 
 ## Source-Verifikation
 
-`npm run check:process-loss` schützt:
+`npm run check:start-handshake` schützt:
 
-- die Zeitstempel-Klassifizierung;
+- `lastStartRequestAt` als eigene persistente Evidence;
+- atomaren Request-Commit aus `enabled=true + timestamp`;
+- Request vor `startForegroundService(...)`;
+- das Verbot des alten nackten `setProtectionEnabled(context, true)` im Startpfad;
+- bestätigte `lastStartAt`-Evidence erst hinter `startForeground(...)`;
+- Fail-closed `START_FAILED`, wenn bestätigte Start-Evidence nicht persistiert werden kann;
+- `RUNNING=true` erst hinter bestätigter Start-Evidence;
+- `start-pending` / `start-interrupted` / `unclean-process-stop` als getrennte Zustände;
+- 15-Sekunden-Grace-Window;
+- UI-Doppelstartschutz und normalen Retry nach unterbrochenem Start;
+- zugehörige Vitest-/Instrumentation-Source-Verträge.
+
+`npm run check:process-loss` schützt weiterhin:
+
+- bestätigte Process-Loss-Klassifizierung;
 - den eigenen Health-State;
 - die eigene Recovery-UI;
 - `recoverAfterProcessLoss(...)`;
@@ -189,20 +301,25 @@ Andernfalls wird entweder ein konkreter Prerequisite-/Ziel-App-Blocker oder nur 
 
 `npm run check:prerequisite-stop-codes` schützt zusätzlich:
 
-- die atomare `recordProtectionPrerequisiteStop(...)`-Transaktion;
+- die atomare System-Stop-Transaktion;
 - die Service-Runtime-Verdrahtung;
 - die vier atomaren Native-Start-Preflight-Codes;
 - den `rejectProtectionStartPrerequisite(...)`-Fallback;
-- das Verbot der alten nackten Prerequisite-`call.reject()`-Pfade;
+- das Verbot alter nackter Prerequisite-`call.reject()`-Pfade;
 - den Instrumentation-Vertrag für bereits deaktivierte First-Start-Fehler.
 
-Beide Checker sind Bestandteil von `npm run verify` und des Readiness-Reports.
+Diese Checker sind Bestandteil von `npm run verify`; `check:start-handshake` und die zentralen Lifecycle-/Recovery-Checks laufen ebenfalls im Readiness-Report.
 
 ## Noch nicht bewiesen
 
 Dieser Source-Vertrag ersetzt keine reale Android-Evidence. Weiter offen:
 
-- echten Prozess nach bestätigtem Dienststart hart beenden;
+- Prozess gezielt **nach** persistiertem `lastStartRequestAt`, aber **vor** bestätigtem `lastStartAt` beenden;
+- innerhalb der Grace-Phase `start-pending` beobachten;
+- nach Ablauf der Grace-Phase `start-interrupted` beobachten;
+- bestätigen, dass dieser Fall **nicht** als `unclean-process-stop` erscheint;
+- `Schutz erneut starten` ausführen und `active` bestätigen;
+- separaten Prozess **nach bestätigtem Dienststart** hart beenden;
 - sicherstellen, dass `onDestroy()` dabei nicht als Voraussetzung für die Erkennung benötigt wird;
 - App erneut öffnen und `unclean-process-stop` beobachten;
 - `Schutz wiederherstellen` ausführen;
