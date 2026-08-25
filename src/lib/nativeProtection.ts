@@ -51,13 +51,17 @@ export interface NativeProtectionStopReason {
 }
 
 interface NativeProtectionPlugin {
-  syncProtectionConfig(options: { configJson: string }): Promise<{ unavailableAppIdsJson: string }>;
-  startProtectionService(): Promise<void>;
+  syncProtectionConfig(options: {
+    configJson: string;
+  }): Promise<{ unavailableAppIdsJson: string; configGeneration: string }>;
+  startProtectionService(options: { expectedConfigGeneration: string }): Promise<void>;
   stopProtectionService(options: { reasonCode: string; reasonMessage: string }): Promise<void>;
   getProtectionServiceStatus(): Promise<{
     running: boolean;
     enabled: boolean;
     unavailableAppIdsJson: string;
+    configGeneration: string;
+    startRequestConfigGeneration: string;
     lastStartRequestAt: number;
     lastStartAt: number;
     lastStopAt: number;
@@ -98,6 +102,11 @@ interface NativeProtectionConfig {
       requireReason: boolean;
     };
   }>;
+}
+
+interface DurableConfigSyncResult {
+  unavailableAppIds: string[];
+  configGeneration: string;
 }
 
 const AndroidProtection = registerPlugin<NativeProtectionPlugin>('ScrollShieldNative');
@@ -162,6 +171,7 @@ const EMPTY_STATUS: NativeProtectionStatus = {
 const EVENT_TYPES = new Set<NativeProtectionEvent['type']>(['open', 'block', 'warning', 'emergency']);
 const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const NATIVE_BATCH_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CONFIG_GENERATION_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const isNativeProtectionEvent = (value: unknown): value is NativeProtectionEvent => {
   if (!value || typeof value !== 'object') return false;
@@ -221,6 +231,12 @@ const normalizeNativeBatchId = (value: unknown): string => {
   if (typeof value !== 'string') return '';
   const normalized = value.trim();
   return NATIVE_BATCH_ID_PATTERN.test(normalized) ? normalized.toLowerCase() : '';
+};
+
+const normalizeConfigGeneration = (value: unknown): string => {
+  if (typeof value !== 'string') return '';
+  const normalized = value.trim();
+  return CONFIG_GENERATION_PATTERN.test(normalized) ? normalized.toLowerCase() : '';
 };
 
 export const assessNativeProtectionHealth = (
@@ -295,6 +311,23 @@ const buildConfig = (appsConfig: Record<string, AppConfig>, focusMode: boolean):
 const getActiveAndroidAppIds = (appsConfig: Record<string, AppConfig>, focusMode: boolean): string[] =>
   buildConfig(appsConfig, focusMode).apps.filter((app) => app.active).map((app) => app.id);
 
+const syncCommittedConfig = async (
+  appsConfig: Record<string, AppConfig>,
+  focusMode: boolean,
+): Promise<DurableConfigSyncResult> => {
+  const result = await AndroidProtection.syncProtectionConfig({
+    configJson: JSON.stringify(buildConfig(appsConfig, focusMode)),
+  });
+  const configGeneration = normalizeConfigGeneration(result.configGeneration);
+  if (!configGeneration) {
+    throw new Error('Android did not confirm a durable protection config generation');
+  }
+  return {
+    unavailableAppIds: parseStringArray(result.unavailableAppIdsJson),
+    configGeneration,
+  };
+};
+
 export const NativeProtection = {
   isAvailable(): boolean {
     return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
@@ -302,16 +335,15 @@ export const NativeProtection = {
 
   async sync(appsConfig: Record<string, AppConfig>, focusMode: boolean): Promise<string[]> {
     if (!this.isAvailable()) return [];
-    const result = await AndroidProtection.syncProtectionConfig({
-      configJson: JSON.stringify(buildConfig(appsConfig, focusMode)),
-    });
-    return parseStringArray(result.unavailableAppIdsJson);
+    return (await syncCommittedConfig(appsConfig, focusMode)).unavailableAppIds;
   },
 
   async start(appsConfig: Record<string, AppConfig>, focusMode: boolean): Promise<void> {
     if (!this.isAvailable()) return;
-    await this.sync(appsConfig, focusMode);
-    await AndroidProtection.startProtectionService();
+    const synced = await syncCommittedConfig(appsConfig, focusMode);
+    await AndroidProtection.startProtectionService({
+      expectedConfigGeneration: synced.configGeneration,
+    });
   },
 
   async recoverAfterProcessLoss(
@@ -327,17 +359,19 @@ export const NativeProtection = {
     }
 
     const activeAndroidAppIds = getActiveAndroidAppIds(appsConfig, focusMode);
-    const unavailableAppIds = await this.sync(appsConfig, focusMode);
+    const synced = await syncCommittedConfig(appsConfig, focusMode);
     const noInstalledActiveTarget =
       activeAndroidAppIds.length === 0 ||
-      activeAndroidAppIds.every((appId) => unavailableAppIds.includes(appId));
+      activeAndroidAppIds.every((appId) => synced.unavailableAppIds.includes(appId));
 
     if (noInstalledActiveTarget) {
       await this.stop(TARGET_APP_MISSING_STOP_REASON);
       return this.getStatus();
     }
 
-    await AndroidProtection.startProtectionService();
+    await AndroidProtection.startProtectionService({
+      expectedConfigGeneration: synced.configGeneration,
+    });
     return this.getStatus();
   },
 
