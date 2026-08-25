@@ -19,6 +19,8 @@ import org.junit.runner.RunWith;
 
 @RunWith(AndroidJUnit4.class)
 public class ProtectionDiagnosticsInstrumentedTest {
+    private static final String EMPTY_VALID_CONFIG = "{\"focusMode\":false,\"apps\":[]}";
+
     private Context context;
     private SharedPreferences preferences;
 
@@ -38,17 +40,24 @@ public class ProtectionDiagnosticsInstrumentedTest {
     }
 
     @Test
-    public void startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence() {
+    public void startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence() throws Exception {
         assertFalse(ScrollShieldNativePlugin.isProtectionEnabled(context));
         assertEquals(0L, ScrollShieldNativePlugin.getLastProtectionStartRequestAt(context));
         assertEquals(0L, ScrollShieldNativePlugin.getLastProtectionStartAt(context));
 
+        String configGeneration = prepareDurableConfig();
         long beforeRequest = System.currentTimeMillis();
-        assertTrue(ScrollShieldNativePlugin.recordProtectionStartRequested(context));
+        assertTrue(
+            ScrollShieldNativePlugin.recordProtectionStartRequested(context, configGeneration)
+        );
 
         long requestAt = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(context);
         assertTrue(ScrollShieldNativePlugin.isProtectionEnabled(context));
         assertTrue(requestAt >= beforeRequest);
+        assertEquals(
+            configGeneration,
+            ProtectionConfigDurabilityStore.getStartRequestGeneration(preferences)
+        );
         assertEquals(0L, ScrollShieldNativePlugin.getLastProtectionStartAt(context));
 
         assertEquals(
@@ -67,7 +76,10 @@ public class ProtectionDiagnosticsInstrumentedTest {
             "instagram",
             "Existing history before start stop race"
         );
-        assertTrue(ScrollShieldNativePlugin.recordProtectionStartRequested(context));
+        String configGeneration = prepareDurableConfig();
+        assertTrue(
+            ScrollShieldNativePlugin.recordProtectionStartRequested(context, configGeneration)
+        );
         long requestAt = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(context);
         String message = "Manual stop won before service confirmation";
 
@@ -100,8 +112,11 @@ public class ProtectionDiagnosticsInstrumentedTest {
     }
 
     @Test
-    public void restartRequestAdvancesBeyondLatestStopBoundary() {
-        assertTrue(ScrollShieldNativePlugin.recordProtectionStartRequested(context));
+    public void restartRequestAdvancesBeyondLatestStopBoundary() throws Exception {
+        String firstGeneration = prepareDurableConfig();
+        assertTrue(
+            ScrollShieldNativePlugin.recordProtectionStartRequested(context, firstGeneration)
+        );
         long firstRequestAt = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(context);
         assertTrue(
             ScrollShieldNativePlugin.recordProtectionTerminalStop(
@@ -113,10 +128,17 @@ public class ProtectionDiagnosticsInstrumentedTest {
         long stopAt = ScrollShieldNativePlugin.getLastProtectionStopAt(context);
         assertTrue(stopAt > firstRequestAt);
 
-        assertTrue(ScrollShieldNativePlugin.recordProtectionStartRequested(context));
+        String restartGeneration = prepareDurableConfig();
+        assertTrue(
+            ScrollShieldNativePlugin.recordProtectionStartRequested(context, restartGeneration)
+        );
         long restartRequestAt = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(context);
         assertTrue(restartRequestAt > stopAt);
         assertTrue(ScrollShieldNativePlugin.hasFreshProtectionStartRequest(context));
+        assertEquals(
+            restartGeneration,
+            ProtectionConfigDurabilityStore.getStartRequestGeneration(preferences)
+        );
 
         assertEquals(
             ScrollShieldNativePlugin.ProtectionStartConfirmationResult.CONFIRMED,
@@ -341,6 +363,18 @@ public class ProtectionDiagnosticsInstrumentedTest {
         );
         assertEquals("Bestehender terminaler Stopp", ScrollShieldNativePlugin.getLastProtectionStopMessage(context));
         assertEquals(stopAt, ScrollShieldNativePlugin.getLastProtectionStopAt(context));
+    }
+
+    private String prepareDurableConfig() throws Exception {
+        ProtectionConfigDurabilityStore.CommitResult result = ProtectionConfigDurabilityStore.commitConfig(
+            context,
+            EMPTY_VALID_CONFIG,
+            "[]",
+            "[]"
+        );
+        assertTrue(result.persisted);
+        assertFalse(result.generation.isEmpty());
+        return result.generation;
     }
 
     private void assertAtomicTerminalStopWithoutEvent(
