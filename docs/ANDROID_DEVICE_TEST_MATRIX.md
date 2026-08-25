@@ -29,7 +29,7 @@ Capture the following before each scenario:
 - Installation source: debug APK, internal testing, closed testing, or release candidate
 - Clean install or upgrade path
 - Copied Android diagnostic JSON
-- Screen recording for permission, overlay, notification, migration, lifecycle, recovery, commitment, and adaptive-friction scenarios
+- Screen recording for permission, overlay, notification, migration, lifecycle, recovery, commitment, adaptive-friction, and lifecycle-race scenarios
 - Relevant `adb logcat` excerpt for failures
 - Result: `PASS`, `FAIL`, or `BLOCKED`
 - Defect or GitHub issue reference for every failure
@@ -126,10 +126,13 @@ Do not reuse evidence from a different build number.
 | LIFE-05 | Manufacturer battery saver | Failures are recorded by manufacturer and mitigation copy remains honest. |
 | LIFE-06 | Extreme battery saver / restricted background mode | App reports degraded or stopped protection instead of showing a false active state. |
 | LIFE-07 | Twelve-hour active run | No runaway battery use, repeated overlays, duplicated notifications, or unbounded event growth. |
-| LIFE-08 | Protection lifecycle reason persistence | Trigger a manual app stop, migration-recovery stop, factory-reset stop, notification loss, Usage Access loss, Overlay loss, final-target removal, final-rule removal, notification-action stop, unexpected service destruction, and failed boot/app-update recovery. After each case and after reopening ScrollShield, `lastProtectionStartAt`, `lastProtectionStopAt`, `lastProtectionStopCode`, and `lastProtectionStopMessage` remain accurate and visible in both the debug report and copied JSON. |
-| LIFE-09 | Stored activation without running service | Create or reproduce `enabled=true` with `running=false`. The Permissions screen must show `NEUSTART NÖTIG`, must display the exact last stop code and message when present, must offer `Schutzdienst starten`, and must never label the service `AKTIV`. A running service with `enabled=false` must be labeled `INKONSISTENT` and offer a stop action outside Commitment. |
-| LIFE-10 | Notification action and unexpected service destroy | Stop protection with the persistent notification action and verify `lastProtectionStopCode=notification_action_stop`, activation clears, overlay disappears, and reopening the app shows a deliberate stop. Separately terminate the service through a path that invokes `onDestroy()` while protection is still enabled and no controlled stop was requested; verify activation clears, a local system warning is queued, and `lastProtectionStopCode=unexpected_service_destroy`. Controlled app, migration, permission, target, rule, and factory-reset shutdowns must retain their original codes and must never be overwritten by `unexpected_service_destroy`. |
+| LIFE-08 | Protection lifecycle reason persistence | Trigger a manual app stop, migration-recovery stop, factory-reset stop, notification loss, Usage Access loss, Overlay loss, final-target removal, final-rule removal, notification-action stop, unexpected service destruction, and failed boot/app-update recovery. After each case and after reopening ScrollShield, `lastProtectionStartRequestAt`, `lastProtectionStartAt`, `lastProtectionStopAt`, `lastProtectionStopCode`, and `lastProtectionStopMessage` remain accurate and visible in both the debug report and copied JSON. |
+| LIFE-09 | Stored activation without running service | Create or reproduce `enabled=true` with `running=false`. A fresh unconfirmed request must first show `STARTET`; after the 15-second confirmation window it must show `START ABGEBROCHEN` and offer `Schutz erneut starten`. A confirmed start that later disappears without terminal stop must instead show `PROZESS ABGEBROCHEN` and `Schutz wiederherstellen`. A running service with `enabled=false` must be labeled `INKONSISTENT`. |
+| LIFE-10 | Notification action and unexpected service destroy | Stop protection with the persistent notification action and verify `lastProtectionStopCode=notification_action_stop`, activation clears, overlay disappears, and reopening the app shows a deliberate stop. Separately terminate the service through a path that invokes `onDestroy()` while the current confirmed activation is still enabled and no controlled stop was requested; verify activation clears, a local system warning is queued, and `lastProtectionStopCode=unexpected_service_destroy`. Controlled app, migration, permission, target, rule, factory-reset, pending-start, and stale-service shutdowns must retain their original/current generation and must never be overwritten by `unexpected_service_destroy`. |
 | LIFE-11 | Emergency unlock friction and reason privacy | With a strict protected app and emergency access enabled, verify `requireCountdown=true` enforces the additional strict countdown before unlock; `requireReason=true` keeps the emergency action disabled for empty or two-character input and permits it only after a normalized reason of at least three characters. Verify the reason is bounded to 160 characters, appears only in the local emergency history event, and is not transmitted to a developer server. With `requireCountdown=false`, only the configured normal opening delay applies rather than a forced 30-second emergency delay. With `requireReason=false`, a reason is not required. The configured daily emergency maximum must still be enforced exactly, and returning home must always remain available instead of forcing an unlock. |
+| LIFE-12 | Terminal stop wins before delayed start confirmation | Start protection and pause execution after `lastProtectionStartRequestAt` is persisted but before the foreground start is confirmed. Trigger a manual or notification terminal stop first, then allow the delayed service creation/confirmation to continue. `enabled` must remain false, `lastProtectionStartAt` must not advance for the stopped generation, the exact terminal stop code/message and event queue must remain unchanged, and no `start_failed` or `unexpected_service_destroy` may overwrite the winning stop. |
+| LIFE-13 | Duplicate start while confirmation is pending | Issue a second start action while the first request is still inside the 15-second `start-pending` window. The native request generation must not be refreshed, only one logical start remains pending, no duplicate foreground notification/service instance is created, and the UI keeps `Start wird bestätigt…` disabled until native truth changes. |
+| LIFE-14 | Immediate stop then restart before old service teardown | With a confirmed running service, issue a controlled app stop and immediately start protection again before the old instance has completed `onDestroy()`. The new `lastProtectionStartRequestAt` must be strictly greater than the stop timestamp, the new generation must reach a confirmed `lastProtectionStartAt`, and the old instance's later teardown must not write `unexpected_service_destroy`, clear the new activation, remove the new stop/start diagnosis, or leave the final service state falsely stopped. |
 
 ## Time and Calendar Boundaries
 
@@ -138,7 +141,7 @@ Do not reuse evidence from a different build number.
 | TIME-01 | Local midnight crossing | Daily usage, opens, and emergency counters move to the correct date. |
 | TIME-02 | Time-zone change | Schedules and daily statistics use the new local zone without corrupting historical dates. |
 | TIME-03 | Daylight-saving transition | Repeated or skipped clock time does not crash the service or duplicate counters. |
-| TIME-04 | Manual clock change forward and backward | No negative usage is stored; temporary access and countdown behavior remain bounded. |
+| TIME-04 | Manual clock change forward and backward | No negative usage is stored; temporary access and countdown behavior remain bounded. Lifecycle request/start/stop ordering must remain logically monotonic even when the wall clock moves backward. |
 | TIME-05 | Weekend transition | Friday-to-Saturday and Sunday-to-Monday precedence is correct. |
 
 ## UI, Accessibility, and Large Screens
@@ -168,12 +171,15 @@ Every copied diagnostic JSON must contain at least:
 - battery optimization exemption
 - persisted protection activation and live service state
 - whether an installed configured target is available
+- `lastProtectionStartRequestAt`
 - `lastProtectionStartAt`
 - `lastProtectionStopAt`
 - `lastProtectionStopCode`
 - `lastProtectionStopMessage`
 
 The in-app Permissions status panel must derive its label from both persisted activation and live service state. It must not collapse `enabled` and `running` into one boolean.
+
+Lifecycle-race evidence must capture diagnostic JSON before and after each boundary. The ordered relation between `lastProtectionStartRequestAt`, `lastProtectionStartAt`, and `lastProtectionStopAt` is part of acceptance, not just the visible button label.
 
 Commitment evidence must show the exact native `running` and `enabled` state immediately before activation, the installed-target result, the persisted deadline, the blocked in-app stop action, recovery start availability, and the dashboard response if native protection later stops.
 
@@ -201,13 +207,14 @@ The Android release candidate remains blocked until:
 3. Manufacturer-specific failures have either a verified fix or explicit release exclusion.
 4. Battery behavior has been measured on physical devices.
 5. Installed V0.7 upgrade, direct former-backup import, write-failure retention, pending recovery, and export/import archive round trip have passed.
-6. Lifecycle stop codes and timestamps persist correctly for manual, migration, factory-reset, notification-action, unexpected-destroy, permission, configuration, and recovery failures.
-7. Controlled shutdown paths retain their specific reason instead of being overwritten by `unexpected_service_destroy`.
-8. The Permissions screen correctly distinguishes active, deliberately stopped, stale-activation, and running-without-activation states.
-9. Emergency unlock countdown/reason friction and the daily maximum pass `LIFE-11` on the exact candidate without network transmission of the local reason.
-10. `UI-06` proves the block overlay remains scrollable and both safe-return and emergency actions stay reachable with maximum font scaling and the software keyboard visible.
-11. The copied diagnostic JSON matches the installed version and build under test.
-12. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, and `assembleDebug`.
-13. Play reviewer videos demonstrate the same tested build.
-14. `COMMIT-01` through `COMMIT-06` pass on the exact candidate, including refusal before live protection is ready, blocked in-app stop, restart recovery, explicit factory-reset shutdown, and honest dashboard recovery after a later native-service failure.
-15. `ADAPT-01` through `ADAPT-05` pass on the exact candidate, including deterministic 5-second escalation, the 60-second cap, strict Anti-Binge precedence, non-counting safety paths, unchanged emergency timing, and local-midnight behavior.
+6. Lifecycle request/start/stop timestamps and stop codes persist correctly for manual, migration, factory-reset, notification-action, unexpected-destroy, permission, configuration, recovery, delayed-confirmation, and immediate-restart cases.
+7. Controlled shutdown paths, terminal stop winners, and newer restart generations retain their specific evidence instead of being overwritten by delayed start confirmation or `unexpected_service_destroy`.
+8. The Permissions screen correctly distinguishes `start-pending`, `start-interrupted`, `unclean-process-stop`, active, deliberately stopped, stale-activation, and running-without-activation states.
+9. `LIFE-12` through `LIFE-14` pass on the exact candidate, including strict request/stop/restart ordering and old-service teardown isolation.
+10. Emergency unlock countdown/reason friction and the daily maximum pass `LIFE-11` on the exact candidate without network transmission of the local reason.
+11. `UI-06` proves the block overlay remains scrollable and both safe-return and emergency actions stay reachable with maximum font scaling and the software keyboard visible.
+12. The copied diagnostic JSON matches the installed version and build under test.
+13. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, instrumentation, and `assembleDebug`.
+14. Play reviewer videos demonstrate the same tested build.
+15. `COMMIT-01` through `COMMIT-06` pass on the exact candidate, including refusal before live protection is ready, blocked in-app stop, restart recovery, explicit factory-reset shutdown, and honest dashboard recovery after a later native-service failure.
+16. `ADAPT-01` through `ADAPT-05` pass on the exact candidate, including deterministic 5-second escalation, the 60-second cap, strict Anti-Binge precedence, non-counting safety paths, unchanged emergency timing, and local-midnight behavior.
