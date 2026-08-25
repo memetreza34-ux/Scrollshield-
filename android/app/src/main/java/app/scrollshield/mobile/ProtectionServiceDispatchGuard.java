@@ -12,36 +12,52 @@ import android.content.Intent;
  */
 final class ProtectionServiceDispatchGuard {
     static final Object LOCK = new Object();
+    static final long CONTROLLED_STOP_DESTROY_WINDOW_NANOS = 30_000_000_000L;
 
     private static boolean controlledStopAwaitingDestroy;
+    private static long controlledStopDispatchedAtNanos;
 
     private ProtectionServiceDispatchGuard() {}
 
     /**
      * Requests a real Android service stop while the caller holds LOCK. A successful stop request is
-     * remembered until onDestroy consumes it, so a fast stop -> restart cannot make the residual
-     * destroy from the older stop look like a new unexpected_service_destroy.
+     * remembered briefly until onDestroy consumes it, so a fast stop -> restart cannot make the
+     * residual destroy from the older stop look like a new unexpected_service_destroy.
      */
     static boolean dispatchControlledStop(Context context) {
         synchronized (LOCK) {
             boolean requested = context.stopService(
                 new Intent(context, ScrollShieldProtectionService.class)
             );
-            noteControlledStopDispatched(requested);
+            noteControlledStopDispatched(requested, System.nanoTime());
             return requested;
         }
     }
 
     static void noteControlledStopDispatched(boolean requested) {
+        noteControlledStopDispatched(requested, System.nanoTime());
+    }
+
+    static void noteControlledStopDispatched(boolean requested, long nowNanos) {
         synchronized (LOCK) {
-            if (requested) controlledStopAwaitingDestroy = true;
+            if (!requested) return;
+            controlledStopAwaitingDestroy = true;
+            controlledStopDispatchedAtNanos = nowNanos;
         }
     }
 
     static boolean consumeControlledStopDestroy() {
+        return consumeControlledStopDestroy(System.nanoTime());
+    }
+
+    static boolean consumeControlledStopDestroy(long nowNanos) {
         synchronized (LOCK) {
-            boolean controlled = controlledStopAwaitingDestroy;
+            if (!controlledStopAwaitingDestroy) return false;
+
+            long ageNanos = nowNanos - controlledStopDispatchedAtNanos;
+            boolean controlled = ageNanos >= 0L && ageNanos <= CONTROLLED_STOP_DESTROY_WINDOW_NANOS;
             controlledStopAwaitingDestroy = false;
+            controlledStopDispatchedAtNanos = 0L;
             return controlled;
         }
     }
@@ -55,6 +71,7 @@ final class ProtectionServiceDispatchGuard {
     static void resetForTest() {
         synchronized (LOCK) {
             controlledStopAwaitingDestroy = false;
+            controlledStopDispatchedAtNanos = 0L;
         }
     }
 }
