@@ -30,6 +30,8 @@ verspäteter stopService() aus S1
 
 In beiden Fällen wäre die Reihenfolge der Android-Service-Aufrufe nicht mehr dieselbe wie die dauerhaft gespeicherte Lifecycle-Reihenfolge.
 
+Zusätzlich kann eine bereits erzeugte Notification-Aktion aus einer älteren Generation verspätet zugestellt werden. Ohne Generation-Bindung könnte ein alter `ACTION_STOP` nach einem erfolgreichen Restart die neue Aktivierung stoppen.
+
 ## 2. Gemeinsame Dispatch-Sperre
 
 Alle produktiven Schutz-Service-Starts und kontrollierten Service-Stopps verwenden:
@@ -103,7 +105,43 @@ Dazu gehören mindestens:
 
 Der exakte Stop-Code wird weiterhin vor dem Android-Stop-Dispatch dauerhaft gespeichert.
 
-## 6. Residualer onDestroy nach kontrolliertem Stop
+## 6. Notification-Stop ist an die Lifecycle-Generation gebunden
+
+Die permanente Foreground-Notification trägt in ihrem Stop-`PendingIntent`:
+
+```text
+EXTRA_STOP_START_REQUEST_AT = serviceStartRequestAtOnCreate
+```
+
+Ein `ACTION_STOP` darf nur akzeptiert werden, wenn:
+
+```text
+actionStartRequestAt > 0
+UND
+actionStartRequestAt == serviceStartRequestAtOnCreate
+UND
+actionStartRequestAt == latestStartRequestAt
+```
+
+Diese Entscheidung liegt in:
+
+```text
+ProtectionServiceLifecyclePolicy.isCurrentNotificationStopGeneration(...)
+```
+
+Fehlt die Generation oder stammt die Aktion aus einer älteren Generation, gilt:
+
+```text
+stale ACTION_STOP
+→ kein Stop-Code
+→ keine Stop-Nachricht
+→ kein stopService()
+→ aktuelle Aktivierung bleibt bestehen
+```
+
+Nach erfolgreichem Same-Instance-Restart übernimmt die Instanz zuerst die neue Request-Generation und aktualisiert danach die Foreground-Notification. `FLAG_UPDATE_CURRENT` sorgt dafür, dass der aktuell sichtbare Stop-`PendingIntent` die neue Generation trägt. Eine bereits zuvor zugestellte alte Aktion bleibt durch die Policy trotzdem stale und wird ignoriert.
+
+## 7. Residualer onDestroy nach kontrolliertem Stop
 
 `Context.stopService(...)` kann erfolgreich angefordert werden, während fast unmittelbar danach schon eine neue Startgeneration entsteht.
 
@@ -115,7 +153,7 @@ Der spätere `onDestroy()` der alten Stop-Anforderung darf dann **nicht**:
 
 Dafür hält `ProtectionServiceDispatchGuard` process-lokal einen one-shot controlled-stop-Token.
 
-## 7. Token ist bewusst begrenzt
+## 8. Token ist bewusst begrenzt
 
 Der Token verwendet `System.nanoTime()` und gilt höchstens:
 
@@ -133,7 +171,7 @@ Danach wird der Token verworfen und darf einen späteren echten unerwarteten Des
 
 Der Token wird bei Konsum immer gelöscht. Ein fehlgeschlagener `stopService()`-Aufruf erzeugt keinen Token.
 
-## 8. RUNNING-Grenze beim Destroy
+## 9. RUNNING-Grenze beim Destroy
 
 `ScrollShieldProtectionService.onDestroy()` muss unter der Dispatch-Sperre zuerst:
 
@@ -145,17 +183,17 @@ veröffentlichen.
 
 Erst danach darf ein konkurrierender neuer Start ausgewertet werden. Dadurch kann ein Restart nicht fälschlich als bereits `running && enabled` wegoptimiert werden, obwohl die alte Instanz gerade stirbt.
 
-## 9. Restart auf derselben Service-Instanz
+## 10. Restart auf derselben Service-Instanz
 
 Android kann einen neuen Start an eine noch existierende Instanz über `onStartCommand()` liefern.
 
 Wird dort eine neue unbestätigte Request-Generation erfolgreich bestätigt, muss diese Instanz ihre Ownership-Grenze auf den neuen `lastStartRequestAt` übernehmen.
 
-Danach gilt die Instanz als Besitzerin der neuen bestätigten Generation.
+Danach gilt die Instanz als Besitzerin der neuen bestätigten Generation und aktualisiert die Foreground-Notification auf dieselbe Generation.
 
 Ein altes `explicitStopRequested=true` aus einer vorherigen kontrollierten Stop-Anforderung darf einen späteren echten unerwarteten Destroy **nicht dauerhaft maskieren**, sobald die neue Generation dauerhaft bestätigt ist.
 
-## 10. Pure-Java-Testvertrag
+## 11. Pure-Java-Testvertrag
 
 `ProtectionServiceDispatchGuardTest` muss mindestens beweisen:
 
@@ -166,12 +204,15 @@ Ein altes `explicitStopRequested=true` aus einer vorherigen kontrollierten Stop-
 
 `ProtectionServiceLifecyclePolicyTest` muss mindestens beweisen:
 
+- Notification-Stop wird nur für exakt die aktuelle Lifecycle-Generation akzeptiert;
+- fehlende Generation ist ungültig;
+- alte Notification-Generation ist nach Restart ungültig;
 - alte Service-Generation überschreibt Fast-Restart nicht;
 - übertragene Restart-Ownership stellt echte Unexpected-Destroy-Erkennung wieder her;
 - ein altes Explicit-Stop-Flag wird durch eine neuere bestätigte Restart-Generation semantisch überholt;
 - Pre-Confirmation-Destroy bleibt `start-interrupted` statt `unexpected_service_destroy`.
 
-## 11. Source-Gates
+## 12. Source-Gates
 
 Pflichtchecks:
 
@@ -180,9 +221,9 @@ npm run check:start-handshake
 npm run check:lifecycle
 ```
 
-Beide Checks müssen die gemeinsame Dispatch-Sperre, den begrenzten Destroy-Token und die Restart-Ownership prüfen.
+Die Checks müssen die gemeinsame Dispatch-Sperre, den begrenzten Destroy-Token, Restart-Ownership und die Generation-Bindung der Notification-Stop-Aktion prüfen.
 
-## 12. Reale Android-Evidence
+## 13. Reale Android-Evidence
 
 Source/JUnit-Verträge sind keine Device-Evidence.
 
@@ -204,6 +245,21 @@ Provoziere Stop → sofortiger Restart → alten `onDestroy()`. Der residuale De
 
 Nach einem erfolgreichen Fast-Restart und nach Ablauf/Verbrauch des controlled-stop-Fensters einen echten unerwarteten Service-Destroy auslösen. Dieser muss wieder als `unexpected_service_destroy` bzw. bei hartem Process-Kill über die bestehende Process-Loss-Evidence sichtbar werden; der alte Stop-Token darf ihn nicht maskieren.
 
-## 13. Gate-Regel
+### DISPATCH-05 — alte Notification-Stop-Aktion nach Restart
+
+Erzeuge eine Stop-Aktion aus Generation `R1`, führe anschließend Stop → Restart auf `R2` aus und liefere danach die alte Aktion `R1` aus bzw. provoziere die entsprechende queued-PendingIntent-Situation. Erwartung:
+
+```text
+R1 ACTION_STOP
+R2 aktuelle Generation
+→ R1 wird ignoriert
+→ enabled bleibt true
+→ lastStartRequestAt/lastStartAt bleiben R2
+→ kein notification_action_stop
+```
+
+Danach muss die aktuell sichtbare Notification-Aktion von `R2` weiterhin normal stoppen und exakt `notification_action_stop` persistieren.
+
+## 14. Gate-Regel
 
 G4/G7 bleiben `TEILWEISE`, bis JUnit/Instrumentation und diese realen Android-Races auf dem exakten Kandidaten tatsächlich ausgeführt wurden.
