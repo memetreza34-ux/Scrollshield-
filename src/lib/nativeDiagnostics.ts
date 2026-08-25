@@ -23,6 +23,8 @@ export interface NativeDiagnosticsSnapshot {
   protectionEnabled: boolean;
   serviceRunning: boolean;
   configuredInstalledApps: boolean;
+  protectionConfigGeneration: string;
+  startRequestConfigGeneration: string;
   lastProtectionStartRequestAt: number;
   lastProtectionStartAt: number;
   lastProtectionStopAt: number;
