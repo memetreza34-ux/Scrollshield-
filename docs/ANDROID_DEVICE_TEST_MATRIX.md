@@ -133,6 +133,7 @@ Do not reuse evidence from a different build number.
 | LIFE-12 | Terminal stop wins before delayed start confirmation | Start protection and pause execution after `lastProtectionStartRequestAt` is persisted but before the foreground start is confirmed. Trigger a manual or notification terminal stop first, then allow the delayed service creation/confirmation to continue. `enabled` must remain false, `lastProtectionStartAt` must not advance for the stopped generation, the exact terminal stop code/message and event queue must remain unchanged, and no `start_failed` or `unexpected_service_destroy` may overwrite the winning stop. |
 | LIFE-13 | Duplicate start while confirmation is pending | Issue a second start action while the first request is still inside the 15-second `start-pending` window. The native request generation must not be refreshed, only one logical start remains pending, no duplicate foreground notification/service instance is created, and the UI keeps `Start wird bestätigt…` disabled until native truth changes. |
 | LIFE-14 | Immediate stop then restart before old service teardown | With a confirmed running service, issue a controlled app stop and immediately start protection again before the old instance has completed `onDestroy()`. The new `lastProtectionStartRequestAt` must be strictly greater than the stop timestamp, the new generation must reach a confirmed `lastProtectionStartAt`, and the old instance's later teardown must not write `unexpected_service_destroy`, clear the new activation, remove the new stop/start diagnosis, or leave the final service state falsely stopped. |
+| LIFE-15 | Stale notification stop action after confirmed restart | Capture or queue the notification stop action while generation `R1` owns the foreground service. Perform a controlled stop and confirm a newer restart generation `R2`, then deliver/provoke the old `R1` action. The stale action must not change `enabled`, `lastProtectionStartRequestAt`, `lastProtectionStartAt`, stop code/message, or event history, and must not stop the `R2` service. Then use the currently visible `R2` notification action and verify it still stops normally with exact `lastProtectionStopCode=notification_action_stop`. |
 
 ## Time and Calendar Boundaries
 
@@ -181,6 +182,8 @@ The in-app Permissions status panel must derive its label from both persisted ac
 
 Lifecycle-race evidence must capture diagnostic JSON before and after each boundary. The ordered relation between `lastProtectionStartRequestAt`, `lastProtectionStartAt`, and `lastProtectionStopAt` is part of acceptance, not just the visible button label.
 
+For `LIFE-15`, additionally capture the generation carried by the stale action if instrumentation/debug hooks are used, plus the current `lastProtectionStartRequestAt` before and after delivery. The stale action must produce no new terminal evidence.
+
 Commitment evidence must show the exact native `running` and `enabled` state immediately before activation, the installed-target result, the persisted deadline, the blocked in-app stop action, recovery start availability, and the dashboard response if native protection later stops.
 
 Adaptive-friction evidence must show the base delay, recent successful intentional-open count, warning threshold/window, resulting effective delay, the 60-second cap, strict-threshold precedence, and that emergency timing is unchanged. The overlay/local event must expose the effective escalation without claiming AI or cloud inference.
@@ -207,10 +210,10 @@ The Android release candidate remains blocked until:
 3. Manufacturer-specific failures have either a verified fix or explicit release exclusion.
 4. Battery behavior has been measured on physical devices.
 5. Installed V0.7 upgrade, direct former-backup import, write-failure retention, pending recovery, and export/import archive round trip have passed.
-6. Lifecycle request/start/stop timestamps and stop codes persist correctly for manual, migration, factory-reset, notification-action, unexpected-destroy, permission, configuration, recovery, delayed-confirmation, and immediate-restart cases.
-7. Controlled shutdown paths, terminal stop winners, and newer restart generations retain their specific evidence instead of being overwritten by delayed start confirmation or `unexpected_service_destroy`.
+6. Lifecycle request/start/stop timestamps and stop codes persist correctly for manual, migration, factory-reset, notification-action, unexpected-destroy, permission, configuration, recovery, delayed-confirmation, immediate-restart, and stale-notification-action cases.
+7. Controlled shutdown paths, terminal stop winners, newer restart generations, and current notification-action generations retain their specific evidence instead of being overwritten by delayed start confirmation, stale actions, or `unexpected_service_destroy`.
 8. The Permissions screen correctly distinguishes `start-pending`, `start-interrupted`, `unclean-process-stop`, active, deliberately stopped, stale-activation, and running-without-activation states.
-9. `LIFE-12` through `LIFE-14` pass on the exact candidate, including strict request/stop/restart ordering and old-service teardown isolation.
+9. `LIFE-12` through `LIFE-15` pass on the exact candidate, including strict request/stop/restart ordering, old-service teardown isolation, and stale notification-action rejection.
 10. Emergency unlock countdown/reason friction and the daily maximum pass `LIFE-11` on the exact candidate without network transmission of the local reason.
 11. `UI-06` proves the block overlay remains scrollable and both safe-return and emergency actions stay reachable with maximum font scaling and the software keyboard visible.
 12. The copied diagnostic JSON matches the installed version and build under test.
