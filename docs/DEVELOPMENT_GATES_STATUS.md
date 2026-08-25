@@ -23,12 +23,12 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 | G1 | Architektur & Repo-Prozess | **FERTIG** | React/TS, lokale Daten, Capacitor/Native Android, Draft-PR-Prozess und Verantwortungsgrenzen sind dokumentiert | bei Architekturänderung erneut öffnen |
 | G2 | Datenmodell & Migration | **TEILWEISE** | starke transaktionale/V0.7-Migration im Source; reale Alt-Daten-Evidenz fehlt | echter V0.7-Upgrade-Test + bytegenauer Archivvergleich |
 | G3 | Kern-UI/UX & Accessibility | **TEILWEISE** | Release-Screens und Source-A11y-Checks existieren; reale Usability-/Large-Font-/TalkBack-Evidenz fehlt | physische Accessibility- und User-Research-Sessions |
-| G4 | Native Android Schutz | **TEILWEISE** | atomare System-/Terminal-Stopps, repo-weiter Stop-Atomicity-Guard und persistenter Start-Handshake mit getrenntem Request-/Confirmed-Start sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + reale Start-/Stop-/Process-Kill-Szenarien |
+| G4 | Native Android Schutz | **TEILWEISE** | atomare System-/Terminal-Stopps, repo-weiter Stop-Atomicity-Guard, persistenter Start-Handshake und serialisierte Start↔Stop-Race-Grenzen mit strikt geordneten Lifecycle-Zeitmarken sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + reale LIFE-12..14/Process-Kill-Szenarien |
 | G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First-Manifest, Privacy-Guard, gepinnter Gradle-SHA256 und `check:supply-chain` existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-Check + Dependency-/Manifest-Snapshot + finaler Binary-Audit + Threat-Review |
-| G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` inklusive `check:native-stop-atomicity` und `check:start-handshake` ist vorbereitet; GitHub Runner liefert weiterhin keine ausgeführten Steps | kompletter echter Verify-Lauf auf exaktem Head |
-| G7 | Android Instrumentation/E2E | **TEILWEISE** | App-/Notification-, Prerequisite-, Boot/Update-, Start-/Destroy- und Process-Loss-Verträge existieren. Der Startpfad unterscheidet jetzt `start-pending`, `start-interrupted` und bestätigten `unclean-process-stop`; echte Android-Ausführung fehlt | `connectedDebugAndroidTest` real ausführen + Prozessabbruch vor Startbestätigung getrennt von Process-Kill nach bestätigtem Start beweisen |
+| G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` inklusive `check:native-stop-atomicity`, `check:start-handshake`, `check:lifecycle` und `check:android-instrumentation` ist vorbereitet; GitHub Runner liefert weiterhin keine ausgeführten Steps | kompletter echter Verify-Lauf auf exaktem Head |
+| G7 | Android Instrumentation/E2E | **TEILWEISE** | App-/Notification-, Prerequisite-, Boot/Update-, Start-/Destroy-, Process-Loss- und Start↔Stop-Race-Verträge existieren. Stop-vs.-Delayed-Confirm, Pending-Doppelstart und Fast-Restart-vs.-altes-`onDestroy()` sind als eigene Source-/Instrumentation-/Device-Verträge definiert; echte Android-Ausführung fehlt | `connectedDebugAndroidTest` + LIFE-12..14 + Pre-/Post-Confirmation-Process-Kill real ausführen |
 | G8 | Performance & Batterie | **TEILWEISE** | Worker/Coordinator-Architektur und Shutdown-Drain im Source; reale JUnit-/Instrumentation-/Gradle-/Device-Evidenz fehlt | Worker-/Coordinator-JUnit + Usage-Flush-Instrumentation real ausführen + `assembleDebug` + 12h-Baseline |
-| G9 | Physical Device Matrix | **FEHLT** | Matrix ist definiert, aber nicht vollständig ausgeführt | Pflichtgeräte/Szenarien mit Build-ID/Evidenz vollständig dokumentieren |
+| G9 | Physical Device Matrix | **FEHLT** | Matrix inklusive LIFE-12..14 ist definiert, aber nicht vollständig ausgeführt | Pflichtgeräte/Szenarien mit Build-ID/Evidenz vollständig dokumentieren |
 | G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Evidence-Schema v2 existiert; Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Kandidaten-SHA + echte Referenzen |
 | G11 | Legal / Privacy / Support | **TEILWEISE** | Dokumente/Struktur existieren; finale reale Identität, Support-Mailbox und öffentliche Privacy-Domain fehlen | keine Platzhalter + überprüfbare öffentliche Angaben |
 | G12 | Store / Play Review | **TEILWEISE** | Submission Packet, Screenshots und Deklarationstexte vorbereitet; finaler AAB/Reviewer-Nachweis fehlt | gegen signierten AAB verifizierte Angaben + Videos |
@@ -40,41 +40,41 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 - `recordProtectionSystemStop(...)`: atomar `enabled=false + warning/system + timestamp + code + message`.
 - `recordProtectionTerminalStop(...)`: atomar `enabled=false + timestamp + code + message`, ohne Event-Queue-Änderung.
 - `persistProtectionSystemStopWithFallback(...)` und `persistProtectionTerminalStopWithFallback(...)` sind die einzigen erlaubten Atomic-First-Fallback-Wrapper.
-- Direkte `setProtectionEnabled(...false)`-/`recordProtectionStop(...)`-Kombinationen sind außerhalb dieser beiden Commit-Failure-Fallbacks produktiv nicht erlaubt.
-- `scripts/check-native-stop-atomicity.ts` scannt rekursiv alle produktiven Java-Dateien und erzwingt diesen Vertrag repo-weit.
-- Detaillierte Spezifikation: `docs/NATIVE_STOP_ATOMICITY.md`.
+- Direkte produktive Disable-/Stop-Diagnose-Kombinationen außerhalb dieser Fallbacks sind durch `check:native-stop-atomicity` verboten.
 
-## Aktueller Native-Start-Vertrag
+## Aktueller Start-/Race-Vertrag
 
-- `recordProtectionStartRequested(...)` persistiert `enabled=true` und `lastStartRequestAt` gemeinsam in einem synchronen Commit.
-- `startProtectionService(...)` darf kein separates `setProtectionEnabled(context, true)` verwenden.
-- Schlägt schon die Request-Persistenz fehl, wird mit `START_FAILED` fail-closed beendet und kein Service-Start angefordert.
-- `lastStartAt` wird ausschließlich hinter erfolgreichem `startForeground(...)` durch `recordProtectionServiceStarted(...)` geschrieben.
-- Kann die bestätigte Start-Evidence nicht dauerhaft gespeichert werden, wird `START_FAILED` persistiert und eine Exception verhindert `RUNNING=true`.
-- `start-pending`: neuer Request ist noch höchstens 15 Sekunden alt und noch nicht bestätigt.
-- `start-interrupted`: neuer Request ist älter als 15 Sekunden, neuer als bestätigter Start/Stopp und der Dienst läuft nicht.
-- `unclean-process-stop`: nur ein **bestätigter** `lastStartAt` ist neuer als der letzte Stopp und der Dienst ist später verschwunden.
-- Die Statuskarte blockiert während `start-pending` Doppelstarts, bietet bei `start-interrupted` `Schutz erneut starten` und bei bestätigtem Process-Loss weiterhin `Schutz wiederherstellen`.
-- `scripts/check-start-handshake.ts` ist Bestandteil von `npm run verify` und `npm run readiness`.
+- `ProtectionStartHandshakePolicy.nextLifecycleTimestamp(...)` ordnet Request/Confirmed-Start/Stop logisch streng hinter die jeweils höchste bekannte Lifecycle-Grenze.
+- `recordProtectionStartRequested(...)` persistiert `enabled=true + lastStartRequestAt` gemeinsam.
+- Ein frischer unbestätigter Request innerhalb von 15 Sekunden wird nativ idempotent behandelt; ein zweiter Start erzeugt keine neue Generation.
+- `recordProtectionServiceStarted(...)` liefert `CONFIRMED`, `SUPERSEDED_BY_STOP` oder `FAILED_CLOSED`.
+- Nur `CONFIRMED` darf `RUNNING=true` erreichen.
+- Persistiert ein terminaler Stop vor einer verspäteten Confirmation, gewinnt der Stop: kein neues `lastStartAt`, kein Diagnose-/Event-Overwrite.
+- Ein echter Restart nach Stop erhält `newRequestAt > lastStopAt`.
+- Eine bestehende Service-Instanz kann eine neue Restart-Generation in `onStartCommand()` bestätigen.
+- `serviceStartRequestAtOnCreate` schützt vor dem Race, dass altes `onDestroy()` nach schnellem Stop→Restart die neue Aktivierung als `unexpected_service_destroy` überschreibt.
+- Pre-Confirmation-Destroy bleibt `start-pending`/`start-interrupted`, nicht `unexpected_service_destroy`.
+- `check:start-handshake` und `check:lifecycle` erzwingen diese Grenzen source-seitig.
+- `ProtectionStartHandshakePolicyTest`, `ProtectionServiceLifecyclePolicyTest` und `ProtectionDiagnosticsInstrumentedTest` enthalten passende Testverträge.
+- Debug-Screen und JSON-Diagnose zeigen `lastProtectionStartRequestAt`, `lastProtectionStartAt` und `lastProtectionStopAt` getrennt.
 - Detaillierte Spezifikation: `docs/PROTECTION_START_HANDSHAKE.md`.
 
 ## Aktueller Arbeitsfokus
 
-1. **G6 extern entsperren:** vollständigen Verify-Lauf auf dem exakten Head ausführen.
-2. **G7 Start-Handshake real prüfen:** Prozess nach `lastStartRequestAt`, aber vor `lastStartAt` beenden → zunächst `start-pending`, nach Grace `start-interrupted`, niemals `unclean-process-stop`; danach `Schutz erneut starten` → `active`.
-3. **G7 echten Post-Start-Process-Kill real prüfen:** bestätigten `lastStartAt` erzeugen, Prozess danach hart beenden, ohne `onDestroy()` vorauszusetzen → `unclean-process-stop` → `Schutz wiederherstellen` → `active`.
-4. **G7 App-/Notification-Stopp real prüfen:** `manual_app_stop` / `notification_action_stop`, `enabled=false`, exakte Nachricht, kein neues `warning/system`-Event.
-5. **G7 technische Start-/Destroy-Fehler real prüfen:** `start_failed` bzw. `unexpected_service_destroy` mit Warn-Event und ohne Diagnose-Overwrite.
-6. **G7 Boot/App-Update, First-Start-Preflight, Permission-Loss und Target-App-Verlust real ausführen.**
-7. **G8:** Worker-/Coordinator-JUnit, Usage-Flush-Instrumentation, Build und 12h-Baseline.
-8. **G9:** Physical Device Matrix.
-9. **G2:** reale V0.7-Migration.
-10. **G5:** finaler Dependency-/SBOM-/Binary-Audit.
-11. **G0/G3:** reale User-Research-/Accessibility-Sessions.
+1. **G6 extern entsperren:** vollständigen Verify-Lauf auf exaktem Head ausführen.
+2. **G7 LIFE-12:** terminalen Stop zwischen Request und Confirmation gewinnen lassen; verspätete Confirmation darf nichts überschreiben.
+3. **G7 LIFE-13:** zweiten Start während `start-pending` auslösen; Request-Generation darf nicht erneuert werden.
+4. **G7 LIFE-14:** kontrollierter Stop → sofortiger Restart vor altem `onDestroy()`; neue Aktivierung muss bestehen bleiben.
+5. **G7 Pre-Confirmation-Abbruch:** `start-pending` → `start-interrupted` → normaler Retry → `active`.
+6. **G7 Post-Start-Process-Kill:** bestätigter `lastStartAt` → harter Kill → `unclean-process-stop` → Recovery → `active`.
+7. **G7 App-/Notification-/Start-/Destroy-/Boot-/Permission-/Target-App-Pfade real prüfen.**
+8. **G8:** Worker-/Coordinator-JUnit, Usage-Flush-Instrumentation, Build und 12h-Baseline.
+9. **G9:** vollständige Physical Device Matrix.
+10. **G2/G5/G0/G3:** Migration, Security-Audit, User Research und Accessibility-Evidence.
 
 ## Aktuelle CI-Grenze
 
-GitHub Actions ist für diesen Draft-Branch weiterhin extern blockiert bzw. liefert auf den zuletzt geprüften Heads einen `verify`-Job ohne ausgeführte Steps (`steps: null`). Die exakte aktuelle Head-SHA und der zugehörige Lauf werden im PR #8 synchronisiert.
+GitHub Actions liefert auf diesem Draft-Branch weiterhin auf den zuletzt geprüften Heads einen `verify`-Job ohne ausgeführte Steps (`steps: null`). Die exakte aktuelle Head-SHA und der zugehörige Lauf werden im PR #8 synchronisiert.
 
 Damit sind insbesondere **nicht als bestanden belegt**:
 
@@ -83,11 +83,15 @@ Damit sind insbesondere **nicht als bestanden belegt**:
 - `check:start-handshake`;
 - `check:lifecycle`;
 - `check:android-instrumentation`;
+- `ProtectionStartHandshakePolicyTest`;
+- aktualisierte `ProtectionServiceLifecyclePolicyTest`;
+- neue Start↔Stop-Race-Instrumentation;
 - Android JUnit;
 - Android Instrumentation;
 - Gradle Debug Build;
 - APK;
-- reale `start-pending`-/`start-interrupted`-/`unclean-process-stop`-Device-Evidence.
+- LIFE-12 bis LIFE-14;
+- reale `start-pending`-/`start-interrupted`-/`unclean-process-stop`-Evidence.
 
 ## Änderungsregel
 
