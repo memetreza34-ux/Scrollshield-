@@ -24,10 +24,64 @@ public class ProtectionServiceLifecyclePolicyTest {
     }
 
     @Test
-    public void recordsUnexpectedDestroyOnlyForStillEnabledProtection() {
-        assertTrue(ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(true, false));
-        assertFalse(ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(false, false));
-        assertFalse(ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(true, true));
-        assertFalse(ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(false, true));
+    public void recordsUnexpectedDestroyOnlyForCurrentConfirmedActivation() {
+        assertTrue(
+            ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(
+                true,
+                false,
+                200L,
+                200L,
+                250L,
+                100L
+            )
+        );
+        assertFalse(
+            ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(
+                false,
+                false,
+                200L,
+                200L,
+                250L,
+                100L
+            )
+        );
+        assertFalse(
+            ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(
+                true,
+                true,
+                200L,
+                200L,
+                250L,
+                100L
+            )
+        );
+    }
+
+    @Test
+    public void doesNotLetOldServiceDestroyOverwriteFastRestart() {
+        assertFalse(
+            ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(
+                true,
+                false,
+                100L,
+                300L,
+                350L,
+                200L
+            )
+        );
+    }
+
+    @Test
+    public void preConfirmationDestroyRemainsStartInterruptedNotUnexpectedDestroy() {
+        assertFalse(
+            ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(
+                true,
+                false,
+                300L,
+                300L,
+                200L,
+                100L
+            )
+        );
     }
 }
