@@ -44,15 +44,11 @@ requirePattern(
   /commitConfig[\s\S]*validateConfig\(configJson\)[\s\S]*UUID\.randomUUID\(\)\.toString\(\)[\s\S]*putString\(ScrollShieldNativePlugin\.CONFIG_KEY, configJson\)[\s\S]*putString\(UNAVAILABLE_APPS_KEY, unavailableJson\)[\s\S]*putString\(UNAVAILABLE_ACTIVE_APPS_KEY, unavailableActiveJson\)[\s\S]*putString\(CONFIG_GENERATION_KEY, generation\)[\s\S]*\.commit\(\)/,
   'Config JSON, availability metadata and generation must be one synchronous durable commit.',
 );
-forbidText(
-  'store',
-  '.apply()',
-  'Durable protection config storage must never use asynchronous SharedPreferences.apply().',
-);
+forbidText('store', '.apply()', 'Durable protection config storage must never use SharedPreferences.apply().');
 requirePattern(
   'store',
   /ensureGenerationForExistingConfig[\s\S]*validateConfig\(configJson\)[\s\S]*putString\(CONFIG_GENERATION_KEY, generation\)\.commit\(\)/,
-  'Existing persisted config may receive a recovery generation only after native validation and commit.',
+  'Existing persisted config may receive a recovery generation only after validation and commit.',
 );
 requirePattern(
   'storeTest',
@@ -74,8 +70,13 @@ if (syncStart < 0 || startStart <= syncStart) {
 }
 requirePattern(
   'plugin',
-  /startProtectionService\(PluginCall call\)[\s\S]*expectedConfigGeneration[\s\S]*matchesCurrentGeneration\(context, expectedConfigGeneration\)[\s\S]*START_FAILED[\s\S]*recordProtectionStartRequested\(context, expectedConfigGeneration\)/,
-  'App start must reject stale/missing config generations before recording activation intent.',
+  /startProtectionService\(PluginCall call\)[\s\S]*expectedConfigGeneration[\s\S]*matchesCurrentGeneration\(context, expectedConfigGeneration\)[\s\S]*hasFreshProtectionStartRequest\(context\)[\s\S]*hasFreshProtectionStartRequestForCurrentConfig\(context\)[\s\S]*START_FAILED[\s\S]*recordProtectionStartRequested\(context, expectedConfigGeneration\)/,
+  'App start must reject stale/missing current or pending config generations before activation/dispatch.',
+);
+requirePattern(
+  'plugin',
+  /hasFreshProtectionStartRequestForCurrentConfig\(Context context\)[\s\S]*isCurrentRequestGeneration\(preferences\)[\s\S]*hasFreshPendingStartRequest/,
+  'A pending start is idempotent only while its request config generation is still current.',
 );
 requirePattern(
   'plugin',
@@ -85,7 +86,7 @@ requirePattern(
 requirePattern(
   'plugin',
   /recordProtectionServiceStarted\(Context context\)[\s\S]*isCurrentRequestGeneration\(preferences\)[\s\S]*START_FAILED[\s\S]*FAILED_CLOSED[\s\S]*putLong\(LAST_START_AT_KEY/,
-  'Foreground confirmation must fail closed when config changed after the start request.',
+  'Foreground confirmation must fail closed when config changes after the start request.',
 );
 requirePattern(
   'plugin',
@@ -95,8 +96,8 @@ requirePattern(
 
 requirePattern(
   'boot',
-  /recordProtectionStartRequested\(context\)/,
-  'Boot/app-update recovery must use the durable-config bootstrap start-request path.',
+  /hasFreshProtectionStartRequest\(context\)[\s\S]*hasFreshProtectionStartRequestForCurrentConfig\(context\)[\s\S]*recovery_start_failed[\s\S]*recordProtectionStartRequested\(context\)/,
+  'Boot/app-update recovery must reject a fresh pending request whose config generation is stale.',
 );
 
 requirePattern(
@@ -107,12 +108,12 @@ requirePattern(
 requirePattern(
   'bridge',
   /async start[\s\S]*syncCommittedConfig[\s\S]*startProtectionService\(\{[\s\S]*expectedConfigGeneration: synced\.configGeneration/,
-  'Normal Android start must forward the exact generation returned by the durable sync.',
+  'Normal Android start must forward the exact generation returned by durable sync.',
 );
 requirePattern(
   'bridge',
   /recoverAfterProcessLoss[\s\S]*syncCommittedConfig[\s\S]*startProtectionService\(\{[\s\S]*expectedConfigGeneration: synced\.configGeneration/,
-  'Process-loss recovery must forward the exact generation returned by its durable sync.',
+  'Process-loss recovery must forward the exact generation returned by durable sync.',
 );
 requirePattern(
   'bridgeTest',
@@ -139,19 +140,21 @@ requirePattern(
 for (const method of [
   'durableConfigGenerationBindsStartRequestAndConfirmation',
   'staleConfigGenerationCannotCreateStartRequest',
+  'freshPendingRequestFromPreviousConfigIsNotCurrent',
   'configChangeBeforeConfirmationFailsClosedWithoutConfirmingOldRequest',
   'legacyDurableConfigReceivesGenerationBeforeBootStyleStartRequest',
 ]) {
-  requirePattern(
-    'instrumentation',
-    new RegExp(`void\\s+${method}\\s*\\(`),
-    `Android instrumentation is missing ${method}.`,
-  );
+  requirePattern('instrumentation', new RegExp(`void\\s+${method}\\s*\\(`), `Android instrumentation is missing ${method}.`);
 }
 requirePattern(
   'instrumentation',
+  /freshPendingRequestFromPreviousConfigIsNotCurrent[\s\S]*hasFreshProtectionStartRequest\(context\)[\s\S]*hasFreshProtectionStartRequestForCurrentConfig\(context\)[\s\S]*assertFalse/,
+  'Instrumentation must prove a fresh timestamp alone cannot make a stale-config request current.',
+);
+requirePattern(
+  'instrumentation',
   /configChangeBeforeConfirmationFailsClosedWithoutConfirmingOldRequest[\s\S]*FAILED_CLOSED[\s\S]*assertFalse\(ScrollShieldNativePlugin\.isProtectionEnabled[\s\S]*START_FAILED/,
-  'Instrumentation must prove a config change before confirmation ends fail-closed without confirming the old request.',
+  'Instrumentation must prove config drift before confirmation fails closed without confirming the old request.',
 );
 
 for (const id of ['APP-07', 'APP-08']) {
@@ -163,21 +166,9 @@ requirePattern(
   'Durability spec must document the commit/generation handshake and real device evidence.',
 );
 
-requirePattern(
-  'packageJson',
-  /"check:config-durability":\s*"tsx scripts\/check-protection-config-durability\.ts"/,
-  'package.json must expose check:config-durability.',
-);
-requirePattern(
-  'packageJson',
-  /"verify":[^\n]*npm run check:config-durability/,
-  'check:config-durability must be part of npm run verify.',
-);
-requirePattern(
-  'readiness',
-  /args: \['run', 'check:config-durability'\], required: true/,
-  'readiness must execute check:config-durability as required.',
-);
+requirePattern('packageJson', /"check:config-durability":\s*"tsx scripts\/check-protection-config-durability\.ts"/, 'package.json must expose check:config-durability.');
+requirePattern('packageJson', /"verify":[^\n]*npm run check:config-durability/, 'check:config-durability must be part of verify.');
+requirePattern('readiness', /args: \['run', 'check:config-durability'\], required: true/, 'readiness must require check:config-durability.');
 
 if (findings.length > 0) {
   console.log('Protection config durability check failed:\n');
@@ -186,5 +177,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection config durability check passed. Config sync is commit-based and start requests/confirmations remain bound to the exact durable config generation.',
+  'Protection config durability check passed. Config sync is commit-based; starts, pending idempotency, recovery and confirmation remain bound to the exact durable config generation.',
 );
