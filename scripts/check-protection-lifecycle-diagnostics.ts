@@ -12,6 +12,8 @@ const policyPath = `${javaRoot}/ProtectionStopReasonPolicy.java`;
 const policyTestPath = `${javaTestRoot}/ProtectionStopReasonPolicyTest.java`;
 const serviceLifecyclePolicyPath = `${javaRoot}/ProtectionServiceLifecyclePolicy.java`;
 const serviceLifecyclePolicyTestPath = `${javaTestRoot}/ProtectionServiceLifecyclePolicyTest.java`;
+const startHandshakePolicyPath = `${javaRoot}/ProtectionStartHandshakePolicy.java`;
+const startHandshakePolicyTestPath = `${javaTestRoot}/ProtectionStartHandshakePolicyTest.java`;
 const emergencyPolicyPath = `${javaRoot}/EmergencyUnlockPolicy.java`;
 const emergencyPolicyTestPath = `${javaTestRoot}/EmergencyUnlockPolicyTest.java`;
 const bridgePath = 'src/lib/nativeProtection.ts';
@@ -40,6 +42,8 @@ const [
   policyTest,
   serviceLifecyclePolicy,
   serviceLifecyclePolicyTest,
+  startHandshakePolicy,
+  startHandshakePolicyTest,
   emergencyPolicy,
   emergencyPolicyTest,
   bridge,
@@ -67,6 +71,8 @@ const [
   readFile(policyTestPath, 'utf8'),
   readFile(serviceLifecyclePolicyPath, 'utf8'),
   readFile(serviceLifecyclePolicyTestPath, 'utf8'),
+  readFile(startHandshakePolicyPath, 'utf8'),
+  readFile(startHandshakePolicyTestPath, 'utf8'),
   readFile(emergencyPolicyPath, 'utf8'),
   readFile(emergencyPolicyTestPath, 'utf8'),
   readFile(bridgePath, 'utf8'),
@@ -114,8 +120,8 @@ requirePattern(
 requirePattern(
   pluginPath,
   plugin,
-  /LAST_START_AT_KEY[\s\S]*LAST_STOP_AT_KEY[\s\S]*LAST_STOP_CODE_KEY[\s\S]*LAST_STOP_MESSAGE_KEY/,
-  'Native preferences must persist lifecycle timestamps, code, and message.',
+  /LAST_START_REQUEST_AT_KEY[\s\S]*LAST_START_AT_KEY[\s\S]*LAST_STOP_AT_KEY[\s\S]*LAST_STOP_CODE_KEY[\s\S]*LAST_STOP_MESSAGE_KEY/,
+  'Native preferences must persist request/start/stop lifecycle timestamps, code, and message.',
 );
 requirePattern(
   pluginPath,
@@ -126,21 +132,33 @@ requirePattern(
 requirePattern(
   pluginPath,
   plugin,
-  /recordProtectionServiceStarted\(Context context\)[\s\S]*LAST_START_AT_KEY[\s\S]*System\.currentTimeMillis\(\)/,
-  'The last-start timestamp must have a dedicated actual-service-start recorder.',
+  /recordProtectionServiceStarted\(Context context\)[\s\S]*ProtectionStartConfirmationResult[\s\S]*LAST_START_AT_KEY[\s\S]*nextLifecycleTimestamp\(preferences\)/,
+  'The actual-service-start recorder must return a race-aware confirmation result and persist ordered start evidence.',
 );
 const setEnabledStart = plugin.indexOf('public static void setProtectionEnabled');
-const actualStartRecorderStart = plugin.indexOf('public static void recordProtectionServiceStarted');
+const actualStartRecorderStart = plugin.indexOf('public static ProtectionStartConfirmationResult recordProtectionServiceStarted');
 if (setEnabledStart < 0 || actualStartRecorderStart <= setEnabledStart) {
   findings.push(`${pluginPath}: Could not isolate activation and actual-start persistence methods.`);
 } else if (plugin.slice(setEnabledStart, actualStartRecorderStart).includes('LAST_START_AT_KEY')) {
   findings.push(`${pluginPath}: Activation requests must not write LAST_START_AT_KEY before the foreground service actually starts.`);
 }
 requirePattern(
+  startHandshakePolicyPath,
+  startHandshakePolicy,
+  /nextLifecycleTimestamp[\s\S]*hasUnconfirmedStartRequest[\s\S]*isConfirmationSuperseded/,
+  'Start-handshake policy must keep strict lifecycle ordering and stop-wins confirmation semantics.',
+);
+requirePattern(
+  startHandshakePolicyTestPath,
+  startHandshakePolicyTest,
+  /lifecycleTimestampAdvancesStrictlyBeyondKnownBoundary[\s\S]*terminalStopSupersedesDelayedConfirmation/,
+  'Start-handshake JUnit must cover strict ordering and stop-wins confirmation.',
+);
+requirePattern(
   servicePath,
   service,
-  /onCreate\(\)[\s\S]*startForeground\(NOTIFICATION_ID, createNotification\(\)\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*RUNNING\.set\(true\)/,
-  'Foreground creation must succeed before last-start evidence and RUNNING=true are recorded.',
+  /onCreate\(\)[\s\S]*startForeground\(NOTIFICATION_ID, createNotification\(\)\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*confirmation != ScrollShieldNativePlugin\.ProtectionStartConfirmationResult\.CONFIRMED[\s\S]*RUNNING\.set\(true\)/,
+  'Foreground creation and race-safe confirmation must succeed before RUNNING=true is recorded.',
 );
 const onCreateStart = service.indexOf('public void onCreate()');
 const onStartCommandStart = service.indexOf('public int onStartCommand', onCreateStart + 1);
@@ -151,8 +169,16 @@ if (onCreateStart < 0 || onStartCommandStart <= onCreateStart) {
   const foregroundIndex = onCreateBody.indexOf('startForeground(NOTIFICATION_ID, createNotification())');
   const runningIndex = onCreateBody.indexOf('RUNNING.set(true)');
   const recorderIndex = onCreateBody.indexOf('recordProtectionServiceStarted(this)');
-  if (foregroundIndex < 0 || runningIndex < foregroundIndex || recorderIndex < foregroundIndex) {
-    findings.push(`${servicePath}: RUNNING and last-start evidence must only follow successful startForeground().`);
+  const rejectIndex = onCreateBody.indexOf('confirmation != ScrollShieldNativePlugin.ProtectionStartConfirmationResult.CONFIRMED');
+  if (
+    foregroundIndex < 0 ||
+    recorderIndex < foregroundIndex ||
+    rejectIndex < recorderIndex ||
+    runningIndex < rejectIndex
+  ) {
+    findings.push(
+      `${servicePath}: RUNNING must only follow successful startForeground() and a current durable confirmation.`,
+    );
   }
 }
 requirePattern(
@@ -160,6 +186,12 @@ requirePattern(
   service,
   /catch \(RuntimeException error\)[\s\S]*RUNNING\.set\(false\)[\s\S]*explicitStopRequested = true[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*ProtectionStopReasonPolicy\.START_FAILED[\s\S]*stopSelf\(\)[\s\S]*return/,
   'A foreground-start failure must atomically fail closed with START_FAILED and must not create false start evidence.',
+);
+requirePattern(
+  servicePath,
+  service,
+  /hasUnconfirmedProtectionStartRequest\(this\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*confirmation != ScrollShieldNativePlugin\.ProtectionStartConfirmationResult\.CONFIRMED[\s\S]*START_NOT_STICKY/,
+  'A newer restart generation delivered to an existing service must be confirmed or fail closed before it remains sticky.',
 );
 requirePattern(
   pluginPath,
@@ -232,8 +264,8 @@ if (pluginStopStart < 0 || pluginStatusStart <= pluginStopStart) {
 requirePattern(
   pluginPath,
   plugin,
-  /startProtectionService[\s\S]*catch \(RuntimeException error\)[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*ProtectionStopReasonPolicy\.START_FAILED[\s\S]*Android konnte den Schutzdienst nicht starten/,
-  'Native start request exceptions must atomically retain the stable START_FAILED diagnostic reason.',
+  /startProtectionService[\s\S]*hasFreshProtectionStartRequest\(context\)[\s\S]*recordProtectionStartRequested\(context\)[\s\S]*catch \(RuntimeException error\)[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*ProtectionStopReasonPolicy\.START_FAILED/,
+  'Native start requests must suppress fresh duplicates, persist a new generation when needed, and retain START_FAILED on service-request exceptions.',
 );
 
 for (const code of [
@@ -267,14 +299,14 @@ for (const code of ['manual_app_stop', 'notification_action_stop', 'unexpected_s
 requirePattern(
   serviceLifecyclePolicyPath,
   serviceLifecyclePolicy,
-  /shouldRecordUnexpectedDestroy[\s\S]*protectionEnabled && !explicitStopRequested/,
-  'Unexpected destroy classification must require enabled protection without an explicit stop request.',
+  /shouldRecordUnexpectedDestroy[\s\S]*!protectionEnabled \|\| explicitStopRequested[\s\S]*terminalStopAfterThisServiceWasRequested[\s\S]*lastStopAt >= serviceStartRequestAtOnCreate[\s\S]*hasUnconfirmedStartRequest/,
+  'Unexpected destroy classification must reject disabled/explicit stops, stale service generations, and pre-confirmation interruptions.',
 );
 requirePattern(
   serviceLifecyclePolicyTestPath,
   serviceLifecyclePolicyTest,
-  /shouldRecordUnexpectedDestroy\(true, false\)[\s\S]*shouldRecordUnexpectedDestroy\(false, false\)[\s\S]*shouldRecordUnexpectedDestroy\(true, true\)/,
-  'Service lifecycle JUnit tests must cover unexpected and controlled destroy boundaries.',
+  /recordsUnexpectedDestroyOnlyForCurrentConfirmedActivation[\s\S]*doesNotLetOldServiceDestroyOverwriteFastRestart[\s\S]*preConfirmationDestroyRemainsStartInterruptedNotUnexpectedDestroy/,
+  'Service lifecycle JUnit tests must cover current activation, fast restart, and pre-confirmation destroy boundaries.',
 );
 requirePattern(
   servicePath,
@@ -299,8 +331,8 @@ if (actionStopStart < 0 || disabledStart <= actionStopStart) {
 requirePattern(
   servicePath,
   service,
-  /onDestroy\(\)[\s\S]*shouldRecordUnexpectedDestroy[\s\S]*isProtectionEnabled\(this\)[\s\S]*explicitStopRequested[\s\S]*if \(unexpectedDestroy\)[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*UNEXPECTED_SERVICE_DESTROY_CODE[\s\S]*description/,
-  'Unexpected service destruction must atomically clear stale activation, queue its warning, and retain the exact terminal stop reason.',
+  /onDestroy\(\)[\s\S]*latestStartRequestAt[\s\S]*lastStartAt[\s\S]*lastStopAt[\s\S]*shouldRecordUnexpectedDestroy[\s\S]*serviceStartRequestAtOnCreate[\s\S]*if \(unexpectedDestroy\)[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*UNEXPECTED_SERVICE_DESTROY_CODE/,
+  'Unexpected service destruction must classify against service/request generations before atomically persisting unexpected_service_destroy.',
 );
 
 const onDestroyStart = service.indexOf('public void onDestroy()');
@@ -394,13 +426,13 @@ requirePattern(
 requirePattern(
   diagnosticsPath,
   diagnostics,
-  /lastProtectionStartAt[\s\S]*lastProtectionStopAt[\s\S]*lastProtectionStopCode[\s\S]*lastProtectionStopMessage/,
-  'Native diagnostic snapshots must expose lifecycle fields.',
+  /lastProtectionStartRequestAt[\s\S]*lastProtectionStartAt[\s\S]*lastProtectionStopAt[\s\S]*lastProtectionStopCode[\s\S]*lastProtectionStopMessage/,
+  'Native diagnostic snapshots must expose request/start/stop lifecycle fields.',
 );
 requirePattern(
   diagnosticsBridgePath,
   diagnosticsBridge,
-  /lastProtectionStartAt:\s*number[\s\S]*lastProtectionStopAt:\s*number[\s\S]*lastProtectionStopCode:\s*string[\s\S]*lastProtectionStopMessage:\s*string/,
+  /lastProtectionStartRequestAt:\s*number[\s\S]*lastProtectionStartAt:\s*number[\s\S]*lastProtectionStopAt:\s*number[\s\S]*lastProtectionStopCode:\s*string[\s\S]*lastProtectionStopMessage:\s*string/,
   'TypeScript diagnostics must type all lifecycle fields.',
 );
 
@@ -419,20 +451,20 @@ requirePattern(
 requirePattern(
   bridgePath,
   bridge,
-  /NativeProtectionHealth[\s\S]*running-without-activation[\s\S]*stale-activation[\s\S]*stopped-with-reason[\s\S]*never-started/,
-  'The bridge must model active, stopped, and inconsistent native states explicitly.',
+  /NativeProtectionHealth[\s\S]*start-pending[\s\S]*start-interrupted[\s\S]*running-without-activation[\s\S]*unclean-process-stop[\s\S]*stale-activation[\s\S]*stopped-with-reason[\s\S]*never-started/,
+  'The bridge must model pending, interrupted, process-loss, active, stopped, and inconsistent native states explicitly.',
 );
 requirePattern(
   bridgePath,
   bridge,
-  /getStatus\(\)[\s\S]*lastStartAt: normalizeTimestamp\(result\.lastStartAt\)[\s\S]*lastStopAt: normalizeTimestamp\(result\.lastStopAt\)[\s\S]*lastStopCode: normalizeDiagnosticText\(result\.lastStopCode\)[\s\S]*lastStopMessage: normalizeDiagnosticText\(result\.lastStopMessage\)[\s\S]*assessNativeProtectionHealth/,
+  /getStatus\(\)[\s\S]*lastStartRequestAt: normalizeTimestamp\(result\.lastStartRequestAt\)[\s\S]*lastStartAt: normalizeTimestamp\(result\.lastStartAt\)[\s\S]*lastStopAt: normalizeTimestamp\(result\.lastStopAt\)[\s\S]*lastStopCode: normalizeDiagnosticText\(result\.lastStopCode\)[\s\S]*lastStopMessage: normalizeDiagnosticText\(result\.lastStopMessage\)[\s\S]*assessNativeProtectionHealth/,
   'NativeProtection.getStatus must preserve and normalize every lifecycle field instead of discarding it.',
 );
 requirePattern(
   bridgeTestPath,
   bridgeTest,
-  /preserves lifecycle diagnostics and detects stale activation[\s\S]*normalizes malformed lifecycle values[\s\S]*distinguishes active, inconsistent, and stopped states deterministically/,
-  'Bridge tests must cover lifecycle preservation, normalization, and deterministic health classification.',
+  /preserves lifecycle diagnostics and detects stale activation[\s\S]*normalizes malformed lifecycle values[\s\S]*distinguishes active, process-loss, inconsistent, and stopped states deterministically/,
+  'Bridge tests must cover lifecycle preservation, normalization, process loss, and deterministic health classification.',
 );
 
 requirePattern(
@@ -508,8 +540,8 @@ requirePattern(
 requirePattern(
   debugPath,
   debug,
-  /Letzter Schutzstart[\s\S]*Letzter Stoppzeitpunkt[\s\S]*Letzter Stoppcode[\s\S]*Letzter Stoppgrund/,
-  'Debug UI must display lifecycle diagnostics without requiring JSON inspection.',
+  /Letzte Startanforderung[\s\S]*Letzter Schutzstart[\s\S]*Letzter Stoppzeitpunkt[\s\S]*Letzter Stoppcode[\s\S]*Letzter Stoppgrund/,
+  'Debug UI must display request/start/stop lifecycle diagnostics without requiring JSON inspection.',
 );
 requirePattern(
   debugTestPath,
@@ -525,6 +557,7 @@ for (const requiredMatrixText of [
   'LIFE-11',
   'notification_action_stop',
   'unexpected_service_destroy',
+  'lastProtectionStartRequestAt',
   'lastProtectionStartAt',
   'lastProtectionStopAt',
   'lastProtectionStopCode',
@@ -545,5 +578,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection lifecycle diagnostics check passed. Actual foreground starts, atomic system stops including unexpected destroy, atomic explicit terminal stops, native fields, emergency friction, inconsistent service states, and physical evidence requirements remain guarded.',
+  'Protection lifecycle diagnostics check passed. Ordered start requests, stop-wins confirmation, fast-restart destroy isolation, actual foreground starts, atomic system/terminal stops, diagnostics, emergency friction, and physical evidence requirements remain guarded.',
 );
