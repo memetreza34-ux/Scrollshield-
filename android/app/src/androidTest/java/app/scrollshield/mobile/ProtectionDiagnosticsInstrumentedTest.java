@@ -51,9 +51,78 @@ public class ProtectionDiagnosticsInstrumentedTest {
         assertTrue(requestAt >= beforeRequest);
         assertEquals(0L, ScrollShieldNativePlugin.getLastProtectionStartAt(context));
 
-        ScrollShieldNativePlugin.recordProtectionServiceStarted(context);
+        assertEquals(
+            ScrollShieldNativePlugin.ProtectionStartConfirmationResult.CONFIRMED,
+            ScrollShieldNativePlugin.recordProtectionServiceStarted(context)
+        );
         long confirmedStartAt = ScrollShieldNativePlugin.getLastProtectionStartAt(context);
-        assertTrue(confirmedStartAt >= requestAt);
+        assertTrue(confirmedStartAt > requestAt);
+    }
+
+    @Test
+    public void terminalStopWinsAgainstDelayedStartConfirmationWithoutOverwrite() throws Exception {
+        ScrollShieldNativePlugin.appendProtectionEvent(
+            context,
+            "open",
+            "instagram",
+            "Existing history before start stop race"
+        );
+        assertTrue(ScrollShieldNativePlugin.recordProtectionStartRequested(context));
+        long requestAt = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(context);
+        String message = "Manual stop won before service confirmation";
+
+        assertTrue(
+            ScrollShieldNativePlugin.recordProtectionTerminalStop(
+                context,
+                ProtectionServiceLifecyclePolicy.MANUAL_APP_STOP_CODE,
+                message
+            )
+        );
+
+        long stopAt = ScrollShieldNativePlugin.getLastProtectionStopAt(context);
+        String eventsAfterStop = preferences.getString("protection_events", "[]");
+        assertTrue(stopAt > requestAt);
+        assertFalse(ScrollShieldNativePlugin.isProtectionEnabled(context));
+
+        assertEquals(
+            ScrollShieldNativePlugin.ProtectionStartConfirmationResult.SUPERSEDED_BY_STOP,
+            ScrollShieldNativePlugin.recordProtectionServiceStarted(context)
+        );
+
+        assertEquals(0L, ScrollShieldNativePlugin.getLastProtectionStartAt(context));
+        assertEquals(stopAt, ScrollShieldNativePlugin.getLastProtectionStopAt(context));
+        assertEquals(
+            ProtectionServiceLifecyclePolicy.MANUAL_APP_STOP_CODE,
+            ScrollShieldNativePlugin.getLastProtectionStopCode(context)
+        );
+        assertEquals(message, ScrollShieldNativePlugin.getLastProtectionStopMessage(context));
+        assertEquals(eventsAfterStop, preferences.getString("protection_events", "[]"));
+    }
+
+    @Test
+    public void restartRequestAdvancesBeyondLatestStopBoundary() {
+        assertTrue(ScrollShieldNativePlugin.recordProtectionStartRequested(context));
+        long firstRequestAt = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(context);
+        assertTrue(
+            ScrollShieldNativePlugin.recordProtectionTerminalStop(
+                context,
+                ProtectionServiceLifecyclePolicy.MANUAL_APP_STOP_CODE,
+                "Stop before immediate restart"
+            )
+        );
+        long stopAt = ScrollShieldNativePlugin.getLastProtectionStopAt(context);
+        assertTrue(stopAt > firstRequestAt);
+
+        assertTrue(ScrollShieldNativePlugin.recordProtectionStartRequested(context));
+        long restartRequestAt = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(context);
+        assertTrue(restartRequestAt > stopAt);
+        assertTrue(ScrollShieldNativePlugin.hasFreshProtectionStartRequest(context));
+
+        assertEquals(
+            ScrollShieldNativePlugin.ProtectionStartConfirmationResult.CONFIRMED,
+            ScrollShieldNativePlugin.recordProtectionServiceStarted(context)
+        );
+        assertTrue(ScrollShieldNativePlugin.getLastProtectionStartAt(context) > restartRequestAt);
     }
 
     @Test
