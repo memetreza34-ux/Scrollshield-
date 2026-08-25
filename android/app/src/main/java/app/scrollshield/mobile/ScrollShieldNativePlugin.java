@@ -152,81 +152,85 @@ public class ScrollShieldNativePlugin extends Plugin {
     @PluginMethod
     public void startProtectionService(PluginCall call) {
         Context context = getContext();
-        if (!hasUsageAccess(context)) {
-            rejectProtectionStartPrerequisite(
-                call,
-                context,
-                ProtectionStopReasonPolicy.USAGE_ACCESS_MISSING,
-                "Nutzungszugriff fehlt; der Android-Schutz konnte nicht gestartet werden",
-                "Usage Access is required before protection can start"
-            );
-            return;
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
-            rejectProtectionStartPrerequisite(
-                call,
-                context,
-                ProtectionStopReasonPolicy.OVERLAY_PERMISSION_MISSING,
-                "Overlay-Berechtigung fehlt; der Android-Schutz konnte nicht gestartet werden",
-                "Overlay permission is required before protection can start"
-            );
-            return;
-        }
-        if (!hasNotificationsEnabled(context)) {
-            rejectProtectionStartPrerequisite(
-                call,
-                context,
-                ProtectionStopReasonPolicy.NOTIFICATIONS_MISSING,
-                "Benachrichtigungen fehlen; der Android-Schutz konnte nicht sichtbar gestartet werden",
-                "Notifications are required so active protection and its stop action remain visible"
-            );
-            return;
-        }
-        if (!hasConfiguredApps(context)) {
-            rejectProtectionStartPrerequisite(
-                call,
-                context,
-                ProtectionStopReasonPolicy.TARGET_APP_MISSING,
-                "Keine aktive installierte Ziel-App ist verfügbar; der Android-Schutz konnte nicht gestartet werden",
-                "At least one installed active protected app is required"
-            );
-            return;
-        }
-
-        if (ScrollShieldProtectionService.isRunning() && isProtectionEnabled(context)) {
-            call.resolve();
-            return;
-        }
-        if (hasFreshProtectionStartRequest(context)) {
-            call.resolve();
-            return;
-        }
-
-        if (!recordProtectionStartRequested(context)) {
-            persistProtectionSystemStopWithFallback(
-                context,
-                ProtectionStopReasonPolicy.START_FAILED,
-                "Android konnte die Schutzaktivierung vor dem Dienststart nicht dauerhaft speichern"
-            );
-            call.reject("Protection start request could not be persisted");
-            return;
-        }
-
-        Intent intent = new Intent(context, ScrollShieldProtectionService.class);
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent);
-            } else {
-                context.startService(intent);
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            if (!hasUsageAccess(context)) {
+                rejectProtectionStartPrerequisite(
+                    call,
+                    context,
+                    ProtectionStopReasonPolicy.USAGE_ACCESS_MISSING,
+                    "Nutzungszugriff fehlt; der Android-Schutz konnte nicht gestartet werden",
+                    "Usage Access is required before protection can start"
+                );
+                return;
             }
-            call.resolve();
-        } catch (RuntimeException error) {
-            persistProtectionSystemStopWithFallback(
-                context,
-                ProtectionStopReasonPolicy.START_FAILED,
-                "Android konnte den Schutzdienst nicht starten"
-            );
-            call.reject("Protection service could not be started", error);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
+                rejectProtectionStartPrerequisite(
+                    call,
+                    context,
+                    ProtectionStopReasonPolicy.OVERLAY_PERMISSION_MISSING,
+                    "Overlay-Berechtigung fehlt; der Android-Schutz konnte nicht gestartet werden",
+                    "Overlay permission is required before protection can start"
+                );
+                return;
+            }
+            if (!hasNotificationsEnabled(context)) {
+                rejectProtectionStartPrerequisite(
+                    call,
+                    context,
+                    ProtectionStopReasonPolicy.NOTIFICATIONS_MISSING,
+                    "Benachrichtigungen fehlen; der Android-Schutz konnte nicht sichtbar gestartet werden",
+                    "Notifications are required so active protection and its stop action remain visible"
+                );
+                return;
+            }
+            if (!hasConfiguredApps(context)) {
+                rejectProtectionStartPrerequisite(
+                    call,
+                    context,
+                    ProtectionStopReasonPolicy.TARGET_APP_MISSING,
+                    "Keine aktive installierte Ziel-App ist verfügbar; der Android-Schutz konnte nicht gestartet werden",
+                    "At least one installed active protected app is required"
+                );
+                return;
+            }
+
+            if (ScrollShieldProtectionService.isRunning() && isProtectionEnabled(context)) {
+                call.resolve();
+                return;
+            }
+            if (hasFreshProtectionStartRequest(context)) {
+                call.resolve();
+                return;
+            }
+
+            if (!recordProtectionStartRequested(context)) {
+                persistProtectionSystemStopWithFallback(
+                    context,
+                    ProtectionStopReasonPolicy.START_FAILED,
+                    "Android konnte die Schutzaktivierung vor dem Dienststart nicht dauerhaft speichern"
+                );
+                ProtectionServiceDispatchGuard.dispatchControlledStop(context);
+                call.reject("Protection start request could not be persisted");
+                return;
+            }
+
+            Intent intent = new Intent(context, ScrollShieldProtectionService.class);
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent);
+                } else {
+                    context.startService(intent);
+                }
+                call.resolve();
+            } catch (RuntimeException error) {
+                persistProtectionSystemStopWithFallback(
+                    context,
+                    ProtectionStopReasonPolicy.START_FAILED,
+                    "Android konnte den Schutzdienst nicht starten"
+                );
+                ProtectionServiceDispatchGuard.dispatchControlledStop(context);
+                call.reject("Protection service could not be started", error);
+            }
         }
     }
 
@@ -237,8 +241,11 @@ public class ScrollShieldNativePlugin extends Plugin {
         String description,
         String rejectionMessage
     ) {
-        persistProtectionSystemStopWithFallback(context, reasonCode, description);
-        call.reject(rejectionMessage);
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            persistProtectionSystemStopWithFallback(context, reasonCode, description);
+            ProtectionServiceDispatchGuard.dispatchControlledStop(context);
+            call.reject(rejectionMessage);
+        }
     }
 
     public static void persistProtectionSystemStopWithFallback(
@@ -246,12 +253,14 @@ public class ScrollShieldNativePlugin extends Plugin {
         String reasonCode,
         String description
     ) {
-        boolean persisted = recordProtectionSystemStop(context, reasonCode, description);
-        if (!persisted) {
-            // Best-effort fallback after an atomic commit failure. Keep protection fail-closed and
-            // retain the exact stable stop code even if the warning event cannot be committed.
-            setProtectionEnabled(context, false);
-            recordProtectionStop(context, reasonCode, description);
+        synchronized (EVENT_LOCK) {
+            boolean persisted = recordProtectionSystemStop(context, reasonCode, description);
+            if (!persisted) {
+                // Best-effort fallback after an atomic commit failure. Keep protection fail-closed and
+                // retain the exact stable stop code even if the warning event cannot be committed.
+                setProtectionEnabled(context, false);
+                recordProtectionStop(context, reasonCode, description);
+            }
         }
     }
 
@@ -260,12 +269,14 @@ public class ScrollShieldNativePlugin extends Plugin {
         String reasonCode,
         String description
     ) {
-        boolean persisted = recordProtectionTerminalStop(context, reasonCode, description);
-        if (!persisted) {
-            // Best-effort fallback after an atomic commit failure. Explicit/manual terminal stops
-            // intentionally do not append warning/system events.
-            setProtectionEnabled(context, false);
-            recordProtectionStop(context, reasonCode, description);
+        synchronized (EVENT_LOCK) {
+            boolean persisted = recordProtectionTerminalStop(context, reasonCode, description);
+            if (!persisted) {
+                // Best-effort fallback after an atomic commit failure. Explicit/manual terminal stops
+                // intentionally do not append warning/system events.
+                setProtectionEnabled(context, false);
+                recordProtectionStop(context, reasonCode, description);
+            }
         }
     }
 
@@ -281,8 +292,10 @@ public class ScrollShieldNativePlugin extends Plugin {
             reasonMessage = "Der Android-Schutz wurde in ScrollShield manuell gestoppt";
         }
 
-        persistProtectionTerminalStopWithFallback(context, reasonCode, reasonMessage);
-        context.stopService(new Intent(context, ScrollShieldProtectionService.class));
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            persistProtectionTerminalStopWithFallback(context, reasonCode, reasonMessage);
+            ProtectionServiceDispatchGuard.dispatchControlledStop(context);
+        }
         call.resolve();
     }
 
@@ -349,16 +362,18 @@ public class ScrollShieldNativePlugin extends Plugin {
     @PluginMethod
     public void factoryResetProtectionData(PluginCall call) {
         Context context = getContext();
-        synchronized (EVENT_LOCK) {
-            if (!NativeDrainBatchStore.markFactoryReset(getPreferences())) {
-                call.reject("Native protection data could not be marked for factory reset");
-                return;
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            synchronized (EVENT_LOCK) {
+                if (!NativeDrainBatchStore.markFactoryReset(getPreferences())) {
+                    call.reject("Native protection data could not be marked for factory reset");
+                    return;
+                }
             }
-        }
 
-        // The tombstone survives any final service onDestroy usage flush. NativeDrainBatchStore
-        // clears it together with any such late writes before a future drain can expose data.
-        context.stopService(new Intent(context, ScrollShieldProtectionService.class));
+            // The tombstone survives any final service onDestroy usage flush. NativeDrainBatchStore
+            // clears it together with any such late writes before a future drain can expose data.
+            ProtectionServiceDispatchGuard.dispatchControlledStop(context);
+        }
         JSObject result = new JSObject();
         result.put("resetPendingCleanup", true);
         call.resolve(result);
