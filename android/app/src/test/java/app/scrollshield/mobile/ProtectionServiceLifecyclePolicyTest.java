@@ -45,12 +45,16 @@ public class ProtectionServiceLifecyclePolicyTest {
                 100L
             )
         );
+    }
+
+    @Test
+    public void explicitStopWithoutNewConfirmedGenerationSuppressesUnexpectedDestroy() {
         assertFalse(
             ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(
                 true,
                 true,
                 200L,
-                200L,
+                300L,
                 250L,
                 100L
             )
@@ -77,6 +81,20 @@ public class ProtectionServiceLifecyclePolicyTest {
             ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(
                 true,
                 false,
+                300L,
+                300L,
+                350L,
+                200L
+            )
+        );
+    }
+
+    @Test
+    public void transferredRestartOwnershipAlsoSupersedesStaleExplicitStopFlag() {
+        assertTrue(
+            ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(
+                true,
+                true,
                 300L,
                 300L,
                 350L,
