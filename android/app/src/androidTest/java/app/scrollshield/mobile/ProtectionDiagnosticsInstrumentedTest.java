@@ -38,6 +38,25 @@ public class ProtectionDiagnosticsInstrumentedTest {
     }
 
     @Test
+    public void startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence() {
+        assertFalse(ScrollShieldNativePlugin.isProtectionEnabled(context));
+        assertEquals(0L, ScrollShieldNativePlugin.getLastProtectionStartRequestAt(context));
+        assertEquals(0L, ScrollShieldNativePlugin.getLastProtectionStartAt(context));
+
+        long beforeRequest = System.currentTimeMillis();
+        assertTrue(ScrollShieldNativePlugin.recordProtectionStartRequested(context));
+
+        long requestAt = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(context);
+        assertTrue(ScrollShieldNativePlugin.isProtectionEnabled(context));
+        assertTrue(requestAt >= beforeRequest);
+        assertEquals(0L, ScrollShieldNativePlugin.getLastProtectionStartAt(context));
+
+        ScrollShieldNativePlugin.recordProtectionServiceStarted(context);
+        long confirmedStartAt = ScrollShieldNativePlugin.getLastProtectionStartAt(context);
+        assertTrue(confirmedStartAt >= requestAt);
+    }
+
+    @Test
     public void atomicPrerequisiteStopPersistsDisabledStateEventAndExactCode() throws Exception {
         ScrollShieldNativePlugin.setProtectionEnabled(context, true);
         long before = System.currentTimeMillis();
