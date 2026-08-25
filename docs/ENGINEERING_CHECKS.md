@@ -30,6 +30,7 @@ Die Kette umfasst unter anderem:
 - Prerequisite/System-Stop-Codes;
 - Lifecycle/Diagnostics;
 - **repo-weiten Native-Stop-Atomicity-Guard**;
+- **Android Protection Start Handshake**;
 - Process-Loss + Protection-Recovery;
 - Device Matrix;
 - Migration/Release/Privacy/Store/Security Checks;
@@ -67,7 +68,51 @@ persistProtectionTerminalStopWithFallback(...)
 System-Stops schreiben atomar `enabled=false + warning/system + timestamp + code + message`.
 Explizite Terminal-Stopps schreiben atomar `enabled=false + timestamp + code + message` und verändern die Event-Queue nicht.
 
-Der Checker ist Pflichtbestandteil von:
+## Android Protection Start Handshake
+
+```bash
+npm run check:start-handshake
+```
+
+Detaillierte Spezifikation: `docs/PROTECTION_START_HANDSHAKE.md`.
+
+Der Startvertrag trennt Aktivierungsabsicht und bestätigten Foreground-Start:
+
+```text
+recordProtectionStartRequested(...)
+→ enabled=true + lastStartRequestAt in einem Commit
+→ startForegroundService/startService
+→ startForeground(...)
+→ recordProtectionServiceStarted(...)
+→ lastStartAt dauerhaft gespeichert
+→ erst dann RUNNING=true
+```
+
+Pflichtgrenzen:
+
+- kein separates `setProtectionEnabled(context, true)` im produktiven Startpfad;
+- Request-Commit-Fehler → `START_FAILED`, fail-closed, kein Service-Start;
+- bestätigter Start darf erst hinter erfolgreichem `startForeground(...)` persistiert werden;
+- Confirmation-Commit-Fehler → `START_FAILED` + Exception vor `RUNNING=true`;
+- bereits `running && enabled` → Native-Start ist idempotent;
+- `lastStartRequestAt` wird separat im Native-Status an TypeScript geliefert.
+
+Health-Klassifizierung:
+
+```text
+neuer Request, <= 15 s, noch keine Bestätigung
+→ start-pending
+
+neuer Request, > 15 s, keine Bestätigung, Dienst läuft nicht
+→ start-interrupted
+
+bestätigter lastStartAt > lastStopAt, Dienst später nicht mehr laufend
+→ unclean-process-stop
+```
+
+Damit darf ein Prozessabbruch **vor** bestätigtem Foreground-Start nicht als echter Post-Start-Process-Kill erscheinen.
+
+`check:start-handshake` ist Pflichtbestandteil von:
 
 ```text
 npm run verify
@@ -94,12 +139,25 @@ Vorhandene Instrumentation-Verträge umfassen u. a.:
 
 `ProtectionDiagnosticsInstrumentedTest` schützt:
 
+- getrennte Request-/Confirmed-Start-Evidence über `startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence`;
 - atomare Prerequisite-/System-Stops;
 - `START_FAILED`;
 - `UNEXPECTED_SERVICE_DESTROY_CODE`;
 - atomare `manual_app_stop`-/`notification_action_stop`-Terminal-Stopps;
 - unveränderte Event-Queue bei bewussten Terminal-Stopps;
 - stabile Stop-Codes unabhängig vom Meldungstext.
+
+Der neue Start-Test beweist source-seitig den erwarteten Ablauf:
+
+```text
+kein Request / kein Start
+→ recordProtectionStartRequested
+→ enabled=true + requestAt > 0 + lastStartAt == 0
+→ recordProtectionServiceStarted
+→ lastStartAt >= requestAt
+```
+
+Erst ein real ausgeführter Instrumentation-Lauf macht daraus Evidence.
 
 ## Android JUnit / Build
 
@@ -112,13 +170,29 @@ Dieser Lauf muss u. a. Coordinator-/Worker-/Stop-Code-/Lifecycle-Tests sowie den
 
 ## Process-Loss / Recovery
 
-Ein harter Process-Kill bleibt getrennt von `unexpected_service_destroy`.
+Ein harter Process-Kill bleibt getrennt von `unexpected_service_destroy` und von einem abgebrochenen Pre-Confirmation-Start.
+
+### Abbruch vor bestätigtem Start
+
+```text
+running == false
+enabled == true
+lastStartRequestAt > max(lastStartAt, lastStopAt)
+```
+
+Innerhalb von 15 Sekunden: `start-pending`.
+Danach: `start-interrupted`.
+
+Dieser Pfad bietet einen normalen Neustart, nicht die Process-Loss-Recovery.
+
+### Abbruch nach bestätigtem Start
 
 ```text
 running == false
 enabled == true
 lastStartAt > 0
 lastStartAt > lastStopAt
+lastStartRequestAt <= lastStartAt
 → unclean-process-stop
 ```
 
@@ -126,18 +200,13 @@ Danach muss `Schutz wiederherstellen` real zu `running && enabled && health == a
 
 ## Aktuelle Ausführungsgrenze
 
-Aktueller Head:
-
-```text
-51ff9f3b243ebb4209ebdbb14b71f742e8d721ad
-```
-
-Verify **#1294** (`32807979640`) wurde für diesen Head registriert. Job `verify` (`97681680254`) endete mit `steps: null`.
+GitHub Actions liefert auf diesem Draft-Branch weiterhin Verify-Jobs ohne ausgeführte Steps (`steps: null`). Die exakte Head-SHA und der zugehörige aktuelle Lauf werden in PR #8 geführt, ohne diesen technischen Vertrag mit jeder Commit-SHA neu schreiben zu müssen.
 
 Deshalb sind aktuell **nicht als bestanden belegt**:
 
 - `npm run verify`;
 - `check:native-stop-atomicity`;
+- `check:start-handshake`;
 - `check:lifecycle`;
 - `check:android-instrumentation`;
 - `check:prerequisite-stop-codes`;
@@ -146,7 +215,8 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - Android JUnit;
 - Android Instrumentation;
 - Gradle Debug Build;
-- APK.
+- APK;
+- reale Start-Handshake-/Process-Kill-Evidence.
 
 ## Reihenfolge nach Entsperrung
 
@@ -154,11 +224,12 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 2. `npm run verify`;
 3. `./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace`;
 4. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace`;
-5. realer App-Stopp → `manual_app_stop`, kein neues `warning/system`-Event;
-6. realer Notification-Stopp → `notification_action_stop`, kein neues `warning/system`-Event;
-7. reale Start-/Foreground-/Destroy-Systemfehler → exakter Code + Warn-Event;
-8. echter Process-Kill → `unclean-process-stop` → Recovery;
-9. Boot/App-Update, Permission-Loss, Target-App-Verlust;
-10. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
-11. finaler Supply-Chain-/Binary-/Security-Audit;
-12. erst danach Candidate Freeze und Release.
+5. Prozess zwischen `lastStartRequestAt` und `lastStartAt` beenden → `start-pending` → `start-interrupted` → normaler Retry → `active`;
+6. Prozess **nach** bestätigtem `lastStartAt` hart beenden → `unclean-process-stop` → `Schutz wiederherstellen` → `active`;
+7. realer App-Stopp → `manual_app_stop`, kein neues `warning/system`-Event;
+8. realer Notification-Stopp → `notification_action_stop`, kein neues `warning/system`-Event;
+9. reale Native-/Foreground-/Destroy-Systemfehler → exakter Code + Warn-Event;
+10. Boot/App-Update, Permission-Loss, Target-App-Verlust;
+11. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
+12. finaler Supply-Chain-/Binary-/Security-Audit;
+13. erst danach Candidate Freeze und Release.
