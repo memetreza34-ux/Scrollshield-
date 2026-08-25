@@ -72,6 +72,20 @@ public class ProtectionServiceLifecyclePolicyTest {
     }
 
     @Test
+    public void transferredRestartOwnershipRestoresUnexpectedDestroyDetection() {
+        assertTrue(
+            ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(
+                true,
+                false,
+                300L,
+                300L,
+                350L,
+                200L
+            )
+        );
+    }
+
+    @Test
     public void preConfirmationDestroyRemainsStartInterruptedNotUnexpectedDestroy() {
         assertFalse(
             ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(
