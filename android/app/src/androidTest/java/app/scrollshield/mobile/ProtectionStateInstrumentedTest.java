@@ -38,6 +38,7 @@ public class ProtectionStateInstrumentedTest {
     @Test
     public void protectionDefaultsToDisabled() {
         assertFalse(ScrollShieldNativePlugin.isProtectionEnabled(context));
+        assertEquals(0L, ScrollShieldNativePlugin.getLastProtectionStartRequestAt(context));
         assertEquals(0L, ScrollShieldNativePlugin.getLastProtectionStartAt(context));
         assertEquals(0L, ScrollShieldNativePlugin.getLastProtectionStopAt(context));
         assertEquals("", ScrollShieldNativePlugin.getLastProtectionStopCode(context));
@@ -47,18 +48,25 @@ public class ProtectionStateInstrumentedTest {
     public void successfulStartAndDisablePersistLifecycleTruth() {
         long beforeStart = System.currentTimeMillis();
 
-        ScrollShieldNativePlugin.setProtectionEnabled(context, true);
+        assertTrue(ScrollShieldNativePlugin.recordProtectionStartRequested(context));
         assertTrue(ScrollShieldNativePlugin.isProtectionEnabled(context));
+        long requestAt = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(context);
+        assertTrue(requestAt >= beforeStart);
         assertEquals(0L, ScrollShieldNativePlugin.getLastProtectionStartAt(context));
 
-        ScrollShieldNativePlugin.recordProtectionServiceStarted(context);
-        assertTrue(ScrollShieldNativePlugin.getLastProtectionStartAt(context) >= beforeStart);
+        assertEquals(
+            ScrollShieldNativePlugin.ProtectionStartConfirmationResult.CONFIRMED,
+            ScrollShieldNativePlugin.recordProtectionServiceStarted(context)
+        );
+        long startAt = ScrollShieldNativePlugin.getLastProtectionStartAt(context);
+        assertTrue(startAt > requestAt);
 
         long beforeStop = System.currentTimeMillis();
         ScrollShieldNativePlugin.setProtectionEnabled(context, false);
 
         assertFalse(ScrollShieldNativePlugin.isProtectionEnabled(context));
         assertTrue(ScrollShieldNativePlugin.getLastProtectionStopAt(context) >= beforeStop);
+        assertTrue(ScrollShieldNativePlugin.getLastProtectionStopAt(context) > startAt);
         assertEquals("protection_disabled", ScrollShieldNativePlugin.getLastProtectionStopCode(context));
     }
 
