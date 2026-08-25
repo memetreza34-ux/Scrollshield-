@@ -3,8 +3,10 @@ import { readFile } from 'node:fs/promises';
 const javaRoot = 'android/app/src/main/java/app/scrollshield/mobile';
 const pluginPath = `${javaRoot}/ScrollShieldNativePlugin.java`;
 const servicePath = `${javaRoot}/ScrollShieldProtectionService.java`;
+const diagnosticsPath = `${javaRoot}/ScrollShieldDiagnosticsPlugin.java`;
 const bridgePath = 'src/lib/nativeProtection.ts';
 const bridgeTestPath = 'src/lib/nativeProtection.test.ts';
+const diagnosticsBridgePath = 'src/lib/nativeDiagnostics.ts';
 const healthPath = 'src/lib/nativeProtectionHealth.ts';
 const healthTestPath = 'src/lib/nativeProtectionHealth.test.ts';
 const statusPanelPath = 'src/components/NativeProtectionStatusPanel.tsx';
@@ -12,18 +14,31 @@ const statusPanelTestPath = 'src/components/NativeProtectionStatusPanel.test.tsx
 const instrumentationPath =
   'android/app/src/androidTest/java/app/scrollshield/mobile/ProtectionDiagnosticsInstrumentedTest.java';
 
-const [plugin, service, bridge, bridgeTest, health, healthTest, statusPanel, statusPanelTest, instrumentation] =
-  await Promise.all([
-    readFile(pluginPath, 'utf8'),
-    readFile(servicePath, 'utf8'),
-    readFile(bridgePath, 'utf8'),
-    readFile(bridgeTestPath, 'utf8'),
-    readFile(healthPath, 'utf8'),
-    readFile(healthTestPath, 'utf8'),
-    readFile(statusPanelPath, 'utf8'),
-    readFile(statusPanelTestPath, 'utf8'),
-    readFile(instrumentationPath, 'utf8'),
-  ]);
+const [
+  plugin,
+  service,
+  diagnostics,
+  bridge,
+  bridgeTest,
+  diagnosticsBridge,
+  health,
+  healthTest,
+  statusPanel,
+  statusPanelTest,
+  instrumentation,
+] = await Promise.all([
+  readFile(pluginPath, 'utf8'),
+  readFile(servicePath, 'utf8'),
+  readFile(diagnosticsPath, 'utf8'),
+  readFile(bridgePath, 'utf8'),
+  readFile(bridgeTestPath, 'utf8'),
+  readFile(diagnosticsBridgePath, 'utf8'),
+  readFile(healthPath, 'utf8'),
+  readFile(healthTestPath, 'utf8'),
+  readFile(statusPanelPath, 'utf8'),
+  readFile(statusPanelTestPath, 'utf8'),
+  readFile(instrumentationPath, 'utf8'),
+]);
 
 const findings: string[] = [];
 
@@ -78,6 +93,18 @@ requirePattern(
   service,
   /startForeground\(NOTIFICATION_ID, createNotification\(\)\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*RUNNING\.set\(true\)/,
   'RUNNING=true must remain after successful foreground creation and durable confirmed-start evidence.',
+);
+requirePattern(
+  diagnosticsPath,
+  diagnostics,
+  /lastProtectionStartRequestAt[\s\S]*getLastProtectionStartRequestAt\(context\)[\s\S]*lastProtectionStartAt/,
+  'The native diagnostics snapshot must expose request evidence separately from confirmed-start evidence.',
+);
+requirePattern(
+  diagnosticsBridgePath,
+  diagnosticsBridge,
+  /lastProtectionStartRequestAt:\s*number[\s\S]*lastProtectionStartAt:\s*number/,
+  'TypeScript diagnostics must type the start-request timestamp for device evidence export.',
 );
 
 requirePattern(
@@ -186,5 +213,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection start-handshake check passed. Activation intent, pending confirmation, interrupted pre-start, confirmed service start, and later process loss remain distinct source contracts.',
+  'Protection start-handshake check passed. Activation intent, pending confirmation, interrupted pre-start, confirmed service start, exported diagnostics, and later process loss remain distinct source contracts.',
 );
