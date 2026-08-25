@@ -21,6 +21,8 @@ export function NativeProtectionStatusPanel({
   const presentation = describeNativeProtectionHealth(status);
   const running = status?.running ?? false;
   const processRecovery = status?.health === 'unclean-process-stop';
+  const startPending = status?.health === 'start-pending';
+  const startRetry = status?.health === 'start-interrupted';
   const stopActionLocked = running && stopLocked;
   const toneClasses =
     presentation.tone === 'positive'
@@ -100,7 +102,7 @@ export function NativeProtectionStatusPanel({
           <button
             type="button"
             onClick={onToggle}
-            disabled={busy || stopActionLocked}
+            disabled={busy || stopActionLocked || startPending}
             className={`mt-4 w-full rounded-xl py-3 text-sm font-bold disabled:opacity-50 ${
               running ? 'bg-zinc-800 text-zinc-200' : 'bg-emerald-500 text-emerald-950'
             }`}
@@ -108,14 +110,20 @@ export function NativeProtectionStatusPanel({
             {busy
               ? processRecovery
                 ? 'Wiederherstellung läuft…'
-                : 'Wird geändert…'
+                : startRetry
+                  ? 'Start wird erneut versucht…'
+                  : 'Wird geändert…'
               : stopActionLocked
                 ? 'Stop während Commitment gesperrt'
                 : running
                   ? 'Schutzdienst stoppen'
                   : processRecovery
                     ? 'Schutz wiederherstellen'
-                    : 'Schutzdienst starten'}
+                    : startPending
+                      ? 'Start wird bestätigt…'
+                      : startRetry
+                        ? 'Schutz erneut starten'
+                        : 'Schutzdienst starten'}
           </button>
         </div>
       </div>
