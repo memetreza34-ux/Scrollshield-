@@ -12,6 +12,7 @@ const lifecyclePolicyPath = `${javaRoot}/ProtectionServiceLifecyclePolicy.java`;
 const lifecyclePolicyTestPath = `${javaTestRoot}/ProtectionServiceLifecyclePolicyTest.java`;
 const bridgePath = 'src/lib/nativeProtection.ts';
 const bridgeTestPath = 'src/lib/nativeProtection.test.ts';
+const bridgeClockTestPath = 'src/lib/nativeProtection.clock.test.ts';
 const diagnosticsBridgePath = 'src/lib/nativeDiagnostics.ts';
 const healthPath = 'src/lib/nativeProtectionHealth.ts';
 const healthTestPath = 'src/lib/nativeProtectionHealth.test.ts';
@@ -31,6 +32,7 @@ const [
   lifecyclePolicyTest,
   bridge,
   bridgeTest,
+  bridgeClockTest,
   diagnosticsBridge,
   health,
   healthTest,
@@ -48,6 +50,7 @@ const [
   readFile(lifecyclePolicyTestPath, 'utf8'),
   readFile(bridgePath, 'utf8'),
   readFile(bridgeTestPath, 'utf8'),
+  readFile(bridgeClockTestPath, 'utf8'),
   readFile(diagnosticsBridgePath, 'utf8'),
   readFile(healthPath, 'utf8'),
   readFile(healthTestPath, 'utf8'),
@@ -65,8 +68,8 @@ function requirePattern(file: string, content: string, pattern: RegExp, message:
 requirePattern(
   handshakePolicyPath,
   handshakePolicy,
-  /CONFIRMATION_GRACE_MS\s*=\s*15_000L[\s\S]*nextLifecycleTimestamp[\s\S]*hasUnconfirmedStartRequest[\s\S]*hasFreshPendingStartRequest[\s\S]*isConfirmationSuperseded/,
-  'Native start-handshake policy must own the grace window, strict lifecycle ordering, pending detection, and stop-wins confirmation boundary.',
+  /CONFIRMATION_GRACE_MS\s*=\s*15_000L[\s\S]*MAX_FUTURE_CLOCK_SKEW_MS\s*=\s*5_000L[\s\S]*nextLifecycleTimestamp[\s\S]*hasUnconfirmedStartRequest[\s\S]*hasFreshPendingStartRequest[\s\S]*isConfirmationSuperseded/,
+  'Native start-handshake policy must own matching grace/skew limits, strict lifecycle ordering, pending detection, and stop-wins confirmation.',
 );
 requirePattern(
   handshakePolicyPath,
@@ -74,9 +77,16 @@ requirePattern(
   /boundary == Long\.MAX_VALUE[\s\S]*boundary \+ 1L[\s\S]*Math\.max\(Math\.max\(0L, now\), nextAfterBoundary\)/,
   'Lifecycle timestamps must advance strictly beyond the latest known boundary when possible.',
 );
+requirePattern(
+  handshakePolicyPath,
+  handshakePolicy,
+  /now < lastStartRequestAt[\s\S]*futureSkew[\s\S]*MAX_FUTURE_CLOCK_SKEW_MS[\s\S]*now - lastStartRequestAt <= CONFIRMATION_GRACE_MS/,
+  'Native pending detection must not stay fresh indefinitely after a material wall-clock rollback.',
+);
 for (const method of [
   'lifecycleTimestampAdvancesStrictlyBeyondKnownBoundary',
   'freshPendingStartUsesBoundedConfirmationWindow',
+  'clockRollbackCannotHoldPendingStartForever',
   'terminalStopSupersedesDelayedConfirmation',
   'unconfirmedBoundaryIsSeparateFromConfirmedOrStoppedState',
 ]) {
@@ -215,8 +225,8 @@ requirePattern(
 requirePattern(
   bridgePath,
   bridge,
-  /START_CONFIRMATION_GRACE_MS\s*=\s*15_000/,
-  'TypeScript and native start confirmation must use the same 15-second grace contract.',
+  /START_CONFIRMATION_GRACE_MS\s*=\s*15_000[\s\S]*MAX_FUTURE_CLOCK_SKEW_MS\s*=\s*5_000/,
+  'TypeScript and native start confirmation must keep matching grace and future-clock-skew contracts.',
 );
 requirePattern(
   bridgePath,
@@ -227,8 +237,8 @@ requirePattern(
 requirePattern(
   bridgePath,
   bridge,
-  /latestConfirmedBoundary = Math\.max\(status\.lastStartAt, status\.lastStopAt\)[\s\S]*status\.lastStartRequestAt > latestConfirmedBoundary[\s\S]*return requestAgeMs <= START_CONFIRMATION_GRACE_MS \? 'start-pending' : 'start-interrupted'[\s\S]*status\.lastStartAt > 0[\s\S]*return 'unclean-process-stop'/,
-  'An unconfirmed newer request must classify before confirmed process-loss logic.',
+  /latestConfirmedBoundary = Math\.max\(status\.lastStartAt, status\.lastStopAt\)[\s\S]*status\.lastStartRequestAt > latestConfirmedBoundary[\s\S]*futureClockSkewMs[\s\S]*MAX_FUTURE_CLOCK_SKEW_MS[\s\S]*return 'start-interrupted'[\s\S]*requestAgeMs[\s\S]*START_CONFIRMATION_GRACE_MS[\s\S]*status\.lastStartAt > 0[\s\S]*return 'unclean-process-stop'/,
+  'An unconfirmed request must handle material clock rollback before the grace-window and confirmed process-loss boundaries.',
 );
 requirePattern(
   bridgeTestPath,
@@ -247,6 +257,12 @@ requirePattern(
   bridgeTest,
   /lastStartRequestAt:[\s\S]*lastStartAt:[\s\S]*unclean-process-stop/,
   'Process-loss tests must prove confirmed start evidence is newer than its request.',
+);
+requirePattern(
+  bridgeClockTestPath,
+  bridgeClockTest,
+  /tolerates only a small future skew[\s\S]*start-pending[\s\S]*fails out of pending when the wall clock moved materially backward[\s\S]*start-interrupted/,
+  'Vitest must prove a material clock rollback cannot hold start-pending indefinitely.',
 );
 
 requirePattern(
@@ -330,5 +346,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection start-handshake check passed. Plugin/boot starts, strict lifecycle ordering, pending duplicate suppression, stop-wins confirmation, fast restart destroy isolation, exported diagnostics, and process-loss separation remain guarded.',
+  'Protection start-handshake check passed. Plugin/boot starts, strict lifecycle ordering, bounded clock skew, pending duplicate suppression, stop-wins confirmation, fast restart destroy isolation, diagnostics, and process-loss separation remain guarded.',
 );
