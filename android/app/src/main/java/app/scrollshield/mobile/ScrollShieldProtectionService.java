@@ -50,6 +50,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class ScrollShieldProtectionService extends Service {
     private static final String CHANNEL_ID = "scrollshield_protection";
     private static final String ACTION_STOP = "app.scrollshield.mobile.action.STOP_PROTECTION";
+    private static final String EXTRA_STOP_START_REQUEST_AT =
+        "app.scrollshield.mobile.extra.STOP_START_REQUEST_AT";
     private static final String USAGE_KEY_PREFIX = "usage_ms_";
     private static final String OPEN_KEY_PREFIX = "open_events_";
     private static final String EMERGENCY_KEY_PREFIX = "emergency_count_";
@@ -146,6 +148,26 @@ public class ScrollShieldProtectionService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         synchronized (ProtectionServiceDispatchGuard.LOCK) {
             if (intent != null && ACTION_STOP.equals(intent.getAction())) {
+                boolean protectionEnabled = ScrollShieldNativePlugin.isProtectionEnabled(this);
+                long actionStartRequestAt = intent.getLongExtra(EXTRA_STOP_START_REQUEST_AT, 0L);
+                long latestStartRequestAt = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(this);
+
+                if (!protectionEnabled) {
+                    explicitStopRequested = true;
+                    ProtectionServiceDispatchGuard.dispatchControlledStop(this);
+                    return START_NOT_STICKY;
+                }
+
+                if (!ProtectionServiceLifecyclePolicy.isCurrentNotificationStopGeneration(
+                    actionStartRequestAt,
+                    serviceStartRequestAtOnCreate,
+                    latestStartRequestAt
+                )) {
+                    // A PendingIntent or already-queued command from an older foreground-service
+                    // generation must never stop a newer confirmed activation.
+                    return START_STICKY;
+                }
+
                 explicitStopRequested = true;
                 ScrollShieldNativePlugin.persistProtectionTerminalStopWithFallback(
                     this,
@@ -201,9 +223,10 @@ public class ScrollShieldProtectionService extends Service {
                 }
 
                 // This already-created instance now owns the newly confirmed restart generation.
-                // A later real unexpected destroy must be judged against this request, not against
-                // the older generation that originally created the service object.
+                // A later real unexpected destroy and notification stop must be judged against
+                // this request, not against the older generation that created the service object.
                 serviceStartRequestAtOnCreate = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(this);
+                refreshProtectionNotification();
             }
             return START_STICKY;
         }
@@ -1142,7 +1165,9 @@ public class ScrollShieldProtectionService extends Service {
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
-        Intent stopIntent = new Intent(this, ScrollShieldProtectionService.class).setAction(ACTION_STOP);
+        Intent stopIntent = new Intent(this, ScrollShieldProtectionService.class)
+            .setAction(ACTION_STOP)
+            .putExtra(EXTRA_STOP_START_REQUEST_AT, serviceStartRequestAtOnCreate);
         PendingIntent stopPendingIntent = PendingIntent.getService(
             this,
             1,
@@ -1162,6 +1187,13 @@ public class ScrollShieldProtectionService extends Service {
             .setOngoing(true)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Schutz stoppen", stopPendingIntent)
             .build();
+    }
+
+    private void refreshProtectionNotification() {
+        NotificationManager notificationManager =
+            (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (notificationManager == null) return;
+        notificationManager.notify(NOTIFICATION_ID, createNotification());
     }
 
     private void createNotificationChannel() {
