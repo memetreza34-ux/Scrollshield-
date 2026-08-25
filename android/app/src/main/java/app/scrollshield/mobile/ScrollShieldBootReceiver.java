@@ -49,32 +49,47 @@ public class ScrollShieldBootReceiver extends BroadcastReceiver {
             return;
         }
 
-        if (!ScrollShieldNativePlugin.recordProtectionStartRequested(context)) {
-            stopRecovery(
-                context,
-                "recovery_start_failed",
-                "Android konnte die Schutzaktivierung nach Neustart oder App-Update nicht dauerhaft als Startanforderung speichern"
-            );
-            return;
-        }
-
-        Intent serviceIntent = new Intent(context, ScrollShieldProtectionService.class);
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(serviceIntent);
-            } else {
-                context.startService(serviceIntent);
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            if (ScrollShieldProtectionService.isRunning()
+                && ScrollShieldNativePlugin.isProtectionEnabled(context)) {
+                return;
             }
-        } catch (RuntimeException error) {
-            stopRecovery(
-                context,
-                "recovery_start_failed",
-                "Android konnte den Schutz nach Neustart oder App-Update nicht automatisch starten"
-            );
+            if (ScrollShieldNativePlugin.hasFreshProtectionStartRequest(context)) return;
+
+            if (!ScrollShieldNativePlugin.recordProtectionStartRequested(context)) {
+                stopRecoveryLocked(
+                    context,
+                    "recovery_start_failed",
+                    "Android konnte die Schutzaktivierung nach Neustart oder App-Update nicht dauerhaft als Startanforderung speichern"
+                );
+                return;
+            }
+
+            Intent serviceIntent = new Intent(context, ScrollShieldProtectionService.class);
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent);
+                } else {
+                    context.startService(serviceIntent);
+                }
+            } catch (RuntimeException error) {
+                stopRecoveryLocked(
+                    context,
+                    "recovery_start_failed",
+                    "Android konnte den Schutz nach Neustart oder App-Update nicht automatisch starten"
+                );
+            }
         }
     }
 
     private void stopRecovery(Context context, String code, String message) {
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            stopRecoveryLocked(context, code, message);
+        }
+    }
+
+    private void stopRecoveryLocked(Context context, String code, String message) {
         ScrollShieldNativePlugin.persistProtectionSystemStopWithFallback(context, code, message);
+        ProtectionServiceDispatchGuard.dispatchControlledStop(context);
     }
 }
