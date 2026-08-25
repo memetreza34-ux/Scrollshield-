@@ -27,8 +27,14 @@ final class ProtectionServiceDispatchGuard {
             boolean requested = context.stopService(
                 new Intent(context, ScrollShieldProtectionService.class)
             );
-            if (requested) controlledStopAwaitingDestroy = true;
+            noteControlledStopDispatched(requested);
             return requested;
+        }
+    }
+
+    static void noteControlledStopDispatched(boolean requested) {
+        synchronized (LOCK) {
+            if (requested) controlledStopAwaitingDestroy = true;
         }
     }
 
