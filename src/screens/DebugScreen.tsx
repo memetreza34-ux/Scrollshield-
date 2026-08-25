@@ -148,6 +148,7 @@ export function DebugScreen({
           nativeSnapshot.configuredInstalledApps ? 'GEFUNDEN' : 'KEINE',
           nativeSnapshot.configuredInstalledApps,
         ],
+        ['Letzte Startanforderung', formatLifecycleTime(nativeSnapshot.lastProtectionStartRequestAt)],
         ['Letzter Schutzstart', formatLifecycleTime(nativeSnapshot.lastProtectionStartAt)],
         ['Letzter Stoppzeitpunkt', formatLifecycleTime(nativeSnapshot.lastProtectionStopAt)],
         ['Letzter Stoppcode', nativeSnapshot.lastProtectionStopCode || 'KEINER'],
