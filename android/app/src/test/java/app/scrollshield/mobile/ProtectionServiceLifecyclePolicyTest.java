@@ -24,6 +24,38 @@ public class ProtectionServiceLifecyclePolicyTest {
     }
 
     @Test
+    public void notificationStopIsAcceptedOnlyForCurrentLifecycleGeneration() {
+        assertTrue(
+            ProtectionServiceLifecyclePolicy.isCurrentNotificationStopGeneration(
+                300L,
+                300L,
+                300L
+            )
+        );
+        assertFalse(
+            ProtectionServiceLifecyclePolicy.isCurrentNotificationStopGeneration(
+                0L,
+                300L,
+                300L
+            )
+        );
+        assertFalse(
+            ProtectionServiceLifecyclePolicy.isCurrentNotificationStopGeneration(
+                200L,
+                300L,
+                300L
+            )
+        );
+        assertFalse(
+            ProtectionServiceLifecyclePolicy.isCurrentNotificationStopGeneration(
+                300L,
+                300L,
+                400L
+            )
+        );
+    }
+
+    @Test
     public void recordsUnexpectedDestroyOnlyForCurrentConfirmedActivation() {
         assertTrue(
             ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(
