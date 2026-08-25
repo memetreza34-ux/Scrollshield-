@@ -119,6 +119,7 @@ describe('NativeProtection lifecycle reasons', () => {
       running: false,
       enabled: true,
       unavailableAppIdsJson: '["instagram","instagram","tiktok"]',
+      lastStartRequestAt: 1_785_999_900_000,
       lastStartAt: 1_786_000_000_000,
       lastStopAt: 1_786_000_100_000,
       lastStopCode: ' notifications_missing ',
@@ -129,6 +130,7 @@ describe('NativeProtection lifecycle reasons', () => {
       running: false,
       enabled: true,
       unavailableAppIds: ['instagram', 'tiktok'],
+      lastStartRequestAt: 1_785_999_900_000,
       lastStartAt: 1_786_000_000_000,
       lastStopAt: 1_786_000_100_000,
       lastStopCode: 'notifications_missing',
@@ -137,11 +139,46 @@ describe('NativeProtection lifecycle reasons', () => {
     });
   });
 
-  it('detects an unclean process stop when the last start has no later stop record', async () => {
+  it('detects a pending start request during the confirmation grace window', () => {
+    expect(
+      assessNativeProtectionHealth(
+        {
+          running: false,
+          enabled: true,
+          lastStartRequestAt: 1_000_000,
+          lastStartAt: 900_000,
+          lastStopAt: 950_000,
+          lastStopCode: 'manual_app_stop',
+          lastStopMessage: 'Älterer Stopp',
+        },
+        1_010_000,
+      ),
+    ).toBe('start-pending');
+  });
+
+  it('detects an interrupted start request after the confirmation grace window', () => {
+    expect(
+      assessNativeProtectionHealth(
+        {
+          running: false,
+          enabled: true,
+          lastStartRequestAt: 1_000_000,
+          lastStartAt: 900_000,
+          lastStopAt: 950_000,
+          lastStopCode: 'manual_app_stop',
+          lastStopMessage: 'Älterer Stopp',
+        },
+        1_020_001,
+      ),
+    ).toBe('start-interrupted');
+  });
+
+  it('detects an unclean process stop when the last confirmed start has no later stop record', async () => {
     getProtectionServiceStatusMock.mockResolvedValue({
       running: false,
       enabled: true,
       unavailableAppIdsJson: '[]',
+      lastStartRequestAt: 1_786_000_150_000,
       lastStartAt: 1_786_000_200_000,
       lastStopAt: 1_786_000_100_000,
       lastStopCode: 'notification_action_stop',
@@ -151,6 +188,7 @@ describe('NativeProtection lifecycle reasons', () => {
     await expect(NativeProtection.getStatus()).resolves.toMatchObject({
       running: false,
       enabled: true,
+      lastStartRequestAt: 1_786_000_150_000,
       lastStartAt: 1_786_000_200_000,
       lastStopAt: 1_786_000_100_000,
       health: 'unclean-process-stop',
@@ -163,6 +201,7 @@ describe('NativeProtection lifecycle reasons', () => {
         running: false,
         enabled: true,
         unavailableAppIdsJson: '[]',
+        lastStartRequestAt: 150,
         lastStartAt: 200,
         lastStopAt: 100,
         lastStopCode: 'notification_action_stop',
@@ -172,6 +211,7 @@ describe('NativeProtection lifecycle reasons', () => {
         running: true,
         enabled: true,
         unavailableAppIdsJson: '[]',
+        lastStartRequestAt: 250,
         lastStartAt: 300,
         lastStopAt: 100,
         lastStopCode: 'notification_action_stop',
@@ -201,6 +241,7 @@ describe('NativeProtection lifecycle reasons', () => {
         running: false,
         enabled: true,
         unavailableAppIdsJson: '[]',
+        lastStartRequestAt: 150,
         lastStartAt: 200,
         lastStopAt: 100,
         lastStopCode: 'notification_action_stop',
@@ -210,6 +251,7 @@ describe('NativeProtection lifecycle reasons', () => {
         running: false,
         enabled: false,
         unavailableAppIdsJson: '["instagram"]',
+        lastStartRequestAt: 150,
         lastStartAt: 200,
         lastStopAt: 250,
         lastStopCode: 'target_app_missing',
@@ -248,6 +290,7 @@ describe('NativeProtection lifecycle reasons', () => {
         running: false,
         enabled: true,
         unavailableAppIdsJson: '[]',
+        lastStartRequestAt: 150,
         lastStartAt: 200,
         lastStopAt: 100,
         lastStopCode: 'notification_action_stop',
@@ -257,6 +300,7 @@ describe('NativeProtection lifecycle reasons', () => {
         running: true,
         enabled: true,
         unavailableAppIdsJson: '["instagram"]',
+        lastStartRequestAt: 250,
         lastStartAt: 300,
         lastStopAt: 100,
         lastStopCode: 'notification_action_stop',
@@ -295,6 +339,7 @@ describe('NativeProtection lifecycle reasons', () => {
       running: true,
       enabled: true,
       unavailableAppIdsJson: '[]',
+      lastStartRequestAt: 250,
       lastStartAt: 300,
       lastStopAt: 100,
       lastStopCode: '',
@@ -315,6 +360,7 @@ describe('NativeProtection lifecycle reasons', () => {
       running: false,
       enabled: false,
       unavailableAppIdsJson: '[]',
+      lastStartRequestAt: 50,
       lastStartAt: 100,
       lastStopAt: 200,
       lastStopCode: 'manual_app_stop',
@@ -333,6 +379,7 @@ describe('NativeProtection lifecycle reasons', () => {
       running: false,
       enabled: false,
       unavailableAppIdsJson: 'invalid-json',
+      lastStartRequestAt: Number.POSITIVE_INFINITY,
       lastStartAt: Number.NaN,
       lastStopAt: -100,
       lastStopCode: null,
@@ -343,6 +390,7 @@ describe('NativeProtection lifecycle reasons', () => {
       running: false,
       enabled: false,
       unavailableAppIds: [],
+      lastStartRequestAt: 0,
       lastStartAt: 0,
       lastStopAt: 0,
       lastStopCode: '',
@@ -351,8 +399,9 @@ describe('NativeProtection lifecycle reasons', () => {
     });
   });
 
-  it('distinguishes active, process-loss, inconsistent, and stopped states deterministically', () => {
+  it('distinguishes active, start, process-loss, inconsistent, and stopped states deterministically', () => {
     const base = {
+      lastStartRequestAt: 0,
       lastStartAt: 0,
       lastStopAt: 0,
       lastStopCode: '',
@@ -365,10 +414,33 @@ describe('NativeProtection lifecycle reasons', () => {
     );
     expect(assessNativeProtectionHealth({ ...base, running: false, enabled: true })).toBe('stale-activation');
     expect(
+      assessNativeProtectionHealth(
+        {
+          ...base,
+          running: false,
+          enabled: true,
+          lastStartRequestAt: 20_000,
+        },
+        25_000,
+      ),
+    ).toBe('start-pending');
+    expect(
+      assessNativeProtectionHealth(
+        {
+          ...base,
+          running: false,
+          enabled: true,
+          lastStartRequestAt: 20_000,
+        },
+        40_001,
+      ),
+    ).toBe('start-interrupted');
+    expect(
       assessNativeProtectionHealth({
         ...base,
         running: false,
         enabled: true,
+        lastStartRequestAt: 150,
         lastStartAt: 200,
         lastStopAt: 100,
       }),
@@ -398,6 +470,7 @@ describe('NativeProtection lifecycle reasons', () => {
       running: false,
       enabled: false,
       unavailableAppIds: [],
+      lastStartRequestAt: 0,
       lastStartAt: 0,
       lastStopAt: 0,
       lastStopCode: '',
