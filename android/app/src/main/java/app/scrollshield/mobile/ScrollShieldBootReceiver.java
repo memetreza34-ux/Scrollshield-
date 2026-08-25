@@ -54,13 +54,23 @@ public class ScrollShieldBootReceiver extends BroadcastReceiver {
                 && ScrollShieldNativePlugin.isProtectionEnabled(context)) {
                 return;
             }
-            if (ScrollShieldNativePlugin.hasFreshProtectionStartRequest(context)) return;
+            if (ScrollShieldNativePlugin.hasFreshProtectionStartRequest(context)) {
+                if (ScrollShieldNativePlugin.hasFreshProtectionStartRequestForCurrentConfig(context)) {
+                    return;
+                }
+                stopRecoveryLocked(
+                    context,
+                    "recovery_start_failed",
+                    "Eine gespeicherte Startanforderung gehört nicht mehr zur aktuellen Schutzkonfiguration"
+                );
+                return;
+            }
 
             if (!ScrollShieldNativePlugin.recordProtectionStartRequested(context)) {
                 stopRecoveryLocked(
                     context,
                     "recovery_start_failed",
-                    "Android konnte die Schutzaktivierung nach Neustart oder App-Update nicht dauerhaft als Startanforderung speichern"
+                    "Android konnte die Schutzaktivierung nach Neustart oder App-Update nicht dauerhaft mit einer gültigen Schutzkonfiguration verknüpfen"
                 );
                 return;
             }
