@@ -33,6 +33,8 @@ vi.mock('@capacitor/core', () => ({
 
 import { assessNativeProtectionHealth, NativeProtection } from './nativeProtection';
 
+const CONFIG_GENERATION = '11111111-2222-4333-8444-555555555555';
+
 describe('NativeProtection lifecycle reasons', () => {
   beforeEach(() => {
     isNativePlatformMock.mockReset();
@@ -46,7 +48,10 @@ describe('NativeProtection lifecycle reasons', () => {
     getPlatformMock.mockReturnValue('android');
     startProtectionServiceMock.mockResolvedValue(undefined);
     stopProtectionServiceMock.mockResolvedValue(undefined);
-    syncProtectionConfigMock.mockResolvedValue({ unavailableAppIdsJson: '[]' });
+    syncProtectionConfigMock.mockResolvedValue({
+      unavailableAppIdsJson: '[]',
+      configGeneration: CONFIG_GENERATION,
+    });
   });
 
   it('passes an explicit migration recovery reason to Android', async () => {
@@ -112,6 +117,33 @@ describe('NativeProtection lifecycle reasons', () => {
       requireCountdown: false,
       requireReason: true,
     });
+  });
+
+  it('starts only with the exact durable config generation returned by native sync', async () => {
+    await NativeProtection.start(
+      {
+        instagram: {
+          id: 'instagram',
+          ...DEFAULT_APP_CONFIG,
+          active: true,
+        },
+      },
+      false,
+    );
+
+    expect(syncProtectionConfigMock).toHaveBeenCalledTimes(1);
+    expect(startProtectionServiceMock).toHaveBeenCalledWith({
+      expectedConfigGeneration: CONFIG_GENERATION,
+    });
+  });
+
+  it('fails closed before start when native sync does not confirm a valid config generation', async () => {
+    syncProtectionConfigMock.mockResolvedValue({ unavailableAppIdsJson: '[]', configGeneration: 'invalid' });
+
+    await expect(NativeProtection.start({}, false)).rejects.toThrow(
+      'durable protection config generation',
+    );
+    expect(startProtectionServiceMock).not.toHaveBeenCalled();
   });
 
   it('preserves lifecycle diagnostics and detects stale activation', async () => {
@@ -205,7 +237,7 @@ describe('NativeProtection lifecycle reasons', () => {
         lastStartAt: 200,
         lastStopAt: 100,
         lastStopCode: 'notification_action_stop',
-        lastStopMessage: 'Ein älterer sauberer Stopp',
+        lastStopMessage: 'Ein älterwer sauberer Stopp',
       })
       .mockResolvedValueOnce({
         running: true,
@@ -230,7 +262,9 @@ describe('NativeProtection lifecycle reasons', () => {
     );
 
     expect(syncProtectionConfigMock).toHaveBeenCalledTimes(1);
-    expect(startProtectionServiceMock).toHaveBeenCalledTimes(1);
+    expect(startProtectionServiceMock).toHaveBeenCalledWith({
+      expectedConfigGeneration: CONFIG_GENERATION,
+    });
     expect(getProtectionServiceStatusMock).toHaveBeenCalledTimes(2);
     expect(result).toMatchObject({ running: true, enabled: true, health: 'active' });
   });
@@ -257,7 +291,10 @@ describe('NativeProtection lifecycle reasons', () => {
         lastStopCode: 'target_app_missing',
         lastStopMessage: 'Keine aktive installierte Ziel-App ist mehr verfügbar',
       });
-    syncProtectionConfigMock.mockResolvedValue({ unavailableAppIdsJson: '["instagram"]' });
+    syncProtectionConfigMock.mockResolvedValue({
+      unavailableAppIdsJson: '["instagram"]',
+      configGeneration: CONFIG_GENERATION,
+    });
 
     const result = await NativeProtection.recoverAfterProcessLoss(
       {
@@ -306,7 +343,10 @@ describe('NativeProtection lifecycle reasons', () => {
         lastStopCode: 'notification_action_stop',
         lastStopMessage: 'Ein älterer sauberer Stopp',
       });
-    syncProtectionConfigMock.mockResolvedValue({ unavailableAppIdsJson: '["instagram"]' });
+    syncProtectionConfigMock.mockResolvedValue({
+      unavailableAppIdsJson: '["instagram"]',
+      configGeneration: CONFIG_GENERATION,
+    });
 
     const result = await NativeProtection.recoverAfterProcessLoss(
       {
@@ -325,7 +365,9 @@ describe('NativeProtection lifecycle reasons', () => {
     );
 
     expect(stopProtectionServiceMock).not.toHaveBeenCalled();
-    expect(startProtectionServiceMock).toHaveBeenCalledTimes(1);
+    expect(startProtectionServiceMock).toHaveBeenCalledWith({
+      expectedConfigGeneration: CONFIG_GENERATION,
+    });
     expect(result).toMatchObject({
       running: true,
       enabled: true,
