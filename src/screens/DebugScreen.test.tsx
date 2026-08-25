@@ -40,6 +40,7 @@ describe('DebugScreen native diagnostics', () => {
       protectionEnabled: true,
       serviceRunning: false,
       configuredInstalledApps: true,
+      lastProtectionStartRequestAt: 1_785_998_900_000,
       lastProtectionStartAt: 1_785_999_000_000,
       lastProtectionStopAt: 1_785_999_500_000,
       lastProtectionStopCode: 'notifications_missing',
@@ -67,6 +68,7 @@ describe('DebugScreen native diagnostics', () => {
     expect(screen.getByText(/Schutz-Benachrichtigung/)).toBeInTheDocument();
     expect(screen.getAllByText('DEAKTIVIERT')).toHaveLength(1);
     expect(screen.getByText('NICHT BEREIT')).toBeInTheDocument();
+    expect(screen.getByText(/Letzte Startanforderung/)).toBeInTheDocument();
     expect(screen.getByText(/Letzter Schutzstart/)).toBeInTheDocument();
     expect(screen.getByText(/Letzter Stoppzeitpunkt/)).toBeInTheDocument();
     expect(screen.getByText(/Letzter Stoppcode/)).toBeInTheDocument();
