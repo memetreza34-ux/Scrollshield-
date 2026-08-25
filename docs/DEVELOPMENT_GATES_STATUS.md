@@ -23,12 +23,12 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 | G1 | Architektur & Repo-Prozess | **FERTIG** | React/TS, lokale Daten, Capacitor/Native Android, Draft-PR-Prozess und Verantwortungsgrenzen sind dokumentiert | bei Architekturänderung erneut öffnen |
 | G2 | Datenmodell & Migration | **TEILWEISE** | starke transaktionale/V0.7-Migration im Source; reale Alt-Daten-Evidenz fehlt | echter V0.7-Upgrade-Test + bytegenauer Archivvergleich |
 | G3 | Kern-UI/UX & Accessibility | **TEILWEISE** | Release-Screens und Source-A11y-Checks existieren; reale Usability-/Large-Font-/TalkBack-Evidenz fehlt | physische Accessibility- und User-Research-Sessions |
-| G4 | Native Android Schutz | **TEILWEISE** | atomare System-/Terminal-Stopps, repo-weiter Stop-Atomicity-Guard, persistenter Start-Handshake, logisch geordnete Lifecycle-Grenzen und serialisierte Android Start-/Stop-Dispatches mit bounded controlled-destroy Token sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + reale LIFE-12..14/DISPATCH-01..04/Process-Kill-Szenarien |
+| G4 | Native Android Schutz | **TEILWEISE** | atomare System-/Terminal-Stopps, persistenter Start-Handshake, logisch geordnete Lifecycle-Grenzen, serialisierte Start-/Stop-Dispatches, bounded controlled-destroy Token und generationgebundene Notification-Stop-Aktionen sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + LIFE-12..15/DISPATCH-01..05/Process-Kill real |
 | G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First-Manifest, Privacy-Guard, gepinnter Gradle-SHA256 und `check:supply-chain` existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-Check + Dependency-/Manifest-Snapshot + finaler Binary-Audit + Threat-Review |
 | G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` inklusive `check:native-stop-atomicity`, `check:start-handshake`, `check:lifecycle` und `check:android-instrumentation` ist vorbereitet; GitHub Runner liefert weiterhin keine ausgeführten Steps | kompletter echter Verify-Lauf auf exaktem Head |
-| G7 | Android Instrumentation/E2E | **TEILWEISE** | App-/Notification-, Prerequisite-, Boot/Update-, Start-/Destroy-, Process-Loss-, Start↔Stop- und Service-Dispatch-Race-Verträge existieren. Persistenz-Gewinner, Pending-Doppelstart, Same-Instance-Restart, bounded Destroy-Token und Fast-Restart-Teardown sind source-seitig definiert; echte Android-Ausführung fehlt | `connectedDebugAndroidTest` + LIFE-12..14 + DISPATCH-01..04 + Pre-/Post-Confirmation-Process-Kill real ausführen |
+| G7 | Android Instrumentation/E2E | **TEILWEISE** | App-/Notification-, Prerequisite-, Boot/Update-, Start-/Destroy-, Process-Loss-, Start↔Stop-, Service-Dispatch- und stale-PendingIntent-Verträge existieren; aktuelle Notification-Generation ist source-seitig gegen alte `ACTION_STOP` abgesichert; echte Android-Ausführung fehlt | `connectedDebugAndroidTest` + LIFE-12..15 + DISPATCH-01..05 + Pre-/Post-Confirmation-Process-Kill real |
 | G8 | Performance & Batterie | **TEILWEISE** | Worker/Coordinator-Architektur und Shutdown-Drain im Source; reale JUnit-/Instrumentation-/Gradle-/Device-Evidenz fehlt | Worker-/Coordinator-JUnit + Usage-Flush-Instrumentation real ausführen + `assembleDebug` + 12h-Baseline |
-| G9 | Physical Device Matrix | **FEHLT** | Matrix inklusive LIFE-12..14 ist definiert; zusätzliche Dispatch-Race-Evidence ist in `PROTECTION_SERVICE_DISPATCH_RACES.md` spezifiziert, aber reale Geräte-Evidence fehlt | Pflichtgeräte/Szenarien mit Build-ID, Diagnose-JSON, Logcat und Screenrecord vollständig dokumentieren |
+| G9 | Physical Device Matrix | **FEHLT** | Matrix inklusive LIFE-12..15 ist definiert; zusätzliche Dispatch-Races DISPATCH-01..05 sind spezifiziert, aber reale Geräte-Evidence fehlt | Pflichtgeräte/Szenarien mit Build-ID, Diagnose-JSON, Logcat und Screenrecord vollständig dokumentieren |
 | G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Evidence-Schema v2 existiert; Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Kandidaten-SHA + echte Referenzen |
 | G11 | Legal / Privacy / Support | **TEILWEISE** | Dokumente/Struktur existieren; finale reale Identität, Support-Mailbox und öffentliche Privacy-Domain fehlen | keine Platzhalter + überprüfbare öffentliche Angaben |
 | G12 | Store / Play Review | **TEILWEISE** | Submission Packet, Screenshots und Deklarationstexte vorbereitet; finaler AAB/Reviewer-Nachweis fehlt | gegen signierten AAB verifizierte Angaben + Videos |
@@ -73,28 +73,49 @@ Damit werden dauerhafte Lifecycle-Evidence und der dazugehörige Android-Service
 - Kontrollierte Stopps setzen nach erfolgreichem `stopService()` einen process-lokalen one-shot Destroy-Token.
 - Dieser Token ist an `System.nanoTime()` gebunden und maximal 30 Sekunden gültig.
 - Abgelaufener/negativer Token oder fehlgeschlagener Stop-Dispatch darf einen späteren echten Destroy nicht maskieren.
-- `RUNNING=false` wird am Anfang der serialisierten `onDestroy()`-Grenze veröffentlicht, damit ein paralleler Restart nicht als bereits laufend wegoptimiert wird.
-- Eine bereits existierende Service-Instanz übernimmt nach erfolgreicher Same-Instance-Restart-Confirmation die neue Request-Generation.
+- `RUNNING=false` wird am Anfang der serialisierten `onDestroy()`-Grenze veröffentlicht.
+- Eine existierende Service-Instanz übernimmt nach erfolgreicher Same-Instance-Restart-Confirmation die neue Request-Generation.
 - Ein altes `explicitStopRequested=true` bleibt nur solange relevant, wie keine neuere bestätigte Generation von dieser Instanz übernommen wurde.
-- `check:start-handshake` und `check:lifecycle` erzwingen diese Grenzen source-seitig.
-- `ProtectionStartHandshakePolicyTest`, `ProtectionServiceLifecyclePolicyTest`, `ProtectionServiceDispatchGuardTest` und `ProtectionDiagnosticsInstrumentedTest` enthalten passende Testverträge.
+
+### Generationgebundene Notification-Aktion
+
+Die Foreground-Notification trägt im Stop-`PendingIntent`:
+
+```text
+EXTRA_STOP_START_REQUEST_AT = serviceStartRequestAtOnCreate
+```
+
+Ein `ACTION_STOP` darf nur die aktuelle Generation stoppen:
+
+```text
+actionStartRequestAt == serviceStartRequestAtOnCreate == latestStartRequestAt
+```
+
+Fehlende oder alte Generationen werden vor jeder `notification_action_stop`-Persistenz ignoriert. Sie dürfen die aktuelle Aktivierung nicht verändern oder stoppen.
+
+Nach Same-Instance-Restart wird die Notification auf die neue Generation aktualisiert. Source-Guard und JUnit schützen diese Invariante.
+
+- `check:start-handshake` und `check:lifecycle` erzwingen die Generation-Bindung.
+- `ProtectionServiceLifecyclePolicyTest.notificationStopIsAcceptedOnlyForCurrentLifecycleGeneration` schützt current/missing/stale Fälle.
+- Device-Evidence: `LIFE-15` / `DISPATCH-05`.
 
 ## Aktueller Arbeitsfokus
 
 1. **G6 extern entsperren:** vollständigen Verify-Lauf auf exaktem Head ausführen.
-2. **G7 LIFE-12:** terminalen Stop zwischen Request und Confirmation gewinnen lassen; verspätete Confirmation darf nichts überschreiben.
-3. **G7 LIFE-13:** zweiten Start während `start-pending` auslösen; Request-Generation darf nicht erneuert werden.
-4. **G7 LIFE-14:** kontrollierter Stop → sofortiger Restart vor altem `onDestroy()`; neue Aktivierung muss bestehen bleiben.
-5. **G7 DISPATCH-01:** Request-Commit gegen konkurrierenden Stop bis zum tatsächlichen Android-Startdispatch testen.
-6. **G7 DISPATCH-02:** Stop-Persistenz gegen sofortigen Restart bis zum tatsächlichen `stopService()` testen.
-7. **G7 DISPATCH-03:** residualen kontrollierten Destroy nach Fast-Restart testen.
-8. **G7 DISPATCH-04:** abgelaufenen controlled-stop Token gegen späteren echten Destroy testen.
-9. **G7 Pre-Confirmation-Abbruch:** `start-pending` → `start-interrupted` → normaler Retry → `active`.
-10. **G7 Post-Start-Process-Kill:** bestätigter `lastStartAt` → harter Kill → `unclean-process-stop` → Recovery → `active`.
-11. **G7 App-/Notification-/Start-/Destroy-/Boot-/Permission-/Target-App-Pfade real prüfen.**
-12. **G8:** Worker-/Coordinator-JUnit, Usage-Flush-Instrumentation, Build und 12h-Baseline.
-13. **G9:** vollständige Physical Device Matrix.
-14. **G2/G5/G0/G3:** Migration, Security-Audit, User Research und Accessibility-Evidence.
+2. **G7 LIFE-12:** Stop vor verspäteter Confirmation.
+3. **G7 LIFE-13:** Pending-Doppelstart ohne neue Generation.
+4. **G7 LIFE-14:** Stop → sofortiger Restart vor altem `onDestroy()`.
+5. **G7 LIFE-15:** alte R1-Notification-Stop-Aktion nach bestätigtem R2-Restart ignorieren; aktuelle R2-Aktion muss normal stoppen.
+6. **G7 DISPATCH-01:** Request-Commit gegen konkurrierenden Stop bis Android-Startdispatch.
+7. **G7 DISPATCH-02:** Stop-Persistenz gegen sofortigen Restart bis `stopService()`.
+8. **G7 DISPATCH-03:** residualer kontrollierter Destroy nach Fast-Restart.
+9. **G7 DISPATCH-04:** abgelaufener controlled-stop Token gegen späteren echten Destroy.
+10. **G7 DISPATCH-05:** stale Notification-`ACTION_STOP` gegen aktuelle Restart-Generation.
+11. **G7 Pre-/Post-Confirmation Process Loss** real prüfen.
+12. **G7 App-/aktuelle Notification-/Start-/Destroy-/Boot-/Permission-/Target-App-Pfade** real prüfen.
+13. **G8:** Worker-/Coordinator-JUnit, Usage-Flush-Instrumentation, Build und 12h-Baseline.
+14. **G9:** vollständige Physical Device Matrix.
+15. **G2/G5/G0/G3:** Migration, Security-Audit, User Research und Accessibility-Evidence.
 
 ## Aktuelle CI-Grenze
 
@@ -108,16 +129,15 @@ Damit sind insbesondere **nicht als bestanden belegt**:
 - `check:lifecycle`;
 - `check:android-instrumentation`;
 - `ProtectionStartHandshakePolicyTest`;
-- `ProtectionServiceLifecyclePolicyTest`;
+- `ProtectionServiceLifecyclePolicyTest` inklusive Notification-Generation;
 - `ProtectionServiceDispatchGuardTest`;
-- neue Start↔Stop-/Dispatch-Race-Instrumentation;
 - Android JUnit;
 - Android Instrumentation;
 - Gradle Debug Build;
 - APK;
-- LIFE-12 bis LIFE-14;
-- DISPATCH-01 bis DISPATCH-04;
-- reale `start-pending`-/`start-interrupted`-/`unclean-process-stop`-Evidence.
+- LIFE-12 bis LIFE-15;
+- DISPATCH-01 bis DISPATCH-05;
+- reale `start-pending`-/`start-interrupted`-/`unclean-process-stop`-/PendingIntent-Evidence.
 
 ## Änderungsregel
 
