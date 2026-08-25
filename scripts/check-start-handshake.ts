@@ -64,7 +64,7 @@ if (nativeStartStart < 0 || prerequisiteRejectStart <= nativeStartStart) {
 requirePattern(
   pluginPath,
   plugin,
-  /recordProtectionServiceStarted\(Context context\)[\s\S]*putLong\(LAST_START_AT_KEY, System\.currentTimeMillis\(\)\)[\s\S]*boolean persisted[\s\S]*if \(!persisted\)[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*ProtectionStopReasonPolicy\.START_FAILED[\s\S]*throw new IllegalStateException/,
+  /recordProtectionServiceStarted\(Context context\)[\s\S]*boolean persisted[\s\S]*putLong\(LAST_START_AT_KEY, System\.currentTimeMillis\(\)\)[\s\S]*\.commit\(\)[\s\S]*if \(!persisted\)[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*ProtectionStopReasonPolicy\.START_FAILED[\s\S]*throw new IllegalStateException/,
   'Confirmed-start evidence must fail closed with START_FAILED if its durable commit fails.',
 );
 requirePattern(
