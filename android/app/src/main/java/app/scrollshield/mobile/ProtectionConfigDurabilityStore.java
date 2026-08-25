@@ -20,11 +20,40 @@ final class ProtectionConfigDurabilityStore {
         final boolean persisted;
         final String generation;
         final String previousUnavailableActiveJson;
+        final boolean rollbackPersisted;
 
-        CommitResult(boolean persisted, String generation, String previousUnavailableActiveJson) {
+        CommitResult(
+            boolean persisted,
+            String generation,
+            String previousUnavailableActiveJson,
+            boolean rollbackPersisted
+        ) {
             this.persisted = persisted;
             this.generation = generation;
             this.previousUnavailableActiveJson = previousUnavailableActiveJson;
+            this.rollbackPersisted = rollbackPersisted;
+        }
+    }
+
+    private static final class PreferenceSnapshot {
+        final boolean hadConfig;
+        final String configJson;
+        final boolean hadUnavailableApps;
+        final String unavailableJson;
+        final boolean hadUnavailableActiveApps;
+        final String unavailableActiveJson;
+        final boolean hadGeneration;
+        final String generation;
+
+        PreferenceSnapshot(SharedPreferences preferences) {
+            hadConfig = preferences.contains(ScrollShieldNativePlugin.CONFIG_KEY);
+            configJson = preferences.getString(ScrollShieldNativePlugin.CONFIG_KEY, "");
+            hadUnavailableApps = preferences.contains(UNAVAILABLE_APPS_KEY);
+            unavailableJson = preferences.getString(UNAVAILABLE_APPS_KEY, "[]");
+            hadUnavailableActiveApps = preferences.contains(UNAVAILABLE_ACTIVE_APPS_KEY);
+            unavailableActiveJson = preferences.getString(UNAVAILABLE_ACTIVE_APPS_KEY, "[]");
+            hadGeneration = preferences.contains(CONFIG_GENERATION_KEY);
+            generation = preferences.getString(CONFIG_GENERATION_KEY, "");
         }
     }
 
@@ -38,7 +67,8 @@ final class ProtectionConfigDurabilityStore {
     ) throws JSONException {
         validateConfig(configJson);
         SharedPreferences preferences = preferences(context);
-        String previousUnavailableActive = preferences.getString(UNAVAILABLE_ACTIVE_APPS_KEY, "[]");
+        PreferenceSnapshot previous = new PreferenceSnapshot(preferences);
+        String previousUnavailableActive = previous.unavailableActiveJson;
         String generation = UUID.randomUUID().toString();
         boolean persisted = preferences
             .edit()
@@ -47,7 +77,26 @@ final class ProtectionConfigDurabilityStore {
             .putString(UNAVAILABLE_ACTIVE_APPS_KEY, unavailableActiveJson)
             .putString(CONFIG_GENERATION_KEY, generation)
             .commit();
-        return new CommitResult(persisted, generation, previousUnavailableActive == null ? "[]" : previousUnavailableActive);
+
+        if (persisted) {
+            return new CommitResult(
+                true,
+                generation,
+                previousUnavailableActive == null ? "[]" : previousUnavailableActive,
+                true
+            );
+        }
+
+        // SharedPreferences may expose Editor changes to this process even when disk persistence
+        // fails. Restore the complete previous tuple before releasing the dispatch lock so the
+        // running service cannot consume a candidate config that was never durably accepted.
+        boolean rollbackPersisted = restoreSnapshot(preferences, previous);
+        return new CommitResult(
+            false,
+            "",
+            previousUnavailableActive == null ? "[]" : previousUnavailableActive,
+            rollbackPersisted
+        );
     }
 
     static String ensureGenerationForExistingConfig(Context context) {
@@ -93,6 +142,51 @@ final class ProtectionConfigDurabilityStore {
             return UUID.fromString(normalized).toString();
         } catch (IllegalArgumentException error) {
             return "";
+        }
+    }
+
+    private static boolean restoreSnapshot(
+        SharedPreferences preferences,
+        PreferenceSnapshot snapshot
+    ) {
+        SharedPreferences.Editor rollback = preferences.edit();
+        restoreString(
+            rollback,
+            ScrollShieldNativePlugin.CONFIG_KEY,
+            snapshot.hadConfig,
+            snapshot.configJson
+        );
+        restoreString(
+            rollback,
+            UNAVAILABLE_APPS_KEY,
+            snapshot.hadUnavailableApps,
+            snapshot.unavailableJson
+        );
+        restoreString(
+            rollback,
+            UNAVAILABLE_ACTIVE_APPS_KEY,
+            snapshot.hadUnavailableActiveApps,
+            snapshot.unavailableActiveJson
+        );
+        restoreString(
+            rollback,
+            CONFIG_GENERATION_KEY,
+            snapshot.hadGeneration,
+            snapshot.generation
+        );
+        return rollback.commit();
+    }
+
+    private static void restoreString(
+        SharedPreferences.Editor editor,
+        String key,
+        boolean existed,
+        String value
+    ) {
+        if (existed) {
+            editor.putString(key, value);
+        } else {
+            editor.remove(key);
         }
     }
 
