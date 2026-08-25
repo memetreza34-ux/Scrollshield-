@@ -48,6 +48,24 @@ export const describeNativeProtectionHealth = (
         tone: 'warning',
         showLastStop: status.lastStopAt > 0,
       };
+    case 'start-pending':
+      return {
+        badge: 'STARTET',
+        title: 'Android bestätigt den Schutzstart',
+        message:
+          'Die Startanforderung wurde dauerhaft gespeichert. Der Foreground-Dienst hat seinen Start aber noch nicht bestätigt. Prüfe den Status in wenigen Sekunden erneut.',
+        tone: 'neutral',
+        showLastStop: false,
+      };
+    case 'start-interrupted':
+      return {
+        badge: 'START ABGEBROCHEN',
+        title: 'Schutzstart wurde nicht bestätigt',
+        message:
+          'Die gespeicherte Startanforderung ist neuer als jeder bestätigte Dienststart oder Stopp, aber der Dienst läuft nicht. Der Prozess kann zwischen Startanforderung und Foreground-Bestätigung beendet worden sein. Prüfe die Android-Zugriffe und starte den Schutz erneut.',
+        tone: 'warning',
+        showLastStop: false,
+      };
     case 'unclean-process-stop':
       return {
         badge: 'PROZESS ABGEBROCHEN',
