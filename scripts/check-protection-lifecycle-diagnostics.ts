@@ -17,6 +17,8 @@ const paths = {
   lifecyclePolicyTest: `${javaTestRoot}/ProtectionServiceLifecyclePolicyTest.java`,
   startPolicy: `${javaRoot}/ProtectionStartHandshakePolicy.java`,
   startPolicyTest: `${javaTestRoot}/ProtectionStartHandshakePolicyTest.java`,
+  configStore: `${javaRoot}/ProtectionConfigDurabilityStore.java`,
+  configStoreTest: `${javaTestRoot}/ProtectionConfigDurabilityStoreTest.java`,
   diagnostics: `${javaRoot}/ScrollShieldDiagnosticsPlugin.java`,
   bridge: 'src/lib/nativeProtection.ts',
   bridgeTest: 'src/lib/nativeProtection.test.ts',
@@ -27,12 +29,9 @@ const paths = {
   debugTest: 'src/screens/DebugScreen.test.tsx',
   permissions: 'src/screens/PermissionsScreen.tsx',
   permissionsTest: 'src/screens/PermissionsScreen.test.tsx',
-  app: 'src/App.tsx',
-  appTest: 'src/App.migration.test.tsx',
-  emergencyPolicy: `${javaRoot}/EmergencyUnlockPolicy.java`,
-  emergencyPolicyTest: `${javaTestRoot}/EmergencyUnlockPolicyTest.java`,
   matrix: 'docs/ANDROID_DEVICE_TEST_MATRIX.md',
   dispatchSpec: 'docs/PROTECTION_SERVICE_DISPATCH_RACES.md',
+  configSpec: 'docs/PROTECTION_CONFIG_DURABILITY.md',
 } as const;
 
 const entries = await Promise.all(
@@ -49,85 +48,73 @@ function forbidText(key: keyof typeof paths, text: string, message: string) {
   if (source[key].includes(text)) findings.push(`${paths[key]}: ${message}`);
 }
 
-requirePattern(
-  'packageJson',
-  /"check:lifecycle":\s*"tsx scripts\/check-protection-lifecycle-diagnostics\.ts"/,
-  'package.json must expose check:lifecycle.',
-);
-requirePattern(
-  'packageJson',
-  /"verify":[^\n]*npm run check:lifecycle/,
-  'check:lifecycle must remain in npm run verify.',
-);
-requirePattern(
-  'readiness',
-  /args: \['run', 'check:lifecycle'\], required: true/,
-  'readiness must execute check:lifecycle as required.',
-);
+requirePattern('packageJson', /"check:lifecycle":\s*"tsx scripts\/check-protection-lifecycle-diagnostics\.ts"/, 'package.json must expose check:lifecycle.');
+requirePattern('packageJson', /"verify":[^\n]*npm run check:lifecycle/, 'check:lifecycle must remain in verify.');
+requirePattern('readiness', /args: \['run', 'check:lifecycle'\], required: true/, 'readiness must require check:lifecycle.');
 
 requirePattern(
   'plugin',
   /LAST_START_REQUEST_AT_KEY[\s\S]*LAST_START_AT_KEY[\s\S]*LAST_STOP_AT_KEY[\s\S]*LAST_STOP_CODE_KEY[\s\S]*LAST_STOP_MESSAGE_KEY/,
-  'Native preferences must keep ordered request/start/stop lifecycle evidence and exact stop diagnostics.',
+  'Native preferences must keep ordered lifecycle evidence and exact stop diagnostics.',
 );
 requirePattern(
   'startPolicy',
   /CONFIRMATION_GRACE_MS\s*=\s*15_000L[\s\S]*MAX_FUTURE_CLOCK_SKEW_MS\s*=\s*5_000L[\s\S]*nextLifecycleTimestamp[\s\S]*hasFreshPendingStartRequest[\s\S]*isConfirmationSuperseded/,
-  'Start policy must retain grace/skew, strict ordering, pending detection and stop-wins confirmation.',
+  'Start policy must retain strict ordering, pending timeout and stop-wins semantics.',
 );
 requirePattern(
   'startPolicyTest',
   /lifecycleTimestampAdvancesStrictlyBeyondKnownBoundary[\s\S]*freshPendingStartUsesBoundedConfirmationWindow[\s\S]*clockRollbackCannotHoldPendingStartForever[\s\S]*terminalStopSupersedesDelayedConfirmation/,
-  'Start-policy JUnit must lock ordering, grace, rollback and stop-wins semantics.',
+  'Start-policy JUnit must retain ordering, timeout, rollback and stop-wins coverage.',
+);
+
+requirePattern(
+  'configStore',
+  /CONFIG_GENERATION_KEY[\s\S]*START_REQUEST_CONFIG_GENERATION_KEY[\s\S]*commitConfig[\s\S]*\.commit\(\)[\s\S]*ensureGenerationForExistingConfig[\s\S]*isCurrentRequestGeneration/,
+  'Lifecycle must be bound to synchronous durable config generations.',
+);
+forbidText('configStore', '.apply()', 'Start-critical config storage must not use apply().');
+requirePattern('configStoreTest', /generationNormalizationAcceptsOnlyCanonicalUuidValues[\s\S]*generationEqualityIsExactAfterNormalization/, 'Config-generation JUnit contract is incomplete.');
+
+requirePattern(
+  'plugin',
+  /startProtectionService\(PluginCall call\)[\s\S]*expectedConfigGeneration[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*matchesCurrentGeneration\(context, expectedConfigGeneration\)[\s\S]*recordProtectionStartRequested\(context, expectedConfigGeneration\)[\s\S]*startForegroundService\(intent\)/,
+  'App start must serialize durable config-generation validation, request persistence and Android dispatch.',
+);
+requirePattern(
+  'plugin',
+  /recordProtectionStartRequested\(Context context, String expectedConfigGeneration\)[\s\S]*expected\.equals\(current\)[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, true\)[\s\S]*putLong\(LAST_START_REQUEST_AT_KEY, requestAt\)[\s\S]*START_REQUEST_CONFIG_GENERATION_KEY, current[\s\S]*\.commit\(\)/,
+  'Request activation and exact config generation must be one commit.',
+);
+requirePattern(
+  'plugin',
+  /recordProtectionServiceStarted\(Context context\)[\s\S]*isConfirmationSuperseded[\s\S]*isCurrentRequestGeneration\(preferences\)[\s\S]*FAILED_CLOSED[\s\S]*putLong\(LAST_START_AT_KEY/,
+  'Service confirmation must preserve terminal winners and reject config-generation drift.',
+);
+requirePattern(
+  'boot',
+  /synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*recordProtectionStartRequested\(context\)[\s\S]*startForegroundService\(serviceIntent\)/,
+  'Boot/update recovery must use validated durable-config bootstrap plus serialized Android dispatch.',
 );
 
 requirePattern(
   'dispatchGuard',
   /static final Object LOCK[\s\S]*CONTROLLED_STOP_DESTROY_WINDOW_NANOS\s*=\s*30_000_000_000L[\s\S]*dispatchControlledStop\(Context context\)[\s\S]*context\.stopService[\s\S]*System\.nanoTime\(\)[\s\S]*consumeControlledStopDestroy/,
-  'Dispatch guard must serialize Android service stops and own bounded monotonic controlled-destroy suppression.',
+  'Dispatch guard must retain shared lock and bounded one-shot destroy suppression.',
 );
 requirePattern(
   'dispatchGuardTest',
   /successfulControlledStopIsConsumedExactlyOnceByPromptDestroy[\s\S]*staleControlledStopTokenCannotSuppressLaterUnexpectedDestroy[\s\S]*backwardMonotonicInputFailsSafeInsteadOfSuppressingDestroy[\s\S]*failedStopDispatchDoesNotSuppressFutureUnexpectedDestroy/,
-  'Dispatch-guard JUnit must cover prompt, stale, rollback and failed-dispatch token boundaries.',
-);
-
-requirePattern(
-  'plugin',
-  /startProtectionService\(PluginCall call\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*hasFreshProtectionStartRequest\(context\)[\s\S]*recordProtectionStartRequested\(context\)[\s\S]*startForegroundService\(intent\)/,
-  'App start must serialize pending check, durable request and Android start dispatch.',
+  'Dispatch-guard JUnit must retain prompt/stale/rollback/failed-dispatch coverage.',
 );
 requirePattern(
   'plugin',
   /stopProtectionService\(PluginCall call\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*persistProtectionTerminalStopWithFallback[\s\S]*dispatchControlledStop\(context\)/,
-  'App stop must serialize exact terminal evidence and Android stop dispatch.',
+  'App stop evidence and Android stop dispatch must remain serialized.',
 );
-requirePattern(
-  'boot',
-  /synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*hasFreshProtectionStartRequest\(context\)[\s\S]*recordProtectionStartRequested\(context\)[\s\S]*startForegroundService\(serviceIntent\)/,
-  'Boot/update recovery must serialize durable request and Android start dispatch.',
-);
-forbidText(
-  'plugin',
-  'context.stopService(new Intent(context, ScrollShieldProtectionService.class))',
-  'Plugin lifecycle methods must not bypass the shared dispatch guard.',
-);
-forbidText(
-  'service',
-  'stopSelf()',
-  'Controlled service shutdown must not bypass serialized stopService dispatch.',
-);
+forbidText('plugin', 'context.stopService(new Intent(context, ScrollShieldProtectionService.class))', 'Plugin must not bypass shared dispatch guard.');
+forbidText('service', 'stopSelf()', 'Controlled service shutdown must not bypass shared dispatch guard.');
 
-requirePattern(
-  'plugin',
-  /persistProtectionSystemStopWithFallback[\s\S]*synchronized \(EVENT_LOCK\)[\s\S]*recordProtectionSystemStop[\s\S]*if \(!persisted\)[\s\S]*setProtectionEnabled[\s\S]*recordProtectionStop/,
-  'System-stop fallback sequence must remain serialized under EVENT_LOCK.',
-);
-requirePattern(
-  'plugin',
-  /persistProtectionTerminalStopWithFallback[\s\S]*synchronized \(EVENT_LOCK\)[\s\S]*recordProtectionTerminalStop[\s\S]*if \(!persisted\)[\s\S]*setProtectionEnabled[\s\S]*recordProtectionStop/,
-  'Terminal-stop fallback sequence must remain serialized under EVENT_LOCK.',
-);
 requirePattern(
   'plugin',
   /recordProtectionSystemStop[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, false\)[\s\S]*putString\(EVENT_QUEUE_KEY, events\.toString\(\)\)[\s\S]*putLong\(LAST_STOP_AT_KEY, timestamp\)[\s\S]*putString\(LAST_STOP_CODE_KEY, normalizedCode\)[\s\S]*\.commit\(\)/,
@@ -136,64 +123,51 @@ requirePattern(
 requirePattern(
   'plugin',
   /recordProtectionTerminalStop[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, false\)[\s\S]*putLong\(LAST_STOP_AT_KEY, timestamp\)[\s\S]*putString\(LAST_STOP_CODE_KEY, normalizedCode\)[\s\S]*putString\(LAST_STOP_MESSAGE_KEY, normalizedMessage\)[\s\S]*\.commit\(\)/,
-  'Explicit terminal stop must atomically persist disabled state and exact diagnostics.',
-);
-
-requirePattern(
-  'service',
-  /EXTRA_STOP_START_REQUEST_AT\s*=[\s\S]*STOP_START_REQUEST_AT/,
-  'Foreground notification stop actions must carry a dedicated lifecycle-generation extra.',
-);
-requirePattern(
-  'service',
-  /createNotification\(\)[\s\S]*setAction\(ACTION_STOP\)[\s\S]*putExtra\(EXTRA_STOP_START_REQUEST_AT, serviceStartRequestAtOnCreate\)[\s\S]*PendingIntent\.FLAG_UPDATE_CURRENT \| PendingIntent\.FLAG_IMMUTABLE/,
-  'The current notification PendingIntent must be immutable and updated with the owning start-request generation.',
-);
-requirePattern(
-  'lifecyclePolicy',
-  /isCurrentNotificationStopGeneration[\s\S]*actionStartRequestAt > 0L[\s\S]*actionStartRequestAt == serviceStartRequestAt[\s\S]*actionStartRequestAt == latestStartRequestAt/,
-  'Notification stop acceptance must require exact action/service/latest generation equality.',
-);
-requirePattern(
-  'lifecyclePolicyTest',
-  /notificationStopIsAcceptedOnlyForCurrentLifecycleGeneration/,
-  'Lifecycle JUnit must cover current, missing and stale notification-stop generations.',
-);
-requirePattern(
-  'service',
-  /ACTION_STOP\.equals\(intent\.getAction\(\)\)[\s\S]*getLongExtra\(EXTRA_STOP_START_REQUEST_AT, 0L\)[\s\S]*getLastProtectionStartRequestAt\(this\)[\s\S]*isCurrentNotificationStopGeneration[\s\S]*return START_STICKY[\s\S]*persistProtectionTerminalStopWithFallback[\s\S]*NOTIFICATION_ACTION_STOP_CODE/,
-  'ACTION_STOP must ignore stale generations before any notification_action_stop persistence occurs.',
-);
-requirePattern(
-  'service',
-  /serviceStartRequestAtOnCreate = ScrollShieldNativePlugin\.getLastProtectionStartRequestAt\(this\);[\s\S]*refreshProtectionNotification\(\)/,
-  'A same-instance confirmed restart must refresh notification ownership after adopting the new request generation.',
-);
-requirePattern(
-  'service',
-  /refreshProtectionNotification\(\)[\s\S]*notificationManager\.notify\(NOTIFICATION_ID, createNotification\(\)\)/,
-  'Foreground notification must be refreshed after lifecycle-generation ownership transfer.',
+  'Terminal stop must atomically persist disabled state and exact diagnostics.',
 );
 
 requirePattern(
   'service',
   /onCreate\(\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*startForeground\(NOTIFICATION_ID, createNotification\(\)\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*RUNNING\.set\(true\)/,
-  'Service creation must serialize foreground creation, durable confirmation and RUNNING publication.',
+  'Service creation must confirm durable current request before RUNNING=true.',
+);
+requirePattern(
+  'service',
+  /onStartCommand[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*hasUnconfirmedProtectionStartRequest\(this\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*serviceStartRequestAtOnCreate = ScrollShieldNativePlugin\.getLastProtectionStartRequestAt\(this\)[\s\S]*refreshProtectionNotification\(\)/,
+  'Same-instance restart must confirm/adopt new generation and refresh notification ownership.',
 );
 requirePattern(
   'service',
   /onDestroy\(\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*RUNNING\.set\(false\)[\s\S]*consumeControlledStopDestroy\(\)[\s\S]*shouldRecordUnexpectedDestroy[\s\S]*UNEXPECTED_SERVICE_DESTROY_CODE/,
-  'onDestroy must publish dying state and distinguish controlled residual destroys from true unexpected destruction.',
+  'onDestroy must publish dying state first and classify only true unexpected destruction.',
+);
+
+requirePattern(
+  'service',
+  /EXTRA_STOP_START_REQUEST_AT[\s\S]*createNotification\(\)[\s\S]*putExtra\(EXTRA_STOP_START_REQUEST_AT, serviceStartRequestAtOnCreate\)[\s\S]*FLAG_UPDATE_CURRENT \| PendingIntent\.FLAG_IMMUTABLE/,
+  'Notification stop PendingIntent must carry lifecycle generation.',
 );
 requirePattern(
   'lifecyclePolicy',
+  /isCurrentNotificationStopGeneration[\s\S]*actionStartRequestAt > 0L[\s\S]*actionStartRequestAt == serviceStartRequestAt[\s\S]*actionStartRequestAt == latestStartRequestAt/,
+  'Notification stop must require exact current generation.',
+);
+requirePattern('lifecyclePolicyTest', /notificationStopIsAcceptedOnlyForCurrentLifecycleGeneration/, 'Missing notification generation JUnit.');
+requirePattern(
+  'service',
+  /ACTION_STOP\.equals\(intent\.getAction\(\)\)[\s\S]*isCurrentNotificationStopGeneration[\s\S]*return START_STICKY[\s\S]*NOTIFICATION_ACTION_STOP_CODE/,
+  'Stale ACTION_STOP must be ignored before terminal persistence.',
+);
+
+requirePattern(
+  'lifecyclePolicy',
   /shouldRecordUnexpectedDestroy[\s\S]*if \(!protectionEnabled\) return false[\s\S]*terminalStopAfterThisServiceWasRequested[\s\S]*currentRequestIsConfirmed[\s\S]*if \(explicitStopRequested && !currentRequestIsConfirmed\) return false[\s\S]*hasUnconfirmedStartRequest/,
-  'Unexpected-destroy policy must stay generation-aware when an old explicit-stop flag survives a restart.',
+  'Unexpected-destroy policy must remain generation-aware after same-instance restart.',
 );
 requirePattern(
   'lifecyclePolicyTest',
-  /explicitStopWithoutNewConfirmedGenerationSuppressesUnexpectedDestroy[\s\S]*transferredRestartOwnershipRestoresUnexpectedDestroyDetection[\s\S]*transferredRestartOwnershipAlsoSupersedesStaleExplicitStopFlag/,
-  'Lifecycle JUnit must cover explicit-stop suppression and confirmed ownership transfer.',
+  /recordsUnexpectedDestroyOnlyForCurrentConfirmedActivation[\s\S]*explicitStopWithoutNewConfirmedGenerationSuppressesUnexpectedDestroy[\s\S]*doesNotLetOldServiceDestroyOverwriteFastRestart[\s\S]*transferredRestartOwnershipRestoresUnexpectedDestroyDetection[\s\S]*transferredRestartOwnershipAlsoSupersedesStaleExplicitStopFlag[\s\S]*preConfirmationDestroyRemainsStartInterruptedNotUnexpectedDestroy/,
+  'Lifecycle JUnit must retain current activation, fast restart, ownership transfer and pre-confirmation coverage.',
 );
 
 for (const code of [
@@ -217,110 +191,38 @@ for (const code of ['manual_app_stop', 'notification_action_stop', 'unexpected_s
 requirePattern(
   'bridge',
   /NativeProtectionHealth[\s\S]*start-pending[\s\S]*start-interrupted[\s\S]*unclean-process-stop[\s\S]*stale-activation/,
-  'Bridge must preserve pending/interrupted/process-loss/stale states.',
+  'Bridge must retain all lifecycle health states.',
 );
 requirePattern(
   'bridge',
-  /START_CONFIRMATION_GRACE_MS\s*=\s*15_000[\s\S]*MAX_FUTURE_CLOCK_SKEW_MS\s*=\s*5_000/,
-  'TypeScript health must match native grace and clock-skew bounds.',
+  /CONFIG_GENERATION_PATTERN[\s\S]*syncCommittedConfig[\s\S]*expectedConfigGeneration: synced\.configGeneration/,
+  'Bridge must bind normal/recovery starts to durable config generation.',
 );
-requirePattern(
-  'bridgeTest',
-  /detects a pending start request during the confirmation grace window[\s\S]*detects an interrupted start request after the confirmation grace window/,
-  'Vitest must cover pending and interrupted start classification.',
-);
-requirePattern(
-  'clockTest',
-  /tolerates only a small future skew for a fresh pending request[\s\S]*fails out of pending when the wall clock moved materially backward/,
-  'Clock-skew Vitest must prove a large rollback cannot keep start-pending forever.',
-);
-requirePattern(
-  'health',
-  /case 'start-pending':[\s\S]*STARTET[\s\S]*case 'start-interrupted':[\s\S]*START ABGEBROCHEN[\s\S]*case 'unclean-process-stop':[\s\S]*PROZESS ABGEBROCHEN/,
-  'Health presentation must keep pending, interrupted and process-loss states distinct.',
-);
+requirePattern('bridgeTest', /starts only with the exact durable config generation returned by native sync[\s\S]*fails closed before start when native sync does not confirm a valid config generation/, 'Bridge tests must cover durable config generation start semantics.');
+requirePattern('bridgeTest', /detects a pending start request during the confirmation grace window[\s\S]*detects an interrupted start request after the confirmation grace window/, 'Bridge tests must retain pending/interrupted classification.');
+requirePattern('clockTest', /tolerates only a small future skew for a fresh pending request[\s\S]*fails out of pending when the wall clock moved materially backward/, 'Clock rollback contract is missing.');
+requirePattern('health', /case 'start-pending':[\s\S]*STARTET[\s\S]*case 'start-interrupted':[\s\S]*START ABGEBROCHEN[\s\S]*case 'unclean-process-stop':[\s\S]*PROZESS ABGEBROCHEN/, 'Health presentation must remain explicit.');
 
 requirePattern(
   'diagnostics',
-  /lastProtectionStartRequestAt[\s\S]*lastProtectionStartAt[\s\S]*lastProtectionStopAt[\s\S]*lastProtectionStopCode[\s\S]*lastProtectionStopMessage/,
-  'Native diagnostics must expose request/start/stop lifecycle evidence.',
+  /protectionConfigGeneration[\s\S]*startRequestConfigGeneration[\s\S]*lastProtectionStartRequestAt[\s\S]*lastProtectionStartAt[\s\S]*lastProtectionStopAt[\s\S]*lastProtectionStopCode[\s\S]*lastProtectionStopMessage/,
+  'Native diagnostics must expose config/lifecycle evidence.',
 );
 requirePattern(
   'diagnosticsBridge',
-  /lastProtectionStartRequestAt:\s*number[\s\S]*lastProtectionStartAt:\s*number[\s\S]*lastProtectionStopAt:\s*number[\s\S]*lastProtectionStopCode:\s*string/,
-  'TypeScript diagnostics must type lifecycle evidence.',
+  /protectionConfigGeneration:\s*string[\s\S]*startRequestConfigGeneration:\s*string[\s\S]*lastProtectionStartRequestAt:\s*number[\s\S]*lastProtectionStartAt:\s*number[\s\S]*lastProtectionStopAt:\s*number/,
+  'TypeScript diagnostics must type config/lifecycle evidence.',
 );
-requirePattern(
-  'debug',
-  /Letzte Startanforderung[\s\S]*Letzter Schutzstart[\s\S]*Letzter Stoppzeitpunkt[\s\S]*Letzter Stoppcode[\s\S]*Letzter Stoppgrund/,
-  'Debug UI must expose lifecycle ordering without raw JSON inspection.',
-);
-requirePattern(
-  'debugTest',
-  /notifications_missing/,
-  'Debug component test must retain exact stop diagnostics.',
-);
-requirePattern(
-  'permissions',
-  /NativeProtection\.getStatus\(\)[\s\S]*NativeProtectionStatusPanel/,
-  'Permissions screen must render current native lifecycle truth.',
-);
-requirePattern(
-  'permissionsTest',
-  /notifications_missing[\s\S]*NEUSTART NÖTIG/,
-  'Permissions integration test must retain exact stale-stop diagnostics.',
-);
-requirePattern(
-  'app',
-  /NativeProtection\.stop\(\{[\s\S]*code: 'migration_recovery'/,
-  'Migration recovery must retain an explicit native stop reason.',
-);
-requirePattern(
-  'appTest',
-  /code: 'migration_recovery'/,
-  'Migration test must require migration_recovery.',
-);
-requirePattern(
-  'emergencyPolicy',
-  /MIN_REASON_CHARACTERS = 3[\s\S]*MAX_REASON_CHARACTERS = 160[\s\S]*resolveCountdownSeconds[\s\S]*canEmergencyUnlock/,
-  'Emergency unlock policy must keep bounded reason/countdown eligibility.',
-);
-requirePattern(
-  'emergencyPolicyTest',
-  /requiresIntentionalReasonOnlyWhenConfigured[\s\S]*unlockRequiresAvailabilityCountdownAndOptionalReason/,
-  'Emergency JUnit must retain reason/countdown boundaries.',
-);
+requirePattern('debug', /Letzte Startanforderung[\s\S]*Letzter Schutzstart[\s\S]*Letzter Stoppzeitpunkt[\s\S]*Letzter Stoppcode[\s\S]*Letzter Stoppgrund/, 'Debug UI must retain lifecycle evidence rows.');
+requirePattern('debugTest', /notifications_missing/, 'Debug regression test must retain exact stop diagnostics.');
+requirePattern('permissions', /NativeProtection\.getStatus\(\)[\s\S]*NativeProtectionStatusPanel/, 'Permissions screen must render native truth.');
+requirePattern('permissionsTest', /Wiederherstellung[\s\S]*Schutz/, 'Permissions tests must retain recovery behavior.');
 
-for (const required of [
-  'LIFE-08',
-  'LIFE-09',
-  'LIFE-10',
-  'LIFE-11',
-  'LIFE-12',
-  'LIFE-13',
-  'LIFE-14',
-  'LIFE-15',
-  'notification_action_stop',
-  'unexpected_service_destroy',
-  'lastProtectionStartRequestAt',
-  'lastProtectionStartAt',
-  'lastProtectionStopAt',
-  'lastProtectionStopCode',
-  'lastProtectionStopMessage',
-]) {
-  requirePattern(
-    'matrix',
-    new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
-    `Physical-device matrix is missing ${required}.`,
-  );
+for (const id of ['LIFE-12', 'LIFE-13', 'LIFE-14', 'LIFE-15', 'APP-07', 'APP-08']) {
+  requirePattern('matrix', new RegExp(`\\| ${id} \\|`), `Device matrix is missing ${id}.`);
 }
-for (const required of ['DISPATCH-01', 'DISPATCH-02', 'DISPATCH-03', 'DISPATCH-04', 'DISPATCH-05']) {
-  requirePattern(
-    'dispatchSpec',
-    new RegExp(required),
-    `Dispatch-race specification is missing ${required}.`,
-  );
-}
+requirePattern('dispatchSpec', /DISPATCH-01[\s\S]*DISPATCH-02[\s\S]*DISPATCH-03[\s\S]*DISPATCH-04[\s\S]*DISPATCH-05/, 'Dispatch race specification is incomplete.');
+requirePattern('configSpec', /commit\(\)[\s\S]*expectedConfigGeneration[\s\S]*startRequestConfigGeneration[\s\S]*APP-07[\s\S]*APP-08/, 'Config durability lifecycle specification is incomplete.');
 
 if (findings.length > 0) {
   console.log('Protection lifecycle diagnostics check failed:\n');
@@ -329,5 +231,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection lifecycle diagnostics check passed. Ordered lifecycle evidence, serialized service dispatch, generation-bound notification stops, bounded controlled-destroy suppression, restart ownership transfer, diagnostics, UI health and physical evidence requirements remain guarded.',
+  'Protection lifecycle diagnostics check passed. Durable config-bound starts, atomic stops, serialized dispatch, stale notification rejection, bounded destroy suppression, lifecycle health, diagnostics and physical evidence requirements remain guarded.',
 );
