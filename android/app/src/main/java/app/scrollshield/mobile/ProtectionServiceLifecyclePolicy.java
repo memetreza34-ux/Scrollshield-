@@ -7,6 +7,16 @@ final class ProtectionServiceLifecyclePolicy {
 
     private ProtectionServiceLifecyclePolicy() {}
 
+    static boolean isCurrentNotificationStopGeneration(
+        long actionStartRequestAt,
+        long serviceStartRequestAt,
+        long latestStartRequestAt
+    ) {
+        return actionStartRequestAt > 0L
+            && actionStartRequestAt == serviceStartRequestAt
+            && actionStartRequestAt == latestStartRequestAt;
+    }
+
     static boolean shouldRecordUnexpectedDestroy(
         boolean protectionEnabled,
         boolean explicitStopRequested,
