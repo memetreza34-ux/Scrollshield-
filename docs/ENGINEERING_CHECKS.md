@@ -40,86 +40,13 @@ persistProtectionTerminalStopWithFallback(...)
 System-Stops schreiben atomar `enabled=false + warning/system + timestamp + code + message`.
 Explizite Terminal-Stopps schreiben atomar `enabled=false + timestamp + code + message` und verändern die Event-Queue nicht.
 
-## Protection Config Durability
-
-```bash
-npm run check:config-durability
-```
-
-Spezifikation: `docs/PROTECTION_CONFIG_DURABILITY.md`.
-
-Die startkritische Native-Konfiguration verwendet keinen asynchronen `SharedPreferences.apply()`-Write mehr. Ein erfolgreicher Sync persistiert in **einem synchronen `commit()`**:
-
-```text
-protection_config
-unavailable_app_ids
-unavailable_active_app_ids
-protection_config_generation
-```
-
-Jeder erfolgreiche Config-Sync erhält eine neue UUID `configGeneration`.
-
-TypeScript darf den Android-Schutz nur starten mit:
-
-```text
-startProtectionService({ expectedConfigGeneration })
-```
-
-Native akzeptiert den Start nur, wenn diese UUID noch exakt der aktuell durable gespeicherten Config entspricht.
-
-Der Startrequest bindet anschließend atomar:
-
-```text
-enabled=true
-lastStartRequestAt
-startRequestConfigGeneration
-```
-
-Ein frischer Pending-Request ist nur dann idempotent, wenn zusätzlich gilt:
-
-```text
-startRequestConfigGeneration == protectionConfigGeneration
-```
-
-Ein frischer Request aus einer inzwischen älteren Config wird sofort fail-closed beendet statt als „bereits in Arbeit“ akzeptiert zu werden.
-
-Die Foreground-Confirmation prüft die Config-Generation erneut. Ändert sich die Config zwischen Request und Confirmation:
-
-```text
-Config A commit
-→ Request bindet A
-→ Config B commit
-→ verspätete Confirmation von A
-```
-
-gilt:
-
-```text
-FAILED_CLOSED
-enabled=false
-lastStartAt wird für A nicht fortgeschrieben
-lastStopCode=start_failed
-```
-
-Für ältere Installationen darf Boot/App-Update eine fehlende Generation nur nachrüsten, wenn bereits eine gültige persistierte Config mit `apps`-Array vorhanden ist und auch der Generation-Write selbst erfolgreich committed wurde.
-
-Diagnose-Evidence enthält:
-
-```text
-protectionConfigGeneration
-startRequestConfigGeneration
-```
-
 ## Android Start-Handshake
 
 ```bash
 npm run check:start-handshake
 ```
 
-Spezifikationen:
-
-- `docs/PROTECTION_START_HANDSHAKE.md`
-- `docs/PROTECTION_CONFIG_DURABILITY.md`
+Spezifikation: `docs/PROTECTION_START_HANDSHAKE.md`.
 
 Persistente Lifecycle-Grenzen:
 
@@ -132,14 +59,12 @@ lastStopAt         = terminaler Stopp
 Wichtige Invarianten:
 
 - kein separates produktives `enabled=true` vor dem Start;
-- App-Start benötigt die exakt durable Config-Generation;
 - Request vor App-/Boot-/Update-Service-Dispatch;
-- frischer Pending-Start <= 15 s ist nur mit gleicher Config-Generation idempotent;
+- frischer Pending-Start <= 15 s ist nur mit aktueller Config-Generation idempotent;
 - deutlicher Wall-Clock-Rollback kann `start-pending` nicht dauerhaft festhalten;
 - `RUNNING=true` erst nach erfolgreichem `startForeground(...)` und `CONFIRMED`;
 - Stop vor verspäteter Confirmation → `SUPERSEDED_BY_STOP`;
-- Config-Wechsel vor Confirmation → `FAILED_CLOSED`;
-- Stop-Code, Stop-Nachricht und Event-Evidence bleiben bei einem terminalen Gewinner erhalten;
+- Stop-Code, Stop-Nachricht und Event-Evidence bleiben dabei erhalten;
 - echter Restart nach Stop erhält eine strikt neuere Request-Generation.
 
 Health-Klassifizierung:
@@ -149,6 +74,62 @@ neuer unbestätigter Request <= 15 s → start-pending
 neuer unbestätigter Request > 15 s  → start-interrupted
 bestätigter Start später ohne Stopp  → unclean-process-stop
 ```
+
+## Protection Config Durability
+
+```bash
+npm run check:config-durability
+```
+
+Spezifikation: `docs/PROTECTION_CONFIG_DURABILITY.md`.
+
+Durable Config-Tupel:
+
+```text
+protection_config
+unavailable_app_ids
+unavailable_active_app_ids
+protection_config_generation
+```
+
+Ein erfolgreicher Native-Sync verwendet einen synchronen `commit()` und liefert erst danach die neue UUID-Generation an TypeScript.
+
+Der normale Start und Process-Loss-Recovery reichen genau diese UUID als `expectedConfigGeneration` zurück. Der Startrequest persistiert zusätzlich:
+
+```text
+startRequestConfigGeneration
+```
+
+und `recordProtectionServiceStarted()` bestätigt nur, wenn Request- und aktuelle Config-Generation noch identisch sind.
+
+### Candidate-Commit-Fehler
+
+Vor dem Config-Write wird der vorherige komplette Tupelzustand gesichert. Liefert der Candidate-Commit `false`, stellt `ProtectionConfigDurabilityStore` vor Freigabe des Dispatch-Locks den vorherigen Config-/Availability-/Generation-Zustand wieder her und der Native-Sync wird abgelehnt.
+
+Für einen bereits laufenden Schutz gilt:
+
+```text
+Candidate nicht durable
+→ Candidate nicht veröffentlichen
+→ letzte durable Regelbasis weiterverwenden
+```
+
+Ein erster Start ohne erfolgreich durable Config bleibt blockiert.
+
+### Stable Service Publication
+
+`ScrollShieldProtectionService.refreshConfiguration()` verwendet zwei Lock-Grenzen:
+
+```text
+1. configJson + configGeneration snapshotten
+2. lokal in nextRulesByPackage parsen
+3. configJson + configGeneration erneut prüfen
+4. nur bei exakter Gleichheit veröffentlichen
+```
+
+Damit darf weder ein fehlgeschlagener Candidate noch ein während des Parsens bereits überholter erfolgreicher Sync in `rulesByPackage` veröffentlicht werden.
+
+Auch der periodische Target-App-Health-Check liest die Config nicht parallel zu Candidate-Commit/Rollback.
 
 ## Android Service Dispatch Races
 
@@ -165,9 +146,9 @@ ProtectionServiceDispatchGuard.LOCK
 
 Unter `ProtectionServiceDispatchGuard.LOCK` werden insbesondere serialisiert:
 
-- Config-Sync: durable Config-Commit;
-- App-Start: Config-Generation prüfen → Pending-Prüfung → Request-Commit → `startForegroundService/startService`;
-- Boot-/App-Update-Recovery: durable Config-Bootstrap/Request → Service-Start;
+- Config Candidate-Commit/Rollback und stabile Service-Publish-Grenzen;
+- App-Start: Pending-Prüfung → Request-Commit → `startForegroundService/startService`;
+- Boot-/App-Update-Recovery: Request-Commit → Service-Start;
 - App-/Notification-/Prerequisite-Stop: Stop-Persistenz → `stopService`;
 - Factory Reset: Tombstone → `stopService`;
 - Service `onCreate()` / `onStartCommand()` / kritische `onDestroy()`-Klassifizierung.
@@ -184,9 +165,15 @@ exakt einmal konsumierbar
 
 Ein abgelaufener Token, negativer monotonic age-Wert oder fehlgeschlagener Stop-Dispatch darf einen späteren echten `unexpected_service_destroy` nicht unterdrücken.
 
+`ProtectionServiceDispatchGuardTest` deckt source-seitig Prompt-, stale-, backward-time- und failed-dispatch-Grenzen ab.
+
 ### Same-Instance Fast Restart
 
-Wenn Android eine neue Startanforderung an dieselbe noch lebende Service-Instanz liefert, übernimmt diese nach erfolgreicher Confirmation die neue Request-Generation und aktualisiert ihre Foreground-Notification.
+Wenn Android eine neue Startanforderung an dieselbe noch lebende Service-Instanz liefert, übernimmt diese nach erfolgreicher Confirmation die neue Request-Generation:
+
+```text
+serviceStartRequestAtOnCreate = lastStartRequestAt
+```
 
 Ein altes `explicitStopRequested=true` darf den späteren echten Destroy dieser neu bestätigten Generation nicht dauerhaft maskieren.
 
@@ -208,7 +195,7 @@ UND
 actionStartRequestAt == latestStartRequestAt
 ```
 
-Fehlende oder alte `ACTION_STOP`-Generationen werden **vor** jeder `notification_action_stop`-Persistenz ignoriert.
+Fehlende oder alte `ACTION_STOP`-Generationen werden vor jeder `notification_action_stop`-Persistenz ignoriert. Nach erfolgreichem Same-Instance-Restart wird die Notification mit der neuen Generation veröffentlicht.
 
 ## Android Instrumentation
 
@@ -218,7 +205,7 @@ cd android
 ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
 ```
 
-`ProtectionDiagnosticsInstrumentedTest` schützt insbesondere:
+`ProtectionDiagnosticsInstrumentedTest` schützt source-seitig insbesondere:
 
 ```text
 startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence
@@ -226,15 +213,7 @@ terminalStopWinsAgainstDelayedStartConfirmationWithoutOverwrite
 restartRequestAdvancesBeyondLatestStopBoundary
 ```
 
-Diese bestehenden Tests wurden auf den neuen Produktionsvertrag migriert und erzeugen vor jedem Start eine durable Config-Generation.
-
-Neu ist:
-
-```text
-ProtectionConfigDurabilityInstrumentedTest
-```
-
-mit:
+`ProtectionConfigDurabilityInstrumentedTest` schützt source-seitig insbesondere:
 
 ```text
 durableConfigGenerationBindsStartRequestAndConfirmation
@@ -244,7 +223,7 @@ configChangeBeforeConfirmationFailsClosedWithoutConfirmingOldRequest
 legacyDurableConfigReceivesGenerationBeforeBootStyleStartRequest
 ```
 
-Die tatsächliche Zustellung einer alten/queued Notification-`PendingIntent`-Aktion bleibt bewusst **Device-/System-E2E-Evidence**.
+Die tatsächliche Zustellung einer alten/queued Notification-`PendingIntent`-Aktion sowie ein realer Storage-/Commit-Fehler sind bewusst Device-/System-E2E-Evidence. Ein reiner Source- oder Persistenztest darf nicht als Ersatz gewertet werden.
 
 ## Android JUnit / Build
 
@@ -255,22 +234,22 @@ cd android
 
 Relevant sind insbesondere:
 
-- `ProtectionConfigDurabilityStoreTest`;
 - `ProtectionStartHandshakePolicyTest`;
 - `ProtectionServiceLifecyclePolicyTest` inklusive Notification-Generation;
 - `ProtectionServiceDispatchGuardTest`;
+- `ProtectionConfigDurabilityStoreTest`;
 - bestehende Coordinator-/Worker-/Stop-Code-/Lifecycle-Tests.
 
 ## Device-/E2E-Evidence
 
-`docs/ANDROID_DEVICE_TEST_MATRIX.md` verlangt zusätzlich zum bisherigen Lifecycle-Vertrag:
+`docs/ANDROID_DEVICE_TEST_MATRIX.md` verlangt zusätzlich:
 
-- `APP-07`: Config-Sync ist durable bevor ein Schutzstart dispatched wird; Config- und Request-Generation stimmen überein;
-- `APP-08`: Config-Wechsel zwischen Request und Foreground-Confirmation endet fail-closed ohne bestätigten alten Start;
+- `APP-07`: durable Config-Sync + gebundener Start; bei erzwungenem Commit-Fehler kein Candidate-Start und keine Candidate-Regel-Veröffentlichung;
+- `APP-08`: Config-Wechsel zwischen Request und Confirmation endet `FAILED_CLOSED`/`start_failed`;
 - `LIFE-12`: terminaler Stop gewinnt vor verspäteter Confirmation;
 - `LIFE-13`: Pending-Doppelstart erzeugt keine neue Generation;
 - `LIFE-14`: sofortiger Stop→Restart wird nicht durch altes `onDestroy()` zerstört;
-- `LIFE-15`: alte Notification-Stop-Aktion aus `R1` bleibt nach bestätigtem Restart `R2` wirkungslos.
+- `LIFE-15`: alte Notification-Stop-Aktion aus `R1` bleibt nach bestätigtem Restart `R2` wirkungslos; die aktuelle `R2`-Aktion stoppt weiterhin mit `notification_action_stop`.
 
 Die Dispatch-Spezifikation verlangt zusätzlich `DISPATCH-01` bis `DISPATCH-05`.
 
@@ -290,7 +269,7 @@ running=false && enabled=true
 → unclean-process-stop
 ```
 
-Boot-/App-Update-Recovery darf einen frischen Pending-Request nur übernehmen, wenn dessen `startRequestConfigGeneration` weiterhin der aktuellen durable Config entspricht. Ein Mismatch endet `recovery_start_failed`.
+Nur der zweite Fall verwendet `Schutz wiederherstellen`.
 
 ## Aktuelle Ausführungsgrenze
 
@@ -304,8 +283,6 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - `check:config-durability`;
 - `check:lifecycle`;
 - `check:android-instrumentation`;
-- `ProtectionConfigDurabilityStoreTest`;
-- `ProtectionConfigDurabilityInstrumentedTest`;
 - Android JUnit;
 - Android Instrumentation;
 - Gradle Debug Build;
@@ -313,7 +290,7 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - `APP-07` / `APP-08`;
 - `LIFE-12` bis `LIFE-15`;
 - `DISPATCH-01` bis `DISPATCH-05`;
-- reale Process-Kill-/Start-/Stop-/PendingIntent-/Config-Durability-Evidence.
+- reale Storage-Failure-/Process-Kill-/Start-/Stop-/PendingIntent-Race-Evidence.
 
 ## Reihenfolge nach Entsperrung
 
@@ -321,7 +298,7 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 2. `npm run verify`;
 3. `./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace`;
 4. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace`;
-5. `APP-07` und `APP-08` real ausführen;
+5. `APP-07` / `APP-08` inklusive Storage-Failure-Fall real ausführen;
 6. `LIFE-12` bis `LIFE-15` real ausführen;
 7. `DISPATCH-01` bis `DISPATCH-05` mit Diagnose-JSON und Logcat ausführen;
 8. Pre-Confirmation-Abbruch → `start-interrupted` → Retry;
