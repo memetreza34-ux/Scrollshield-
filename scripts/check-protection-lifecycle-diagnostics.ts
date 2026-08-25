@@ -32,6 +32,7 @@ const paths = {
   emergencyPolicy: `${javaRoot}/EmergencyUnlockPolicy.java`,
   emergencyPolicyTest: `${javaTestRoot}/EmergencyUnlockPolicyTest.java`,
   matrix: 'docs/ANDROID_DEVICE_TEST_MATRIX.md',
+  dispatchSpec: 'docs/PROTECTION_SERVICE_DISPATCH_RACES.md',
 } as const;
 
 const entries = await Promise.all(
@@ -82,8 +83,8 @@ requirePattern(
 
 requirePattern(
   'dispatchGuard',
-  /static final Object LOCK[\s\S]*CONTROLLED_STOP_DESTROY_WINDOW_NANOS\s*=\s*30_000_000_000L[\s\S]*dispatchControlledStop\(Context context\)[\s\S]*context\.stopService[\s\S]*consumeControlledStopDestroy/,
-  'Dispatch guard must serialize real Android service stops and own bounded controlled-destroy suppression.',
+  /static final Object LOCK[\s\S]*CONTROLLED_STOP_DESTROY_WINDOW_NANOS\s*=\s*30_000_000_000L[\s\S]*dispatchControlledStop\(Context context\)[\s\S]*context\.stopService[\s\S]*System\.nanoTime\(\)[\s\S]*consumeControlledStopDestroy/,
+  'Dispatch guard must serialize Android service stops and own bounded monotonic controlled-destroy suppression.',
 );
 requirePattern(
   'dispatchGuardTest',
@@ -177,13 +178,13 @@ requirePattern(
 
 requirePattern(
   'lifecyclePolicy',
-  /shouldRecordUnexpectedDestroy[\s\S]*!protectionEnabled \|\| explicitStopRequested[\s\S]*terminalStopAfterThisServiceWasRequested[\s\S]*hasUnconfirmedStartRequest/,
-  'Unexpected-destroy policy must reject disabled, explicit, old-generation and pre-confirmation cases.',
+  /shouldRecordUnexpectedDestroy[\s\S]*if \(!protectionEnabled\) return false[\s\S]*terminalStopAfterThisServiceWasRequested[\s\S]*currentRequestIsConfirmed[\s\S]*latestStartRequestAt == serviceStartRequestAtOnCreate[\s\S]*lastStartAt > serviceStartRequestAtOnCreate[\s\S]*if \(explicitStopRequested && !currentRequestIsConfirmed\) return false[\s\S]*hasUnconfirmedStartRequest/,
+  'Unexpected-destroy policy must be generation-aware: stale explicit-stop flags are superseded only by a newly confirmed generation.',
 );
 requirePattern(
   'lifecyclePolicyTest',
-  /recordsUnexpectedDestroyOnlyForCurrentConfirmedActivation[\s\S]*doesNotLetOldServiceDestroyOverwriteFastRestart[\s\S]*transferredRestartOwnershipRestoresUnexpectedDestroyDetection[\s\S]*preConfirmationDestroyRemainsStartInterruptedNotUnexpectedDestroy/,
-  'Lifecycle JUnit must cover current activation, fast restart, ownership transfer and pre-confirmation destruction.',
+  /recordsUnexpectedDestroyOnlyForCurrentConfirmedActivation[\s\S]*explicitStopWithoutNewConfirmedGenerationSuppressesUnexpectedDestroy[\s\S]*doesNotLetOldServiceDestroyOverwriteFastRestart[\s\S]*transferredRestartOwnershipRestoresUnexpectedDestroyDetection[\s\S]*transferredRestartOwnershipAlsoSupersedesStaleExplicitStopFlag[\s\S]*preConfirmationDestroyRemainsStartInterruptedNotUnexpectedDestroy/,
+  'Lifecycle JUnit must cover current activation, explicit-stop suppression, fast restart, ownership transfer, stale-flag supersession and pre-confirmation destruction.',
 );
 
 for (const code of [
@@ -305,6 +306,14 @@ for (const required of [
   );
 }
 
+for (const scenario of ['DISPATCH-01', 'DISPATCH-02', 'DISPATCH-03', 'DISPATCH-04']) {
+  requirePattern(
+    'dispatchSpec',
+    new RegExp(scenario),
+    `Dispatch-race specification is missing ${scenario}.`,
+  );
+}
+
 if (findings.length > 0) {
   console.log('Protection lifecycle diagnostics check failed:\n');
   for (const finding of findings) console.log(`- ${finding}`);
@@ -312,5 +321,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection lifecycle diagnostics check passed. Durable lifecycle evidence, serialized start/stop dispatch, bounded controlled-destroy suppression, restart ownership transfer, health states, diagnostics and physical evidence requirements remain guarded.',
+  'Protection lifecycle diagnostics check passed. Durable lifecycle evidence, serialized start/stop dispatch, bounded controlled-destroy suppression, generation-aware explicit stops, restart ownership transfer, health states, diagnostics and physical evidence requirements remain guarded.',
 );
