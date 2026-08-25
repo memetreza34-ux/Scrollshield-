@@ -7,7 +7,25 @@ final class ProtectionServiceLifecyclePolicy {
 
     private ProtectionServiceLifecyclePolicy() {}
 
-    static boolean shouldRecordUnexpectedDestroy(boolean protectionEnabled, boolean explicitStopRequested) {
-        return protectionEnabled && !explicitStopRequested;
+    static boolean shouldRecordUnexpectedDestroy(
+        boolean protectionEnabled,
+        boolean explicitStopRequested,
+        long serviceStartRequestAtOnCreate,
+        long latestStartRequestAt,
+        long lastStartAt,
+        long lastStopAt
+    ) {
+        if (!protectionEnabled || explicitStopRequested) return false;
+
+        boolean terminalStopAfterThisServiceWasRequested =
+            serviceStartRequestAtOnCreate > 0L && lastStopAt >= serviceStartRequestAtOnCreate;
+        if (terminalStopAfterThisServiceWasRequested) return false;
+
+        return !ProtectionStartHandshakePolicy.hasUnconfirmedStartRequest(
+            true,
+            latestStartRequestAt,
+            lastStartAt,
+            lastStopAt
+        );
     }
 }
