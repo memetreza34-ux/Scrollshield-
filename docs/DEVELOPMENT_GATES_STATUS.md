@@ -23,26 +23,68 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 | G1 | Architektur & Repo-Prozess | **FERTIG** | React/TS, lokale Daten, Capacitor/Native Android, Draft-PR-Prozess und Verantwortungsgrenzen sind dokumentiert | bei Architekturänderung erneut öffnen |
 | G2 | Datenmodell & Migration | **TEILWEISE** | starke transaktionale/V0.7-Migration im Source; reale Alt-Daten-Evidenz fehlt | echter V0.7-Upgrade-Test + bytegenauer Archivvergleich |
 | G3 | Kern-UI/UX & Accessibility | **TEILWEISE** | Release-Screens und Source-A11y-Checks existieren; reale Usability-/Large-Font-/TalkBack-Evidenz fehlt | physische Accessibility- und User-Research-Sessions |
-| G4 | Native Android Schutz | **TEILWEISE** | atomare System-/Terminal-Stopps, persistenter Start-Handshake, logisch geordnete Lifecycle-Grenzen, serialisierte Start-/Stop-Dispatches, bounded controlled-destroy Token und generationgebundene Notification-Stop-Aktionen sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + LIFE-12..15/DISPATCH-01..05/Process-Kill real |
+| G4 | Native Android Schutz | **TEILWEISE** | atomare Stopps, persistenter Start-Handshake, **durable Config-Generation**, serialisierte Start-/Stop-Dispatches, bounded controlled-destroy Token und generationgebundene Notification-Stop-Aktionen sind source-seitig implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + APP-07/08 + LIFE-12..15 + DISPATCH-01..05 + Process-Kill real |
 | G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First-Manifest, Privacy-Guard, gepinnter Gradle-SHA256 und `check:supply-chain` existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-Check + Dependency-/Manifest-Snapshot + finaler Binary-Audit + Threat-Review |
-| G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` inklusive `check:native-stop-atomicity`, `check:start-handshake`, `check:lifecycle` und `check:android-instrumentation` ist vorbereitet; GitHub Runner liefert weiterhin keine ausgeführten Steps | kompletter echter Verify-Lauf auf exaktem Head |
-| G7 | Android Instrumentation/E2E | **TEILWEISE** | App-/Notification-, Prerequisite-, Boot/Update-, Start-/Destroy-, Process-Loss-, Start↔Stop-, Service-Dispatch- und stale-PendingIntent-Verträge existieren; echte Android-Ausführung fehlt | `connectedDebugAndroidTest` + LIFE-12..15 + DISPATCH-01..05 + Pre-/Post-Confirmation-Process-Kill real |
+| G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` inklusive `check:native-stop-atomicity`, `check:start-handshake`, `check:config-durability`, `check:lifecycle` und `check:android-instrumentation` ist vorbereitet; GitHub Runner liefert weiterhin keine ausgeführten Steps | kompletter echter Verify-Lauf auf exaktem Head |
+| G7 | Android Instrumentation/E2E | **TEILWEISE** | App-/Config-/Notification-, Prerequisite-, Boot/Update-, Start-/Destroy-, Process-Loss-, Start↔Stop-, Service-Dispatch- und stale-PendingIntent-Verträge existieren; neue Config-Durability-Instrumentation ist vorbereitet; echte Android-Ausführung fehlt | `connectedDebugAndroidTest` + APP-07/08 + LIFE-12..15 + DISPATCH-01..05 + Pre-/Post-Confirmation-Process-Kill real |
 | G8 | Performance & Batterie | **TEILWEISE** | Worker/Coordinator-Architektur und Shutdown-Drain im Source; reale JUnit-/Instrumentation-/Gradle-/Device-Evidenz fehlt | Worker-/Coordinator-JUnit + Usage-Flush-Instrumentation real ausführen + `assembleDebug` + 12h-Baseline |
-| G9 | Physical Device Matrix | **FEHLT** | Matrix inklusive LIFE-12..15 ist definiert; DISPATCH-01..05 sind spezifiziert, aber reale Geräte-Evidence fehlt | Pflichtgeräte/Szenarien mit Build-ID, Diagnose-JSON, Logcat und Screenrecord vollständig dokumentieren |
+| G9 | Physical Device Matrix | **FEHLT** | Matrix inklusive APP-07/08 und LIFE-12..15 ist definiert; DISPATCH-01..05 sind spezifiziert, aber reale Geräte-Evidence fehlt | Pflichtgeräte/Szenarien mit Build-ID, Diagnose-JSON, Config-/Lifecycle-Generationen, Logcat und Screenrecord vollständig dokumentieren |
 | G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Evidence-Schema v2 existiert; Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Kandidaten-SHA + echte Referenzen |
 | G11 | Legal / Privacy / Support | **TEILWEISE** | Dokumente/Struktur existieren; finale reale Identität, Support-Mailbox und öffentliche Privacy-Domain fehlen | keine Platzhalter + überprüfbare öffentliche Angaben |
 | G12 | Store / Play Review | **TEILWEISE** | Submission Packet, Screenshots und Deklarationstexte vorbereitet; finaler AAB/Reviewer-Nachweis fehlt | gegen signierten AAB verifizierte Angaben + Videos |
 | G13 | Signing / Binary / Internal & Closed Test | **BLOCKIERT** | Release-Gate blockiert bewusst; kein final signierter freigegebener Kandidat | Gate PASS → AAB → Internal/Closed Test |
 | G14 | Production Rollout & Operations | **BLOCKIERT** | Rollout- und Incident-Response-Prozess existieren; Produktion darf vor G13 nicht beginnen | Produktionsfreigabe + gestaffelter Rollout + benannte Verantwortliche |
 
+## Aktueller Config-Durability-Vertrag
+
+Detaillierte Spezifikation: `docs/PROTECTION_CONFIG_DURABILITY.md`.
+
+Ein Native-Config-Sync persistiert in einem synchronen `commit()` gemeinsam:
+
+```text
+protection_config
+unavailable_app_ids
+unavailable_active_app_ids
+protection_config_generation
+```
+
+Jeder erfolgreiche Sync erzeugt eine neue UUID-Generation. TypeScript darf anschließend nur mit exakt dieser UUID starten:
+
+```text
+startProtectionService({ expectedConfigGeneration })
+```
+
+Der Native-Start akzeptiert die Anforderung nur, wenn die erwartete Generation noch der aktuellen durable Config entspricht.
+
+Der Startrequest persistiert zusätzlich:
+
+```text
+startRequestConfigGeneration
+```
+
+mit `enabled=true + lastStartRequestAt` in einem Commit.
+
+Ein Pending-Request ist nur dann idempotent, wenn er zeitlich frisch **und** weiterhin an die aktuelle Config-Generation gebunden ist. Ein frischer Request einer älteren Config endet fail-closed.
+
+`recordProtectionServiceStarted(...)` prüft die Bindung erneut. Ein Config-Wechsel zwischen Request und Confirmation darf kein `lastStartAt` für die alte Generation erzeugen und endet mit `start_failed`.
+
+Boot/App-Update darf für Altinstallationen nur dann eine fehlende Config-Generation nachrüsten, wenn bereits eine gültige persistierte Config vorhanden ist und der neue Generation-Write selbst erfolgreich committed wurde.
+
+Source-/Testschutz:
+
+- `check:config-durability`;
+- `ProtectionConfigDurabilityStoreTest`;
+- `ProtectionConfigDurabilityInstrumentedTest`;
+- `APP-07` und `APP-08` in der Device-Matrix.
+
 ## Aktueller Lifecycle-/Dispatch-Vertrag
 
 - System-/Terminal-Stopps bleiben atomar und source-guarded.
-- `recordProtectionStartRequested(...)` persistiert `enabled=true + lastStartRequestAt` gemeinsam.
+- `recordProtectionStartRequested(...)` persistiert `enabled=true + lastStartRequestAt + startRequestConfigGeneration` gemeinsam.
 - `recordProtectionServiceStarted(...)` liefert `CONFIRMED`, `SUPERSEDED_BY_STOP` oder `FAILED_CLOSED`; nur `CONFIRMED` darf `RUNNING=true` erreichen.
 - Lifecycle-Grenzen werden logisch monoton geordnet; Material Clock Rollback kann `start-pending` nicht dauerhaft festhalten.
 - Globale Dispatch-Reihenfolge: `ProtectionServiceDispatchGuard.LOCK → EVENT_LOCK`.
-- Startpersistenz und Android-Startdispatch sowie Stop-Persistenz und `stopService()` werden gemeinsam serialisiert.
+- Config-Sync, Startpersistenz/Android-Startdispatch sowie Stop-Persistenz/`stopService()` werden gegeneinander geordnet.
 - Controlled-stop Destroy-Suppression ist process-lokal, one-shot und auf 30 Sekunden `System.nanoTime()` begrenzt.
 - Same-Instance-Restart überträgt die aktuelle Request-Generation auf die lebende Service-Instanz.
 - Ein altes `explicitStopRequested=true` darf einen späteren echten Destroy einer neu bestätigten Generation nicht maskieren.
@@ -55,38 +97,21 @@ Die Foreground-Notification trägt im Stop-`PendingIntent`:
 EXTRA_STOP_START_REQUEST_AT = serviceStartRequestAtOnCreate
 ```
 
-Ein `ACTION_STOP` ist nur gültig, wenn:
-
-```text
-actionStartRequestAt > 0
-UND
-actionStartRequestAt == serviceStartRequestAtOnCreate
-UND
-actionStartRequestAt == latestStartRequestAt
-```
-
-Fehlende oder alte Generationen werden vor jeder `notification_action_stop`-Persistenz ignoriert. Nach Same-Instance-Restart wird die Notification auf die neue Generation aktualisiert.
-
-Source-/JUnit-Schutz:
-
-- `check:start-handshake`;
-- `check:lifecycle`;
-- `ProtectionServiceLifecyclePolicyTest.notificationStopIsAcceptedOnlyForCurrentLifecycleGeneration`;
-- `docs/PROTECTION_SERVICE_DISPATCH_RACES.md` mit `DISPATCH-05`;
-- `docs/ANDROID_DEVICE_TEST_MATRIX.md` mit `LIFE-15`.
+Ein `ACTION_STOP` ist nur gültig, wenn Action-, Service- und aktuelle Request-Generation exakt übereinstimmen. Fehlende oder alte Generationen werden vor jeder `notification_action_stop`-Persistenz ignoriert.
 
 ## Aktueller Arbeitsfokus
 
 1. G6 extern entsperren und `npm run verify` auf exaktem Head ausführen.
 2. Android JUnit + `assembleDebug`.
-3. `connectedDebugAndroidTest`.
-4. LIFE-12 bis LIFE-15 real ausführen.
-5. DISPATCH-01 bis DISPATCH-05 real ausführen.
-6. Pre-/Post-Confirmation Process Loss real prüfen.
-7. App-/aktuelle Notification-/Start-/Destroy-/Boot-/Permission-/Target-App-Pfade real prüfen.
-8. G8 Worker/Coordinator/Usage-Flush + 12h-Baseline.
-9. G9 vollständige Physical Device Matrix.
-10. G2/G5/G0/G3: Migration, Security-Audit, User Research und Accessibility-Evidence.
+3. `connectedDebugAndroidTest` einschließlich `ProtectionConfigDurabilityInstrumentedTest`.
+4. APP-07 und APP-08 real ausführen.
+5. LIFE-12 bis LIFE-15 real ausführen.
+6. DISPATCH-01 bis DISPATCH-05 real ausführen.
+7. Pre-/Post-Confirmation Process Loss real prüfen.
+8. App-/Config-/aktuelle Notification-/Start-/Destroy-/Boot-/Permission-/Target-App-Pfade real prüfen.
+9. G8 Worker/Coordinator/Usage-Flush + 12h-Baseline.
+10. G9 vollständige Physical Device Matrix.
+11. G2/G5/G0/G3: Migration, Security-Audit, User Research und Accessibility-Evidence.
 
 ## Aktuelle CI-Grenze
 
@@ -97,14 +122,18 @@ Damit sind insbesondere **nicht als bestanden belegt**:
 - `npm run verify`;
 - `check:native-stop-atomicity`;
 - `check:start-handshake`;
+- `check:config-durability`;
 - `check:lifecycle`;
 - `check:android-instrumentation`;
+- `ProtectionConfigDurabilityStoreTest`;
+- `ProtectionConfigDurabilityInstrumentedTest`;
 - Android JUnit;
 - Android Instrumentation;
 - Gradle Debug Build / APK;
+- APP-07 / APP-08;
 - LIFE-12 bis LIFE-15;
 - DISPATCH-01 bis DISPATCH-05;
-- reale `start-pending`-/`start-interrupted`-/`unclean-process-stop`-/PendingIntent-Evidence.
+- reale `start-pending`-/`start-interrupted`-/`unclean-process-stop`-/PendingIntent-/Config-Durability-Evidence.
 
 ## Änderungsregel
 
