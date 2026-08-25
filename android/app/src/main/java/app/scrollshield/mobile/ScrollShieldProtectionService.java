@@ -70,6 +70,7 @@ public class ScrollShieldProtectionService extends Service {
     private View overlayView;
     private String overlayPackage;
     private String cachedConfigJson = "";
+    private String cachedConfigGeneration = "";
     private boolean focusMode;
     private boolean hasActiveConfiguredRule;
     private boolean explicitStopRequested;
@@ -163,8 +164,6 @@ public class ScrollShieldProtectionService extends Service {
                     serviceStartRequestAtOnCreate,
                     latestStartRequestAt
                 )) {
-                    // A PendingIntent or already-queued command from an older foreground-service
-                    // generation must never stop a newer confirmed activation.
                     return START_STICKY;
                 }
 
@@ -222,9 +221,6 @@ public class ScrollShieldProtectionService extends Service {
                     return START_NOT_STICKY;
                 }
 
-                // This already-created instance now owns the newly confirmed restart generation.
-                // A later real unexpected destroy and notification stop must be judged against
-                // this request, not against the older generation that created the service object.
                 serviceStartRequestAtOnCreate = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(this);
                 refreshProtectionNotification();
             }
@@ -235,8 +231,6 @@ public class ScrollShieldProtectionService extends Service {
     @Override
     public void onDestroy() {
         synchronized (ProtectionServiceDispatchGuard.LOCK) {
-            // Publish the dying state before a concurrent user restart can be mistaken for an
-            // already-active service and optimized away.
             RUNNING.set(false);
 
             boolean controlledDispatchDestroy =
@@ -329,7 +323,11 @@ public class ScrollShieldProtectionService extends Service {
         long now = System.currentTimeMillis();
         if (now - lastConfigurationHealthCheckMs >= CONFIGURATION_HEALTH_INTERVAL_MS) {
             lastConfigurationHealthCheckMs = now;
-            if (!ScrollShieldNativePlugin.hasConfiguredApps(this)) {
+            boolean hasConfiguredApps;
+            synchronized (ProtectionServiceDispatchGuard.LOCK) {
+                hasConfiguredApps = ScrollShieldNativePlugin.hasConfiguredApps(this);
+            }
+            if (!hasConfiguredApps) {
                 stopForProtectionPrerequisite(
                     ProtectionStopReasonPolicy.TARGET_APP_MISSING,
                     "Keine aktive installierte Ziel-App ist mehr verfügbar; der Android-Schutz wurde gestoppt"
@@ -440,94 +438,119 @@ public class ScrollShieldProtectionService extends Service {
     }
 
     private void refreshConfiguration() {
-        SharedPreferences preferences = getNativePreferences();
-        String configJson = preferences.getString(ScrollShieldNativePlugin.CONFIG_KEY, "{}");
-        if (configJson == null || configJson.equals(cachedConfigJson)) return;
+        String configJson;
+        String configGeneration;
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            SharedPreferences preferences = getNativePreferences();
+            configJson = preferences.getString(ScrollShieldNativePlugin.CONFIG_KEY, "{}");
+            if (configJson == null) configJson = "{}";
+            configGeneration = ProtectionConfigDurabilityStore.normalizeGeneration(
+                preferences.getString(ProtectionConfigDurabilityStore.CONFIG_GENERATION_KEY, "")
+            );
+            if (configJson.equals(cachedConfigJson) && configGeneration.equals(cachedConfigGeneration)) {
+                return;
+            }
+        }
 
-        cachedConfigJson = configJson;
-        rulesByPackage.clear();
-        focusMode = false;
-        hasActiveConfiguredRule = false;
+        Map<String, ProtectionRule> nextRulesByPackage = new HashMap<>();
+        boolean nextFocusMode = false;
+        boolean nextHasActiveConfiguredRule = false;
 
         try {
             JSONObject root = new JSONObject(configJson);
-            focusMode = root.optBoolean("focusMode", false);
+            nextFocusMode = root.optBoolean("focusMode", false);
             JSONArray apps = root.optJSONArray("apps");
-            if (apps == null) {
-                pruneTemporaryAccess();
+            if (apps != null) {
+                for (int index = 0; index < apps.length(); index++) {
+                    JSONObject app = apps.optJSONObject(index);
+                    if (app == null) continue;
+
+                    JSONObject timeWindows = app.optJSONObject("timeWindows");
+                    JSONObject antiBinge = app.optJSONObject("antiBinge");
+                    JSONObject emergencyUnlock = app.optJSONObject("emergencyUnlock");
+
+                    ProtectionRule rule = new ProtectionRule(
+                        app.optString("id", "unknown"),
+                        app.optString("name", "Geschützte App"),
+                        app.optBoolean("active", false),
+                        app.optString("mode", "standard"),
+                        Math.max(0, app.optInt("delaySeconds", 10)),
+                        Math.max(0, app.optInt("dailyLimitMinutes", 0)),
+                        Math.max(1, app.optInt("sessionMinutes", 5)),
+                        app.optString("blockHours", ""),
+                        app.optString("focusModeBehavior", "warn"),
+                        timeWindows == null
+                            ? ProtectionRulePolicy.NORMAL
+                            : ProtectionRulePolicy.normalizeScheduleAction(
+                                timeWindows.optString("morningRules", ProtectionRulePolicy.NORMAL)
+                            ),
+                        timeWindows == null
+                            ? ProtectionRulePolicy.NORMAL
+                            : ProtectionRulePolicy.normalizeScheduleAction(
+                                timeWindows.optString("workRules", ProtectionRulePolicy.NORMAL)
+                            ),
+                        timeWindows == null
+                            ? ProtectionRulePolicy.NORMAL
+                            : ProtectionRulePolicy.normalizeScheduleAction(
+                                timeWindows.optString("eveningRules", ProtectionRulePolicy.NORMAL)
+                            ),
+                        timeWindows == null
+                            ? ProtectionRulePolicy.NORMAL
+                            : ProtectionRulePolicy.normalizeScheduleAction(
+                                timeWindows.optString("nightRules", ProtectionRulePolicy.NORMAL)
+                            ),
+                        timeWindows == null
+                            ? ProtectionRulePolicy.NORMAL
+                            : ProtectionRulePolicy.normalizeScheduleAction(
+                                timeWindows.optString("weekendRules", ProtectionRulePolicy.NORMAL)
+                            ),
+                        antiBinge != null && antiBinge.optBoolean("enabled", false),
+                        antiBinge == null ? 3 : Math.max(1, antiBinge.optInt("warningThreshold", 3)),
+                        antiBinge == null ? 10 : Math.max(1, antiBinge.optInt("warningWindowMinutes", 10)),
+                        antiBinge == null ? 5 : Math.max(1, antiBinge.optInt("blockThreshold", 5)),
+                        antiBinge == null ? 20 : Math.max(1, antiBinge.optInt("blockWindowMinutes", 20)),
+                        emergencyUnlock != null && emergencyUnlock.optBoolean("enabled", false),
+                        emergencyUnlock == null ? 5 : Math.max(1, emergencyUnlock.optInt("durationMinutes", 5)),
+                        emergencyUnlock == null ? 0 : Math.max(0, emergencyUnlock.optInt("maxPerDay", 0)),
+                        emergencyUnlock == null || emergencyUnlock.optBoolean("requireCountdown", true),
+                        emergencyUnlock == null || emergencyUnlock.optBoolean("requireReason", true)
+                    );
+
+                    JSONArray packages = app.optJSONArray("packages");
+                    if (packages == null) continue;
+                    for (int packageIndex = 0; packageIndex < packages.length(); packageIndex++) {
+                        String packageName = packages.optString(packageIndex, "");
+                        if (packageName.trim().isEmpty()) continue;
+                        nextRulesByPackage.put(packageName, rule);
+                        if (rule.active) nextHasActiveConfiguredRule = true;
+                    }
+                }
+            }
+        } catch (JSONException error) {
+            nextRulesByPackage.clear();
+            nextFocusMode = false;
+            nextHasActiveConfiguredRule = false;
+            error.printStackTrace();
+        }
+
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            SharedPreferences preferences = getNativePreferences();
+            String latestConfigJson = preferences.getString(ScrollShieldNativePlugin.CONFIG_KEY, "{}");
+            if (latestConfigJson == null) latestConfigJson = "{}";
+            String latestConfigGeneration = ProtectionConfigDurabilityStore.normalizeGeneration(
+                preferences.getString(ProtectionConfigDurabilityStore.CONFIG_GENERATION_KEY, "")
+            );
+            if (!configJson.equals(latestConfigJson) || !configGeneration.equals(latestConfigGeneration)) {
                 return;
             }
 
-            for (int index = 0; index < apps.length(); index++) {
-                JSONObject app = apps.optJSONObject(index);
-                if (app == null) continue;
-
-                JSONObject timeWindows = app.optJSONObject("timeWindows");
-                JSONObject antiBinge = app.optJSONObject("antiBinge");
-                JSONObject emergencyUnlock = app.optJSONObject("emergencyUnlock");
-
-                ProtectionRule rule = new ProtectionRule(
-                    app.optString("id", "unknown"),
-                    app.optString("name", "Geschützte App"),
-                    app.optBoolean("active", false),
-                    app.optString("mode", "standard"),
-                    Math.max(0, app.optInt("delaySeconds", 10)),
-                    Math.max(0, app.optInt("dailyLimitMinutes", 0)),
-                    Math.max(1, app.optInt("sessionMinutes", 5)),
-                    app.optString("blockHours", ""),
-                    app.optString("focusModeBehavior", "warn"),
-                    timeWindows == null
-                        ? ProtectionRulePolicy.NORMAL
-                        : ProtectionRulePolicy.normalizeScheduleAction(
-                            timeWindows.optString("morningRules", ProtectionRulePolicy.NORMAL)
-                        ),
-                    timeWindows == null
-                        ? ProtectionRulePolicy.NORMAL
-                        : ProtectionRulePolicy.normalizeScheduleAction(
-                            timeWindows.optString("workRules", ProtectionRulePolicy.NORMAL)
-                        ),
-                    timeWindows == null
-                        ? ProtectionRulePolicy.NORMAL
-                        : ProtectionRulePolicy.normalizeScheduleAction(
-                            timeWindows.optString("eveningRules", ProtectionRulePolicy.NORMAL)
-                        ),
-                    timeWindows == null
-                        ? ProtectionRulePolicy.NORMAL
-                        : ProtectionRulePolicy.normalizeScheduleAction(
-                            timeWindows.optString("nightRules", ProtectionRulePolicy.NORMAL)
-                        ),
-                    timeWindows == null
-                        ? ProtectionRulePolicy.NORMAL
-                        : ProtectionRulePolicy.normalizeScheduleAction(
-                            timeWindows.optString("weekendRules", ProtectionRulePolicy.NORMAL)
-                        ),
-                    antiBinge != null && antiBinge.optBoolean("enabled", false),
-                    antiBinge == null ? 3 : Math.max(1, antiBinge.optInt("warningThreshold", 3)),
-                    antiBinge == null ? 10 : Math.max(1, antiBinge.optInt("warningWindowMinutes", 10)),
-                    antiBinge == null ? 5 : Math.max(1, antiBinge.optInt("blockThreshold", 5)),
-                    antiBinge == null ? 20 : Math.max(1, antiBinge.optInt("blockWindowMinutes", 20)),
-                    emergencyUnlock != null && emergencyUnlock.optBoolean("enabled", false),
-                    emergencyUnlock == null ? 5 : Math.max(1, emergencyUnlock.optInt("durationMinutes", 5)),
-                    emergencyUnlock == null ? 0 : Math.max(0, emergencyUnlock.optInt("maxPerDay", 0)),
-                    emergencyUnlock == null || emergencyUnlock.optBoolean("requireCountdown", true),
-                    emergencyUnlock == null || emergencyUnlock.optBoolean("requireReason", true)
-                );
-
-                JSONArray packages = app.optJSONArray("packages");
-                if (packages == null) continue;
-                for (int packageIndex = 0; packageIndex < packages.length(); packageIndex++) {
-                    String packageName = packages.optString(packageIndex, "");
-                    if (packageName.trim().isEmpty()) continue;
-                    rulesByPackage.put(packageName, rule);
-                    if (rule.active) hasActiveConfiguredRule = true;
-                }
-            }
-            pruneTemporaryAccess();
-        } catch (JSONException error) {
+            cachedConfigJson = configJson;
+            cachedConfigGeneration = configGeneration;
             rulesByPackage.clear();
-            hasActiveConfiguredRule = false;
+            rulesByPackage.putAll(nextRulesByPackage);
+            focusMode = nextFocusMode;
+            hasActiveConfiguredRule = nextHasActiveConfiguredRule;
             pruneTemporaryAccess();
-            error.printStackTrace();
         }
     }
 
@@ -1055,9 +1078,7 @@ public class ScrollShieldProtectionService extends Service {
                 long timestamp = existing.optLong(index, 0L);
                 if (timestamp >= cutoff) result.put(timestamp);
             }
-        } catch (JSONException ignored) {
-            // A corrupted local counter is safely reset.
-        }
+        } catch (JSONException ignored) {}
 
         result.put(now);
         while (result.length() > 100) result.remove(0);
@@ -1148,9 +1169,7 @@ public class ScrollShieldProtectionService extends Service {
         if (overlayView != null && windowManager != null) {
             try {
                 windowManager.removeView(overlayView);
-            } catch (RuntimeException ignored) {
-                // The system may already have removed the overlay after a permission change.
-            }
+            } catch (RuntimeException ignored) {}
         }
         overlayView = null;
         overlayPackage = null;
