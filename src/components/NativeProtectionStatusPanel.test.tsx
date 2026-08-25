@@ -7,6 +7,7 @@ const makeStatus = (updates: Partial<NativeProtectionStatus> = {}): NativeProtec
   running: false,
   enabled: false,
   unavailableAppIds: [],
+  lastStartRequestAt: 0,
   lastStartAt: 0,
   lastStopAt: 0,
   lastStopCode: '',
@@ -41,6 +42,50 @@ describe('NativeProtectionStatusPanel', () => {
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 
+  it('blocks duplicate starts while a fresh start request is awaiting confirmation', () => {
+    const onToggle = vi.fn();
+    render(
+      <NativeProtectionStatusPanel
+        status={makeStatus({
+          enabled: true,
+          lastStartRequestAt: 300,
+          health: 'start-pending',
+        })}
+        busy={false}
+        onToggle={onToggle}
+      />,
+    );
+
+    expect(screen.getByText('STARTET')).toBeInTheDocument();
+    const pendingButton = screen.getByRole('button', { name: 'Start wird bestätigt…' });
+    expect(pendingButton).toBeDisabled();
+    fireEvent.click(pendingButton);
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('offers a normal retry after an unconfirmed start was interrupted', () => {
+    const onToggle = vi.fn();
+    render(
+      <NativeProtectionStatusPanel
+        status={makeStatus({
+          enabled: true,
+          lastStartRequestAt: 300,
+          lastStartAt: 100,
+          lastStopAt: 200,
+          health: 'start-interrupted',
+        })}
+        busy={false}
+        onToggle={onToggle}
+      />,
+    );
+
+    expect(screen.getByText('START ABGEBROCHEN')).toBeInTheDocument();
+    const retryButton = screen.getByRole('button', { name: 'Schutz erneut starten' });
+    expect(retryButton).toBeEnabled();
+    fireEvent.click(retryButton);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
   it('offers a dedicated recovery action after an unclean process stop', () => {
     const onToggle = vi.fn();
     render(
@@ -48,6 +93,7 @@ describe('NativeProtectionStatusPanel', () => {
         status={makeStatus({
           enabled: true,
           running: false,
+          lastStartRequestAt: 150,
           lastStartAt: 200,
           lastStopAt: 100,
           health: 'unclean-process-stop',
