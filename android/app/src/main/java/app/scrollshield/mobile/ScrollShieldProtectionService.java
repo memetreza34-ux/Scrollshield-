@@ -103,124 +103,143 @@ public class ScrollShieldProtectionService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        serviceStartRequestAtOnCreate = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(this);
-        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-        createNotificationChannel();
-        try {
-            startForeground(NOTIFICATION_ID, createNotification());
-        } catch (RuntimeException error) {
-            RUNNING.set(false);
-            explicitStopRequested = true;
-            ScrollShieldNativePlugin.persistProtectionSystemStopWithFallback(
-                this,
-                ProtectionStopReasonPolicy.START_FAILED,
-                "Android konnte den Foreground-Schutzdienst nicht starten"
-            );
-            stopSelf();
-            return;
-        }
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            serviceStartRequestAtOnCreate = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(this);
+            windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+            createNotificationChannel();
+            try {
+                startForeground(NOTIFICATION_ID, createNotification());
+            } catch (RuntimeException error) {
+                RUNNING.set(false);
+                explicitStopRequested = true;
+                ScrollShieldNativePlugin.persistProtectionSystemStopWithFallback(
+                    this,
+                    ProtectionStopReasonPolicy.START_FAILED,
+                    "Android konnte den Foreground-Schutzdienst nicht starten"
+                );
+                ProtectionServiceDispatchGuard.dispatchControlledStop(this);
+                return;
+            }
 
-        ScrollShieldNativePlugin.ProtectionStartConfirmationResult confirmation =
-            ScrollShieldNativePlugin.recordProtectionServiceStarted(this);
-        if (confirmation != ScrollShieldNativePlugin.ProtectionStartConfirmationResult.CONFIRMED) {
-            RUNNING.set(false);
-            explicitStopRequested = true;
-            stopSelf();
-            return;
-        }
-
-        RUNNING.set(true);
-        lastUsageTickMs = System.currentTimeMillis();
-        usageFlushCoordinator = new UsageFlushCoordinator(lastUsageTickMs);
-        usageFlushWorker = UsageFlushWorker.forSharedPreferences(
-            getNativePreferences(),
-            USAGE_KEY_PREFIX,
-            usageFlushCoordinator
-        );
-        handler.post(pollRunnable);
-    }
-
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && ACTION_STOP.equals(intent.getAction())) {
-            explicitStopRequested = true;
-            ScrollShieldNativePlugin.persistProtectionTerminalStopWithFallback(
-                this,
-                ProtectionServiceLifecyclePolicy.NOTIFICATION_ACTION_STOP_CODE,
-                "Der Android-Schutz wurde über die Dauerbenachrichtigung manuell gestoppt"
-            );
-            stopSelf();
-            return START_NOT_STICKY;
-        }
-
-        if (!ScrollShieldNativePlugin.isProtectionEnabled(this)) {
-            explicitStopRequested = true;
-            stopSelf();
-            return START_NOT_STICKY;
-        }
-        if (!ScrollShieldNativePlugin.hasConfiguredApps(this)) {
-            stopForProtectionPrerequisite(
-                ProtectionStopReasonPolicy.TARGET_APP_MISSING,
-                "Keine aktive installierte Ziel-App ist mehr konfiguriert; der Android-Schutz wurde gestoppt"
-            );
-            return START_NOT_STICKY;
-        }
-        if (!ScrollShieldNativePlugin.hasUsageAccess(this)) {
-            stopForProtectionPrerequisite(
-                ProtectionStopReasonPolicy.USAGE_ACCESS_MISSING,
-                "Nutzungszugriff fehlt; der Android-Schutz wurde gestoppt"
-            );
-            return START_NOT_STICKY;
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            stopForProtectionPrerequisite(
-                ProtectionStopReasonPolicy.OVERLAY_PERMISSION_MISSING,
-                "Overlay-Berechtigung fehlt; der Android-Schutz wurde gestoppt"
-            );
-            return START_NOT_STICKY;
-        }
-        if (!ScrollShieldNativePlugin.hasNotificationsEnabled(this)) {
-            stopForProtectionPrerequisite(
-                ProtectionStopReasonPolicy.NOTIFICATIONS_MISSING,
-                "Benachrichtigungen fehlen; der Android-Schutz wurde beendet, damit er nicht unsichtbar läuft"
-            );
-            return START_NOT_STICKY;
-        }
-
-        if (ScrollShieldNativePlugin.hasUnconfirmedProtectionStartRequest(this)) {
             ScrollShieldNativePlugin.ProtectionStartConfirmationResult confirmation =
                 ScrollShieldNativePlugin.recordProtectionServiceStarted(this);
             if (confirmation != ScrollShieldNativePlugin.ProtectionStartConfirmationResult.CONFIRMED) {
                 RUNNING.set(false);
                 explicitStopRequested = true;
-                stopSelf();
+                ProtectionServiceDispatchGuard.dispatchControlledStop(this);
+                return;
+            }
+
+            RUNNING.set(true);
+            lastUsageTickMs = System.currentTimeMillis();
+            usageFlushCoordinator = new UsageFlushCoordinator(lastUsageTickMs);
+            usageFlushWorker = UsageFlushWorker.forSharedPreferences(
+                getNativePreferences(),
+                USAGE_KEY_PREFIX,
+                usageFlushCoordinator
+            );
+            handler.post(pollRunnable);
+        }
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            if (intent != null && ACTION_STOP.equals(intent.getAction())) {
+                explicitStopRequested = true;
+                ScrollShieldNativePlugin.persistProtectionTerminalStopWithFallback(
+                    this,
+                    ProtectionServiceLifecyclePolicy.NOTIFICATION_ACTION_STOP_CODE,
+                    "Der Android-Schutz wurde über die Dauerbenachrichtigung manuell gestoppt"
+                );
+                ProtectionServiceDispatchGuard.dispatchControlledStop(this);
                 return START_NOT_STICKY;
             }
+
+            if (!ScrollShieldNativePlugin.isProtectionEnabled(this)) {
+                explicitStopRequested = true;
+                ProtectionServiceDispatchGuard.dispatchControlledStop(this);
+                return START_NOT_STICKY;
+            }
+            if (!ScrollShieldNativePlugin.hasConfiguredApps(this)) {
+                stopForProtectionPrerequisite(
+                    ProtectionStopReasonPolicy.TARGET_APP_MISSING,
+                    "Keine aktive installierte Ziel-App ist mehr konfiguriert; der Android-Schutz wurde gestoppt"
+                );
+                return START_NOT_STICKY;
+            }
+            if (!ScrollShieldNativePlugin.hasUsageAccess(this)) {
+                stopForProtectionPrerequisite(
+                    ProtectionStopReasonPolicy.USAGE_ACCESS_MISSING,
+                    "Nutzungszugriff fehlt; der Android-Schutz wurde gestoppt"
+                );
+                return START_NOT_STICKY;
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                stopForProtectionPrerequisite(
+                    ProtectionStopReasonPolicy.OVERLAY_PERMISSION_MISSING,
+                    "Overlay-Berechtigung fehlt; der Android-Schutz wurde gestoppt"
+                );
+                return START_NOT_STICKY;
+            }
+            if (!ScrollShieldNativePlugin.hasNotificationsEnabled(this)) {
+                stopForProtectionPrerequisite(
+                    ProtectionStopReasonPolicy.NOTIFICATIONS_MISSING,
+                    "Benachrichtigungen fehlen; der Android-Schutz wurde beendet, damit er nicht unsichtbar läuft"
+                );
+                return START_NOT_STICKY;
+            }
+
+            if (ScrollShieldNativePlugin.hasUnconfirmedProtectionStartRequest(this)) {
+                ScrollShieldNativePlugin.ProtectionStartConfirmationResult confirmation =
+                    ScrollShieldNativePlugin.recordProtectionServiceStarted(this);
+                if (confirmation != ScrollShieldNativePlugin.ProtectionStartConfirmationResult.CONFIRMED) {
+                    RUNNING.set(false);
+                    explicitStopRequested = true;
+                    ProtectionServiceDispatchGuard.dispatchControlledStop(this);
+                    return START_NOT_STICKY;
+                }
+
+                // This already-created instance now owns the newly confirmed restart generation.
+                // A later real unexpected destroy must be judged against this request, not against
+                // the older generation that originally created the service object.
+                serviceStartRequestAtOnCreate = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(this);
+            }
+            return START_STICKY;
         }
-        return START_STICKY;
     }
 
     @Override
     public void onDestroy() {
-        long latestStartRequestAt = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(this);
-        long lastStartAt = ScrollShieldNativePlugin.getLastProtectionStartAt(this);
-        long lastStopAt = ScrollShieldNativePlugin.getLastProtectionStopAt(this);
-        boolean unexpectedDestroy = ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(
-            ScrollShieldNativePlugin.isProtectionEnabled(this),
-            explicitStopRequested,
-            serviceStartRequestAtOnCreate,
-            latestStartRequestAt,
-            lastStartAt,
-            lastStopAt
-        );
-        if (unexpectedDestroy) {
-            String description =
-                "Android hat den Schutzdienst unerwartet beendet; die gespeicherte Aktivierung wurde aus Sicherheitsgründen zurückgesetzt";
-            ScrollShieldNativePlugin.persistProtectionSystemStopWithFallback(
-                this,
-                ProtectionServiceLifecyclePolicy.UNEXPECTED_SERVICE_DESTROY_CODE,
-                description
-            );
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            // Publish the dying state before a concurrent user restart can be mistaken for an
+            // already-active service and optimized away.
+            RUNNING.set(false);
+
+            boolean controlledDispatchDestroy =
+                ProtectionServiceDispatchGuard.consumeControlledStopDestroy();
+            if (!controlledDispatchDestroy) {
+                long latestStartRequestAt = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(this);
+                long lastStartAt = ScrollShieldNativePlugin.getLastProtectionStartAt(this);
+                long lastStopAt = ScrollShieldNativePlugin.getLastProtectionStopAt(this);
+                boolean unexpectedDestroy = ProtectionServiceLifecyclePolicy.shouldRecordUnexpectedDestroy(
+                    ScrollShieldNativePlugin.isProtectionEnabled(this),
+                    explicitStopRequested,
+                    serviceStartRequestAtOnCreate,
+                    latestStartRequestAt,
+                    lastStartAt,
+                    lastStopAt
+                );
+                if (unexpectedDestroy) {
+                    String description =
+                        "Android hat den Schutzdienst unerwartet beendet; die gespeicherte Aktivierung wurde aus Sicherheitsgründen zurückgesetzt";
+                    ScrollShieldNativePlugin.persistProtectionSystemStopWithFallback(
+                        this,
+                        ProtectionServiceLifecyclePolicy.UNEXPECTED_SERVICE_DESTROY_CODE,
+                        description
+                    );
+                }
+            }
         }
 
         handler.removeCallbacksAndMessages(null);
@@ -236,7 +255,6 @@ public class ScrollShieldProtectionService extends Service {
         } else {
             stopForeground(true);
         }
-        RUNNING.set(false);
         super.onDestroy();
     }
 
@@ -248,8 +266,12 @@ public class ScrollShieldProtectionService extends Service {
 
     private void enforceCurrentApp() {
         if (!ScrollShieldNativePlugin.isProtectionEnabled(this)) {
-            explicitStopRequested = true;
-            stopSelf();
+            synchronized (ProtectionServiceDispatchGuard.LOCK) {
+                if (!ScrollShieldNativePlugin.isProtectionEnabled(this)) {
+                    explicitStopRequested = true;
+                    ProtectionServiceDispatchGuard.dispatchControlledStop(this);
+                }
+            }
             return;
         }
         if (!ScrollShieldNativePlugin.hasNotificationsEnabled(this)) {
@@ -353,14 +375,16 @@ public class ScrollShieldProtectionService extends Service {
     }
 
     private void stopForProtectionPrerequisite(String reasonCode, String description) {
-        explicitStopRequested = true;
-        hideOverlay();
-        ScrollShieldNativePlugin.persistProtectionSystemStopWithFallback(
-            this,
-            reasonCode,
-            description
-        );
-        stopSelf();
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            explicitStopRequested = true;
+            hideOverlay();
+            ScrollShieldNativePlugin.persistProtectionSystemStopWithFallback(
+                this,
+                reasonCode,
+                description
+            );
+            ProtectionServiceDispatchGuard.dispatchControlledStop(this);
+        }
     }
 
     private String getForegroundPackage() {
