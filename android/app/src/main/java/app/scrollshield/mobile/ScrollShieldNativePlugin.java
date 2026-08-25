@@ -121,16 +121,27 @@ public class ScrollShieldNativePlugin extends Plugin {
         JSONArray unavailableActiveApps = getUnavailableAppIds(context, configJson, true);
         String unavailableJson = unavailableApps.toString();
         String unavailableActiveJson = unavailableActiveApps.toString();
-        SharedPreferences preferences = getPreferences();
-        String previousUnavailableActive = preferences.getString(UNAVAILABLE_ACTIVE_APPS_KEY, "[]");
-        preferences
-            .edit()
-            .putString(CONFIG_KEY, configJson)
-            .putString(UNAVAILABLE_APPS_KEY, unavailableJson)
-            .putString(UNAVAILABLE_ACTIVE_APPS_KEY, unavailableActiveJson)
-            .apply();
+        ProtectionConfigDurabilityStore.CommitResult commitResult;
 
-        if (!unavailableActiveJson.equals(previousUnavailableActive)) {
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            try {
+                commitResult = ProtectionConfigDurabilityStore.commitConfig(
+                    context,
+                    configJson,
+                    unavailableJson,
+                    unavailableActiveJson
+                );
+            } catch (JSONException error) {
+                call.reject("Protection configuration is invalid", error);
+                return;
+            }
+            if (!commitResult.persisted) {
+                call.reject("Protection configuration could not be persisted durably");
+                return;
+            }
+        }
+
+        if (!unavailableActiveJson.equals(commitResult.previousUnavailableActiveJson)) {
             for (int index = 0; index < unavailableActiveApps.length(); index++) {
                 String appId = unavailableActiveApps.optString(index, "");
                 if (!appId.isEmpty()) {
@@ -146,13 +157,27 @@ public class ScrollShieldNativePlugin extends Plugin {
 
         JSObject result = new JSObject();
         result.put("unavailableAppIdsJson", unavailableJson);
+        result.put("configGeneration", commitResult.generation);
         call.resolve(result);
     }
 
     @PluginMethod
     public void startProtectionService(PluginCall call) {
         Context context = getContext();
+        String expectedConfigGeneration = ProtectionConfigDurabilityStore.normalizeGeneration(
+            call.getString("expectedConfigGeneration")
+        );
         synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            if (!ProtectionConfigDurabilityStore.matchesCurrentGeneration(context, expectedConfigGeneration)) {
+                persistProtectionSystemStopWithFallback(
+                    context,
+                    ProtectionStopReasonPolicy.START_FAILED,
+                    "Die Schutzkonfiguration hat sich vor dem Dienststart geändert oder wurde nicht dauerhaft bestätigt"
+                );
+                ProtectionServiceDispatchGuard.dispatchControlledStop(context);
+                call.reject("Protection configuration generation is stale or missing");
+                return;
+            }
             if (!hasUsageAccess(context)) {
                 rejectProtectionStartPrerequisite(
                     call,
@@ -203,11 +228,11 @@ public class ScrollShieldNativePlugin extends Plugin {
                 return;
             }
 
-            if (!recordProtectionStartRequested(context)) {
+            if (!recordProtectionStartRequested(context, expectedConfigGeneration)) {
                 persistProtectionSystemStopWithFallback(
                     context,
                     ProtectionStopReasonPolicy.START_FAILED,
-                    "Android konnte die Schutzaktivierung vor dem Dienststart nicht dauerhaft speichern"
+                    "Android konnte die Schutzaktivierung mit der aktuellen Konfiguration nicht dauerhaft speichern"
                 );
                 ProtectionServiceDispatchGuard.dispatchControlledStop(context);
                 call.reject("Protection start request could not be persisted");
@@ -306,6 +331,11 @@ public class ScrollShieldNativePlugin extends Plugin {
         result.put("running", ScrollShieldProtectionService.isRunning());
         result.put("enabled", isProtectionEnabled(context));
         result.put("unavailableAppIdsJson", getPreferences().getString(UNAVAILABLE_APPS_KEY, "[]"));
+        result.put("configGeneration", ProtectionConfigDurabilityStore.getCurrentGeneration(context));
+        result.put(
+            "startRequestConfigGeneration",
+            ProtectionConfigDurabilityStore.getStartRequestGeneration(getPreferences())
+        );
         result.put("lastStartRequestAt", getLastProtectionStartRequestAt(context));
         result.put("lastStartAt", getLastProtectionStartAt(context));
         result.put("lastStopAt", getLastProtectionStopAt(context));
@@ -598,18 +628,33 @@ public class ScrollShieldNativePlugin extends Plugin {
     }
 
     /**
-     * Persists activation intent and its request timestamp in one commit. The timestamp is ordered
-     * strictly after every known lifecycle boundary so a same-millisecond stop -> restart cannot
-     * make the new request look stale.
+     * Boot/app-update compatibility path. Existing valid persisted configs receive a generation
+     * before a recovery request is recorded; missing/invalid configs fail closed.
      */
     public static boolean recordProtectionStartRequested(Context context) {
+        String generation = ProtectionConfigDurabilityStore.ensureGenerationForExistingConfig(context);
+        return recordProtectionStartRequested(context, generation);
+    }
+
+    /**
+     * Persists activation intent, ordered request timestamp, and the exact durable config generation
+     * in one commit. A stale generation can never create a new activation request.
+     */
+    public static boolean recordProtectionStartRequested(Context context, String expectedConfigGeneration) {
         synchronized (EVENT_LOCK) {
             SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+            String expected = ProtectionConfigDurabilityStore.normalizeGeneration(expectedConfigGeneration);
+            String current = ProtectionConfigDurabilityStore.normalizeGeneration(
+                preferences.getString(ProtectionConfigDurabilityStore.CONFIG_GENERATION_KEY, "")
+            );
+            if (expected.isEmpty() || !expected.equals(current)) return false;
+
             long requestAt = nextLifecycleTimestamp(preferences);
             return preferences
                 .edit()
                 .putBoolean(SERVICE_ENABLED_KEY, true)
                 .putLong(LAST_START_REQUEST_AT_KEY, requestAt)
+                .putString(ProtectionConfigDurabilityStore.START_REQUEST_CONFIG_GENERATION_KEY, current)
                 .commit();
         }
     }
@@ -635,7 +680,7 @@ public class ScrollShieldNativePlugin extends Plugin {
 
     /**
      * Confirms that the foreground service reached a current, still-enabled activation. A terminal
-     * stop that won the EVENT_LOCK first is never overwritten by a delayed service confirmation.
+     * stop or config generation change that won first is never overwritten by delayed confirmation.
      */
     public static ProtectionStartConfirmationResult recordProtectionServiceStarted(Context context) {
         synchronized (EVENT_LOCK) {
@@ -652,6 +697,14 @@ public class ScrollShieldNativePlugin extends Plugin {
                     context,
                     ProtectionStopReasonPolicy.START_FAILED,
                     "Android konnte den Schutzstart keiner gespeicherten Startanforderung zuordnen"
+                );
+                return ProtectionStartConfirmationResult.FAILED_CLOSED;
+            }
+            if (!ProtectionConfigDurabilityStore.isCurrentRequestGeneration(preferences)) {
+                persistProtectionSystemStopWithFallback(
+                    context,
+                    ProtectionStopReasonPolicy.START_FAILED,
+                    "Die Schutzkonfiguration hat sich zwischen Startanforderung und Dienstbestätigung geändert"
                 );
                 return ProtectionStartConfirmationResult.FAILED_CLOSED;
             }
@@ -772,7 +825,7 @@ public class ScrollShieldNativePlugin extends Plugin {
                 }
             }
         } catch (JSONException ignored) {
-            // Invalid configurations are rejected by the TypeScript state layer before synchronization.
+            // Native durability validation rejects malformed configurations before synchronization resolves.
         }
         return unavailable;
     }
