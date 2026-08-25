@@ -2,86 +2,58 @@ import { readFile } from 'node:fs/promises';
 
 const javaRoot = 'android/app/src/main/java/app/scrollshield/mobile';
 const javaTestRoot = 'android/app/src/test/java/app/scrollshield/mobile';
-const pluginPath = `${javaRoot}/ScrollShieldNativePlugin.java`;
-const servicePath = `${javaRoot}/ScrollShieldProtectionService.java`;
-const bootReceiverPath = `${javaRoot}/ScrollShieldBootReceiver.java`;
-const diagnosticsPath = `${javaRoot}/ScrollShieldDiagnosticsPlugin.java`;
-const handshakePolicyPath = `${javaRoot}/ProtectionStartHandshakePolicy.java`;
-const handshakePolicyTestPath = `${javaTestRoot}/ProtectionStartHandshakePolicyTest.java`;
-const lifecyclePolicyPath = `${javaRoot}/ProtectionServiceLifecyclePolicy.java`;
-const lifecyclePolicyTestPath = `${javaTestRoot}/ProtectionServiceLifecyclePolicyTest.java`;
-const bridgePath = 'src/lib/nativeProtection.ts';
-const bridgeTestPath = 'src/lib/nativeProtection.test.ts';
-const bridgeClockTestPath = 'src/lib/nativeProtection.clock.test.ts';
-const diagnosticsBridgePath = 'src/lib/nativeDiagnostics.ts';
-const healthPath = 'src/lib/nativeProtectionHealth.ts';
-const healthTestPath = 'src/lib/nativeProtectionHealth.test.ts';
-const statusPanelPath = 'src/components/NativeProtectionStatusPanel.tsx';
-const statusPanelTestPath = 'src/components/NativeProtectionStatusPanel.test.tsx';
-const instrumentationPath =
-  'android/app/src/androidTest/java/app/scrollshield/mobile/ProtectionDiagnosticsInstrumentedTest.java';
 
-const [
-  plugin,
-  service,
-  bootReceiver,
-  diagnostics,
-  handshakePolicy,
-  handshakePolicyTest,
-  lifecyclePolicy,
-  lifecyclePolicyTest,
-  bridge,
-  bridgeTest,
-  bridgeClockTest,
-  diagnosticsBridge,
-  health,
-  healthTest,
-  statusPanel,
-  statusPanelTest,
-  instrumentation,
-] = await Promise.all([
-  readFile(pluginPath, 'utf8'),
-  readFile(servicePath, 'utf8'),
-  readFile(bootReceiverPath, 'utf8'),
-  readFile(diagnosticsPath, 'utf8'),
-  readFile(handshakePolicyPath, 'utf8'),
-  readFile(handshakePolicyTestPath, 'utf8'),
-  readFile(lifecyclePolicyPath, 'utf8'),
-  readFile(lifecyclePolicyTestPath, 'utf8'),
-  readFile(bridgePath, 'utf8'),
-  readFile(bridgeTestPath, 'utf8'),
-  readFile(bridgeClockTestPath, 'utf8'),
-  readFile(diagnosticsBridgePath, 'utf8'),
-  readFile(healthPath, 'utf8'),
-  readFile(healthTestPath, 'utf8'),
-  readFile(statusPanelPath, 'utf8'),
-  readFile(statusPanelTestPath, 'utf8'),
-  readFile(instrumentationPath, 'utf8'),
-]);
+const paths = {
+  plugin: `${javaRoot}/ScrollShieldNativePlugin.java`,
+  service: `${javaRoot}/ScrollShieldProtectionService.java`,
+  boot: `${javaRoot}/ScrollShieldBootReceiver.java`,
+  dispatchGuard: `${javaRoot}/ProtectionServiceDispatchGuard.java`,
+  dispatchGuardTest: `${javaTestRoot}/ProtectionServiceDispatchGuardTest.java`,
+  startPolicy: `${javaRoot}/ProtectionStartHandshakePolicy.java`,
+  startPolicyTest: `${javaTestRoot}/ProtectionStartHandshakePolicyTest.java`,
+  lifecyclePolicy: `${javaRoot}/ProtectionServiceLifecyclePolicy.java`,
+  lifecyclePolicyTest: `${javaTestRoot}/ProtectionServiceLifecyclePolicyTest.java`,
+  diagnostics: `${javaRoot}/ScrollShieldDiagnosticsPlugin.java`,
+  bridge: 'src/lib/nativeProtection.ts',
+  bridgeTest: 'src/lib/nativeProtection.test.ts',
+  clockTest: 'src/lib/nativeProtection.clock.test.ts',
+  diagnosticsBridge: 'src/lib/nativeDiagnostics.ts',
+  health: 'src/lib/nativeProtectionHealth.ts',
+  healthTest: 'src/lib/nativeProtectionHealth.test.ts',
+  statusPanel: 'src/components/NativeProtectionStatusPanel.tsx',
+  statusPanelTest: 'src/components/NativeProtectionStatusPanel.test.tsx',
+  instrumentation:
+    'android/app/src/androidTest/java/app/scrollshield/mobile/ProtectionDiagnosticsInstrumentedTest.java',
+} as const;
 
+const entries = await Promise.all(
+  Object.entries(paths).map(async ([key, file]) => [key, await readFile(file, 'utf8')] as const),
+);
+const source = Object.fromEntries(entries) as Record<keyof typeof paths, string>;
 const findings: string[] = [];
 
-function requirePattern(file: string, content: string, pattern: RegExp, message: string) {
-  if (!pattern.test(content)) findings.push(`${file}: ${message}`);
+function requirePattern(key: keyof typeof paths, pattern: RegExp, message: string) {
+  if (!pattern.test(source[key])) findings.push(`${paths[key]}: ${message}`);
+}
+
+function forbidText(key: keyof typeof paths, text: string, message: string) {
+  if (source[key].includes(text)) findings.push(`${paths[key]}: ${message}`);
 }
 
 requirePattern(
-  handshakePolicyPath,
-  handshakePolicy,
+  'startPolicy',
   /CONFIRMATION_GRACE_MS\s*=\s*15_000L[\s\S]*MAX_FUTURE_CLOCK_SKEW_MS\s*=\s*5_000L[\s\S]*nextLifecycleTimestamp[\s\S]*hasUnconfirmedStartRequest[\s\S]*hasFreshPendingStartRequest[\s\S]*isConfirmationSuperseded/,
-  'Native start-handshake policy must own matching grace/skew limits, strict lifecycle ordering, pending detection, and stop-wins confirmation.',
+  'Native handshake policy must own grace/skew, ordered lifecycle timestamps, pending detection and stop-wins confirmation.',
 );
 requirePattern(
-  handshakePolicyPath,
-  handshakePolicy,
+  'startPolicy',
   /boundary == Long\.MAX_VALUE[\s\S]*boundary \+ 1L[\s\S]*Math\.max\(Math\.max\(0L, now\), nextAfterBoundary\)/,
-  'Lifecycle timestamps must advance strictly beyond the latest known boundary when possible.',
+  'Lifecycle timestamps must advance strictly beyond known request/start/stop evidence when possible.',
 );
 requirePattern(
-  handshakePolicyPath,
-  handshakePolicy,
+  'startPolicy',
   /now < lastStartRequestAt[\s\S]*futureSkew[\s\S]*MAX_FUTURE_CLOCK_SKEW_MS[\s\S]*now - lastStartRequestAt <= CONFIRMATION_GRACE_MS/,
-  'Native pending detection must not stay fresh indefinitely after a material wall-clock rollback.',
+  'Material wall-clock rollback must not keep an old request pending indefinitely.',
 );
 for (const method of [
   'lifecycleTimestampAdvancesStrictlyBeyondKnownBoundary',
@@ -91,227 +63,171 @@ for (const method of [
   'unconfirmedBoundaryIsSeparateFromConfirmedOrStoppedState',
 ]) {
   requirePattern(
-    handshakePolicyTestPath,
-    handshakePolicyTest,
+    'startPolicyTest',
     new RegExp(`void\\s+${method}\\s*\\(`),
-    `Start-handshake JUnit coverage is missing ${method}.`,
+    `Start-handshake JUnit is missing ${method}.`,
   );
 }
 
 requirePattern(
-  pluginPath,
-  plugin,
+  'plugin',
   /LAST_START_REQUEST_AT_KEY\s*=\s*"protection_last_start_request_at"/,
   'Native persistence must keep a dedicated start-request timestamp.',
 );
 requirePattern(
-  pluginPath,
-  plugin,
+  'plugin',
   /ProtectionStartConfirmationResult[\s\S]*CONFIRMED[\s\S]*SUPERSEDED_BY_STOP[\s\S]*FAILED_CLOSED/,
-  'Native confirmation must distinguish success, a newer stop winner, and fail-closed persistence failure.',
+  'Confirmed-start persistence must distinguish success, a newer stop winner, and fail-closed persistence failure.',
 );
 requirePattern(
-  pluginPath,
-  plugin,
+  'plugin',
   /recordProtectionStartRequested\(Context context\)[\s\S]*requestAt = nextLifecycleTimestamp\(preferences\)[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, true\)[\s\S]*putLong\(LAST_START_REQUEST_AT_KEY, requestAt\)[\s\S]*\.commit\(\)/,
-  'Activation intent and a strictly ordered start-request timestamp must be persisted atomically.',
+  'Activation intent and ordered request evidence must be one durable commit.',
 );
 requirePattern(
-  pluginPath,
-  plugin,
-  /hasFreshProtectionStartRequest\(Context context\)[\s\S]*hasFreshPendingStartRequest[\s\S]*System\.currentTimeMillis\(\)/,
-  'Native code must expose a read-only fresh-pending guard for duplicate start suppression.',
-);
-requirePattern(
-  pluginPath,
-  plugin,
-  /startProtectionService\(PluginCall call\)[\s\S]*ScrollShieldProtectionService\.isRunning\(\) && isProtectionEnabled\(context\)[\s\S]*hasFreshProtectionStartRequest\(context\)[\s\S]*recordProtectionStartRequested\(context\)[\s\S]*startForegroundService\(intent\)/,
-  'Native start must be idempotent for active and fresh-pending states before creating a new request generation.',
-);
-const nativeStartStart = plugin.indexOf('public void startProtectionService');
-const prerequisiteRejectStart = plugin.indexOf('private static void rejectProtectionStartPrerequisite', nativeStartStart + 1);
-if (nativeStartStart < 0 || prerequisiteRejectStart <= nativeStartStart) {
-  findings.push(`${pluginPath}: Could not isolate startProtectionService.`);
-} else {
-  const body = plugin.slice(nativeStartStart, prerequisiteRejectStart);
-  if (body.includes('setProtectionEnabled(context, true)')) {
-    findings.push(
-      `${pluginPath}: startProtectionService must not restore a standalone enabled=true write; use recordProtectionStartRequested.`,
-    );
-  }
-}
-requirePattern(
-  pluginPath,
-  plugin,
+  'plugin',
   /recordProtectionServiceStarted\(Context context\)[\s\S]*isConfirmationSuperseded\(enabled, requestAt, stopAt\)[\s\S]*SUPERSEDED_BY_STOP[\s\S]*requestAt <= 0L[\s\S]*START_FAILED[\s\S]*FAILED_CLOSED[\s\S]*putLong\(LAST_START_AT_KEY, nextLifecycleTimestamp\(preferences\)\)[\s\S]*CONFIRMED/,
-  'Delayed confirmation must preserve a newer stop, while real confirmation uses strictly ordered durable start evidence and fails closed on invalid persistence.',
-);
-requirePattern(
-  pluginPath,
-  plugin,
-  /recordProtectionSystemStop[\s\S]*timestamp = nextLifecycleTimestamp\(preferences\)[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, false\)/,
-  'System-stop timestamps must share the strict lifecycle ordering used by start requests.',
-);
-requirePattern(
-  pluginPath,
-  plugin,
-  /recordProtectionTerminalStop[\s\S]*timestamp = nextLifecycleTimestamp\(preferences\)[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, false\)/,
-  'Terminal-stop timestamps must share the strict lifecycle ordering used by start requests.',
-);
-requirePattern(
-  pluginPath,
-  plugin,
-  /getProtectionServiceStatus[\s\S]*lastStartRequestAt[\s\S]*getLastProtectionStartRequestAt/,
-  'Native service status must expose the persisted start-request timestamp.',
+  'Delayed confirmation must preserve a newer stop and only current requests may create ordered confirmed-start evidence.',
 );
 
 requirePattern(
-  servicePath,
-  service,
-  /serviceStartRequestAtOnCreate = ScrollShieldNativePlugin\.getLastProtectionStartRequestAt\(this\)[\s\S]*startForeground\(NOTIFICATION_ID, createNotification\(\)\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*confirmation != ScrollShieldNativePlugin\.ProtectionStartConfirmationResult\.CONFIRMED[\s\S]*RUNNING\.set\(false\)[\s\S]*stopSelf\(\)[\s\S]*RUNNING\.set\(true\)/,
-  'A new service instance must capture its request generation and refuse RUNNING=true when a newer stop already won confirmation.',
+  'dispatchGuard',
+  /static final Object LOCK[\s\S]*CONTROLLED_STOP_DESTROY_WINDOW_NANOS\s*=\s*30_000_000_000L[\s\S]*dispatchControlledStop\(Context context\)[\s\S]*context\.stopService[\s\S]*System\.nanoTime\(\)/,
+  'A single dispatch guard must serialize Android start/stop dispatch and bound residual controlled-destroy suppression.',
 );
 requirePattern(
-  servicePath,
-  service,
-  /onStartCommand[\s\S]*hasUnconfirmedProtectionStartRequest\(this\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*confirmation != ScrollShieldNativePlugin\.ProtectionStartConfirmationResult\.CONFIRMED[\s\S]*START_NOT_STICKY/,
-  'An already-created service must confirm a newer restart request delivered through onStartCommand.',
+  'dispatchGuard',
+  /consumeControlledStopDestroy\(long nowNanos\)[\s\S]*ageNanos >= 0L[\s\S]*ageNanos <= CONTROLLED_STOP_DESTROY_WINDOW_NANOS[\s\S]*controlledStopAwaitingDestroy = false/,
+  'Controlled-stop destroy evidence must be monotonic, bounded and one-shot.',
 );
 requirePattern(
-  lifecyclePolicyPath,
-  lifecyclePolicy,
-  /terminalStopAfterThisServiceWasRequested[\s\S]*lastStopAt >= serviceStartRequestAtOnCreate[\s\S]*hasUnconfirmedStartRequest/,
-  'Old service destruction must not overwrite a stop/restart generation or a pre-confirmation interruption.',
-);
-requirePattern(
-  lifecyclePolicyTestPath,
-  lifecyclePolicyTest,
-  /doesNotLetOldServiceDestroyOverwriteFastRestart[\s\S]*preConfirmationDestroyRemainsStartInterruptedNotUnexpectedDestroy/,
-  'Lifecycle JUnit tests must lock fast stop-restart and pre-confirmation destroy boundaries.',
+  'dispatchGuardTest',
+  /successfulControlledStopIsConsumedExactlyOnceByPromptDestroy[\s\S]*staleControlledStopTokenCannotSuppressLaterUnexpectedDestroy[\s\S]*backwardMonotonicInputFailsSafeInsteadOfSuppressingDestroy[\s\S]*failedStopDispatchDoesNotSuppressFutureUnexpectedDestroy/,
+  'Dispatch-guard JUnit must cover prompt, stale, backwards-time and failed-dispatch boundaries.',
 );
 
 requirePattern(
-  bootReceiverPath,
-  bootReceiver,
-  /recordProtectionStartRequested\(context\)[\s\S]*recovery_start_failed[\s\S]*return[\s\S]*startForegroundService\(serviceIntent\)/,
-  'Boot/app-update recovery must persist a fresh start request before requesting the foreground service.',
+  'plugin',
+  /startProtectionService\(PluginCall call\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*ScrollShieldProtectionService\.isRunning\(\) && isProtectionEnabled\(context\)[\s\S]*hasFreshProtectionStartRequest\(context\)[\s\S]*recordProtectionStartRequested\(context\)[\s\S]*startForegroundService\(intent\)/,
+  'App start must hold the dispatch lock from active/pending checks through request persistence and Android dispatch.',
 );
-const bootStartRequestIndex = bootReceiver.indexOf('recordProtectionStartRequested(context)');
-const bootServiceStartIndex = bootReceiver.indexOf('context.startForegroundService(serviceIntent)');
-if (bootStartRequestIndex < 0 || bootServiceStartIndex <= bootStartRequestIndex) {
-  findings.push(
-    `${bootReceiverPath}: Boot/app-update recovery must record start-request evidence before startForegroundService.`,
-  );
+const nativeStartStart = source.plugin.indexOf('public void startProtectionService');
+const rejectStart = source.plugin.indexOf('private static void rejectProtectionStartPrerequisite', nativeStartStart + 1);
+if (nativeStartStart < 0 || rejectStart <= nativeStartStart) {
+  findings.push(`${paths.plugin}: Could not isolate startProtectionService.`);
+} else if (source.plugin.slice(nativeStartStart, rejectStart).includes('setProtectionEnabled(context, true)')) {
+  findings.push(`${paths.plugin}: App start must not restore a standalone enabled=true write.`);
 }
 requirePattern(
-  diagnosticsPath,
-  diagnostics,
+  'plugin',
+  /stopProtectionService\(PluginCall call\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*persistProtectionTerminalStopWithFallback[\s\S]*dispatchControlledStop\(context\)/,
+  'App stop persistence and Android stop dispatch must be serialized against starts.',
+);
+forbidText(
+  'plugin',
+  'context.stopService(new Intent(context, ScrollShieldProtectionService.class))',
+  'Plugin lifecycle callers must use the shared dispatch guard instead of a direct stopService call.',
+);
+
+requirePattern(
+  'boot',
+  /synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*ScrollShieldProtectionService\.isRunning\(\)[\s\S]*hasFreshProtectionStartRequest\(context\)[\s\S]*recordProtectionStartRequested\(context\)[\s\S]*startForegroundService\(serviceIntent\)/,
+  'Boot/app-update recovery must use the same serialized request-to-dispatch handshake.',
+);
+requirePattern(
+  'boot',
+  /stopRecoveryLocked[\s\S]*persistProtectionSystemStopWithFallback[\s\S]*dispatchControlledStop\(context\)/,
+  'Recovery failures must serialize fail-closed evidence with Android stop dispatch.',
+);
+
+requirePattern(
+  'service',
+  /onCreate\(\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*serviceStartRequestAtOnCreate = ScrollShieldNativePlugin\.getLastProtectionStartRequestAt\(this\)[\s\S]*startForeground\(NOTIFICATION_ID, createNotification\(\)\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*confirmation != ScrollShieldNativePlugin\.ProtectionStartConfirmationResult\.CONFIRMED[\s\S]*dispatchControlledStop\(this\)[\s\S]*RUNNING\.set\(true\)/,
+  'Service creation must serialize request ownership, foreground creation, durable confirmation and fail-closed shutdown before RUNNING=true.',
+);
+requirePattern(
+  'service',
+  /onStartCommand[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*hasUnconfirmedProtectionStartRequest\(this\)[\s\S]*recordProtectionServiceStarted\(this\)[\s\S]*confirmation != ScrollShieldNativePlugin\.ProtectionStartConfirmationResult\.CONFIRMED[\s\S]*serviceStartRequestAtOnCreate = ScrollShieldNativePlugin\.getLastProtectionStartRequestAt\(this\)/,
+  'A still-living service must confirm and adopt a newer restart request generation.',
+);
+forbidText(
+  'service',
+  'stopSelf()',
+  'Controlled shutdown must not bypass serialized stopService dispatch with stopSelf().',
+);
+requirePattern(
+  'service',
+  /onDestroy\(\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*RUNNING\.set\(false\)[\s\S]*consumeControlledStopDestroy\(\)[\s\S]*if \(!controlledDispatchDestroy\)[\s\S]*shouldRecordUnexpectedDestroy[\s\S]*UNEXPECTED_SERVICE_DESTROY_CODE/,
+  'onDestroy must publish the dying state before concurrent restarts, consume only prompt controlled destroys, then classify real unexpected destruction.',
+);
+
+requirePattern(
+  'lifecyclePolicy',
+  /terminalStopAfterThisServiceWasRequested[\s\S]*lastStopAt >= serviceStartRequestAtOnCreate[\s\S]*hasUnconfirmedStartRequest/,
+  'Old service destruction must not overwrite a newer stop/restart generation or a pre-confirmation interruption.',
+);
+requirePattern(
+  'lifecyclePolicyTest',
+  /doesNotLetOldServiceDestroyOverwriteFastRestart[\s\S]*transferredRestartOwnershipRestoresUnexpectedDestroyDetection[\s\S]*preConfirmationDestroyRemainsStartInterruptedNotUnexpectedDestroy/,
+  'Lifecycle JUnit must lock old-generation suppression, restart ownership transfer and pre-confirmation destruction.',
+);
+
+requirePattern(
+  'diagnostics',
   /lastProtectionStartRequestAt[\s\S]*getLastProtectionStartRequestAt\(context\)[\s\S]*lastProtectionStartAt/,
-  'The native diagnostics snapshot must expose request evidence separately from confirmed-start evidence.',
+  'Native diagnostics must export request evidence separately from confirmed-start evidence.',
 );
 requirePattern(
-  diagnosticsBridgePath,
-  diagnosticsBridge,
+  'diagnosticsBridge',
   /lastProtectionStartRequestAt:\s*number[\s\S]*lastProtectionStartAt:\s*number/,
-  'TypeScript diagnostics must type the start-request timestamp for device evidence export.',
+  'TypeScript diagnostics must type request and confirmed-start evidence separately.',
 );
 
 requirePattern(
-  bridgePath,
-  bridge,
+  'bridge',
   /NativeProtectionHealth[\s\S]*'start-pending'[\s\S]*'start-interrupted'[\s\S]*'unclean-process-stop'/,
-  'TypeScript health must distinguish pending start, interrupted start, and confirmed process loss.',
+  'TypeScript health must distinguish pending start, interrupted start and confirmed process loss.',
 );
 requirePattern(
-  bridgePath,
-  bridge,
+  'bridge',
   /START_CONFIRMATION_GRACE_MS\s*=\s*15_000[\s\S]*MAX_FUTURE_CLOCK_SKEW_MS\s*=\s*5_000/,
-  'TypeScript and native start confirmation must keep matching grace and future-clock-skew contracts.',
+  'TypeScript and native handshake must keep matching grace/skew constants.',
 );
 requirePattern(
-  bridgePath,
-  bridge,
-  /lastStartRequestAt:\s*number[\s\S]*lastStartAt:\s*number/,
-  'NativeProtectionStatus must expose start-request and confirmed-start timestamps separately.',
+  'bridge',
+  /latestConfirmedBoundary = Math\.max\(status\.lastStartAt, status\.lastStopAt\)[\s\S]*lastStartRequestAt > latestConfirmedBoundary[\s\S]*futureClockSkewMs[\s\S]*MAX_FUTURE_CLOCK_SKEW_MS[\s\S]*return 'start-interrupted'[\s\S]*START_CONFIRMATION_GRACE_MS[\s\S]*return 'unclean-process-stop'/,
+  'Health classification must resolve unconfirmed request/clock-skew boundaries before confirmed process-loss logic.',
 );
 requirePattern(
-  bridgePath,
-  bridge,
-  /latestConfirmedBoundary = Math\.max\(status\.lastStartAt, status\.lastStopAt\)[\s\S]*status\.lastStartRequestAt > latestConfirmedBoundary[\s\S]*futureClockSkewMs[\s\S]*MAX_FUTURE_CLOCK_SKEW_MS[\s\S]*return 'start-interrupted'[\s\S]*requestAgeMs[\s\S]*START_CONFIRMATION_GRACE_MS[\s\S]*status\.lastStartAt > 0[\s\S]*return 'unclean-process-stop'/,
-  'An unconfirmed request must handle material clock rollback before the grace-window and confirmed process-loss boundaries.',
+  'bridgeTest',
+  /detects a pending start request during the confirmation grace window[\s\S]*detects an interrupted start request after the confirmation grace window[\s\S]*unclean process stop/,
+  'Vitest must cover pending, interrupted and confirmed process-loss states.',
 );
 requirePattern(
-  bridgeTestPath,
-  bridgeTest,
-  /detects a pending start request during the confirmation grace window[\s\S]*start-pending/,
-  'Vitest must cover the fresh start-pending boundary.',
-);
-requirePattern(
-  bridgeTestPath,
-  bridgeTest,
-  /detects an interrupted start request after the confirmation grace window[\s\S]*start-interrupted/,
-  'Vitest must cover an unconfirmed start after the grace window.',
-);
-requirePattern(
-  bridgeTestPath,
-  bridgeTest,
-  /lastStartRequestAt:[\s\S]*lastStartAt:[\s\S]*unclean-process-stop/,
-  'Process-loss tests must prove confirmed start evidence is newer than its request.',
-);
-requirePattern(
-  bridgeClockTestPath,
-  bridgeClockTest,
-  /tolerates only a small future skew[\s\S]*start-pending[\s\S]*fails out of pending when the wall clock moved materially backward[\s\S]*start-interrupted/,
-  'Vitest must prove a material clock rollback cannot hold start-pending indefinitely.',
+  'clockTest',
+  /tolerates only a small future skew for a fresh pending request[\s\S]*start-pending[\s\S]*fails out of pending when the wall clock moved materially backward[\s\S]*start-interrupted/,
+  'Clock-skew Vitest must prove a material rollback cannot hold start-pending forever.',
 );
 
 requirePattern(
-  healthPath,
-  health,
-  /case 'start-pending':[\s\S]*STARTET[\s\S]*Startanforderung[\s\S]*showLastStop: false/,
-  'The UI must explain a fresh start request without presenting it as a failure.',
+  'health',
+  /case 'start-pending':[\s\S]*STARTET[\s\S]*case 'start-interrupted':[\s\S]*START ABGEBROCHEN[\s\S]*case 'unclean-process-stop':[\s\S]*PROZESS ABGEBROCHEN/,
+  'Presentation must keep pending, interrupted and process-loss states visually distinct.',
 );
 requirePattern(
-  healthPath,
-  health,
-  /case 'start-interrupted':[\s\S]*START ABGEBROCHEN[\s\S]*Foreground-Bestätigung[\s\S]*showLastStop: false/,
-  'The UI must explain an interrupted pre-confirmation start separately from process loss.',
+  'healthTest',
+  /shows a neutral in-flight state while Android can still confirm a fresh start request[\s\S]*explains an interrupted start separately from a confirmed process loss/,
+  'Presentation tests must cover pending and interrupted starts.',
 );
 requirePattern(
-  healthTestPath,
-  healthTest,
-  /shows a neutral in-flight state while Android can still confirm a fresh start request[\s\S]*STARTET/,
-  'Presentation tests must cover start-pending.',
+  'statusPanel',
+  /startPending = status\?\.health === 'start-pending'[\s\S]*Start wird bestätigt[\s\S]*startRetry = status\?\.health === 'start-interrupted'[\s\S]*Schutz erneut starten/,
+  'Status panel must suppress duplicate pending starts and offer a normal retry after interruption.',
 );
 requirePattern(
-  healthTestPath,
-  healthTest,
-  /explains an interrupted start separately from a confirmed process loss[\s\S]*START ABGEBROCHEN/,
-  'Presentation tests must cover start-interrupted.',
-);
-requirePattern(
-  statusPanelPath,
-  statusPanel,
-  /startPending = status\?\.health === 'start-pending'[\s\S]*disabled=\{busy \|\| stopActionLocked \|\| startPending\}[\s\S]*Start wird bestätigt/,
-  'The status panel must suppress duplicate starts while confirmation is still pending.',
-);
-requirePattern(
-  statusPanelPath,
-  statusPanel,
-  /startRetry = status\?\.health === 'start-interrupted'[\s\S]*Schutz erneut starten/,
-  'An interrupted start must offer a normal retry rather than process-loss recovery.',
-);
-requirePattern(
-  statusPanelTestPath,
-  statusPanelTest,
-  /blocks duplicate starts while a fresh start request is awaiting confirmation[\s\S]*Start wird bestätigt/,
-  'Status-panel tests must cover duplicate-start suppression.',
-);
-requirePattern(
-  statusPanelTestPath,
-  statusPanelTest,
-  /offers a normal retry after an unconfirmed start was interrupted[\s\S]*Schutz erneut starten/,
-  'Status-panel tests must cover interrupted-start retry.',
+  'statusPanelTest',
+  /blocks duplicate starts while a fresh start request is awaiting confirmation[\s\S]*offers a normal retry after an unconfirmed start was interrupted/,
+  'Status-panel tests must cover duplicate suppression and retry semantics.',
 );
 
 for (const method of [
@@ -320,23 +236,20 @@ for (const method of [
   'restartRequestAdvancesBeyondLatestStopBoundary',
 ]) {
   requirePattern(
-    instrumentationPath,
-    instrumentation,
+    'instrumentation',
     new RegExp(`void\\s+${method}\\s*\\(`),
-    `Android instrumentation must cover ${method}.`,
+    `Android instrumentation is missing ${method}.`,
   );
 }
 requirePattern(
-  instrumentationPath,
-  instrumentation,
-  /terminalStopWinsAgainstDelayedStartConfirmationWithoutOverwrite[\s\S]*recordProtectionTerminalStop[\s\S]*SUPERSEDED_BY_STOP[\s\S]*assertEquals\(0L, ScrollShieldNativePlugin\.getLastProtectionStartAt[\s\S]*getLastProtectionStopCode[\s\S]*getLastProtectionStopMessage[\s\S]*protection_events/,
-  'Instrumentation must prove a terminal stop wins without delayed confirmation changing start or stop evidence.',
+  'instrumentation',
+  /terminalStopWinsAgainstDelayedStartConfirmationWithoutOverwrite[\s\S]*recordProtectionTerminalStop[\s\S]*SUPERSEDED_BY_STOP[\s\S]*getLastProtectionStopCode[\s\S]*getLastProtectionStopMessage[\s\S]*protection_events/,
+  'Instrumentation must prove delayed confirmation cannot overwrite terminal stop evidence.',
 );
 requirePattern(
-  instrumentationPath,
-  instrumentation,
-  /restartRequestAdvancesBeyondLatestStopBoundary[\s\S]*restartRequestAt > stopAt[\s\S]*hasFreshProtectionStartRequest[\s\S]*ProtectionStartConfirmationResult\.CONFIRMED/,
-  'Instrumentation must prove immediate restart creates a strictly newer request generation that can be confirmed.',
+  'instrumentation',
+  /restartRequestAdvancesBeyondLatestStopBoundary[\s\S]*restartRequestAt > stopAt[\s\S]*ProtectionStartConfirmationResult\.CONFIRMED/,
+  'Instrumentation must prove immediate restart creates a strictly newer confirmable request generation.',
 );
 
 if (findings.length > 0) {
@@ -346,5 +259,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection start-handshake check passed. Plugin/boot starts, strict lifecycle ordering, bounded clock skew, pending duplicate suppression, stop-wins confirmation, fast restart destroy isolation, diagnostics, and process-loss separation remain guarded.',
+  'Protection start-handshake check passed. Ordered durable evidence, serialized app/boot start-stop dispatch, bounded controlled-destroy suppression, restart ownership transfer, clock-skew handling, UI states and Android instrumentation contracts remain guarded.',
 );
