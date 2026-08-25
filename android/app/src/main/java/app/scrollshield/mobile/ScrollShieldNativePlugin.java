@@ -41,6 +41,12 @@ public class ScrollShieldNativePlugin extends Plugin {
     private static final int MAX_QUEUED_EVENTS = 200;
     private static final Object EVENT_LOCK = new Object();
 
+    public enum ProtectionStartConfirmationResult {
+        CONFIRMED,
+        SUPERSEDED_BY_STOP,
+        FAILED_CLOSED,
+    }
+
     @PluginMethod
     public void getPermissionStatus(PluginCall call) {
         Context context = getContext();
@@ -188,6 +194,10 @@ public class ScrollShieldNativePlugin extends Plugin {
         }
 
         if (ScrollShieldProtectionService.isRunning() && isProtectionEnabled(context)) {
+            call.resolve();
+            return;
+        }
+        if (hasFreshProtectionStartRequest(context)) {
             call.resolve();
             return;
         }
@@ -372,7 +382,10 @@ public class ScrollShieldNativePlugin extends Plugin {
 
             JSONObject event = new JSONObject();
             try {
-                long timestamp = System.currentTimeMillis();
+                boolean systemWarning = "warning".equals(type) && "system".equals(appId);
+                long timestamp = systemWarning
+                    ? nextLifecycleTimestamp(preferences)
+                    : System.currentTimeMillis();
                 event.put("timestamp", timestamp);
                 event.put("type", type);
                 event.put("appId", appId);
@@ -385,7 +398,7 @@ public class ScrollShieldNativePlugin extends Plugin {
                 SharedPreferences.Editor editor = preferences
                     .edit()
                     .putString(EVENT_QUEUE_KEY, events.toString());
-                if ("warning".equals(type) && "system".equals(appId)) {
+                if (systemWarning) {
                     editor
                         .putLong(LAST_STOP_AT_KEY, timestamp)
                         .putString(
@@ -428,7 +441,7 @@ public class ScrollShieldNativePlugin extends Plugin {
             }
 
             try {
-                long timestamp = System.currentTimeMillis();
+                long timestamp = nextLifecycleTimestamp(preferences);
                 String normalizedCode = ProtectionDiagnosticPolicy.normalizeCode(
                     reasonCode,
                     ProtectionStopReasonPolicy.SYSTEM_WARNING
@@ -474,7 +487,8 @@ public class ScrollShieldNativePlugin extends Plugin {
         String description
     ) {
         synchronized (EVENT_LOCK) {
-            long timestamp = System.currentTimeMillis();
+            SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+            long timestamp = nextLifecycleTimestamp(preferences);
             String normalizedCode = ProtectionDiagnosticPolicy.normalizeCode(
                 reasonCode,
                 ProtectionServiceLifecyclePolicy.MANUAL_APP_STOP_CODE
@@ -484,8 +498,7 @@ public class ScrollShieldNativePlugin extends Plugin {
                 "Der Android-Schutz wurde gestoppt"
             );
 
-            return context
-                .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+            return preferences
                 .edit()
                 .putBoolean(SERVICE_ENABLED_KEY, false)
                 .putLong(LAST_STOP_AT_KEY, timestamp)
@@ -544,49 +557,93 @@ public class ScrollShieldNativePlugin extends Plugin {
             .getBoolean(SERVICE_ENABLED_KEY, false);
     }
 
+    public static boolean hasFreshProtectionStartRequest(Context context) {
+        synchronized (EVENT_LOCK) {
+            SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+            return ProtectionStartHandshakePolicy.hasFreshPendingStartRequest(
+                preferences.getBoolean(SERVICE_ENABLED_KEY, false),
+                preferences.getLong(LAST_START_REQUEST_AT_KEY, 0L),
+                preferences.getLong(LAST_START_AT_KEY, 0L),
+                preferences.getLong(LAST_STOP_AT_KEY, 0L),
+                System.currentTimeMillis()
+            );
+        }
+    }
+
+    public static boolean hasUnconfirmedProtectionStartRequest(Context context) {
+        synchronized (EVENT_LOCK) {
+            SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+            return ProtectionStartHandshakePolicy.hasUnconfirmedStartRequest(
+                preferences.getBoolean(SERVICE_ENABLED_KEY, false),
+                preferences.getLong(LAST_START_REQUEST_AT_KEY, 0L),
+                preferences.getLong(LAST_START_AT_KEY, 0L),
+                preferences.getLong(LAST_STOP_AT_KEY, 0L)
+            );
+        }
+    }
+
     /**
-     * Persists activation intent and its request timestamp in one commit. A later confirmed service
-     * start must write LAST_START_AT_KEY. This lets the UI distinguish an in-flight/interrupted
-     * start request from a service that had actually started and was later killed.
+     * Persists activation intent and its request timestamp in one commit. The timestamp is ordered
+     * strictly after every known lifecycle boundary so a same-millisecond stop -> restart cannot
+     * make the new request look stale.
      */
     public static boolean recordProtectionStartRequested(Context context) {
         synchronized (EVENT_LOCK) {
-            return context
-                .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+            SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+            long requestAt = nextLifecycleTimestamp(preferences);
+            return preferences
                 .edit()
                 .putBoolean(SERVICE_ENABLED_KEY, true)
-                .putLong(LAST_START_REQUEST_AT_KEY, System.currentTimeMillis())
+                .putLong(LAST_START_REQUEST_AT_KEY, requestAt)
                 .commit();
         }
     }
 
     public static void setProtectionEnabled(Context context, boolean enabled) {
-        SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
-        boolean wasEnabled = preferences.getBoolean(SERVICE_ENABLED_KEY, false);
-        SharedPreferences.Editor editor = preferences.edit().putBoolean(SERVICE_ENABLED_KEY, enabled);
+        synchronized (EVENT_LOCK) {
+            SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+            boolean wasEnabled = preferences.getBoolean(SERVICE_ENABLED_KEY, false);
+            SharedPreferences.Editor editor = preferences.edit().putBoolean(SERVICE_ENABLED_KEY, enabled);
 
-        if (!enabled && wasEnabled) {
-            editor
-                .putLong(LAST_STOP_AT_KEY, System.currentTimeMillis())
-                .putString(LAST_STOP_CODE_KEY, "protection_disabled")
-                .putString(
-                    LAST_STOP_MESSAGE_KEY,
-                    "Der Android-Schutz wurde über App, Benachrichtigung oder System deaktiviert"
-                );
+            if (!enabled && wasEnabled) {
+                editor
+                    .putLong(LAST_STOP_AT_KEY, nextLifecycleTimestamp(preferences))
+                    .putString(LAST_STOP_CODE_KEY, "protection_disabled")
+                    .putString(
+                        LAST_STOP_MESSAGE_KEY,
+                        "Der Android-Schutz wurde über App, Benachrichtigung oder System deaktiviert"
+                    );
+            }
+            editor.commit();
         }
-        editor.commit();
     }
 
     /**
-     * Confirms that the foreground service really reached its started state. If even this evidence
-     * cannot be persisted, fail closed before the service can publish RUNNING=true.
+     * Confirms that the foreground service reached a current, still-enabled activation. A terminal
+     * stop that won the EVENT_LOCK first is never overwritten by a delayed service confirmation.
      */
-    public static void recordProtectionServiceStarted(Context context) {
+    public static ProtectionStartConfirmationResult recordProtectionServiceStarted(Context context) {
         synchronized (EVENT_LOCK) {
-            boolean persisted = context
-                .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+            SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+            boolean enabled = preferences.getBoolean(SERVICE_ENABLED_KEY, false);
+            long requestAt = preferences.getLong(LAST_START_REQUEST_AT_KEY, 0L);
+            long stopAt = preferences.getLong(LAST_STOP_AT_KEY, 0L);
+
+            if (ProtectionStartHandshakePolicy.isConfirmationSuperseded(enabled, requestAt, stopAt)) {
+                return ProtectionStartConfirmationResult.SUPERSEDED_BY_STOP;
+            }
+            if (requestAt <= 0L) {
+                persistProtectionSystemStopWithFallback(
+                    context,
+                    ProtectionStopReasonPolicy.START_FAILED,
+                    "Android konnte den Schutzstart keiner gespeicherten Startanforderung zuordnen"
+                );
+                return ProtectionStartConfirmationResult.FAILED_CLOSED;
+            }
+
+            boolean persisted = preferences
                 .edit()
-                .putLong(LAST_START_AT_KEY, System.currentTimeMillis())
+                .putLong(LAST_START_AT_KEY, nextLifecycleTimestamp(preferences))
                 .commit();
             if (!persisted) {
                 persistProtectionSystemStopWithFallback(
@@ -594,25 +651,28 @@ public class ScrollShieldNativePlugin extends Plugin {
                     ProtectionStopReasonPolicy.START_FAILED,
                     "Android konnte den bestätigten Schutzstart nicht dauerhaft speichern"
                 );
-                throw new IllegalStateException("Confirmed protection start could not be persisted");
+                return ProtectionStartConfirmationResult.FAILED_CLOSED;
             }
+            return ProtectionStartConfirmationResult.CONFIRMED;
         }
     }
 
     public static void recordProtectionStop(Context context, String code, String message) {
-        context
-            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putLong(LAST_STOP_AT_KEY, System.currentTimeMillis())
-            .putString(
-                LAST_STOP_CODE_KEY,
-                ProtectionDiagnosticPolicy.normalizeCode(code, "unknown_stop")
-            )
-            .putString(
-                LAST_STOP_MESSAGE_KEY,
-                ProtectionDiagnosticPolicy.normalizeMessage(message, "Unbekannter Stoppgrund")
-            )
-            .commit();
+        synchronized (EVENT_LOCK) {
+            SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+            preferences
+                .edit()
+                .putLong(LAST_STOP_AT_KEY, nextLifecycleTimestamp(preferences))
+                .putString(
+                    LAST_STOP_CODE_KEY,
+                    ProtectionDiagnosticPolicy.normalizeCode(code, "unknown_stop")
+                )
+                .putString(
+                    LAST_STOP_MESSAGE_KEY,
+                    ProtectionDiagnosticPolicy.normalizeMessage(message, "Unbekannter Stoppgrund")
+                )
+                .commit();
+        }
     }
 
     public static long getLastProtectionStartRequestAt(Context context) {
@@ -669,6 +729,15 @@ public class ScrollShieldNativePlugin extends Plugin {
         } catch (JSONException error) {
             return false;
         }
+    }
+
+    private static long nextLifecycleTimestamp(SharedPreferences preferences) {
+        return ProtectionStartHandshakePolicy.nextLifecycleTimestamp(
+            System.currentTimeMillis(),
+            preferences.getLong(LAST_START_REQUEST_AT_KEY, 0L),
+            preferences.getLong(LAST_START_AT_KEY, 0L),
+            preferences.getLong(LAST_STOP_AT_KEY, 0L)
+        );
     }
 
     private static JSONArray getUnavailableAppIds(Context context, String configJson, boolean activeOnly) {
