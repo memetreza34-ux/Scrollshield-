@@ -81,7 +81,7 @@ Spezifikation: `docs/PROTECTION_SERVICE_DISPATCH_RACES.md`.
 
 Persistenz allein reicht nicht: Der zugehörige Android-Service-Dispatch muss dieselbe Reihenfolge einhalten.
 
-Dafür gilt die globale Lock-Reihenfolge:
+Globale Lock-Reihenfolge:
 
 ```text
 ProtectionServiceDispatchGuard.LOCK
@@ -150,6 +150,38 @@ transferredRestartOwnershipRestoresUnexpectedDestroyDetection
 transferredRestartOwnershipAlsoSupersedesStaleExplicitStopFlag
 ```
 
+### Generation-bound Notification Stop
+
+Die dauerhafte Foreground-Notification darf nicht zu einem generationslosen Stop-Kanal werden.
+
+Der Stop-`PendingIntent` trägt deshalb:
+
+```text
+EXTRA_STOP_START_REQUEST_AT = serviceStartRequestAtOnCreate
+```
+
+Ein Notification-Stop ist nur aktuell, wenn:
+
+```text
+actionStartRequestAt > 0
+UND
+actionStartRequestAt == serviceStartRequestAtOnCreate
+UND
+actionStartRequestAt == latestStartRequestAt
+```
+
+Die Entscheidung liegt in `ProtectionServiceLifecyclePolicy.isCurrentNotificationStopGeneration(...)`.
+
+Ein fehlender oder alter `ACTION_STOP` muss **vor** jeder `notification_action_stop`-Persistenz verworfen werden. Er darf weder `enabled`, Lifecycle-Zeitmarken, Stop-Code/-Nachricht noch Event-Historie verändern und darf den aktuellen Service nicht stoppen.
+
+Nach erfolgreichem Same-Instance-Restart wird die Notification nach der Ownership-Übernahme neu veröffentlicht. Der aktuelle `PendingIntent` verwendet `FLAG_UPDATE_CURRENT | FLAG_IMMUTABLE` und trägt damit die neue Request-Generation.
+
+JUnit-Vertrag:
+
+```text
+notificationStopIsAcceptedOnlyForCurrentLifecycleGeneration
+```
+
 ## Android Instrumentation
 
 ```bash
@@ -174,7 +206,7 @@ Damit wird verlangt:
 - Stop-Code/-Nachricht/Event-Queue bleiben unverändert;
 - sofortiger Restart erzeugt eine strikt neuere Request-Generation und kann bestätigt werden.
 
-Die neuen Dispatch-Race-Verträge ergänzen diese Persistenztests um den realen Android-Service-Dispatch.
+Die tatsächliche Zustellung einer alten/queued Notification-`PendingIntent`-Aktion ist bewusst **Device-/System-E2E-Evidence** und wird nicht durch einen reinen Persistenz-Instrumentationstest ersetzt.
 
 ## Android JUnit / Build
 
@@ -186,24 +218,26 @@ cd android
 Relevant sind insbesondere:
 
 - `ProtectionStartHandshakePolicyTest`;
-- `ProtectionServiceLifecyclePolicyTest`;
+- `ProtectionServiceLifecyclePolicyTest` inklusive Notification-Generation;
 - `ProtectionServiceDispatchGuardTest`;
 - bestehende Coordinator-/Worker-/Stop-Code-/Lifecycle-Tests.
 
 ## Device-/E2E-Evidence
 
-`docs/ANDROID_DEVICE_TEST_MATRIX.md` verlangt bereits:
+`docs/ANDROID_DEVICE_TEST_MATRIX.md` verlangt:
 
 - `LIFE-12`: terminaler Stop gewinnt vor verspäteter Confirmation;
 - `LIFE-13`: Pending-Doppelstart erzeugt keine neue Generation;
-- `LIFE-14`: sofortiger Stop→Restart wird nicht durch altes `onDestroy()` zerstört.
+- `LIFE-14`: sofortiger Stop→Restart wird nicht durch altes `onDestroy()` zerstört;
+- `LIFE-15`: alte Notification-Stop-Aktion aus `R1` bleibt nach bestätigtem Restart `R2` wirkungslos; die aktuelle `R2`-Aktion stoppt weiterhin mit `notification_action_stop`.
 
 Die Dispatch-Spezifikation verlangt zusätzlich real:
 
 - `DISPATCH-01`: Stop darf nicht zwischen Request-Commit und Android-Startdispatch gewinnen;
 - `DISPATCH-02`: Restart darf nicht zwischen Stop-Persistenz und altem `stopService()` verloren gehen;
 - `DISPATCH-03`: residualer kontrollierter Destroy nach Fast-Restart darf die neue Generation nicht überschreiben;
-- `DISPATCH-04`: ein alter/abgelaufener controlled-stop Token darf einen späteren echten Destroy nicht maskieren.
+- `DISPATCH-04`: ein alter/abgelaufener controlled-stop Token darf einen späteren echten Destroy nicht maskieren;
+- `DISPATCH-05`: stale Notification-`ACTION_STOP` darf die neue Generation nicht stoppen.
 
 Der Debug-Screen und der kopierte Native-Snapshot müssen sichtbar enthalten:
 
@@ -245,13 +279,14 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - `check:lifecycle`;
 - `check:android-instrumentation`;
 - Android JUnit;
+- `ProtectionServiceLifecyclePolicyTest`;
 - `ProtectionServiceDispatchGuardTest`;
 - Android Instrumentation;
 - Gradle Debug Build;
 - APK;
-- `LIFE-12` bis `LIFE-14`;
-- `DISPATCH-01` bis `DISPATCH-04`;
-- reale Process-Kill-/Start-/Stop-Race-Evidence.
+- `LIFE-12` bis `LIFE-15`;
+- `DISPATCH-01` bis `DISPATCH-05`;
+- reale Process-Kill-/Start-/Stop-/PendingIntent-Race-Evidence.
 
 ## Reihenfolge nach Entsperrung
 
@@ -262,10 +297,11 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 5. `LIFE-12`: Stop vor verspäteter Confirmation;
 6. `LIFE-13`: doppelter Start während `start-pending`;
 7. `LIFE-14`: sofortiger Stop→Restart vor altem `onDestroy()`;
-8. `DISPATCH-01..04` mit Diagnose-JSON und Logcat ausführen;
-9. Pre-Confirmation-Abbruch → `start-interrupted` → Retry;
-10. Post-Start-Process-Kill → `unclean-process-stop` → Recovery;
-11. App-/Notification-Stopp, Start-/Foreground-/Destroy-Fehler, Boot/App-Update, Permission-Loss, Target-App-Verlust;
-12. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
-13. finaler Supply-Chain-/Binary-/Security-Audit;
-14. erst danach Candidate Freeze und Release.
+8. `LIFE-15`: stale Notification-Stop-Aktion nach bestätigtem Restart;
+9. `DISPATCH-01..05` mit Diagnose-JSON und Logcat ausführen;
+10. Pre-Confirmation-Abbruch → `start-interrupted` → Retry;
+11. Post-Start-Process-Kill → `unclean-process-stop` → Recovery;
+12. App-/aktuelle Notification-Stopp-, Start-/Foreground-/Destroy-, Boot/App-Update-, Permission-Loss- und Target-App-Pfade;
+13. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
+14. finaler Supply-Chain-/Binary-/Security-Audit;
+15. erst danach Candidate Freeze und Release.
