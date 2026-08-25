@@ -96,13 +96,9 @@ Unter `ProtectionServiceDispatchGuard.LOCK` werden insbesondere serialisiert:
 - Factory Reset: Tombstone → `stopService`;
 - Service `onCreate()` / `onStartCommand()` / kritische `onDestroy()`-Klassifizierung.
 
-Damit darf kein konkurrierender Stop zwischen einem persistierten Request und dem dazugehörigen Android-Startdispatch einspringen und umgekehrt.
-
 ### Controlled-stop Destroy Token
 
-Ein erfolgreicher kontrollierter `stopService()` setzt einen process-lokalen one-shot Token.
-
-Vertrag:
+Ein erfolgreicher kontrollierter `stopService()` setzt einen process-lokalen one-shot Token:
 
 ```text
 System.nanoTime()
@@ -110,16 +106,9 @@ Destroy-Fenster <= 30 s
 exakt einmal konsumierbar
 ```
 
-Ein abgelaufener Token, ein negativer monotonic age-Wert oder ein fehlgeschlagener Stop-Dispatch darf einen späteren echten `unexpected_service_destroy` nicht unterdrücken.
+Ein abgelaufener Token, negativer monotonic age-Wert oder fehlgeschlagener Stop-Dispatch darf einen späteren echten `unexpected_service_destroy` nicht unterdrücken.
 
-`ProtectionServiceDispatchGuardTest` deckt source-seitig ab:
-
-```text
-successfulControlledStopIsConsumedExactlyOnceByPromptDestroy
-staleControlledStopTokenCannotSuppressLaterUnexpectedDestroy
-backwardMonotonicInputFailsSafeInsteadOfSuppressingDestroy
-failedStopDispatchDoesNotSuppressFutureUnexpectedDestroy
-```
+`ProtectionServiceDispatchGuardTest` deckt source-seitig Prompt-, stale-, backward-time- und failed-dispatch-Grenzen ab.
 
 ### Same-Instance Fast Restart
 
@@ -129,32 +118,11 @@ Wenn Android eine neue Startanforderung an dieselbe noch lebende Service-Instanz
 serviceStartRequestAtOnCreate = lastStartRequestAt
 ```
 
-Ein altes `explicitStopRequested=true` darf den späteren echten Destroy dieser **neu bestätigten** Generation nicht dauerhaft maskieren.
-
-`ProtectionServiceLifecyclePolicy` unterscheidet daher:
-
-```text
-kein neuer bestätigter Request
-→ altes explicitStopRequested darf Unexpected-Destroy unterdrücken
-
-neuer Request von derselben Instanz übernommen und bestätigt
-→ altes Flag ist stale
-→ späterer echter Destroy wird wieder erkannt
-```
-
-Passende JUnit-Verträge:
-
-```text
-explicitStopWithoutNewConfirmedGenerationSuppressesUnexpectedDestroy
-transferredRestartOwnershipRestoresUnexpectedDestroyDetection
-transferredRestartOwnershipAlsoSupersedesStaleExplicitStopFlag
-```
+Ein altes `explicitStopRequested=true` darf den späteren echten Destroy dieser neu bestätigten Generation nicht dauerhaft maskieren.
 
 ### Generation-bound Notification Stop
 
-Die dauerhafte Foreground-Notification darf nicht zu einem generationslosen Stop-Kanal werden.
-
-Der Stop-`PendingIntent` trägt deshalb:
+Die Foreground-Notification trägt:
 
 ```text
 EXTRA_STOP_START_REQUEST_AT = serviceStartRequestAtOnCreate
@@ -172,9 +140,9 @@ actionStartRequestAt == latestStartRequestAt
 
 Die Entscheidung liegt in `ProtectionServiceLifecyclePolicy.isCurrentNotificationStopGeneration(...)`.
 
-Ein fehlender oder alter `ACTION_STOP` muss **vor** jeder `notification_action_stop`-Persistenz verworfen werden. Er darf weder `enabled`, Lifecycle-Zeitmarken, Stop-Code/-Nachricht noch Event-Historie verändern und darf den aktuellen Service nicht stoppen.
+Fehlende oder alte `ACTION_STOP`-Generationen werden **vor** jeder `notification_action_stop`-Persistenz ignoriert. Sie dürfen weder `enabled`, Lifecycle-Zeitmarken, Stop-Code/-Nachricht noch Event-Historie verändern und dürfen den aktuellen Service nicht stoppen.
 
-Nach erfolgreichem Same-Instance-Restart wird die Notification nach der Ownership-Übernahme neu veröffentlicht. Der aktuelle `PendingIntent` verwendet `FLAG_UPDATE_CURRENT | FLAG_IMMUTABLE` und trägt damit die neue Request-Generation.
+Nach erfolgreichem Same-Instance-Restart wird die Notification nach der Ownership-Übernahme neu veröffentlicht. Der aktuelle Stop-`PendingIntent` verwendet `FLAG_UPDATE_CURRENT | FLAG_IMMUTABLE` und trägt die neue Generation.
 
 JUnit-Vertrag:
 
@@ -198,15 +166,7 @@ terminalStopWinsAgainstDelayedStartConfirmationWithoutOverwrite
 restartRequestAdvancesBeyondLatestStopBoundary
 ```
 
-Damit wird verlangt:
-
-- Confirmed-Start ist strikt neuer als sein Request;
-- terminaler Stop ist strikt neuer als der vorherige Request;
-- verspätete Confirmation liefert `SUPERSEDED_BY_STOP`;
-- Stop-Code/-Nachricht/Event-Queue bleiben unverändert;
-- sofortiger Restart erzeugt eine strikt neuere Request-Generation und kann bestätigt werden.
-
-Die tatsächliche Zustellung einer alten/queued Notification-`PendingIntent`-Aktion ist bewusst **Device-/System-E2E-Evidence** und wird nicht durch einen reinen Persistenz-Instrumentationstest ersetzt.
+Die tatsächliche Zustellung einer alten/queued Notification-`PendingIntent`-Aktion ist bewusst **Device-/System-E2E-Evidence**. Ein reiner Persistenz-Instrumentationstest darf nicht als Ersatz dafür gewertet werden.
 
 ## Android JUnit / Build
 
@@ -231,23 +191,13 @@ Relevant sind insbesondere:
 - `LIFE-14`: sofortiger Stop→Restart wird nicht durch altes `onDestroy()` zerstört;
 - `LIFE-15`: alte Notification-Stop-Aktion aus `R1` bleibt nach bestätigtem Restart `R2` wirkungslos; die aktuelle `R2`-Aktion stoppt weiterhin mit `notification_action_stop`.
 
-Die Dispatch-Spezifikation verlangt zusätzlich real:
+Die Dispatch-Spezifikation verlangt zusätzlich:
 
-- `DISPATCH-01`: Stop darf nicht zwischen Request-Commit und Android-Startdispatch gewinnen;
-- `DISPATCH-02`: Restart darf nicht zwischen Stop-Persistenz und altem `stopService()` verloren gehen;
-- `DISPATCH-03`: residualer kontrollierter Destroy nach Fast-Restart darf die neue Generation nicht überschreiben;
-- `DISPATCH-04`: ein alter/abgelaufener controlled-stop Token darf einen späteren echten Destroy nicht maskieren;
-- `DISPATCH-05`: stale Notification-`ACTION_STOP` darf die neue Generation nicht stoppen.
-
-Der Debug-Screen und der kopierte Native-Snapshot müssen sichtbar enthalten:
-
-```text
-lastProtectionStartRequestAt
-lastProtectionStartAt
-lastProtectionStopAt
-lastProtectionStopCode
-lastProtectionStopMessage
-```
+- `DISPATCH-01`: Stop vs. Request-Commit → Android-Startdispatch;
+- `DISPATCH-02`: Restart vs. Stop-Persistenz → `stopService()`;
+- `DISPATCH-03`: residualer kontrollierter Destroy nach Fast-Restart;
+- `DISPATCH-04`: alter/abgelaufener controlled-stop Token vs. späterer echter Destroy;
+- `DISPATCH-05`: stale Notification-`ACTION_STOP` vs. aktuelle Restart-Generation.
 
 ## Process-Loss / Recovery
 
@@ -269,7 +219,7 @@ Nur der zweite Fall verwendet `Schutz wiederherstellen`.
 
 ## Aktuelle Ausführungsgrenze
 
-GitHub Actions liefert auf diesem Draft-Branch weiterhin Verify-Jobs ohne ausgeführte Steps. Die exakte aktuelle Head-SHA und der zugehörige Lauf werden in PR #8 geführt.
+GitHub Actions liefert auf diesem Draft-Branch weiterhin Verify-Jobs ohne ausgeführte Steps. Die **exakte aktuelle Head-SHA und der zugehörige Lauf werden ausschließlich in PR #8 geführt**, damit committed Dokumente nicht durch ihren eigenen Commit sofort veralten.
 
 Deshalb sind aktuell **nicht als bestanden belegt**:
 
@@ -294,14 +244,11 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 2. `npm run verify`;
 3. `./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace`;
 4. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace`;
-5. `LIFE-12`: Stop vor verspäteter Confirmation;
-6. `LIFE-13`: doppelter Start während `start-pending`;
-7. `LIFE-14`: sofortiger Stop→Restart vor altem `onDestroy()`;
-8. `LIFE-15`: stale Notification-Stop-Aktion nach bestätigtem Restart;
-9. `DISPATCH-01..05` mit Diagnose-JSON und Logcat ausführen;
-10. Pre-Confirmation-Abbruch → `start-interrupted` → Retry;
-11. Post-Start-Process-Kill → `unclean-process-stop` → Recovery;
-12. App-/aktuelle Notification-Stopp-, Start-/Foreground-/Destroy-, Boot/App-Update-, Permission-Loss- und Target-App-Pfade;
-13. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
-14. finaler Supply-Chain-/Binary-/Security-Audit;
-15. erst danach Candidate Freeze und Release.
+5. `LIFE-12` bis `LIFE-15` real ausführen;
+6. `DISPATCH-01` bis `DISPATCH-05` mit Diagnose-JSON und Logcat ausführen;
+7. Pre-Confirmation-Abbruch → `start-interrupted` → Retry;
+8. Post-Start-Process-Kill → `unclean-process-stop` → Recovery;
+9. App-/aktuelle Notification-Stopp-, Start-/Foreground-/Destroy-, Boot/App-Update-, Permission-Loss- und Target-App-Pfade;
+10. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
+11. finaler Supply-Chain-/Binary-/Security-Audit;
+12. erst danach Candidate Freeze und Release.
