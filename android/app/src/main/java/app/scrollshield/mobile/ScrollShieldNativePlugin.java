@@ -577,13 +577,25 @@ public class ScrollShieldNativePlugin extends Plugin {
         editor.commit();
     }
 
-    public static boolean recordProtectionServiceStarted(Context context) {
+    /**
+     * Confirms that the foreground service really reached its started state. If even this evidence
+     * cannot be persisted, fail closed before the service can publish RUNNING=true.
+     */
+    public static void recordProtectionServiceStarted(Context context) {
         synchronized (EVENT_LOCK) {
-            return context
+            boolean persisted = context
                 .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
                 .edit()
                 .putLong(LAST_START_AT_KEY, System.currentTimeMillis())
                 .commit();
+            if (!persisted) {
+                persistProtectionSystemStopWithFallback(
+                    context,
+                    ProtectionStopReasonPolicy.START_FAILED,
+                    "Android konnte den bestätigten Schutzstart nicht dauerhaft speichern"
+                );
+                throw new IllegalStateException("Confirmed protection start could not be persisted");
+            }
         }
     }
 
