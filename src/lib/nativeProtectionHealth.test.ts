@@ -6,6 +6,7 @@ const makeStatus = (updates: Partial<NativeProtectionStatus> = {}): NativeProtec
   running: false,
   enabled: false,
   unavailableAppIds: [],
+  lastStartRequestAt: 0,
   lastStartAt: 0,
   lastStopAt: 0,
   lastStopCode: '',
@@ -33,11 +34,49 @@ describe('describeNativeProtectionHealth', () => {
     expect(presentation.showLastStop).toBe(true);
   });
 
+  it('shows a neutral in-flight state while Android can still confirm a fresh start request', () => {
+    const presentation = describeNativeProtectionHealth(
+      makeStatus({
+        enabled: true,
+        health: 'start-pending',
+        lastStartRequestAt: 1_786_000_200_000,
+      }),
+    );
+
+    expect(presentation.badge).toBe('STARTET');
+    expect(presentation.title).toContain('bestätigt den Schutzstart');
+    expect(presentation.message).toContain('Startanforderung');
+    expect(presentation.tone).toBe('neutral');
+    expect(presentation.showLastStop).toBe(false);
+  });
+
+  it('explains an interrupted start separately from a confirmed process loss', () => {
+    const presentation = describeNativeProtectionHealth(
+      makeStatus({
+        enabled: true,
+        health: 'start-interrupted',
+        lastStartRequestAt: 1_786_000_200_000,
+        lastStartAt: 1_786_000_000_000,
+        lastStopAt: 1_786_000_100_000,
+        lastStopCode: 'manual_app_stop',
+        lastStopMessage: 'Dieser Stopp gehört zu einem älteren Lebenszyklus',
+      }),
+    );
+
+    expect(presentation.badge).toBe('START ABGEBROCHEN');
+    expect(presentation.title).toContain('nicht bestätigt');
+    expect(presentation.message).toContain('Foreground-Bestätigung');
+    expect(presentation.message).toContain('starte den Schutz erneut');
+    expect(presentation.tone).toBe('warning');
+    expect(presentation.showLastStop).toBe(false);
+  });
+
   it('explains an unclean process stop without trusting an older stop record', () => {
     const presentation = describeNativeProtectionHealth(
       makeStatus({
         enabled: true,
         health: 'unclean-process-stop',
+        lastStartRequestAt: 1_786_000_150_000,
         lastStartAt: 1_786_000_200_000,
         lastStopAt: 1_786_000_100_000,
         lastStopCode: 'manual_app_stop',
