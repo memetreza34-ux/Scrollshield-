@@ -78,8 +78,8 @@ requirePattern(
 requirePattern(
   servicePath,
   service,
-  /stopForProtectionPrerequisite\(String reasonCode, String description\)[\s\S]*explicitStopRequested = true[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*reasonCode,[\s\S]*description[\s\S]*stopSelf\(\)/,
-  'Service prerequisite shutdown must delegate to the shared atomic system-stop wrapper.',
+  /stopForProtectionPrerequisite\(String reasonCode, String description\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*explicitStopRequested = true[\s\S]*hideOverlay\(\)[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*reasonCode,[\s\S]*description[\s\S]*ProtectionServiceDispatchGuard\.dispatchControlledStop\(this\)/,
+  'Service prerequisite shutdown must serialize atomic system-stop persistence and controlled Android stop dispatch under the shared dispatch lock.',
 );
 
 const helperStart = service.indexOf('private void stopForProtectionPrerequisite');
@@ -88,10 +88,15 @@ if (helperStart < 0 || nextMethod <= helperStart) {
   findings.push(`${servicePath}: Could not isolate stopForProtectionPrerequisite helper.`);
 } else {
   const helperBody = service.slice(helperStart, nextMethod);
-  for (const forbidden of ['appendProtectionEvent(', 'setProtectionEnabled(', 'recordProtectionStop(']) {
+  for (const forbidden of [
+    'appendProtectionEvent(',
+    'setProtectionEnabled(',
+    'recordProtectionStop(',
+    'stopSelf()',
+  ]) {
     if (helperBody.includes(forbidden)) {
       findings.push(
-        `${servicePath}: Prerequisite helper must delegate to the shared atomic wrapper instead of performing '${forbidden}' itself.`,
+        `${servicePath}: Prerequisite helper must use the centralized atomic stop + controlled dispatch path instead of '${forbidden}'.`,
       );
     }
   }
@@ -121,20 +126,20 @@ if (/stopForMissingPermission\s*\(/.test(service)) {
 requirePattern(
   pluginPath,
   plugin,
-  /private static void rejectProtectionStartPrerequisite\([\s\S]*persistProtectionSystemStopWithFallback\(context, reasonCode, description\)[\s\S]*call\.reject\(rejectionMessage\)/,
-  'Native start preflight must persist through the shared atomic system-stop wrapper before rejecting.',
+  /private static void rejectProtectionStartPrerequisite\([\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*persistProtectionSystemStopWithFallback\(context, reasonCode, description\)[\s\S]*ProtectionServiceDispatchGuard\.dispatchControlledStop\(context\)[\s\S]*call\.reject\(rejectionMessage\)/,
+  'Native start preflight must serialize system-stop evidence and controlled dispatch before rejecting.',
 );
 requirePattern(
   pluginPath,
   plugin,
-  /catch \(RuntimeException error\)[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*ProtectionStopReasonPolicy\.START_FAILED[\s\S]*Android konnte den Schutzdienst nicht starten[\s\S]*call\.reject\("Protection service could not be started", error\)/,
-  'Native service-start request exceptions must atomically persist START_FAILED before rejecting.',
+  /catch \(RuntimeException error\)[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*ProtectionStopReasonPolicy\.START_FAILED[\s\S]*Android konnte den Schutzdienst nicht starten[\s\S]*ProtectionServiceDispatchGuard\.dispatchControlledStop\(context\)[\s\S]*call\.reject\("Protection service could not be started", error\)/,
+  'Native service-start request exceptions must atomically persist START_FAILED and dispatch a controlled stop before rejecting.',
 );
 requirePattern(
   servicePath,
   service,
-  /catch \(RuntimeException error\)[\s\S]*RUNNING\.set\(false\)[\s\S]*explicitStopRequested = true[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*ProtectionStopReasonPolicy\.START_FAILED[\s\S]*Android konnte den Foreground-Schutzdienst nicht starten[\s\S]*stopSelf\(\)/,
-  'Foreground start failure must atomically persist START_FAILED and mark the stop explicit before stopSelf().',
+  /catch \(RuntimeException error\)[\s\S]*RUNNING\.set\(false\)[\s\S]*explicitStopRequested = true[\s\S]*persistProtectionSystemStopWithFallback\([\s\S]*ProtectionStopReasonPolicy\.START_FAILED[\s\S]*Android konnte den Foreground-Schutzdienst nicht starten[\s\S]*ProtectionServiceDispatchGuard\.dispatchControlledStop\(this\)/,
+  'Foreground start failure must atomically persist START_FAILED and use controlled stop dispatch.',
 );
 
 const startMethodStart = plugin.indexOf('public void startProtectionService');
@@ -218,5 +223,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Prerequisite/system stop-code contract check passed. Runtime prerequisites, native preflight, and technical start failures share one atomic system-stop transaction with stable diagnostics.',
+  'Prerequisite/system stop-code contract check passed. Runtime prerequisites, native preflight, and technical start failures use atomic system-stop evidence plus serialized controlled Android stop dispatch.',
 );
