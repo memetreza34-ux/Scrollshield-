@@ -36,32 +36,38 @@ requirePattern(
 requirePattern(
   policyPath,
   policy,
-  /status\.enabled[\s\S]*!status\.running[\s\S]*installedActiveAppIds\.length > 0[\s\S]*status\.health === 'stale-activation'[\s\S]*status\.health === 'unclean-process-stop'/,
-  'Automatic app-open recovery must be limited to safe stale activation or confirmed process loss with an installed target.',
+  /status\.enabled[\s\S]*!status\.running[\s\S]*installedActiveAppIds\.length > 0[\s\S]*status\.health === 'stale-activation'/,
+  'Normal app-open restart policy must be limited to stale activation with an installed target.',
 );
 requirePattern(
   policyTestPath,
   policyTest,
-  /safe stale or confirmed process-loss state[\s\S]*stale-activation[\s\S]*unclean-process-stop[\s\S]*start-pending[\s\S]*start-interrupted[\s\S]*\[\]/,
-  'Recovery policy tests must prove pending/interrupted starts are not auto-recovered and an installed target is still required.',
+  /restarts only a safe stale activation with an installed active target[\s\S]*stale-activation[\s\S]*unclean-process-stop[\s\S]*start-pending[\s\S]*start-interrupted[\s\S]*\[\]/,
+  'Recovery policy tests must prove process loss, pending/interrupted starts, and missing targets do not enter the generic stale-start path.',
 );
 requirePattern(
   appPath,
   app,
-  /NativeProtection\.getStatus\(\)[\s\S]*serviceStatus\.health === 'start-pending'[\s\S]*setTimeout\([\s\S]*syncAndRecoverProtection[\s\S]*NativeProtection\.sync\([\s\S]*getInstalledActiveProtectionIds[\s\S]*shouldRecoverStaleProtection/,
-  'App-open recovery must read lifecycle truth before config sync and defer sync while a fresh start confirmation is pending.',
+  /NativeProtection\.getStatus\(\)[\s\S]*serviceStatus\.health === 'start-pending'[\s\S]*setTimeout\([\s\S]*syncAndRecoverProtection/,
+  'App-open recovery must read lifecycle truth first and defer all sync/start work while a fresh confirmation is pending.',
 );
 requirePattern(
   appPath,
   app,
-  /serviceStatus\.health === 'unclean-process-stop'[\s\S]*NativeProtection\.recoverAfterProcessLoss\([\s\S]*NativeProtection\.start\(/,
-  'Confirmed process loss must use controlled recovery while ordinary stale activation uses the normal generation-bound start path.',
+  /serviceStatus\.health === 'unclean-process-stop'[\s\S]*NativeProtection\.recoverAfterProcessLoss\([\s\S]*return;[\s\S]*NativeProtection\.sync\([\s\S]*getInstalledActiveProtectionIds[\s\S]*shouldRecoverStaleProtection[\s\S]*NativeProtection\.start\(/,
+  'Confirmed process loss must route directly to controlled recovery before generic config sync; only stale activation may use the normal start path.',
 );
 requirePattern(
   appTestPath,
   appTest,
-  /restarts a previously enabled stale service[\s\S]*uses controlled process-loss recovery after a confirmed unclean service loss[\s\S]*does not invalidate a fresh pending start request with config sync or a duplicate start[\s\S]*never automatically enables protection that was deliberately disabled[\s\S]*does not restart when every configured active target is unavailable/,
-  'App integration tests must guard stale recovery, process-loss routing, pending-generation protection, disabled state, and unavailable targets.',
+  /restarts a previously enabled stale service[\s\S]*uses controlled process-loss recovery without a duplicate app-level config sync[\s\S]*does not invalidate a fresh pending start request with config sync or a duplicate start[\s\S]*never automatically enables protection that was deliberately disabled[\s\S]*does not restart when every configured active target is unavailable/,
+  'App integration tests must guard stale recovery, single-sync process-loss routing, pending-generation protection, disabled state, and unavailable targets.',
+);
+requirePattern(
+  appTestPath,
+  appTest,
+  /unclean-process-stop[\s\S]*recoverMock\)\.toHaveBeenCalled[\s\S]*syncMock\)\.not\.toHaveBeenCalled[\s\S]*startMock\)\.not\.toHaveBeenCalled/,
+  'App-open process-loss handling must not perform a redundant generic config sync or normal start before controlled recovery.',
 );
 requirePattern(
   appTestPath,
@@ -122,5 +128,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection recovery check passed. App-open recovery is lifecycle-health aware, preserves fresh pending start generations, routes confirmed process loss through controlled recovery, and keeps boot/update failures atomically fail-closed.',
+  'Protection recovery check passed. App-open recovery preserves fresh pending starts, routes confirmed process loss directly through controlled generation-bound recovery without duplicate sync, and limits generic restart to safe stale activation.',
 );
