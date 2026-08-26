@@ -20,9 +20,34 @@ Ein Source-Checker oder vorbereiteter Test ist niemals ein ausgeführter Android
 npm run verify
 ```
 
-Die Kette umfasst unter anderem TypeScript/Lint/Prettier, Android Project/Instrumentation, Supply Chain, Native Drain/ACK/Retention, Usage Flush Worker, Stop-Codes, Lifecycle/Diagnostics, `check:native-stop-atomicity`, `check:start-handshake`, `check:config-durability`, `check:runtime-config-state`, `check:usage-accounting`, Process-Loss/Recovery, Device Matrix, Migration/Release/Privacy/Store/Security, Vitest, Build, PWA und Bundle Checks.
+Die Kette umfasst unter anderem TypeScript/Lint/Prettier, Android Project/Instrumentation, `check:checker-drift`, Supply Chain, Native Drain/ACK/Retention, Usage Flush Worker, Stop-Codes, Lifecycle/Diagnostics, `check:native-stop-atomicity`, `check:start-handshake`, `check:config-durability`, `check:runtime-config-state`, `check:usage-accounting`, Process-Loss/Recovery, Device Matrix, Migration/Release/Privacy/Store/Security, Vitest, Build, PWA und Bundle Checks.
 
 Die Android-Source-Checker müssen die **aktuelle** Architektur prüfen. Veraltete Erwartungen wie produktives `setProtectionEnabled(context, true)`, `stopForMissingPermission(...)` oder Service-`stopSelf()` sind nicht zulässig. Aktivierung läuft über den generationgebundenen Startrequest; kontrollierte Stopps laufen über den zentralen Dispatch Guard.
+
+## Checker Architecture Drift
+
+```bash
+npm run check:checker-drift
+```
+
+Spezifikation: `docs/CHECKER_ARCHITECTURE_DRIFT.md`.
+
+Der Meta-Guard schützt nicht die Produktlogik selbst, sondern die **Source-Checker**, die diese Produktlogik prüfen. Der Verify-Audit hat veraltete Verträge in Android Project, Prerequisite Stop Codes, Process Loss, Config Durability, Transparency, Native Drain/Factory Reset und Migration Recovery gefunden und auf die aktuelle Architektur gezogen.
+
+Verbindliche Marker sind insbesondere:
+
+```text
+recordProtectionStartRequested(...)
+ProtectionServiceDispatchGuard.dispatchControlledStop(...)
+syncCommittedConfig(...) + expectedConfigGeneration
+start-pending / start-interrupted / unclean-process-stop
+durable History/Counter + Event vor temporaryAccessUntil
+Factory-Reset-Tombstone vor controlled stop
+rejectProtectionStartPrerequisite(...) für Notification-Prerequisites
+fail-closed Migration-Guards
+```
+
+`check:checker-drift` ist Bestandteil von `verify` und `readiness`. Auch dieser Meta-Guard ist erst nach realer Ausführung Executed Evidence.
 
 ## Native Stop Atomicity
 
@@ -355,9 +380,23 @@ Relevant sind insbesondere:
 
 Die Dispatch-Spezifikation verlangt zusätzlich `DISPATCH-01` bis `DISPATCH-05`.
 
-## Process-Loss / Recovery
+## Process-Loss / App-Open Recovery
 
 Pre-Confirmation-Abbruch und echter Post-Start-Process-Kill bleiben getrennt. Nur ein bestätigter Start, der später ohne terminalen Stopp verschwindet, wird als `unclean-process-stop` behandelt.
+
+Beim App-Open wird deshalb zuerst Native Lifecycle Truth gelesen:
+
+```text
+getStatus()
+├─ start-pending          → kein Config-Sync, kein zweiter Start; erneut prüfen
+├─ unclean-process-stop   → direkt recoverAfterProcessLoss(...)
+│                           (eigener durable Config-Sync + Generation-Bindung)
+├─ stale-activation       → normaler Config-Sync; bei installierter aktiver Ziel-App normaler start(...)
+├─ start-interrupted      → kein automatischer Neustart; sichtbarer Retry-Pfad
+└─ active/disabled/other  → kein automatischer Start
+```
+
+Die `unclean-process-stop`-Abzweigung liegt **vor** dem generischen App-Level-Config-Sync. Dadurch entsteht beim Recovery kein doppelter unnötiger Config-Generation-Wechsel. Ein frischer `start-pending`-Request darf durch App-Open weder resynchronisiert noch dupliziert werden.
 
 ## Aktuelle Ausführungsgrenze
 
@@ -366,8 +405,11 @@ GitHub Actions liefert auf diesem Draft-Branch weiterhin Verify-Jobs ohne ausgef
 Deshalb sind aktuell **nicht als bestanden belegt**:
 
 - `npm run verify`;
+- `check:checker-drift`;
 - `check:android-project`;
 - `check:prerequisite-stop-codes`;
+- `check:process-loss`;
+- `check:protection-recovery`;
 - `check:native-stop-atomicity`;
 - `check:start-handshake`;
 - `check:config-durability`;
@@ -376,6 +418,7 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - `check:lifecycle`;
 - `check:device-matrix`;
 - `check:android-instrumentation`;
+- Vitest einschließlich App-Open-Recovery-Tests;
 - Android JUnit;
 - `ProtectionConfigWriteCertaintyPolicyTest`;
 - `ProtectionConfigRuntimePolicyTest`;
@@ -388,7 +431,7 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - `RUNTIME-01` bis `RUNTIME-06`;
 - `LIFE-12` bis `LIFE-15`;
 - `DISPATCH-01` bis `DISPATCH-05`;
-- reale Storage-Failure-/Overlay-/Grant-/Usage-Boundary-/Action-Commit-/Process-Kill-/Start-/Stop-/PendingIntent-Race-Evidence.
+- reale Storage-Failure-/Overlay-/Grant-/Usage-Boundary-/Action-Commit-/Process-Kill-/App-Open-/Start-/Stop-/PendingIntent-Race-Evidence.
 
 ## Reihenfolge nach Entsperrung
 
@@ -396,12 +439,13 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 2. `npm run verify`;
 3. `./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace`;
 4. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace`;
-5. `APP-07` bis `APP-10` real ausführen;
-6. `RUNTIME-01` bis `RUNTIME-06` inklusive echter Usage-Bucket-Grenze und sofortigem Kill/Recovery nach normaler/Emergency-Freigabe real ausführen;
-7. `LIFE-12` bis `LIFE-15` real ausführen;
-8. `DISPATCH-01` bis `DISPATCH-05` mit Diagnose-JSON und Logcat ausführen;
-9. Pre-/Post-Confirmation Process Loss real prüfen;
-10. App-/Notification-/Start-/Foreground-/Destroy-/Boot-/Permission-/Target-App-Pfade real prüfen;
-11. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
-12. finaler Supply-Chain-/Binary-/Security-Audit;
-13. erst danach Candidate Freeze und Release.
+5. App-Open-Recovery mit `start-pending`, `start-interrupted`, `unclean-process-stop`, `stale-activation` real prüfen;
+6. `APP-07` bis `APP-10` real ausführen;
+7. `RUNTIME-01` bis `RUNTIME-06` inklusive echter Usage-Bucket-Grenze und sofortigem Kill/Recovery nach normaler/Emergency-Freigabe real ausführen;
+8. `LIFE-12` bis `LIFE-15` real ausführen;
+9. `DISPATCH-01` bis `DISPATCH-05` mit Diagnose-JSON und Logcat ausführen;
+10. Pre-/Post-Confirmation Process Loss real prüfen;
+11. App-/Notification-/Start-/Foreground-/Destroy-/Boot-/Permission-/Target-App-Pfade real prüfen;
+12. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
+13. finaler Supply-Chain-/Binary-/Security-Audit;
+14. erst danach Candidate Freeze und Release.
