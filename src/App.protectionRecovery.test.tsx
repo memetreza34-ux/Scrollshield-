@@ -2,6 +2,7 @@ import { render, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { DEFAULT_APP_CONFIG, DEFAULT_STATE } from './types';
+import type { NativeProtectionHealth } from './lib/nativeProtection';
 
 const {
   acknowledgeDrainMock,
@@ -12,6 +13,7 @@ const {
   syncMock,
   getStatusMock,
   startMock,
+  recoverMock,
   drainMock,
 } = vi.hoisted(() => ({
   acknowledgeDrainMock: vi.fn(),
@@ -22,6 +24,7 @@ const {
   syncMock: vi.fn(),
   getStatusMock: vi.fn(),
   startMock: vi.fn(),
+  recoverMock: vi.fn(),
   drainMock: vi.fn(),
 }));
 
@@ -40,6 +43,7 @@ vi.mock('./lib/nativeProtection', () => ({
     sync: (...args: unknown[]) => syncMock(...args),
     getStatus: (...args: unknown[]) => getStatusMock(...args),
     start: (...args: unknown[]) => startMock(...args),
+    recoverAfterProcessLoss: (...args: unknown[]) => recoverMock(...args),
     drain: (...args: unknown[]) => drainMock(...args),
     acknowledgeDrain: (...args: unknown[]) => acknowledgeDrainMock(...args),
     factoryReset: (...args: unknown[]) => factoryResetMock(...args),
@@ -62,15 +66,24 @@ const savedState = {
   },
 };
 
-const status = (enabled: boolean, running: boolean) => ({
+const status = (
+  enabled: boolean,
+  running: boolean,
+  health: NativeProtectionHealth = enabled && running
+    ? 'active'
+    : enabled
+      ? 'stale-activation'
+      : 'never-started',
+) => ({
   enabled,
   running,
   unavailableAppIds: [],
-  lastStartAt: 1,
+  lastStartRequestAt: 0,
+  lastStartAt: health === 'unclean-process-stop' ? 2 : 1,
   lastStopAt: 0,
   lastStopCode: '',
   lastStopMessage: '',
-  health: enabled && running ? 'active' : enabled ? 'stale-activation' : 'never-started',
+  health,
 });
 
 describe('App native protection recovery', () => {
@@ -81,6 +94,7 @@ describe('App native protection recovery', () => {
     syncMock.mockReset();
     getStatusMock.mockReset();
     startMock.mockReset();
+    recoverMock.mockReset();
     drainMock.mockReset();
     acknowledgeDrainMock.mockReset();
     factoryResetMock.mockReset();
@@ -91,6 +105,7 @@ describe('App native protection recovery', () => {
     syncMock.mockResolvedValue([]);
     getStatusMock.mockResolvedValue(status(true, false));
     startMock.mockResolvedValue(undefined);
+    recoverMock.mockResolvedValue(status(true, true, 'active'));
     drainMock.mockResolvedValue({ batchId: '', events: [], usage: [] });
     acknowledgeDrainMock.mockResolvedValue(undefined);
     factoryResetMock.mockResolvedValue(undefined);
@@ -100,22 +115,46 @@ describe('App native protection recovery', () => {
     render(<App />);
 
     await waitFor(() => expect(startMock).toHaveBeenCalled());
+    expect(syncMock).toHaveBeenCalledWith(expect.any(Object), false);
     expect(startMock).toHaveBeenCalledWith(expect.any(Object), false);
+    expect(recoverMock).not.toHaveBeenCalled();
+  });
+
+  it('uses controlled process-loss recovery after a confirmed unclean service loss', async () => {
+    getStatusMock.mockResolvedValue(status(true, false, 'unclean-process-stop'));
+    render(<App />);
+
+    await waitFor(() => expect(recoverMock).toHaveBeenCalled());
+    expect(syncMock).toHaveBeenCalledWith(expect.any(Object), false);
+    expect(recoverMock).toHaveBeenCalledWith(expect.any(Object), false);
+    expect(startMock).not.toHaveBeenCalled();
+  });
+
+  it('does not invalidate a fresh pending start request with config sync or a duplicate start', async () => {
+    getStatusMock.mockResolvedValue(status(true, false, 'start-pending'));
+    render(<App />);
+
+    await waitFor(() => expect(getStatusMock).toHaveBeenCalled());
+    expect(syncMock).not.toHaveBeenCalled();
+    expect(startMock).not.toHaveBeenCalled();
+    expect(recoverMock).not.toHaveBeenCalled();
   });
 
   it('never automatically enables protection that was deliberately disabled', async () => {
     getStatusMock.mockResolvedValue(status(false, false));
     render(<App />);
 
-    await waitFor(() => expect(getStatusMock).toHaveBeenCalled());
+    await waitFor(() => expect(syncMock).toHaveBeenCalled());
     expect(startMock).not.toHaveBeenCalled();
+    expect(recoverMock).not.toHaveBeenCalled();
   });
 
   it('does not restart when every configured active target is unavailable', async () => {
     syncMock.mockResolvedValue(['instagram']);
     render(<App />);
 
-    await waitFor(() => expect(getStatusMock).toHaveBeenCalled());
+    await waitFor(() => expect(syncMock).toHaveBeenCalled());
     expect(startMock).not.toHaveBeenCalled();
+    expect(recoverMock).not.toHaveBeenCalled();
   });
 });
