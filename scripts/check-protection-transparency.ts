@@ -88,8 +88,14 @@ requirePattern(
 requirePattern(
   pluginPath,
   plugin,
-  /if \(!hasNotificationsEnabled\(context\)\)[\s\S]*call\.reject\("Notifications are required/,
-  'Protection start must require enabled notifications so the ongoing service and stop action remain visible.',
+  /if \(!hasNotificationsEnabled\(context\)\)[\s\S]*rejectProtectionStartPrerequisite\([\s\S]*ProtectionStopReasonPolicy\.NOTIFICATIONS_MISSING[\s\S]*Notifications are required so active protection and its stop action remain visible/,
+  'Protection start must fail closed through the shared prerequisite helper when visible notifications are unavailable.',
+);
+requirePattern(
+  pluginPath,
+  plugin,
+  /rejectProtectionStartPrerequisite\([\s\S]*persistProtectionSystemStopWithFallback\(context, reasonCode, description\)[\s\S]*ProtectionServiceDispatchGuard\.dispatchControlledStop\(context\)[\s\S]*call\.reject\(rejectionMessage\)/,
+  'Notification prerequisite rejection must persist exact stop evidence and serialize Android stop dispatch before rejecting.',
 );
 requirePattern(
   pluginPath,
@@ -207,5 +213,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection transparency check passed. Android protection remains visible, channel-aware, prompt-driven, revocation-safe, and directly stoppable.',
+  'Protection transparency check passed. Android protection remains visible, channel-aware, prompt-driven, revocation-safe, fail-closed through atomic prerequisite persistence, and directly stoppable.',
 );
