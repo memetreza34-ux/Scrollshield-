@@ -218,6 +218,14 @@ export default function App() {
           return;
         }
 
+        if (serviceStatus.health === 'unclean-process-stop') {
+          await NativeProtection.recoverAfterProcessLoss(
+            appState.appsConfig,
+            appState.isFocusModeActive,
+          );
+          return;
+        }
+
         const unavailableAppIds = await NativeProtection.sync(
           appState.appsConfig,
           appState.isFocusModeActive,
@@ -229,14 +237,6 @@ export default function App() {
           unavailableAppIds,
         );
         if (!shouldRecoverStaleProtection(serviceStatus, installedActiveAppIds)) return;
-
-        if (serviceStatus.health === 'unclean-process-stop') {
-          await NativeProtection.recoverAfterProcessLoss(
-            appState.appsConfig,
-            appState.isFocusModeActive,
-          );
-          return;
-        }
 
         await NativeProtection.start(appState.appsConfig, appState.isFocusModeActive);
       } catch (error) {
