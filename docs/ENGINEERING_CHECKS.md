@@ -20,7 +20,7 @@ Ein Source-Checker oder vorbereiteter Test ist niemals ein ausgeführter Android
 npm run verify
 ```
 
-Die Kette umfasst unter anderem TypeScript/Lint/Prettier, Android Project/Instrumentation, Supply Chain, Native Drain/ACK/Retention, Usage Flush Worker, Stop-Codes, Lifecycle/Diagnostics, `check:native-stop-atomicity`, `check:start-handshake`, `check:config-durability`, Process-Loss/Recovery, Device Matrix, Migration/Release/Privacy/Store/Security, Vitest, Build, PWA und Bundle Checks.
+Die Kette umfasst unter anderem TypeScript/Lint/Prettier, Android Project/Instrumentation, Supply Chain, Native Drain/ACK/Retention, Usage Flush Worker, Stop-Codes, Lifecycle/Diagnostics, `check:native-stop-atomicity`, `check:start-handshake`, `check:config-durability`, `check:runtime-config-state`, `check:usage-accounting`, Process-Loss/Recovery, Device Matrix, Migration/Release/Privacy/Store/Security, Vitest, Build, PWA und Bundle Checks.
 
 ## Native Stop Atomicity
 
@@ -126,6 +126,14 @@ Bei `UNSICHER` gilt im selben Prozess:
 
 Ein bereits laufender Dienst darf seine zuvor veröffentlichte bestätigte Regelbasis weiterverwenden.
 
+## Runtime Config State
+
+```bash
+npm run check:runtime-config-state
+```
+
+Spezifikation: `docs/PROTECTION_RUNTIME_CONFIG_STATE.md`.
+
 ### Stable Service Publication / Runtime Generation
 
 `ScrollShieldProtectionService.refreshConfiguration()` verwendet zwei Lock-Grenzen:
@@ -168,13 +176,35 @@ Eine stale `G1`-Action nach `G2` darf daher weder:
 - ein `emergency`-Event schreiben;
 - ein altes warning/block-Overlay neu veröffentlichen.
 
+### RUNTIME-04 — Usage-Grenze vor G2-Publish
+
+Ein echter Generationwechsel schließt jetzt den laufenden G1-Usage-Tick **vor** dem Austausch der Regelbasis:
+
+```text
+G1 rulesByPackage + G1 temporaryAccessUntil
+↓
+generationBoundaryAt = System.currentTimeMillis()
+↓
+recordAllowedUsage(null, generationBoundaryAt)
+↓
+Usage wird noch über previousRule.id aus G1 gebucketet
+↓
+cachedConfigGeneration = G2
+rulesByPackage = G2
+Grants/Overlay aus G1 invalidieren
+```
+
+Damit kann die Zeit vor der Publish-Grenze nicht einer ausschließlich in G2 neu eingeführten oder neu zugeordneten Rule-ID zugerechnet werden. Der folgende Enforcement-Pass startet die neue Messperiode unter G2 mit einer frischen Tick-Grenze.
+
+`check:usage-accounting` wurde gleichzeitig auf die tatsächliche `UsageFlushCoordinator`-/`UsageFlushWorker`-Architektur aktualisiert. Der alte Source-Vertrag für ein Service-lokales `pendingUsageMs` ist entfernt.
+
+Source-seitig ist RUNTIME-04 damit gehärtet. Der reale Bucket-Nachweis bleibt offen.
+
 Pure-Java-Vertrag:
 
 ```text
 ProtectionConfigRuntimePolicyTest
 ```
-
-Er trennt ausdrücklich bestimmte Persistenz, `UNSICHER` mit letzter veröffentlichter Generation sowie bestätigte Generationwechsel.
 
 Der Debug-/Diagnosevertrag exportiert:
 
@@ -186,6 +216,32 @@ startRequestConfigGeneration
 ```
 
 und zeigt im Debug-Screen `SICHER`/`UNSICHER` sowie `Config-Generation`, `Runtime-Config` und `Startrequest-Config`.
+
+## Usage Accounting / Flush
+
+```bash
+npm run check:usage-accounting
+npm run check:usage-flush-worker
+```
+
+Aktuelle Ownership:
+
+```text
+ScrollShieldProtectionService
+→ day + ruleId Bucket
+→ UsageFlushCoordinator (pending + höchstens ein in-flight Batch)
+→ UsageFlushWorker (single-thread)
+→ SharedPreferences.commit()
+```
+
+Wichtige Invarianten:
+
+- Tageszuordnung geschieht beim gemessenen Intervall, nicht beim späteren Flush;
+- Pending und In-Flight bleiben für Daily-Limit-Berechnung sichtbar;
+- fehlgeschlagene Writes werden zurück in Pending gemerged;
+- stale Completion darf keinen anderen Batch bestätigen;
+- Shutdown drainiert über denselben serialisierten Worker;
+- Config-Generationwechsel schließen den alten Usage-Tick vor Austausch der Rule-Map.
 
 ## Android Service Dispatch Races
 
@@ -226,7 +282,7 @@ configChangeBeforeConfirmationFailsClosedWithoutConfirmingOldRequest
 legacyDurableConfigReceivesGenerationBeforeBootStyleStartRequest
 ```
 
-Die tatsächliche Lebensdauer eines WindowManager-Overlays, bereits gequeueete UI-Aktionen, alte Notification-`PendingIntent`-Aktionen sowie reale Storage-/Commit-/Rollback-Fehler sind Device-/System-E2E-Evidence. Ein Source- oder Persistenztest darf nicht als Ersatz gewertet werden.
+Die tatsächliche Lebensdauer eines WindowManager-Overlays, bereits gequeueete UI-Aktionen, alte Notification-`PendingIntent`-Aktionen, reale Storage-/Commit-/Rollback-Fehler und echte Usage-Bucket-Grenzen sind Device-/System-E2E-Evidence. Ein Source- oder Persistenztest darf nicht als Ersatz gewertet werden.
 
 ## Android JUnit / Build
 
@@ -243,7 +299,10 @@ Relevant sind insbesondere:
 - `ProtectionConfigDurabilityStoreTest`;
 - `ProtectionConfigWriteCertaintyPolicyTest`;
 - `ProtectionConfigRuntimePolicyTest`;
-- bestehende Coordinator-/Worker-/Stop-Code-/Lifecycle-Tests.
+- `UsageAccountingPolicyTest`;
+- `UsageFlushCoordinatorTest`;
+- `UsageFlushWorkerTest`;
+- bestehende Stop-Code-/Lifecycle-Tests.
 
 ## Device-/E2E-Evidence
 
@@ -254,6 +313,13 @@ Relevant sind insbesondere:
 - `APP-09`: Candidate- und Rollback-Commit schlagen fehl → `UNSICHER`, neuer Start/Recovery blockiert, `protectionRuntimeConfigGeneration` bleibt auf letzter veröffentlichter Regelbasis, erfolgreicher späterer Sync stellt `SICHER` wieder her;
 - `APP-10`: bestätigter `G1 → G2`-Wechsel invalidiert alte temporäre Grants und alte Overlay-Aktionen; stale `G1` darf nach `G2` keinen Grant oder `open`/`emergency`-Event erzeugen;
 - `LIFE-12` bis `LIFE-15`: Start-/Stop-/Restart-/Notification-Races.
+
+`docs/PROTECTION_RUNTIME_CONFIG_STATE.md` verlangt zusätzlich:
+
+- `RUNTIME-01`: alte temporäre Freigabe nach G2 ungültig;
+- `RUNTIME-02`: stale Overlay-Aktion kann nach G2 nicht autorisieren;
+- `RUNTIME-03`: `UNSICHER` behält nur die letzte veröffentlichte bestätigte Runtime-Regelbasis;
+- `RUNTIME-04`: Usage-Buckets werden exakt an der Generation-Publish-Grenze getrennt.
 
 Die Dispatch-Spezifikation verlangt zusätzlich `DISPATCH-01` bis `DISPATCH-05`.
 
@@ -271,18 +337,24 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - `check:native-stop-atomicity`;
 - `check:start-handshake`;
 - `check:config-durability`;
+- `check:runtime-config-state`;
+- `check:usage-accounting`;
 - `check:lifecycle`;
 - `check:device-matrix`;
 - `check:android-instrumentation`;
 - Android JUnit;
 - `ProtectionConfigWriteCertaintyPolicyTest`;
 - `ProtectionConfigRuntimePolicyTest`;
+- `UsageAccountingPolicyTest`;
+- `UsageFlushCoordinatorTest`;
+- `UsageFlushWorkerTest`;
 - Android Instrumentation;
 - Gradle Debug Build / APK;
 - `APP-07` bis `APP-10`;
+- `RUNTIME-01` bis `RUNTIME-04`;
 - `LIFE-12` bis `LIFE-15`;
 - `DISPATCH-01` bis `DISPATCH-05`;
-- reale Storage-Failure-/Overlay-/Grant-/Process-Kill-/Start-/Stop-/PendingIntent-Race-Evidence.
+- reale Storage-Failure-/Overlay-/Grant-/Usage-Boundary-/Process-Kill-/Start-/Stop-/PendingIntent-Race-Evidence.
 
 ## Reihenfolge nach Entsperrung
 
@@ -290,11 +362,12 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 2. `npm run verify`;
 3. `./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace`;
 4. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace`;
-5. `APP-07` bis `APP-10` inklusive Storage-/Rollback-Failure und stale Overlay-/Grant-Aktionen real ausführen;
-6. `LIFE-12` bis `LIFE-15` real ausführen;
-7. `DISPATCH-01` bis `DISPATCH-05` mit Diagnose-JSON und Logcat ausführen;
-8. Pre-/Post-Confirmation Process Loss real prüfen;
-9. App-/Notification-/Start-/Foreground-/Destroy-/Boot-/Permission-/Target-App-Pfade real prüfen;
-10. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
-11. finaler Supply-Chain-/Binary-/Security-Audit;
-12. erst danach Candidate Freeze und Release.
+5. `APP-07` bis `APP-10` real ausführen;
+6. `RUNTIME-01` bis `RUNTIME-04` inklusive echter Usage-Bucket-Grenze real ausführen;
+7. `LIFE-12` bis `LIFE-15` real ausführen;
+8. `DISPATCH-01` bis `DISPATCH-05` mit Diagnose-JSON und Logcat ausführen;
+9. Pre-/Post-Confirmation Process Loss real prüfen;
+10. App-/Notification-/Start-/Foreground-/Destroy-/Boot-/Permission-/Target-App-Pfade real prüfen;
+11. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
+12. finaler Supply-Chain-/Binary-/Security-Audit;
+13. erst danach Candidate Freeze und Release.
