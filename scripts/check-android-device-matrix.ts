@@ -124,6 +124,12 @@ for (const requiredScenario of [
   'APP-08',
   'APP-09',
   'APP-10',
+  'RUNTIME-01',
+  'RUNTIME-02',
+  'RUNTIME-03',
+  'RUNTIME-04',
+  'RUNTIME-05',
+  'RUNTIME-06',
   'COMMIT-01',
   'COMMIT-02',
   'COMMIT-03',
@@ -202,6 +208,11 @@ for (const evidenceField of [
   'strict Anti-Binge precedence',
   'unchanged emergency timing',
   'local-midnight behavior',
+  'Usage boundary across generation switch',
+  'Intentional-open evidence survives process loss',
+  'Emergency counter survives process loss',
+  'persisted usage bucket',
+  'process/service termination',
   'PASS',
   'FAIL',
   'BLOCKED',
@@ -221,5 +232,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android device-matrix check passed. Build identity, config persistence/runtime generations, lifecycle diagnostics, APP-07..10, LIFE-12..15, OEM coverage, migration recovery, accessibility and physical evidence requirements are guarded.',
+  'Android device-matrix check passed. Build identity, config persistence/runtime generations, RUNTIME-01..06, lifecycle diagnostics, APP-07..10, LIFE-12..15, OEM coverage, migration recovery, accessibility and physical evidence requirements are guarded.',
 );
