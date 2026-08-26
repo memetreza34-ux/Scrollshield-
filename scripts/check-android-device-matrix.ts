@@ -37,6 +37,12 @@ requirePattern(
 requirePattern(
   diagnosticsPluginPath,
   diagnosticsPlugin,
+  /protectionConfigGeneration[\s\S]*protectionConfigWriteStateCertain[\s\S]*protectionRuntimeConfigGeneration[\s\S]*startRequestConfigGeneration/,
+  'Native diagnostics must expose persisted, certainty, published-runtime, and request config evidence.',
+);
+requirePattern(
+  diagnosticsPluginPath,
+  diagnosticsPlugin,
   /lastProtectionStartAt[\s\S]*lastProtectionStopAt[\s\S]*lastProtectionStopCode[\s\S]*lastProtectionStopMessage/,
   'Native diagnostics must expose persistent protection lifecycle evidence.',
 );
@@ -61,20 +67,26 @@ requirePattern(
 requirePattern(
   diagnosticsBridgePath,
   diagnosticsBridge,
+  /protectionConfigGeneration:\s*string[\s\S]*protectionConfigWriteStateCertain:\s*boolean[\s\S]*protectionRuntimeConfigGeneration:\s*string[\s\S]*startRequestConfigGeneration:\s*string/,
+  'The TypeScript diagnostic contract must preserve config persistence/runtime generations.',
+);
+requirePattern(
+  diagnosticsBridgePath,
+  diagnosticsBridge,
   /lastProtectionStartAt:\s*number[\s\S]*lastProtectionStopAt:\s*number[\s\S]*lastProtectionStopCode:\s*string[\s\S]*lastProtectionStopMessage:\s*string/,
   'The TypeScript diagnostic contract must preserve lifecycle fields.',
 );
 requirePattern(
   debugScreenPath,
   debugScreen,
-  /Version[\s\S]*Build[\s\S]*App-Benachrichtigungen[\s\S]*Schutzkanal[\s\S]*Schutz-Benachrichtigung[\s\S]*Letzter Schutzstart[\s\S]*Letzter Stoppcode/,
-  'The debug screen must visibly show build, notification, and lifecycle health.',
+  /Version[\s\S]*Build[\s\S]*Config-Schreibzustand[\s\S]*Config-Generation[\s\S]*Runtime-Config[\s\S]*Startrequest-Config[\s\S]*Letzter Schutzstart[\s\S]*Letzter Stoppcode/,
+  'The debug screen must visibly show build, config persistence/runtime, and lifecycle health.',
 );
 requirePattern(
   debugTestPath,
   debugTest,
-  /renders build, notification, and protection lifecycle diagnostics/,
-  'A component test must protect the expanded Android diagnostic display.',
+  /protectionRuntimeConfigGeneration[\s\S]*Runtime-Config/,
+  'A component test must protect the published runtime config diagnostic display.',
 );
 
 for (const requiredDevice of [
@@ -108,6 +120,10 @@ for (const requiredScenario of [
   'PERM-07',
   'APP-04',
   'APP-05',
+  'APP-07',
+  'APP-08',
+  'APP-09',
+  'APP-10',
   'COMMIT-01',
   'COMMIT-02',
   'COMMIT-03',
@@ -130,6 +146,10 @@ for (const requiredScenario of [
   'LIFE-09',
   'LIFE-10',
   'LIFE-11',
+  'LIFE-12',
+  'LIFE-13',
+  'LIFE-14',
+  'LIFE-15',
   'TIME-01',
   'TIME-02',
   'TIME-03',
@@ -152,6 +172,10 @@ for (const evidenceField of [
   'Screen recording',
   'adb logcat',
   'byte-for-byte',
+  'protectionConfigGeneration',
+  'protectionConfigWriteStateCertain',
+  'protectionRuntimeConfigGeneration',
+  'startRequestConfigGeneration',
   'lastProtectionStopCode',
   'lastProtectionStopMessage',
   'notification_action_stop',
@@ -197,5 +221,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android device-matrix check passed. Build identity, channel/lifecycle diagnostics, commitment readiness, adaptive-friction boundaries, stop-bypass and reset evidence, emergency friction, overlay accessibility, stale activation, OEM coverage, migration recovery, and physical evidence requirements are guarded.',
+  'Android device-matrix check passed. Build identity, config persistence/runtime generations, lifecycle diagnostics, APP-07..10, LIFE-12..15, OEM coverage, migration recovery, accessibility and physical evidence requirements are guarded.',
 );
