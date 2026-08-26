@@ -120,13 +120,13 @@ describe('App native protection recovery', () => {
     expect(recoverMock).not.toHaveBeenCalled();
   });
 
-  it('uses controlled process-loss recovery after a confirmed unclean service loss', async () => {
+  it('uses controlled process-loss recovery without a duplicate app-level config sync', async () => {
     getStatusMock.mockResolvedValue(status(true, false, 'unclean-process-stop'));
     render(<App />);
 
     await waitFor(() => expect(recoverMock).toHaveBeenCalled());
-    expect(syncMock).toHaveBeenCalledWith(expect.any(Object), false);
     expect(recoverMock).toHaveBeenCalledWith(expect.any(Object), false);
+    expect(syncMock).not.toHaveBeenCalled();
     expect(startMock).not.toHaveBeenCalled();
   });
 
