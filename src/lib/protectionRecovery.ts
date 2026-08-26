@@ -18,4 +18,4 @@ export const shouldRecoverStaleProtection = (
   status.enabled &&
   !status.running &&
   installedActiveAppIds.length > 0 &&
-  (status.health === 'stale-activation' || status.health === 'unclean-process-stop');
+  status.health === 'stale-activation';
