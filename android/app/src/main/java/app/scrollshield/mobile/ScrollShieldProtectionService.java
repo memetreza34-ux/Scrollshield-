@@ -320,8 +320,6 @@ public class ScrollShieldProtectionService extends Service {
             return;
         }
         if (!isCurrentRuntimeConfigGeneration(cachedConfigGeneration)) {
-            // A durable sync may race after this poll parsed the previous generation. Never use
-            // old grants or rules during that gap; the next poll will publish the new snapshot.
             hideOverlay();
             return;
         }
@@ -447,6 +445,7 @@ public class ScrollShieldProtectionService extends Service {
         String configJson;
         String configGeneration;
         synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            if (!ProtectionConfigDurabilityStore.isWriteStateCertain()) return;
             SharedPreferences preferences = getNativePreferences();
             configJson = preferences.getString(ScrollShieldNativePlugin.CONFIG_KEY, "{}");
             if (configJson == null) configJson = "{}";
@@ -540,6 +539,7 @@ public class ScrollShieldProtectionService extends Service {
         }
 
         synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            if (!ProtectionConfigDurabilityStore.isWriteStateCertain()) return;
             SharedPreferences preferences = getNativePreferences();
             String latestConfigJson = preferences.getString(ScrollShieldNativePlugin.CONFIG_KEY, "{}");
             if (latestConfigJson == null) latestConfigJson = "{}";
@@ -572,11 +572,13 @@ public class ScrollShieldProtectionService extends Service {
 
     private boolean isCurrentRuntimeConfigGeneration(String generation) {
         synchronized (ProtectionServiceDispatchGuard.LOCK) {
-            return ProtectionConfigDurabilityStore.isWriteStateCertain()
-                && ProtectionConfigRuntimePolicy.isCurrentGeneration(
-                    generation,
-                    ProtectionConfigDurabilityStore.getCurrentGeneration(this)
-                );
+            boolean writeStateCertain = ProtectionConfigDurabilityStore.isWriteStateCertain();
+            return ProtectionConfigRuntimePolicy.canUsePublishedRuntimeState(
+                writeStateCertain,
+                generation,
+                cachedConfigGeneration,
+                ProtectionConfigDurabilityStore.getCurrentGeneration(this)
+            );
         }
     }
 
