@@ -6,6 +6,10 @@ import { normalizeAppState } from './lib/state';
 import { reconcileFocusRuntime } from './lib/focus';
 import { NativeProtection } from './lib/nativeProtection';
 import {
+  getInstalledActiveProtectionIds,
+  shouldRecoverStaleProtection,
+} from './lib/protectionRecovery';
+import {
   applyNativeDrainBatch,
   getLastProcessedNativeDrainBatchId,
 } from './lib/nativeDrainJournal';
@@ -201,13 +205,52 @@ export default function App() {
       return;
     }
 
-    const syncTimer = window.setTimeout(() => {
-      void NativeProtection.sync(appState.appsConfig, appState.isFocusModeActive).catch((error) => {
-        console.error('Failed to sync native protection configuration', error);
-      });
-    }, 250);
+    let cancelled = false;
+    let pendingRetryTimer: number | null = null;
 
-    return () => window.clearTimeout(syncTimer);
+    const syncAndRecoverProtection = async () => {
+      try {
+        const serviceStatus = await NativeProtection.getStatus();
+        if (cancelled) return;
+
+        if (serviceStatus.health === 'start-pending') {
+          pendingRetryTimer = window.setTimeout(() => void syncAndRecoverProtection(), 1_000);
+          return;
+        }
+
+        const unavailableAppIds = await NativeProtection.sync(
+          appState.appsConfig,
+          appState.isFocusModeActive,
+        );
+        if (cancelled) return;
+
+        const installedActiveAppIds = getInstalledActiveProtectionIds(
+          appState.appsConfig,
+          unavailableAppIds,
+        );
+        if (!shouldRecoverStaleProtection(serviceStatus, installedActiveAppIds)) return;
+
+        if (serviceStatus.health === 'unclean-process-stop') {
+          await NativeProtection.recoverAfterProcessLoss(
+            appState.appsConfig,
+            appState.isFocusModeActive,
+          );
+          return;
+        }
+
+        await NativeProtection.start(appState.appsConfig, appState.isFocusModeActive);
+      } catch (error) {
+        console.error('Failed to sync or recover native protection configuration', error);
+      }
+    };
+
+    const syncTimer = window.setTimeout(() => void syncAndRecoverProtection(), 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(syncTimer);
+      if (pendingRetryTimer !== null) window.clearTimeout(pendingRetryTimer);
+    };
   }, [
     appState.appsConfig,
     appState.isFocusModeActive,
