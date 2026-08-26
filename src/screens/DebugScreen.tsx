@@ -154,6 +154,7 @@ export function DebugScreen({
           nativeSnapshot.protectionConfigWriteStateCertain,
         ],
         ['Config-Generation', nativeSnapshot.protectionConfigGeneration || 'KEINE'],
+        ['Runtime-Config', nativeSnapshot.protectionRuntimeConfigGeneration || 'KEINE'],
         ['Startrequest-Config', nativeSnapshot.startRequestConfigGeneration || 'KEINE'],
         ['Letzte Startanforderung', formatLifecycleTime(nativeSnapshot.lastProtectionStartRequestAt)],
         ['Letzter Schutzstart', formatLifecycleTime(nativeSnapshot.lastProtectionStartAt)],
