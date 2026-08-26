@@ -15,6 +15,7 @@ final class ProtectionConfigDurabilityStore {
 
     private static final String UNAVAILABLE_APPS_KEY = "unavailable_app_ids";
     private static final String UNAVAILABLE_ACTIVE_APPS_KEY = "unavailable_active_app_ids";
+    private static volatile boolean writeStateCertain = true;
 
     static final class CommitResult {
         final boolean persisted;
@@ -79,6 +80,7 @@ final class ProtectionConfigDurabilityStore {
             .commit();
 
         if (persisted) {
+            writeStateCertain = ProtectionConfigWriteCertaintyPolicy.isCertainAfterWrite(true, false);
             return new CommitResult(
                 true,
                 generation,
@@ -91,6 +93,10 @@ final class ProtectionConfigDurabilityStore {
         // fails. Restore the complete previous tuple before releasing the dispatch lock so the
         // running service cannot consume a candidate config that was never durably accepted.
         boolean rollbackPersisted = restoreSnapshot(preferences, previous);
+        writeStateCertain = ProtectionConfigWriteCertaintyPolicy.isCertainAfterWrite(
+            false,
+            rollbackPersisted
+        );
         return new CommitResult(
             false,
             "",
@@ -100,6 +106,8 @@ final class ProtectionConfigDurabilityStore {
     }
 
     static String ensureGenerationForExistingConfig(Context context) {
+        if (!writeStateCertain) return "";
+
         SharedPreferences preferences = preferences(context);
         String current = normalizeGeneration(preferences.getString(CONFIG_GENERATION_KEY, ""));
         if (!current.isEmpty()) return current;
@@ -124,12 +132,18 @@ final class ProtectionConfigDurabilityStore {
         return normalizeGeneration(preferences.getString(START_REQUEST_CONFIG_GENERATION_KEY, ""));
     }
 
+    static boolean isWriteStateCertain() {
+        return writeStateCertain;
+    }
+
     static boolean matchesCurrentGeneration(Context context, String expectedGeneration) {
+        if (!writeStateCertain) return false;
         String expected = normalizeGeneration(expectedGeneration);
         return !expected.isEmpty() && expected.equals(getCurrentGeneration(context));
     }
 
     static boolean isCurrentRequestGeneration(SharedPreferences preferences) {
+        if (!writeStateCertain) return false;
         String current = normalizeGeneration(preferences.getString(CONFIG_GENERATION_KEY, ""));
         String requested = getStartRequestGeneration(preferences);
         return !current.isEmpty() && current.equals(requested);
