@@ -25,6 +25,7 @@ export interface NativeDiagnosticsSnapshot {
   configuredInstalledApps: boolean;
   protectionConfigGeneration: string;
   protectionConfigWriteStateCertain: boolean;
+  protectionRuntimeConfigGeneration: string;
   startRequestConfigGeneration: string;
   lastProtectionStartRequestAt: number;
   lastProtectionStartAt: number;
