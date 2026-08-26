@@ -864,31 +864,31 @@ public class ScrollShieldProtectionService extends Service {
                     }
 
                     if (!incrementEmergencyCount(rule.id, actionTime)) return;
-                    temporaryAccessUntil.put(
-                        packageName,
-                        actionTime + rule.emergencyDurationMinutes * 60_000L
-                    );
                     String eventDescription =
                         "Notfallfreigabe für " + rule.emergencyDurationMinutes + " Minuten";
                     if (!emergencyReason.isEmpty()) {
                         eventDescription += " · Grund: " + emergencyReason;
                     }
-                    ScrollShieldNativePlugin.appendProtectionEvent(
+                    if (!ScrollShieldNativePlugin.appendProtectionEvent(
                         this,
                         "emergency",
                         rule.id,
                         eventDescription
+                    )) return;
+                    temporaryAccessUntil.put(
+                        packageName,
+                        actionTime + rule.emergencyDurationMinutes * 60_000L
                     );
                 } else {
                     if (!countdownFinished[0]) return;
                     if (!recordIntentionalOpen(rule.id, actionTime)) return;
-                    temporaryAccessUntil.put(packageName, actionTime + rule.sessionMinutes * 60_000L);
-                    ScrollShieldNativePlugin.appendProtectionEvent(
+                    if (!ScrollShieldNativePlugin.appendProtectionEvent(
                         this,
                         "open",
                         rule.id,
                         "Bewusst geöffnet für bis zu " + rule.sessionMinutes + " Minuten"
-                    );
+                    )) return;
+                    temporaryAccessUntil.put(packageName, actionTime + rule.sessionMinutes * 60_000L);
                 }
                 hideOverlay();
             }
