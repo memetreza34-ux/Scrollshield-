@@ -23,12 +23,12 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 | G1 | Architektur & Repo-Prozess | **FERTIG** | React/TS, lokale Daten, Capacitor/Native Android, Draft-PR-Prozess und Verantwortungsgrenzen sind dokumentiert | bei Architekturänderung erneut öffnen |
 | G2 | Datenmodell & Migration | **TEILWEISE** | starke transaktionale/V0.7-Migration im Source; reale Alt-Daten-Evidenz fehlt | echter V0.7-Upgrade-Test + bytegenauer Archivvergleich |
 | G3 | Kern-UI/UX & Accessibility | **TEILWEISE** | Release-Screens und Source-A11y-Checks existieren; reale Usability-/Large-Font-/TalkBack-Evidenz fehlt | physische Accessibility- und User-Research-Sessions |
-| G4 | Native Android Schutz | **TEILWEISE** | atomare Stops, persistenter Start-Handshake, durable Config-Generation, Candidate-Rollback/Write-Certainty, getrennte veröffentlichte Runtime-Generation, generationgebundene temporäre Grants/Overlays, serialisierte Dispatches und generationgebundene Notification-Stop-Aktionen sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + APP-07..10 + LIFE-12..15 + DISPATCH-01..05 + Process-Kill real |
+| G4 | Native Android Schutz | **TEILWEISE** | atomare Stops, persistenter Start-Handshake, durable Config-Generation, Candidate-Rollback/Write-Certainty, getrennte Runtime-Generation, generationgebundene Grants/Overlays, source-gehärtete G1→G2-Usage-Grenze, serialisierte Dispatches und generationgebundene Notification-Stop-Aktionen sind implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + APP-07..10 + RUNTIME-01..04 + LIFE-12..15 + DISPATCH-01..05 + Process-Kill real |
 | G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First-Manifest, Privacy-Guard, gepinnter Gradle-SHA256 und `check:supply-chain` existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-Check + Dependency-/Manifest-Snapshot + finaler Binary-Audit + Threat-Review |
-| G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` inklusive `check:native-stop-atomicity`, `check:start-handshake`, `check:config-durability`, `check:lifecycle`, `check:device-matrix` und `check:android-instrumentation` ist vorbereitet; GitHub Runner liefert weiterhin keine ausgeführten Steps | kompletter echter Verify-Lauf auf exaktem Head |
-| G7 | Android Instrumentation/E2E | **TEILWEISE** | App-/Notification-, Prerequisite-, Boot/Update-, Start-/Destroy-, Process-Loss-, Config-Durability-/Write-Certainty-/Runtime-Generation-, Start↔Stop-, Service-Dispatch- und stale-PendingIntent-Verträge existieren; echte Android-Ausführung fehlt | `connectedDebugAndroidTest` + APP-07..10 + LIFE-12..15 + DISPATCH-01..05 + Pre-/Post-Confirmation-Process-Kill real |
-| G8 | Performance & Batterie | **TEILWEISE** | Worker/Coordinator-Architektur und Shutdown-Drain im Source; reale JUnit-/Instrumentation-/Gradle-/Device-Evidenz fehlt | Worker-/Coordinator-JUnit + Usage-Flush-Instrumentation real ausführen + `assembleDebug` + 12h-Baseline |
-| G9 | Physical Device Matrix | **FEHLT** | Matrix inklusive APP-07..10 und LIFE-12..15 ist definiert; DISPATCH-01..05 sind spezifiziert, aber reale Geräte-Evidence fehlt | Pflichtgeräte/Szenarien mit Build-ID, Diagnose-JSON, Logcat und Screenrecord vollständig dokumentieren |
+| G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` inklusive `check:native-stop-atomicity`, `check:start-handshake`, `check:config-durability`, `check:runtime-config-state`, `check:usage-accounting`, `check:lifecycle`, `check:device-matrix` und `check:android-instrumentation` ist vorbereitet; GitHub Runner liefert weiterhin keine ausgeführten Steps | kompletter echter Verify-Lauf auf exaktem Head |
+| G7 | Android Instrumentation/E2E | **TEILWEISE** | App-/Notification-, Prerequisite-, Boot/Update-, Start-/Destroy-, Process-Loss-, Config-Durability-/Write-Certainty-/Runtime-Generation-/Usage-Boundary-, Start↔Stop-, Service-Dispatch- und stale-PendingIntent-Verträge existieren; echte Android-Ausführung fehlt | `connectedDebugAndroidTest` + APP-07..10 + RUNTIME-01..04 + LIFE-12..15 + DISPATCH-01..05 + Pre-/Post-Confirmation-Process-Kill real |
+| G8 | Performance & Batterie | **TEILWEISE** | Usage-Accounting-Guard ist auf die reale `UsageFlushCoordinator`-/`UsageFlushWorker`-Architektur aktualisiert; Worker/Coordinator, Shutdown-Drain und Generation-Boundary sind source-guarded; reale JUnit-/Instrumentation-/Gradle-/Device-Evidenz fehlt | `UsageAccountingPolicyTest` + Coordinator-/Worker-JUnit + Usage-Flush-Instrumentation + RUNTIME-04 real + `assembleDebug` + 12h-Baseline |
+| G9 | Physical Device Matrix | **FEHLT** | APP-07..10, RUNTIME-01..04, LIFE-12..15 und DISPATCH-01..05 sind als Pflichtszenarien spezifiziert; reale Geräte-Evidence fehlt | Pflichtgeräte/Szenarien mit Build-ID, Diagnose-JSON, Usage-Buckets, Logcat und Screenrecord vollständig dokumentieren |
 | G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Evidence-Schema v2 existiert; Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Kandidaten-SHA + echte Referenzen |
 | G11 | Legal / Privacy / Support | **TEILWEISE** | Dokumente/Struktur existieren; finale reale Identität, Support-Mailbox und öffentliche Privacy-Domain fehlen | keine Platzhalter + überprüfbare öffentliche Angaben |
 | G12 | Store / Play Review | **TEILWEISE** | Submission Packet, Screenshots und Deklarationstexte vorbereitet; finaler AAB/Reviewer-Nachweis fehlt | gegen signierten AAB verifizierte Angaben + Videos |
@@ -78,7 +78,7 @@ protectionRuntimeConfigGeneration
 
 Bei `UNSICHER` bleibt diese Generation auf der letzten bestätigten Runtime-Regelbasis.
 
-Bei einem bestätigten `G1 → G2`-Publish gilt dagegen:
+Bei einem bestätigten `G1 → G2`-Publish gilt:
 
 ```text
 alte temporaryAccessUntil-Grants löschen
@@ -88,7 +88,24 @@ G2 als Runtime-Generation veröffentlichen
 
 Overlay-Aktionen erfassen `actionConfigGeneration` und prüfen sie vor `WindowManager.addView(...)` sowie direkt vor `Bewusst öffnen`/Notfall-Freigabe erneut unter dem Dispatch-Lock. Eine stale `G1`-Aktion darf nach `G2` keinen neuen Grant und kein `open`-/`emergency`-Event erzeugen.
 
-Diagnose/Debug zeigt damit:
+### Runtime Usage Boundary
+
+Bei einem echten Generationwechsel wird die alte Messperiode geschlossen, **bevor** G2 die Rule-Map ersetzt:
+
+```text
+G1 rulesByPackage + G1 temporaryAccessUntil
+→ generationBoundaryAt = System.currentTimeMillis()
+→ recordAllowedUsage(null, generationBoundaryAt)
+→ Usage wird noch über previousRule.id aus G1 gebucketet
+→ cachedConfigGeneration = G2
+→ rulesByPackage = G2
+→ Grants/Overlay aus G1 invalidieren
+→ nächste Messperiode startet frisch unter G2
+```
+
+Damit ist `RUNTIME-04` source-seitig gehärtet. Der reale Android-Bucket-Nachweis bleibt offen.
+
+Diagnose/Debug zeigt:
 
 ```text
 protectionConfigWriteStateCertain
@@ -108,11 +125,28 @@ startRequestConfigGeneration
 - Same-Instance-Restart überträgt die aktuelle Request-Generation auf die lebende Service-Instanz;
 - alte Notification-Stop-Aktionen dürfen neue Generationen nicht stoppen.
 
+## Usage Accounting Ownership
+
+Aktuelle Architektur:
+
+```text
+ScrollShieldProtectionService
+→ lokaler Tag + Rule-ID Bucket
+→ UsageFlushCoordinator
+→ UsageFlushWorker
+→ SharedPreferences.commit()
+```
+
+`check:usage-accounting` ist auf diese Architektur aktualisiert. Es schützt Pending+In-Flight-Sichtbarkeit für Daily Limits, immutable one-in-flight Batches, Mergeback bei Fehlern, Shutdown-Drain, Midnight-Bucketing und die G1→G2-Usage-Grenze.
+
 ## Source-/Testvertrag
 
 Pflichtbestandteile sind insbesondere:
 
 - `check:config-durability`;
+- `check:runtime-config-state`;
+- `check:usage-accounting`;
+- `check:usage-flush-worker`;
 - `check:start-handshake`;
 - `check:lifecycle`;
 - `check:device-matrix`;
@@ -120,12 +154,16 @@ Pflichtbestandteile sind insbesondere:
 - `ProtectionConfigDurabilityStoreTest`;
 - `ProtectionConfigWriteCertaintyPolicyTest`;
 - `ProtectionConfigRuntimePolicyTest`;
+- `UsageAccountingPolicyTest`;
+- `UsageFlushCoordinatorTest`;
+- `UsageFlushWorkerTest`;
 - `ProtectionConfigDurabilityInstrumentedTest`;
 - `ProtectionServiceLifecyclePolicyTest`;
 - `ProtectionServiceDispatchGuardTest`;
 - `docs/PROTECTION_CONFIG_DURABILITY.md`;
+- `docs/PROTECTION_RUNTIME_CONFIG_STATE.md`;
 - `docs/PROTECTION_SERVICE_DISPATCH_RACES.md`;
-- `docs/ANDROID_DEVICE_TEST_MATRIX.md` mit APP-07..10 und LIFE-12..15.
+- `docs/ANDROID_DEVICE_TEST_MATRIX.md` mit APP-07..10, RUNTIME-01..04 und LIFE-12..15.
 
 ## Aktueller Arbeitsfokus
 
@@ -133,13 +171,14 @@ Pflichtbestandteile sind insbesondere:
 2. Android JUnit + `assembleDebug`.
 3. `connectedDebugAndroidTest`.
 4. APP-07 bis APP-10 real ausführen, einschließlich Candidate-/Rollback-Storage-Failure, `UNSICHER→SICHER`, Runtime-Generation sowie stale Overlay-/Grant-Aktionen.
-5. LIFE-12 bis LIFE-15 real ausführen.
-6. DISPATCH-01 bis DISPATCH-05 real ausführen.
-7. Pre-/Post-Confirmation Process Loss real prüfen.
-8. App-/Notification-/Start-/Destroy-/Boot-/Permission-/Target-App-Pfade real prüfen.
-9. G8 Worker/Coordinator/Usage-Flush + 12h-Baseline.
-10. G9 vollständige Physical Device Matrix.
-11. G2/G5/G0/G3: Migration, Security-Audit, User Research und Accessibility-Evidence.
+5. RUNTIME-01 bis RUNTIME-04 real ausführen; für RUNTIME-04 G1-/G2-Usage-Buckets explizit vergleichen.
+6. LIFE-12 bis LIFE-15 real ausführen.
+7. DISPATCH-01 bis DISPATCH-05 real ausführen.
+8. Pre-/Post-Confirmation Process Loss real prüfen.
+9. App-/Notification-/Start-/Destroy-/Boot-/Permission-/Target-App-Pfade real prüfen.
+10. G8 Worker/Coordinator/Usage-Flush + 12h-Baseline.
+11. G9 vollständige Physical Device Matrix.
+12. G2/G5/G0/G3: Migration, Security-Audit, User Research und Accessibility-Evidence.
 
 ## Aktuelle CI-Grenze
 
@@ -151,18 +190,25 @@ Damit sind insbesondere **nicht als bestanden belegt**:
 - `check:native-stop-atomicity`;
 - `check:start-handshake`;
 - `check:config-durability`;
+- `check:runtime-config-state`;
+- `check:usage-accounting`;
+- `check:usage-flush-worker`;
 - `check:lifecycle`;
 - `check:device-matrix`;
 - `check:android-instrumentation`;
 - Android JUnit;
 - `ProtectionConfigWriteCertaintyPolicyTest`;
 - `ProtectionConfigRuntimePolicyTest`;
+- `UsageAccountingPolicyTest`;
+- `UsageFlushCoordinatorTest`;
+- `UsageFlushWorkerTest`;
 - Android Instrumentation;
 - Gradle Debug Build / APK;
 - APP-07 bis APP-10;
+- RUNTIME-01 bis RUNTIME-04;
 - LIFE-12 bis LIFE-15;
 - DISPATCH-01 bis DISPATCH-05;
-- reale Storage-Failure-/Overlay-/Grant-/`start-pending`-/`start-interrupted`-/`unclean-process-stop`-/PendingIntent-Evidence.
+- reale Storage-Failure-/Overlay-/Grant-/Usage-Boundary-/`start-pending`-/`start-interrupted`-/`unclean-process-stop`-/PendingIntent-Evidence.
 
 ## Änderungsregel
 
