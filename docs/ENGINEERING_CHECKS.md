@@ -22,6 +22,8 @@ npm run verify
 
 Die Kette umfasst unter anderem TypeScript/Lint/Prettier, Android Project/Instrumentation, Supply Chain, Native Drain/ACK/Retention, Usage Flush Worker, Stop-Codes, Lifecycle/Diagnostics, `check:native-stop-atomicity`, `check:start-handshake`, `check:config-durability`, `check:runtime-config-state`, `check:usage-accounting`, Process-Loss/Recovery, Device Matrix, Migration/Release/Privacy/Store/Security, Vitest, Build, PWA und Bundle Checks.
 
+Die Android-Source-Checker müssen die **aktuelle** Architektur prüfen. Veraltete Erwartungen wie produktives `setProtectionEnabled(context, true)`, `stopForMissingPermission(...)` oder Service-`stopSelf()` sind nicht zulässig. Aktivierung läuft über den generationgebundenen Startrequest; kontrollierte Stopps laufen über den zentralen Dispatch Guard.
+
 ## Native Stop Atomicity
 
 ```bash
@@ -109,9 +111,9 @@ writeStateCertain
 `ProtectionConfigWriteCertaintyPolicy` erzwingt:
 
 ```text
-candidate=true                  → SICHER
-candidate=false + rollback=true → SICHER
-candidate=false + rollback=false→ UNSICHER
+candidate=true                   → SICHER
+candidate=false + rollback=true  → SICHER
+candidate=false + rollback=false → UNSICHER
 ```
 
 Bei `UNSICHER` gilt im selben Prozess:
@@ -162,6 +164,7 @@ Bei `UNSICHER` bleibt nur die zuletzt veröffentlichte bestätigte Runtime-Gener
 Bei einem bestätigten Generationwechsel `G1 → G2` gilt:
 
 ```text
+laufenden G1-Usage-Tick mit G1-Regelbasis schließen
 alte temporaryAccessUntil-Grants löschen
 altes Overlay/Countdown entfernen
 G2 als Runtime-Generation veröffentlichen
@@ -178,7 +181,7 @@ Eine stale `G1`-Action nach `G2` darf daher weder:
 
 ### RUNTIME-04 — Usage-Grenze vor G2-Publish
 
-Ein echter Generationwechsel schließt jetzt den laufenden G1-Usage-Tick **vor** dem Austausch der Regelbasis:
+Ein echter Generationwechsel schließt den laufenden G1-Usage-Tick **vor** dem Austausch der Regelbasis:
 
 ```text
 G1 rulesByPackage + G1 temporaryAccessUntil
@@ -199,6 +202,36 @@ Damit kann die Zeit vor der Publish-Grenze nicht einer ausschließlich in G2 neu
 `check:usage-accounting` wurde gleichzeitig auf die tatsächliche `UsageFlushCoordinator`-/`UsageFlushWorker`-Architektur aktualisiert. Der alte Source-Vertrag für ein Service-lokales `pendingUsageMs` ist entfernt.
 
 Source-seitig ist RUNTIME-04 damit gehärtet. Der reale Bucket-Nachweis bleibt offen.
+
+### RUNTIME-05/06 — Durable Action Evidence vor Grant
+
+Normale und Emergency-Freigaben dürfen keinen In-Memory-Grant erzeugen, solange die Enforcement-Evidence nicht synchron gespeichert ist.
+
+Normale Freigabe:
+
+```text
+recordIntentionalOpen(...).commit() == true
+↓
+appendProtectionEvent("open", ...).commit() == true
+↓
+temporaryAccessUntil.put(...)
+```
+
+Emergency-Freigabe:
+
+```text
+incrementEmergencyCount(...).commit() == true
+↓
+appendProtectionEvent("emergency", ...).commit() == true
+↓
+temporaryAccessUntil.put(...)
+```
+
+`ScrollShieldNativePlugin.appendProtectionEvent(...)` liefert deshalb den echten `boolean`-Commit-Erfolg zurück. `recordIntentionalOpen(...)` und `incrementEmergencyCount(...)` verwenden ebenfalls `commit()` statt `apply()`.
+
+Schlägt der erste oder zweite persistente Schritt fehl, wird **kein Zugang** gewährt. Wenn Schritt 1 bereits erfolgreich war und Schritt 2 scheitert, bleibt der bereits geschriebene Counter/History-Eintrag bestehen. Das ist bewusst konservativ: ein lokaler Schreibfehler darf Schutz höchstens strenger, niemals schwächer machen.
+
+Ein Process-/Service-Kill nach erfolgreicher Freigabe darf deshalb Anti-Binge-History beziehungsweise Emergency-Tagesverbrauch nicht vergessen. Der reale Kill-/Recovery-Nachweis bleibt Device-Evidence.
 
 Pure-Java-Vertrag:
 
@@ -282,7 +315,7 @@ configChangeBeforeConfirmationFailsClosedWithoutConfirmingOldRequest
 legacyDurableConfigReceivesGenerationBeforeBootStyleStartRequest
 ```
 
-Die tatsächliche Lebensdauer eines WindowManager-Overlays, bereits gequeueete UI-Aktionen, alte Notification-`PendingIntent`-Aktionen, reale Storage-/Commit-/Rollback-Fehler und echte Usage-Bucket-Grenzen sind Device-/System-E2E-Evidence. Ein Source- oder Persistenztest darf nicht als Ersatz gewertet werden.
+Die tatsächliche Lebensdauer eines WindowManager-Overlays, bereits gequeueete UI-Aktionen, alte Notification-`PendingIntent`-Aktionen, reale Storage-/Commit-/Rollback-Fehler, echte Usage-Bucket-Grenzen und Process-Kills direkt nach normalen/Emergency-Freigaben sind Device-/System-E2E-Evidence. Ein Source- oder Persistenztest darf nicht als Ersatz gewertet werden.
 
 ## Android JUnit / Build
 
@@ -306,20 +339,19 @@ Relevant sind insbesondere:
 
 ## Device-/E2E-Evidence
 
-`docs/ANDROID_DEVICE_TEST_MATRIX.md` verlangt zusätzlich:
+`docs/ANDROID_DEVICE_TEST_MATRIX.md` verlangt:
 
 - `APP-07`: durable Config-Sync + gebundener Start; Candidate-Fehler darf keine Candidate-Regel veröffentlichen;
 - `APP-08`: Config-Wechsel zwischen Request und Confirmation endet `FAILED_CLOSED`/`start_failed`;
 - `APP-09`: Candidate- und Rollback-Commit schlagen fehl → `UNSICHER`, neuer Start/Recovery blockiert, `protectionRuntimeConfigGeneration` bleibt auf letzter veröffentlichter Regelbasis, erfolgreicher späterer Sync stellt `SICHER` wieder her;
-- `APP-10`: bestätigter `G1 → G2`-Wechsel invalidiert alte temporäre Grants und alte Overlay-Aktionen; stale `G1` darf nach `G2` keinen Grant oder `open`/`emergency`-Event erzeugen;
-- `LIFE-12` bis `LIFE-15`: Start-/Stop-/Restart-/Notification-Races.
-
-`docs/PROTECTION_RUNTIME_CONFIG_STATE.md` verlangt zusätzlich:
-
+- `APP-10`: bestätigter `G1 → G2`-Wechsel invalidiert alte temporäre Grants und alte Overlay-Aktionen;
 - `RUNTIME-01`: alte temporäre Freigabe nach G2 ungültig;
 - `RUNTIME-02`: stale Overlay-Aktion kann nach G2 nicht autorisieren;
 - `RUNTIME-03`: `UNSICHER` behält nur die letzte veröffentlichte bestätigte Runtime-Regelbasis;
-- `RUNTIME-04`: Usage-Buckets werden exakt an der Generation-Publish-Grenze getrennt.
+- `RUNTIME-04`: Usage-Buckets werden an der Generation-Publish-Grenze getrennt;
+- `RUNTIME-05`: erfolgreiche Intentional-Open-History überlebt sofortigen Process-/Service-Kill; fehlende durable History/Event-Evidence gewährt keinen Grant;
+- `RUNTIME-06`: erfolgreicher Emergency-Tagesverbrauch überlebt sofortigen Process-/Service-Kill; fehlender durable Counter/Event gewährt keinen Grant;
+- `LIFE-12` bis `LIFE-15`: Start-/Stop-/Restart-/Notification-Races.
 
 Die Dispatch-Spezifikation verlangt zusätzlich `DISPATCH-01` bis `DISPATCH-05`.
 
@@ -334,6 +366,8 @@ GitHub Actions liefert auf diesem Draft-Branch weiterhin Verify-Jobs ohne ausgef
 Deshalb sind aktuell **nicht als bestanden belegt**:
 
 - `npm run verify`;
+- `check:android-project`;
+- `check:prerequisite-stop-codes`;
 - `check:native-stop-atomicity`;
 - `check:start-handshake`;
 - `check:config-durability`;
@@ -351,10 +385,10 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - Android Instrumentation;
 - Gradle Debug Build / APK;
 - `APP-07` bis `APP-10`;
-- `RUNTIME-01` bis `RUNTIME-04`;
+- `RUNTIME-01` bis `RUNTIME-06`;
 - `LIFE-12` bis `LIFE-15`;
 - `DISPATCH-01` bis `DISPATCH-05`;
-- reale Storage-Failure-/Overlay-/Grant-/Usage-Boundary-/Process-Kill-/Start-/Stop-/PendingIntent-Race-Evidence.
+- reale Storage-Failure-/Overlay-/Grant-/Usage-Boundary-/Action-Commit-/Process-Kill-/Start-/Stop-/PendingIntent-Race-Evidence.
 
 ## Reihenfolge nach Entsperrung
 
@@ -363,7 +397,7 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 3. `./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace`;
 4. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace`;
 5. `APP-07` bis `APP-10` real ausführen;
-6. `RUNTIME-01` bis `RUNTIME-04` inklusive echter Usage-Bucket-Grenze real ausführen;
+6. `RUNTIME-01` bis `RUNTIME-06` inklusive echter Usage-Bucket-Grenze und sofortigem Kill/Recovery nach normaler/Emergency-Freigabe real ausführen;
 7. `LIFE-12` bis `LIFE-15` real ausführen;
 8. `DISPATCH-01` bis `DISPATCH-05` mit Diagnose-JSON und Logcat ausführen;
 9. Pre-/Post-Confirmation Process Loss real prüfen;
