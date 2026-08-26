@@ -55,9 +55,38 @@ neue Candidate-Config nicht durable
 
 Bei einem ersten Setup ohne vorherige durable Config kann anschließend kein generationgebundener Service-Start erfolgen.
 
-Der Rollback ist selbst ein synchroner Best-Effort-Disk-Write. Falls das Speichermedium generell keine Writes mehr akzeptiert, darf daraus keine falsche erfolgreiche Persistenzbehauptung entstehen; der fehlgeschlagene Candidate bleibt abgelehnt und reale Device-/Storage-Failure-Evidence ist weiterhin erforderlich.
+## 4. Doppelter Speicherfehler / Write Certainty
 
-## 4. Laufender Service veröffentlicht nur stabile Snapshots
+Auch der Rollback ist ein synchroner `commit()`. Deshalb gibt es einen process-lokalen Zustand:
+
+```text
+writeStateCertain
+```
+
+Die Policy lautet:
+
+```text
+Candidate commit=true                  → SICHER
+Candidate commit=false, rollback=true  → SICHER
+Candidate commit=false, rollback=false → UNSICHER
+```
+
+`UNSICHER` bedeutet nicht, dass ein bereits laufender Schutz sofort beendet wird. Seine bereits veröffentlichte letzte bestätigte Regelbasis darf weiterlaufen.
+
+Aber im selben Prozess gilt anschließend:
+
+```text
+kein neuer App-Start
+kein neuer Boot-/Update-Startrequest
+kein Pending-Request als current
+keine Foreground-Confirmation als current
+```
+
+bis ein späterer **erfolgreicher Config-Commit** `writeStateCertain` wieder auf `SICHER` setzt.
+
+Damit wird ein doppelter Speicherfehler nicht als bestätigte Persistenz behandelt.
+
+## 5. Laufender Service veröffentlicht nur stabile Snapshots
 
 `ScrollShieldProtectionService.refreshConfiguration()` liest `configJson` und `configGeneration` zuerst unter:
 
@@ -77,11 +106,11 @@ parsedConfigGeneration == latestConfigGeneration
 
 wird der Snapshot veröffentlicht.
 
-Ändert sich die Config während des Parsens oder wird ein fehlgeschlagener Candidate zurückgerollt, wird dieser Parse verworfen und der nächste Poll beginnt mit der aktuellen durable Generation.
+Ändert sich die Config während des Parsens oder wird ein fehlgeschlagener Candidate zurückgerollt, wird dieser Parse verworfen und der nächste Poll beginnt mit der aktuellen bestätigten Generation.
 
 Auch der periodische Target-App-Health-Check darf die Config nicht parallel zu Candidate-Commit/Rollback bewerten.
 
-## 5. App-Start bindet die Generation
+## 6. App-Start bindet die Generation
 
 TypeScript erhält nach erfolgreichem Sync:
 
@@ -98,12 +127,14 @@ startProtectionService({ expectedConfigGeneration })
 Native akzeptiert den Start nur, wenn:
 
 ```text
+writeStateCertain == true
+UND
 expectedConfigGeneration == protection_config_generation
 ```
 
-Fehlt die Generation oder ist sie inzwischen veraltet, wird kein neuer Startrequest akzeptiert. Der Pfad endet fail-closed mit `start_failed`.
+Fehlt die Generation, ist sie veraltet oder ist der Schreibzustand `UNSICHER`, wird kein neuer Startrequest akzeptiert. Der Pfad endet fail-closed mit `start_failed`.
 
-## 6. Startrequest bindet die Config dauerhaft
+## 7. Startrequest bindet die Config dauerhaft
 
 `recordProtectionStartRequested(...)` persistiert atomar:
 
@@ -113,44 +144,29 @@ lastStartRequestAt
 startRequestConfigGeneration
 ```
 
-`startRequestConfigGeneration` muss exakt der aktuell durable gespeicherten `protectionConfigGeneration` entsprechen.
+`startRequestConfigGeneration` muss exakt der aktuell bestätigten `protectionConfigGeneration` entsprechen und `writeStateCertain` muss `true` sein.
 
-Damit ist nach Prozessverlust rekonstruierbar, welche Config-Generation den Start ausgelöst hat.
+Ein noch frischer Pending-Request ist nur idempotent, wenn seine gebundene Config-Generation weiterhin aktuell und der Schreibzustand sicher ist.
 
-Ein noch frischer Pending-Request ist nur idempotent, wenn seine gebundene Config-Generation weiterhin aktuell ist:
-
-```text
-frischer Request + gleiche Config → weiter pending
-frischer Request + neue Config   → nicht mehr current
-```
-
-Der App-Start endet im zweiten Fall fail-closed; Boot-/App-Update-Recovery verwendet `recovery_start_failed`.
-
-## 7. Foreground-Confirmation prüft erneut
+## 8. Foreground-Confirmation prüft erneut
 
 `recordProtectionServiceStarted(...)` darf `lastStartAt` nur schreiben, wenn:
 
 ```text
+writeStateCertain == true
+UND
 startRequestConfigGeneration == protectionConfigGeneration
 ```
 
-Ändert sich die Config zwischen Request und Confirmation:
+Ändert sich die Config zwischen Request und Confirmation oder wird der Schreibzustand unsicher, liefert die Confirmation `FAILED_CLOSED`, `enabled=false` wird persistiert und `start_failed` bleibt als Stop-Evidence zurück.
 
-```text
-Config A committed
-→ Request bindet A
-→ Config B committed
-→ verspätete Confirmation von A
-```
-
-muss die Confirmation `FAILED_CLOSED` liefern, `enabled=false` persistieren und `start_failed` als Stop-Evidence hinterlassen. `lastStartAt` darf für A nicht fortgeschrieben werden.
-
-## 8. Boot-/App-Update-Kompatibilität
+## 9. Boot-/App-Update-Kompatibilität
 
 Ältere Installationen können bereits ein dauerhaft gespeichertes `protection_config`, aber noch keine Config-Generation besitzen.
 
 Der Boot-/App-Update-Pfad darf deshalb einmalig eine Generation nachrüsten, aber nur wenn:
 
+- der process-lokale Schreibzustand sicher ist;
 - eine Config bereits persistent vorhanden ist;
 - die Config nativ als JSON validiert werden kann;
 - ein `apps`-Array vorhanden ist;
@@ -158,20 +174,13 @@ Der Boot-/App-Update-Pfad darf deshalb einmalig eine Generation nachrüsten, abe
 
 Fehlt oder scheitert eine dieser Bedingungen, bleibt Recovery fail-closed.
 
-Ein frischer Boot-/Update-Pending-Request aus einer inzwischen veralteten Config-Generation darf nicht als laufender aktueller Start akzeptiert werden.
-
-## 9. Laufende Config-Updates
-
-Nach einem bereits bestätigten Start dürfen normale Config-Syncs weiterhin neue Generationen erzeugen. Der laufende Service übernimmt jedoch nur einen Snapshot, dessen JSON und Generation beim zweiten locked Check noch aktuell sind.
-
-Die Generation-Bindung schützt damit sowohl die Grenze **vor der Startbestätigung** als auch die Veröffentlichung neuer Regeln in einen bereits laufenden Dienst.
-
 ## 10. Diagnose
 
 Der Native-Snapshot muss mindestens enthalten:
 
 ```text
 protectionConfigGeneration
+protectionConfigWriteStateCertain
 startRequestConfigGeneration
 lastProtectionStartRequestAt
 lastProtectionStartAt
@@ -180,7 +189,12 @@ lastProtectionStopCode
 lastProtectionStopMessage
 ```
 
-Für einen bestätigten Start müssen die beiden Config-Generationen übereinstimmen.
+Der Debug-Screen zeigt den Schreibzustand ausdrücklich als:
+
+```text
+SICHER
+UNSICHER
+```
 
 ## 11. Automatisierte Verträge
 
@@ -190,25 +204,25 @@ Pflichtcheck:
 npm run check:config-durability
 ```
 
-Er ist Teil von:
+Er ist Teil von `npm run verify` und `npm run readiness`.
 
-```text
-npm run verify
-npm run readiness
-```
+Der Checker schützt insbesondere:
 
-Der Checker schützt zusätzlich:
-
+- synchronen Candidate-Commit;
 - vollständigen Pre-Commit-Snapshot;
-- synchronen Rollback bei Candidate-Commit-Fehler;
+- synchronen Rollback;
+- `ProtectionConfigWriteCertaintyPolicy`;
+- Startblockade bei `UNSICHER`;
 - kein `apply()` im Durability-Store;
 - zweistufige Config-/Generation-Prüfung vor Service-Publish;
-- generationgebundene Pending-/Start-/Confirmation-Pfade.
+- generationgebundene Pending-/Start-/Confirmation-Pfade;
+- Diagnose-/Debug-Evidence.
 
-Pure-Java-Vertrag:
+Pure-Java-Verträge:
 
 ```text
 ProtectionConfigDurabilityStoreTest
+ProtectionConfigWriteCertaintyPolicyTest
 ```
 
 Android-Instrumentation:
@@ -229,20 +243,11 @@ Diese Verträge sind erst dann Execution-Evidence, wenn sie auf dem exakten Cand
 
 Ändere Regeln oder aktive Ziel-Apps und starte Schutz unmittelbar danach. Der native Sync muss vor dem Start eine neue `protectionConfigGeneration` dauerhaft bestätigt haben. `startRequestConfigGeneration` muss exakt gleich sein.
 
-Bei simuliertem/erzwungenem Candidate-Commit-Fehler gilt:
-
-```text
-kein erfolgreicher Sync
-kein Startdispatch mit Candidate-Generation
-vorherige durable configGeneration bleibt maßgeblich
-laufender Service übernimmt keine Candidate-Regel
-```
-
-Existiert bereits ein laufender Schutz, muss er mit der vorherigen bestätigten Regelbasis weiterarbeiten. Existiert noch keine durable Config, muss der Start blockiert bleiben.
+Bei simuliertem Candidate-Commit-Fehler darf kein Startdispatch mit Candidate-Generation erfolgen. Ein bereits laufender Schutz muss mit der vorherigen bestätigten Regelbasis weiterarbeiten.
 
 ### APP-08 — Config change before foreground confirmation
 
-Pausiere einen Start nach persistiertem Startrequest, aber vor bestätigtem Foreground-Start. Synchronisiere eine andere Config. Danach die alte Confirmation fortsetzen.
+Pausiere einen Start nach persistiertem Startrequest, aber vor bestätigtem Foreground-Start. Synchronisiere eine andere Config und setze danach die alte Confirmation fort.
 
 Erwartung:
 
@@ -253,6 +258,30 @@ lastStartAt unverändert für alte Generation
 lastStopCode=start_failed
 ```
 
+### APP-09 — Candidate-Commit und Rollback-Commit schlagen fehl
+
+Erzwinge zuerst einen fehlgeschlagenen Candidate-Commit und anschließend auch einen fehlgeschlagenen Rollback-Commit.
+
+Erwartung im selben Prozess:
+
+```text
+protectionConfigWriteStateCertain=false
+Debug: Config-Schreibzustand = UNSICHER
+kein neuer Startrequest
+kein Boot-/Update-Recovery-Start
+laufender Dienst veröffentlicht keine Candidate-Regel
+```
+
+Danach Storage-Bedingung wiederherstellen und einen neuen Config-Sync erfolgreich committen.
+
+Erwartung:
+
+```text
+protectionConfigWriteStateCertain=true
+Debug: Config-Schreibzustand = SICHER
+neue Generation darf wieder normal gestartet werden
+```
+
 ## 13. Gate-Regel
 
-G4/G7/G9 bleiben unvollständig, bis JUnit/Instrumentation sowie APP-07 und APP-08 auf dem exakten Kandidaten real ausgeführt und dokumentiert wurden.
+G4/G7/G9 bleiben unvollständig, bis JUnit/Instrumentation sowie APP-07, APP-08 und APP-09 auf dem exakten Kandidaten real ausgeführt und dokumentiert wurden.
