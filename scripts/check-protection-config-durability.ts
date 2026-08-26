@@ -161,8 +161,13 @@ requirePattern(
 );
 requirePattern(
   'service',
-  /showOverlay\([\s\S]*actionConfigGeneration = cachedConfigGeneration[\s\S]*setOnClickListener[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*isCurrentRuntimeConfigGeneration\(actionConfigGeneration\)[\s\S]*temporaryAccessUntil\.put[\s\S]*appendProtectionEvent/,
-  'Overlay grants/events must re-check the exact generation immediately before writing access or evidence.',
+  /if \(!incrementEmergencyCount\(rule\.id, actionTime\)\) return;[\s\S]*if \(!ScrollShieldNativePlugin\.appendProtectionEvent\([\s\S]*"emergency"[\s\S]*\)\) return;[\s\S]*temporaryAccessUntil\.put/,
+  'Emergency grants must be created only after the counter and event are durably persisted for the still-current generation.',
+);
+requirePattern(
+  'service',
+  /if \(!recordIntentionalOpen\(rule\.id, actionTime\)\) return;[\s\S]*if \(!ScrollShieldNativePlugin\.appendProtectionEvent\([\s\S]*"open"[\s\S]*\)\) return;[\s\S]*temporaryAccessUntil\.put/,
+  'Intentional-open grants must be created only after history and event evidence are durably persisted for the still-current generation.',
 );
 requirePattern(
   'service',
@@ -248,5 +253,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection config durability check passed. Candidate/rollback certainty is explicit; uncertain writes preserve only the last published runtime generation, while confirmed generation changes invalidate stale grants and overlay actions before they can write access or events.',
+  'Protection config durability check passed. Candidate/rollback certainty is explicit; uncertain writes preserve only the last published runtime generation, while confirmed generation changes invalidate stale grants and require durable action evidence before any temporary access is granted.',
 );
