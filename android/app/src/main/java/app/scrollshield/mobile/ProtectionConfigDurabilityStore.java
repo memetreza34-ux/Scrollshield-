@@ -120,8 +120,23 @@ final class ProtectionConfigDurabilityStore {
             return "";
         }
 
+        boolean hadGeneration = preferences.contains(CONFIG_GENERATION_KEY);
+        String previousGeneration = preferences.getString(CONFIG_GENERATION_KEY, "");
         String generation = UUID.randomUUID().toString();
-        return preferences.edit().putString(CONFIG_GENERATION_KEY, generation).commit() ? generation : "";
+        boolean persisted = preferences.edit().putString(CONFIG_GENERATION_KEY, generation).commit();
+        if (persisted) {
+            writeStateCertain = ProtectionConfigWriteCertaintyPolicy.isCertainAfterWrite(true, false);
+            return generation;
+        }
+
+        SharedPreferences.Editor rollback = preferences.edit();
+        restoreString(rollback, CONFIG_GENERATION_KEY, hadGeneration, previousGeneration);
+        boolean rollbackPersisted = rollback.commit();
+        writeStateCertain = ProtectionConfigWriteCertaintyPolicy.isCertainAfterWrite(
+            false,
+            rollbackPersisted
+        );
+        return "";
     }
 
     static String getCurrentGeneration(Context context) {
