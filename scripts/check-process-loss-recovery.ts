@@ -44,33 +44,33 @@ const requirePattern = (file: string, content: string, pattern: RegExp, message:
 requirePattern(
   bridgePath,
   bridge,
-  /NativeProtectionHealth[\s\S]*'unclean-process-stop'/,
-  'Native lifecycle health must expose a dedicated unclean-process-stop state.',
+  /NativeProtectionHealth[\s\S]*'start-pending'[\s\S]*'start-interrupted'[\s\S]*'unclean-process-stop'/,
+  'Native lifecycle health must expose pending start, interrupted start, and confirmed-process-loss states separately.',
 );
 requirePattern(
   bridgePath,
   bridge,
-  /!status\.running && status\.enabled[\s\S]*status\.lastStartAt > 0[\s\S]*status\.lastStartAt > status\.lastStopAt[\s\S]*return 'unclean-process-stop'/,
-  'A saved activation with no running service and a newer start than stop record must classify as an unclean process stop.',
+  /!status\.running && status\.enabled[\s\S]*lastStartRequestAt > latestConfirmedBoundary[\s\S]*return 'start-pending'[\s\S]*return 'start-interrupted'[\s\S]*status\.lastStartAt > 0[\s\S]*status\.lastStartAt > status\.lastStopAt[\s\S]*return 'unclean-process-stop'/,
+  'An unconfirmed newer start request must be classified before a confirmed unclean process stop so first-start interruption is not mistaken for post-start process loss.',
 );
 requirePattern(
   bridgePath,
   bridge,
   /return 'unclean-process-stop'[\s\S]*return 'stale-activation'/,
-  'Generic stale activation must remain the fallback only after the unclean-process-stop boundary is checked.',
+  'Generic stale activation must remain the fallback only after confirmed process-loss evidence is checked.',
 );
 requirePattern(
   healthPath,
   health,
-  /case 'unclean-process-stop':[\s\S]*PROZESS ABGEBROCHEN[\s\S]*System-Kill[\s\S]*showLastStop: false/,
-  'The user-facing health presentation must explain an unclean process stop without presenting an older stop record as current evidence.',
+  /case 'start-pending':[\s\S]*STARTET[\s\S]*case 'start-interrupted':[\s\S]*START ABGEBROCHEN[\s\S]*case 'unclean-process-stop':[\s\S]*PROZESS ABGEBROCHEN[\s\S]*System-Kill[\s\S]*showLastStop: false/,
+  'The user-facing health presentation must distinguish pending/interrupted starts from a confirmed unclean process stop and hide stale stop evidence.',
 );
 
 requirePattern(
   bridgePath,
   bridge,
-  /recoverAfterProcessLoss\([\s\S]*const before = await this\.getStatus\(\)[\s\S]*before\.running && before\.enabled[\s\S]*before\.health !== 'unclean-process-stop'[\s\S]*await this\.sync\(appsConfig, focusMode\)[\s\S]*AndroidProtection\.startProtectionService\(\)[\s\S]*return this\.getStatus\(\)/,
-  'Controlled process-loss recovery must re-read native truth, avoid duplicate starts, require unclean-process-stop, resync config, start through the native prerequisite gate, and re-read status afterward.',
+  /recoverAfterProcessLoss\([\s\S]*const before = await this\.getStatus\(\)[\s\S]*before\.running && before\.enabled[\s\S]*before\.health !== 'unclean-process-stop'[\s\S]*const synced = await syncCommittedConfig\(appsConfig, focusMode\)[\s\S]*AndroidProtection\.startProtectionService\(\{[\s\S]*expectedConfigGeneration: synced\.configGeneration[\s\S]*\}\)[\s\S]*return this\.getStatus\(\)/,
+  'Controlled process-loss recovery must re-read native truth, require confirmed unclean-process-stop, durably resync config, bind service start to the returned config generation, and re-read status afterward.',
 );
 requirePattern(
   bridgeTestPath,
@@ -90,6 +90,12 @@ requirePattern(
   /refuses process-loss recovery from an unrelated stopped state[\s\S]*rejects\.toThrow[\s\S]*unclean-process-stop/,
   'Recovery must fail closed when the latest native state is not an unclean process stop.',
 );
+requirePattern(
+  bridgeTestPath,
+  bridgeTest,
+  /recovers only from a confirmed unclean process stop[\s\S]*expectedConfigGeneration/,
+  'Process-loss recovery tests must lock the exact durable config generation passed to the native start request.',
+);
 
 requirePattern(
   bridgePath,
@@ -100,7 +106,7 @@ requirePattern(
 requirePattern(
   bridgePath,
   bridge,
-  /activeAndroidAppIds[\s\S]*unavailableAppIds = await this\.sync\(appsConfig, focusMode\)[\s\S]*activeAndroidAppIds\.length === 0[\s\S]*activeAndroidAppIds\.every\(\(appId\) => unavailableAppIds\.includes\(appId\)\)[\s\S]*await this\.stop\(TARGET_APP_MISSING_STOP_REASON\)[\s\S]*return this\.getStatus\(\)[\s\S]*AndroidProtection\.startProtectionService\(\)/,
+  /activeAndroidAppIds[\s\S]*const synced = await syncCommittedConfig\(appsConfig, focusMode\)[\s\S]*activeAndroidAppIds\.length === 0[\s\S]*activeAndroidAppIds\.every\(\(appId\) => synced\.unavailableAppIds\.includes\(appId\)\)[\s\S]*await this\.stop\(TARGET_APP_MISSING_STOP_REASON\)[\s\S]*return this\.getStatus\(\)[\s\S]*AndroidProtection\.startProtectionService/,
   'Recovery must fail closed before service start when every active Android target is unavailable, then persist target_app_missing and re-read status.',
 );
 requirePattern(
@@ -133,6 +139,12 @@ requirePattern(
   statusPanel,
   /processRecovery = status\?\.health === 'unclean-process-stop'[\s\S]*Schutz wiederherstellen[\s\S]*Wiederherstellung läuft/,
   'The status panel must expose a dedicated and observable process-loss recovery action.',
+);
+requirePattern(
+  statusPanelPath,
+  statusPanel,
+  /startPending = status\?\.health === 'start-pending'[\s\S]*startRetry = status\?\.health === 'start-interrupted'/,
+  'The status panel must not route an unconfirmed start through process-loss recovery.',
 );
 requirePattern(
   statusPanelTestPath,
@@ -242,6 +254,12 @@ requirePattern(
 requirePattern(
   bridgeTestPath,
   bridgeTest,
+  /detects a pending start request during the confirmation grace window[\s\S]*health: 'start-pending'[\s\S]*detects an interrupted start request after the confirmation grace window[\s\S]*health: 'start-interrupted'/,
+  'Vitest must protect the pending/interrupted start states that precede confirmed process-loss classification.',
+);
+requirePattern(
+  bridgeTestPath,
+  bridgeTest,
   /detects an unclean process stop when the last start has no later stop record[\s\S]*health: 'unclean-process-stop'/,
   'Vitest must cover process-loss detection from persisted lifecycle timestamps.',
 );
@@ -265,5 +283,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Process-loss recovery contract check passed. Unclean process loss is detected separately; recovery names exact permission blockers and fails closed with target_app_missing when no installed active Android target remains.',
+  'Process-loss recovery contract check passed. Pending/interrupted starts remain distinct from confirmed process loss; recovery is config-generation bound, names exact permission blockers, and fails closed with target_app_missing when no installed active Android target remains.',
 );
