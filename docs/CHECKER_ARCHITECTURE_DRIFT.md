@@ -203,4 +203,4 @@ Gradle build
 physical device recovery evidence
 ```
 
-Solange GitHub Actions auf dem Draft-Branch einen Verify-Job ohne Steps liefert, darf aus diesen Source-Verträgen keine bestandene Release-Evidence abgeleitet werden.
+Solange auf dem aktuellen Kandidaten kein vollständiger erfolgreicher Verify-Lauf vorliegt – unabhängig davon, ob noch gar kein Workflow-Run registriert ist oder ein registrierter Run ohne belastbare ausgeführte Steps endet – darf aus diesen Source-Verträgen keine bestandene Release-Evidence abgeleitet werden.
