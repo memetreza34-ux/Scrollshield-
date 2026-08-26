@@ -59,6 +59,7 @@ public class ScrollShieldDiagnosticsPlugin extends Plugin {
         result.put("configuredInstalledApps", ScrollShieldNativePlugin.hasConfiguredApps(context));
         result.put("protectionConfigGeneration", ProtectionConfigDurabilityStore.getCurrentGeneration(context));
         result.put("protectionConfigWriteStateCertain", ProtectionConfigDurabilityStore.isWriteStateCertain());
+        result.put("protectionRuntimeConfigGeneration", ScrollShieldProtectionService.getPublishedConfigGeneration());
         result.put(
             "startRequestConfigGeneration",
             ProtectionConfigDurabilityStore.getStartRequestGeneration(
