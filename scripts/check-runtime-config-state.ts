@@ -6,6 +6,7 @@ const javaTestRoot = 'android/app/src/test/java/app/scrollshield/mobile';
 const paths = {
   packageJson: 'package.json',
   readiness: 'scripts/readiness-report.ts',
+  plugin: `${javaRoot}/ScrollShieldNativePlugin.java`,
   service: `${javaRoot}/ScrollShieldProtectionService.java`,
   policy: `${javaRoot}/ProtectionConfigRuntimePolicy.java`,
   policyTest: `${javaTestRoot}/ProtectionConfigRuntimePolicyTest.java`,
@@ -20,6 +21,10 @@ const findings: string[] = [];
 
 function requirePattern(key: keyof typeof paths, pattern: RegExp, message: string) {
   if (!pattern.test(source[key])) findings.push(`${paths[key]}: ${message}`);
+}
+
+function forbidPattern(key: keyof typeof paths, pattern: RegExp, message: string) {
+  if (pattern.test(source[key])) findings.push(`${paths[key]}: ${message}`);
 }
 
 requirePattern(
@@ -76,17 +81,48 @@ requirePattern(
 );
 requirePattern(
   'service',
-  /onDestroy\(\)[\s\S]*publishedConfigGeneration = ""/,
-  'Destroy must clear process-visible published config generation evidence only through service ownership.',
+  /onDestroy\(\)[\s\S]*publishedConfigOwnerStartRequestAt == serviceStartRequestAtOnCreate[\s\S]*publishedConfigGeneration = ""/,
+  'Destroy must clear process-visible runtime generation evidence only when the dying service owns it.',
 );
 
-for (const id of ['RUNTIME-01', 'RUNTIME-02', 'RUNTIME-03', 'RUNTIME-04']) {
+requirePattern(
+  'service',
+  /private boolean recordIntentionalOpen\(String appId, long now\)[\s\S]*OPEN_KEY_PREFIX[\s\S]*return preferences\.edit\(\)\.putString\(key, result\.toString\(\)\)\.commit\(\)/,
+  'Intentional-open history must be synchronously persisted and report commit success.',
+);
+requirePattern(
+  'service',
+  /private boolean incrementEmergencyCount\(String appId, long now\)[\s\S]*EMERGENCY_KEY_PREFIX[\s\S]*return preferences\.edit\(\)\.putInt\(key, preferences\.getInt\(key, 0\) \+ 1\)\.commit\(\)/,
+  'Emergency daily count must be synchronously persisted and report commit success.',
+);
+forbidPattern(
+  'service',
+  /recordIntentionalOpen[\s\S]{0,1200}\.apply\(\)|incrementEmergencyCount[\s\S]{0,500}\.apply\(\)/,
+  'Runtime authorization counters must not fall back to asynchronous apply().',
+);
+requirePattern(
+  'plugin',
+  /public static boolean appendProtectionEvent\([\s\S]*return editor\.commit\(\)[\s\S]*catch \(JSONException error\)[\s\S]*return false/,
+  'Protection event persistence must expose its synchronous commit result for authorization paths.',
+);
+requirePattern(
+  'service',
+  /if \(!incrementEmergencyCount\(rule\.id, actionTime\)\) return;[\s\S]*if \(!ScrollShieldNativePlugin\.appendProtectionEvent\([\s\S]*"emergency"[\s\S]*\)\) return;[\s\S]*temporaryAccessUntil\.put/,
+  'Emergency access must be granted only after both the daily counter and local event are durably persisted.',
+);
+requirePattern(
+  'service',
+  /if \(!recordIntentionalOpen\(rule\.id, actionTime\)\) return;[\s\S]*if \(!ScrollShieldNativePlugin\.appendProtectionEvent\([\s\S]*"open"[\s\S]*\)\) return;[\s\S]*temporaryAccessUntil\.put/,
+  'Intentional access must be granted only after both open history and local event are durably persisted.',
+);
+
+for (const id of ['RUNTIME-01', 'RUNTIME-02', 'RUNTIME-03', 'RUNTIME-04', 'RUNTIME-05', 'RUNTIME-06']) {
   requirePattern('spec', new RegExp(id), `Runtime config spec is missing ${id}.`);
 }
 requirePattern(
   'spec',
-  /temporaryAccessUntil[\s\S]*actionConfigGeneration[\s\S]*UNSICHER[\s\S]*Usage-Grenze[\s\S]*recordAllowedUsage\(null, generationBoundaryAt\)/i,
-  'Runtime config spec must document temporary access, stale overlay actions, uncertain writes, and the source-hardened usage boundary.',
+  /temporaryAccessUntil[\s\S]*actionConfigGeneration[\s\S]*UNSICHER[\s\S]*Usage-Grenze[\s\S]*recordAllowedUsage\(null, generationBoundaryAt\)[\s\S]*RUNTIME-05[\s\S]*RUNTIME-06/i,
+  'Runtime config spec must document generation state, usage boundary, and durable authorization actions.',
 );
 
 requirePattern(
@@ -112,5 +148,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Runtime config state check passed. Temporary access and overlay actions are generation-scoped; generation changes close the old usage tick before rule publication; uncertain writes retain only the last published confirmed runtime state.',
+  'Runtime config state check passed. Config-generation state, G1→G2 usage boundaries, durable intentional/emergency action evidence, and fail-closed temporary grants remain guarded.',
 );
