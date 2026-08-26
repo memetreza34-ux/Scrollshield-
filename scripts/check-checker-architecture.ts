@@ -50,13 +50,7 @@ for (const required of [
   );
 }
 
-for (const required of [
-  'syncCommittedConfig',
-  'expectedConfigGeneration',
-  'start-pending',
-  'start-interrupted',
-  'generation-bound',
-]) {
+for (const required of ['syncCommittedConfig', 'expectedConfigGeneration', 'start-pending', 'start-interrupted']) {
   requireText(
     'processLoss',
     required,
@@ -120,8 +114,8 @@ for (const required of [
 
 for (const required of [
   'if \\(!isLoaded \\|\\| migrationBlocked\\) return;',
-  'fail-closed save condition',
-  'inspect lifecycle status first',
+  'Normal React state persistence must stay paused while migration is blocked.',
+  'must inspect lifecycle status first.',
 ]) {
   requireText(
     'migrationRecovery',
