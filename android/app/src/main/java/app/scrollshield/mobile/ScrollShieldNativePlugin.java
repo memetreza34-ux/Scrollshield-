@@ -136,7 +136,13 @@ public class ScrollShieldNativePlugin extends Plugin {
                 return;
             }
             if (!commitResult.persisted) {
-                call.reject("Protection configuration could not be persisted durably");
+                if (!commitResult.rollbackPersisted) {
+                    call.reject(
+                        "Protection configuration persistence is uncertain; retry configuration sync before starting protection"
+                    );
+                } else {
+                    call.reject("Protection configuration could not be persisted durably");
+                }
                 return;
             }
         }
@@ -172,10 +178,12 @@ public class ScrollShieldNativePlugin extends Plugin {
                 persistProtectionSystemStopWithFallback(
                     context,
                     ProtectionStopReasonPolicy.START_FAILED,
-                    "Die Schutzkonfiguration hat sich vor dem Dienststart geändert oder wurde nicht dauerhaft bestätigt"
+                    ProtectionConfigDurabilityStore.isWriteStateCertain()
+                        ? "Die Schutzkonfiguration hat sich vor dem Dienststart geändert oder wurde nicht dauerhaft bestätigt"
+                        : "Der dauerhafte Zustand der Schutzkonfiguration ist nach einem Speicherfehler nicht sicher; vor dem Start ist ein erfolgreicher neuer Config-Sync erforderlich"
                 );
                 ProtectionServiceDispatchGuard.dispatchControlledStop(context);
-                call.reject("Protection configuration generation is stale or missing");
+                call.reject("Protection configuration generation is stale, missing, or persistence is uncertain");
                 return;
             }
             if (!hasUsageAccess(context)) {
@@ -224,17 +232,17 @@ public class ScrollShieldNativePlugin extends Plugin {
                 return;
             }
             if (hasFreshProtectionStartRequest(context)) {
-                if (!hasFreshProtectionStartRequestForCurrentConfig(context)) {
-                    persistProtectionSystemStopWithFallback(
-                        context,
-                        ProtectionStopReasonPolicy.START_FAILED,
-                        "Eine laufende Startanforderung gehört zu einer älteren Schutzkonfiguration"
-                    );
-                    ProtectionServiceDispatchGuard.dispatchControlledStop(context);
-                    call.reject("Pending protection start belongs to a stale config generation");
+                if (hasFreshProtectionStartRequestForCurrentConfig(context)) {
+                    call.resolve();
                     return;
                 }
-                call.resolve();
+                persistProtectionSystemStopWithFallback(
+                    context,
+                    ProtectionStopReasonPolicy.START_FAILED,
+                    "Eine frische Startanforderung gehört nicht mehr zur aktuell dauerhaft bestätigten Schutzkonfiguration"
+                );
+                ProtectionServiceDispatchGuard.dispatchControlledStop(context);
+                call.reject("Pending protection start belongs to a stale config generation");
                 return;
             }
 
@@ -338,6 +346,7 @@ public class ScrollShieldNativePlugin extends Plugin {
         result.put("enabled", isProtectionEnabled(context));
         result.put("unavailableAppIdsJson", getPreferences().getString(UNAVAILABLE_APPS_KEY, "[]"));
         result.put("configGeneration", ProtectionConfigDurabilityStore.getCurrentGeneration(context));
+        result.put("configWriteStateCertain", ProtectionConfigDurabilityStore.isWriteStateCertain());
         result.put(
             "startRequestConfigGeneration",
             ProtectionConfigDurabilityStore.getStartRequestGeneration(getPreferences())
@@ -412,7 +421,12 @@ public class ScrollShieldNativePlugin extends Plugin {
         call.resolve(result);
     }
 
-    public static void appendProtectionEvent(Context context, String type, String appId, String description) {
+    public static void appendProtectionEvent(
+        Context context,
+        String type,
+        String appId,
+        String description
+    ) {
         synchronized (EVENT_LOCK) {
             SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
             JSONArray events;
@@ -600,6 +614,7 @@ public class ScrollShieldNativePlugin extends Plugin {
             String current = ProtectionConfigDurabilityStore.normalizeGeneration(
                 preferences.getString(ProtectionConfigDurabilityStore.CONFIG_GENERATION_KEY, "")
             );
+            if (!ProtectionConfigDurabilityStore.isWriteStateCertain()) return false;
             if (expected.isEmpty() || !expected.equals(current)) return false;
             long requestAt = nextLifecycleTimestamp(preferences);
             return preferences
@@ -647,7 +662,7 @@ public class ScrollShieldNativePlugin extends Plugin {
                 persistProtectionSystemStopWithFallback(
                     context,
                     ProtectionStopReasonPolicy.START_FAILED,
-                    "Die Schutzkonfiguration hat sich zwischen Startanforderung und Dienstbestätigung geändert"
+                    "Die Schutzkonfiguration ist für diese Startanforderung nicht mehr dauerhaft bestätigt"
                 );
                 return ProtectionStartConfirmationResult.FAILED_CLOSED;
             }
@@ -702,20 +717,22 @@ public class ScrollShieldNativePlugin extends Plugin {
     }
 
     public static boolean hasConfiguredApps(Context context) {
-        SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
-        String configJson = preferences.getString(CONFIG_KEY, "{}");
-        try {
-            JSONObject root = new JSONObject(configJson == null ? "{}" : configJson);
-            JSONArray apps = root.optJSONArray("apps");
-            if (apps == null) return false;
-            for (int index = 0; index < apps.length(); index++) {
-                JSONObject app = apps.optJSONObject(index);
-                if (app == null || !app.optBoolean("active", false)) continue;
-                if (hasInstalledPackage(context, app.optJSONArray("packages"))) return true;
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+            String configJson = preferences.getString(CONFIG_KEY, "{}");
+            try {
+                JSONObject root = new JSONObject(configJson == null ? "{}" : configJson);
+                JSONArray apps = root.optJSONArray("apps");
+                if (apps == null) return false;
+                for (int index = 0; index < apps.length(); index++) {
+                    JSONObject app = apps.optJSONObject(index);
+                    if (app == null || !app.optBoolean("active", false)) continue;
+                    if (hasInstalledPackage(context, app.optJSONArray("packages"))) return true;
+                }
+                return false;
+            } catch (JSONException error) {
+                return false;
             }
-            return false;
-        } catch (JSONException error) {
-            return false;
         }
     }
 
