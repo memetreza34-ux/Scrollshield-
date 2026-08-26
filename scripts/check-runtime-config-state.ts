@@ -56,8 +56,13 @@ requirePattern(
 );
 requirePattern(
   'service',
-  /shouldInvalidateRuntimeState\([\s\S]*cachedConfigGeneration,[\s\S]*configGeneration[\s\S]*if \(invalidateRuntimeState\)[\s\S]*temporaryAccessUntil\.clear\(\)[\s\S]*hideOverlay\(\)/,
-  'Publishing a new generation must revoke temporary access and remove any old overlay.',
+  /shouldInvalidateRuntimeState\([\s\S]*cachedConfigGeneration,[\s\S]*configGeneration[\s\S]*if \(invalidateRuntimeState\)[\s\S]*generationBoundaryAt = System\.currentTimeMillis\(\)[\s\S]*recordAllowedUsage\(null, generationBoundaryAt\)[\s\S]*cachedConfigJson = configJson[\s\S]*cachedConfigGeneration = configGeneration[\s\S]*rulesByPackage\.clear\(\)[\s\S]*if \(invalidateRuntimeState\)[\s\S]*temporaryAccessUntil\.clear\(\)[\s\S]*hideOverlay\(\)/,
+  'A generation switch must close the old usage tick before replacing rules, revoking temporary access, or removing the old overlay.',
+);
+requirePattern(
+  'service',
+  /recordAllowedUsage\(@Nullable String foregroundPackage, long now\)[\s\S]*ProtectionRule previousRule = rulesByPackage\.get\(lastUsagePackage\)[\s\S]*temporaryAccessUntil\.get\(lastUsagePackage\)[\s\S]*addPendingUsage\(previousRule\.id, lastUsageTickMs, boundedEnd\)[\s\S]*lastUsagePackage = foregroundPackage[\s\S]*lastUsageTickMs = now/,
+  'Usage closure must attribute the pre-boundary interval through the still-published rule id before resetting the tick owner.',
 );
 requirePattern(
   'service',
@@ -72,7 +77,7 @@ requirePattern(
 requirePattern(
   'service',
   /onDestroy\(\)[\s\S]*publishedConfigGeneration = ""/,
-  'Destroy must clear process-visible published config generation evidence.',
+  'Destroy must clear process-visible published config generation evidence only through service ownership.',
 );
 
 for (const id of ['RUNTIME-01', 'RUNTIME-02', 'RUNTIME-03', 'RUNTIME-04']) {
@@ -80,8 +85,8 @@ for (const id of ['RUNTIME-01', 'RUNTIME-02', 'RUNTIME-03', 'RUNTIME-04']) {
 }
 requirePattern(
   'spec',
-  /temporaryAccessUntil[\s\S]*actionConfigGeneration[\s\S]*UNSICHER[\s\S]*usage/i,
-  'Runtime config spec must cover temporary access, stale overlay actions, uncertain writes, and usage-boundary evidence.',
+  /temporaryAccessUntil[\s\S]*actionConfigGeneration[\s\S]*UNSICHER[\s\S]*Usage-Grenze[\s\S]*recordAllowedUsage\(null, generationBoundaryAt\)/i,
+  'Runtime config spec must document temporary access, stale overlay actions, uncertain writes, and the source-hardened usage boundary.',
 );
 
 requirePattern(
@@ -107,5 +112,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Runtime config state check passed. Temporary access and overlay actions are generation-scoped; uncertain writes retain only the last published confirmed runtime state.',
+  'Runtime config state check passed. Temporary access and overlay actions are generation-scoped; generation changes close the old usage tick before rule publication; uncertain writes retain only the last published confirmed runtime state.',
 );
