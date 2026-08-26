@@ -136,8 +136,8 @@ requirePattern(
 );
 requirePattern(
   'service',
-  /refreshConfiguration\(\)[\s\S]*latestConfigJson[\s\S]*latestConfigGeneration[\s\S]*!configJson\.equals\(latestConfigJson\) \|\| !configGeneration\.equals\(latestConfigGeneration\)[\s\S]*shouldInvalidateRuntimeState[\s\S]*cachedConfigGeneration = configGeneration[\s\S]*temporaryAccessUntil\.clear\(\)[\s\S]*hideOverlay\(\)/,
-  'Publishing a new durable generation must invalidate temporary access and the old overlay.',
+  /refreshConfiguration\(\)[\s\S]*latestConfigJson[\s\S]*latestConfigGeneration[\s\S]*!configJson\.equals\(latestConfigJson\) \|\| !configGeneration\.equals\(latestConfigGeneration\)[\s\S]*shouldInvalidateRuntimeState[\s\S]*cachedConfigGeneration = configGeneration[\s\S]*publishedConfigGeneration = configGeneration[\s\S]*temporaryAccessUntil\.clear\(\)[\s\S]*hideOverlay\(\)/,
+  'Publishing a new durable generation must publish explicit runtime generation evidence and invalidate temporary access/old overlay.',
 );
 requirePattern(
   'service',
@@ -151,6 +151,16 @@ requirePattern(
 );
 requirePattern(
   'service',
+  /onStartCommand[\s\S]*ProtectionConfigDurabilityStore\.isWriteStateCertain\(\)[\s\S]*ScrollShieldNativePlugin\.hasConfiguredApps\(this\)/,
+  'A running service must not trust preference-based target configuration while write certainty is unresolved.',
+);
+requirePattern(
+  'service',
+  /CONFIGURATION_HEALTH_INTERVAL_MS[\s\S]*if \(ProtectionConfigDurabilityStore\.isWriteStateCertain\(\)\)[\s\S]*hasConfiguredApps = ScrollShieldNativePlugin\.hasConfiguredApps\(this\)/,
+  'Periodic target-app health must not inspect uncertain preference config.',
+);
+requirePattern(
+  'service',
   /showOverlay\([\s\S]*actionConfigGeneration = cachedConfigGeneration[\s\S]*setOnClickListener[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*isCurrentRuntimeConfigGeneration\(actionConfigGeneration\)[\s\S]*temporaryAccessUntil\.put[\s\S]*appendProtectionEvent/,
   'Overlay grants/events must re-check the exact generation immediately before writing access or evidence.',
 );
@@ -161,8 +171,8 @@ requirePattern(
 );
 requirePattern(
   'service',
-  /CONFIGURATION_HEALTH_INTERVAL_MS[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*hasConfiguredApps = ScrollShieldNativePlugin\.hasConfiguredApps\(this\)/,
-  'Target-app health must not inspect the config tuple concurrently with a candidate commit/rollback.',
+  /getPublishedConfigGeneration\(\)[\s\S]*onDestroy\(\)[\s\S]*publishedConfigGeneration = ""/,
+  'Published runtime generation evidence must clear when the service is destroyed.',
 );
 
 requirePattern(
@@ -184,23 +194,23 @@ requirePattern(
 
 requirePattern(
   'diagnostics',
-  /protectionConfigGeneration[\s\S]*protectionConfigWriteStateCertain[\s\S]*startRequestConfigGeneration/,
-  'Native diagnostics must expose config generation, write certainty, and request-bound generation.',
+  /protectionConfigGeneration[\s\S]*protectionConfigWriteStateCertain[\s\S]*protectionRuntimeConfigGeneration[\s\S]*startRequestConfigGeneration/,
+  'Native diagnostics must expose persisted generation, write certainty, published runtime generation, and request-bound generation.',
 );
 requirePattern(
   'diagnosticsBridge',
-  /protectionConfigGeneration:\s*string[\s\S]*protectionConfigWriteStateCertain:\s*boolean[\s\S]*startRequestConfigGeneration:\s*string/,
-  'TypeScript diagnostics must type config write certainty.',
+  /protectionConfigGeneration:\s*string[\s\S]*protectionConfigWriteStateCertain:\s*boolean[\s\S]*protectionRuntimeConfigGeneration:\s*string[\s\S]*startRequestConfigGeneration:\s*string/,
+  'TypeScript diagnostics must type persisted/runtime config evidence.',
 );
 requirePattern(
   'debug',
-  /Config-Schreibzustand[\s\S]*protectionConfigWriteStateCertain \? 'SICHER' : 'UNSICHER'[\s\S]*Config-Generation[\s\S]*Startrequest-Config/,
-  'Debug UI must make config write certainty and both generations visible.',
+  /Config-Schreibzustand[\s\S]*protectionConfigWriteStateCertain \? 'SICHER' : 'UNSICHER'[\s\S]*Config-Generation[\s\S]*Runtime-Config[\s\S]*Startrequest-Config/,
+  'Debug UI must make config write certainty and persisted/runtime/request generations visible.',
 );
 requirePattern(
   'debugTest',
-  /protectionConfigWriteStateCertain: true[\s\S]*Config-Schreibzustand[\s\S]*SICHER/,
-  'Debug UI test must cover config write certainty evidence.',
+  /protectionConfigWriteStateCertain: true[\s\S]*protectionRuntimeConfigGeneration[\s\S]*Config-Schreibzustand[\s\S]*Runtime-Config/,
+  'Debug UI test must cover config write certainty and runtime generation evidence.',
 );
 
 for (const method of [
@@ -216,6 +226,11 @@ for (const method of [
 for (const id of ['APP-07', 'APP-08', 'APP-09', 'APP-10']) {
   requirePattern('matrix', new RegExp(`\\| ${id} \\|`), `Device matrix is missing ${id}.`);
 }
+requirePattern(
+  'matrix',
+  /protectionRuntimeConfigGeneration[\s\S]*APP-10/,
+  'Device evidence must capture the actual published runtime generation for APP-09/APP-10.',
+);
 requirePattern(
   'spec',
   /commit\(\)[\s\S]*rollback[\s\S]*writeStateCertain[\s\S]*UNSICHER[\s\S]*temporary[\s\S]*overlay[\s\S]*APP-07[\s\S]*APP-08[\s\S]*APP-09[\s\S]*APP-10/i,
