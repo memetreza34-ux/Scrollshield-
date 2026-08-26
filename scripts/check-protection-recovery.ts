@@ -36,26 +36,38 @@ requirePattern(
 requirePattern(
   policyPath,
   policy,
-  /status\.enabled && !status\.running && installedActiveAppIds\.length > 0/,
-  'Recovery must only restart a previously enabled stale service.',
+  /status\.enabled[\s\S]*!status\.running[\s\S]*installedActiveAppIds\.length > 0[\s\S]*status\.health === 'stale-activation'[\s\S]*status\.health === 'unclean-process-stop'/,
+  'Automatic app-open recovery must be limited to safe stale activation or confirmed process loss with an installed target.',
 );
 requirePattern(
   policyTestPath,
   policyTest,
-  /active installed target ids[\s\S]*previously enabled but stopped service[\s\S]*enabled: false[\s\S]*running: true[\s\S]*\[\]/,
-  'Recovery policy tests must cover active, disabled, already-running, and unavailable-target cases.',
+  /safe stale or confirmed process-loss state[\s\S]*stale-activation[\s\S]*unclean-process-stop[\s\S]*start-pending[\s\S]*start-interrupted[\s\S]*\[\]/,
+  'Recovery policy tests must prove pending/interrupted starts are not auto-recovered and an installed target is still required.',
 );
 requirePattern(
   appPath,
   app,
-  /NativeProtection\.sync[\s\S]*NativeProtection\.getStatus[\s\S]*getInstalledActiveProtectionIds[\s\S]*shouldRecoverStaleProtection[\s\S]*NativeProtection\.start/,
-  'App startup/config sync must inspect and recover a stale previously-enabled service.',
+  /NativeProtection\.getStatus\(\)[\s\S]*serviceStatus\.health === 'start-pending'[\s\S]*setTimeout\([\s\S]*syncAndRecoverProtection[\s\S]*NativeProtection\.sync\([\s\S]*getInstalledActiveProtectionIds[\s\S]*shouldRecoverStaleProtection/,
+  'App-open recovery must read lifecycle truth before config sync and defer sync while a fresh start confirmation is pending.',
+);
+requirePattern(
+  appPath,
+  app,
+  /serviceStatus\.health === 'unclean-process-stop'[\s\S]*NativeProtection\.recoverAfterProcessLoss\([\s\S]*NativeProtection\.start\(/,
+  'Confirmed process loss must use controlled recovery while ordinary stale activation uses the normal generation-bound start path.',
 );
 requirePattern(
   appTestPath,
   appTest,
-  /restarts a previously enabled stale service[\s\S]*never automatically enables protection that was deliberately disabled[\s\S]*does not restart when every configured active target is unavailable/,
-  'App integration tests must guard every automatic-recovery boundary.',
+  /restarts a previously enabled stale service[\s\S]*uses controlled process-loss recovery after a confirmed unclean service loss[\s\S]*does not invalidate a fresh pending start request with config sync or a duplicate start[\s\S]*never automatically enables protection that was deliberately disabled[\s\S]*does not restart when every configured active target is unavailable/,
+  'App integration tests must guard stale recovery, process-loss routing, pending-generation protection, disabled state, and unavailable targets.',
+);
+requirePattern(
+  appTestPath,
+  appTest,
+  /start-pending[\s\S]*syncMock\)\.not\.toHaveBeenCalled[\s\S]*startMock\)\.not\.toHaveBeenCalled[\s\S]*recoverMock\)\.not\.toHaveBeenCalled/,
+  'A fresh pending start must not be invalidated by app-open sync or duplicate recovery dispatch.',
 );
 requirePattern(
   bootReceiverPath,
@@ -66,8 +78,8 @@ requirePattern(
 requirePattern(
   bootReceiverPath,
   bootReceiver,
-  /private void stopRecovery\([\s\S]*persistProtectionSystemStopWithFallback\(context, code, message\)/,
-  'Boot/update recovery failures must delegate to the shared atomic system-stop wrapper.',
+  /private void stopRecovery\([\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*stopRecoveryLocked[\s\S]*private void stopRecoveryLocked[\s\S]*persistProtectionSystemStopWithFallback\(context, code, message\)[\s\S]*dispatchControlledStop\(context\)/,
+  'Boot/update recovery failures must persist atomically and serialize the Android stop dispatch.',
 );
 requirePattern(
   pluginPath,
@@ -110,5 +122,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection recovery check passed. Boot/update recovery delegates to the shared atomic system-stop transaction, while app-open stale-service recovery remains fail-closed and target-aware.',
+  'Protection recovery check passed. App-open recovery is lifecycle-health aware, preserves fresh pending start generations, routes confirmed process loss through controlled recovery, and keeps boot/update failures atomically fail-closed.',
 );
