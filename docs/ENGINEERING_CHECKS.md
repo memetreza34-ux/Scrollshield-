@@ -2,7 +2,7 @@
 
 Status: **verbindlicher technischer Verifikationsvertrag**
 
-Letzte Aktualisierung: **25. August 2026**
+Letzte Aktualisierung: **26. August 2026**
 
 ## Grundregel
 
@@ -67,14 +67,6 @@ Wichtige Invarianten:
 - Stop-Code, Stop-Nachricht und Event-Evidence bleiben dabei erhalten;
 - echter Restart nach Stop erhält eine strikt neuere Request-Generation.
 
-Health-Klassifizierung:
-
-```text
-neuer unbestätigter Request <= 15 s → start-pending
-neuer unbestätigter Request > 15 s  → start-interrupted
-bestätigter Start später ohne Stopp  → unclean-process-stop
-```
-
 ## Protection Config Durability
 
 ```bash
@@ -92,29 +84,46 @@ unavailable_active_app_ids
 protection_config_generation
 ```
 
-Ein erfolgreicher Native-Sync verwendet einen synchronen `commit()` und liefert erst danach die neue UUID-Generation an TypeScript.
-
-Der normale Start und Process-Loss-Recovery reichen genau diese UUID als `expectedConfigGeneration` zurück. Der Startrequest persistiert zusätzlich:
-
-```text
-startRequestConfigGeneration
-```
-
-und `recordProtectionServiceStarted()` bestätigt nur, wenn Request- und aktuelle Config-Generation noch identisch sind.
+Ein erfolgreicher Native-Sync verwendet einen synchronen `commit()` und liefert erst danach die neue UUID-Generation an TypeScript. Der normale Start und Process-Loss-Recovery reichen genau diese UUID als `expectedConfigGeneration` zurück; der Startrequest persistiert `startRequestConfigGeneration`.
 
 ### Candidate-Commit-Fehler
 
-Vor dem Config-Write wird der vorherige komplette Tupelzustand gesichert. Liefert der Candidate-Commit `false`, stellt `ProtectionConfigDurabilityStore` vor Freigabe des Dispatch-Locks den vorherigen Config-/Availability-/Generation-Zustand wieder her und der Native-Sync wird abgelehnt.
+Vor dem Config-Write wird der vorherige komplette Tupelzustand gesichert. Liefert der Candidate-Commit `false`, stellt `ProtectionConfigDurabilityStore` vor Freigabe des Dispatch-Locks den vorherigen Config-/Availability-/Generation-Zustand wieder her und lehnt den Sync ab.
 
 Für einen bereits laufenden Schutz gilt:
 
 ```text
 Candidate nicht durable
 → Candidate nicht veröffentlichen
-→ letzte durable Regelbasis weiterverwenden
+→ letzte bestätigte Regelbasis weiterverwenden
 ```
 
-Ein erster Start ohne erfolgreich durable Config bleibt blockiert.
+### Doppelter Schreibfehler / Certainty State
+
+Zusätzlich existiert process-lokal:
+
+```text
+writeStateCertain
+```
+
+`ProtectionConfigWriteCertaintyPolicy` erzwingt:
+
+```text
+candidate=true                  → SICHER
+candidate=false + rollback=true → SICHER
+candidate=false + rollback=false→ UNSICHER
+```
+
+Bei `UNSICHER` gilt im selben Prozess:
+
+- `matchesCurrentGeneration(...)` liefert false;
+- `isCurrentRequestGeneration(...)` liefert false;
+- Boot-/Update-Generation-Bootstrap ist blockiert;
+- `recordProtectionStartRequested(...)` ist blockiert;
+- eine Foreground-Confirmation kann nicht als current durchgehen;
+- erst ein späterer erfolgreicher Config-Commit setzt den Zustand wieder auf `SICHER`.
+
+Ein bereits laufender Dienst darf seine zuvor veröffentlichte bestätigte Regelbasis weiterverwenden.
 
 ### Stable Service Publication
 
@@ -127,15 +136,19 @@ Ein erster Start ohne erfolgreich durable Config bleibt blockiert.
 4. nur bei exakter Gleichheit veröffentlichen
 ```
 
-Damit darf weder ein fehlgeschlagener Candidate noch ein während des Parsens bereits überholter erfolgreicher Sync in `rulesByPackage` veröffentlicht werden.
+Damit darf weder ein fehlgeschlagener Candidate noch ein während des Parsens überholter erfolgreicher Sync in `rulesByPackage` veröffentlicht werden.
 
-Auch der periodische Target-App-Health-Check liest die Config nicht parallel zu Candidate-Commit/Rollback.
+Der Debug-/Diagnosevertrag exportiert zusätzlich:
+
+```text
+protectionConfigWriteStateCertain
+```
+
+und zeigt im Debug-Screen `SICHER` oder `UNSICHER`.
 
 ## Android Service Dispatch Races
 
 Spezifikation: `docs/PROTECTION_SERVICE_DISPATCH_RACES.md`.
-
-Persistenz allein reicht nicht: Der zugehörige Android-Service-Dispatch muss dieselbe Reihenfolge einhalten.
 
 Globale Lock-Reihenfolge:
 
@@ -144,58 +157,15 @@ ProtectionServiceDispatchGuard.LOCK
 → EVENT_LOCK
 ```
 
-Unter `ProtectionServiceDispatchGuard.LOCK` werden insbesondere serialisiert:
-
-- Config Candidate-Commit/Rollback und stabile Service-Publish-Grenzen;
-- App-Start: Pending-Prüfung → Request-Commit → `startForegroundService/startService`;
-- Boot-/App-Update-Recovery: Request-Commit → Service-Start;
-- App-/Notification-/Prerequisite-Stop: Stop-Persistenz → `stopService`;
-- Factory Reset: Tombstone → `stopService`;
-- Service `onCreate()` / `onStartCommand()` / kritische `onDestroy()`-Klassifizierung.
+Unter dem Dispatch-Lock werden Config Candidate-Commit/Rollback, Startrequest + Android-Startdispatch, Stop-Persistenz + `stopService()`, Factory Reset sowie kritische Service-Lifecycle-Grenzen serialisiert.
 
 ### Controlled-stop Destroy Token
 
-Ein erfolgreicher kontrollierter `stopService()` setzt einen process-lokalen one-shot Token:
+Ein erfolgreicher kontrollierter `stopService()` setzt einen process-lokalen one-shot Token auf Basis von `System.nanoTime()`, maximal 30 Sekunden gültig. Ein abgelaufener Token, negativer monotonic age-Wert oder fehlgeschlagener Stop-Dispatch darf einen späteren echten `unexpected_service_destroy` nicht unterdrücken.
 
-```text
-System.nanoTime()
-Destroy-Fenster <= 30 s
-exakt einmal konsumierbar
-```
+### Same-Instance Fast Restart / Notification Stop
 
-Ein abgelaufener Token, negativer monotonic age-Wert oder fehlgeschlagener Stop-Dispatch darf einen späteren echten `unexpected_service_destroy` nicht unterdrücken.
-
-`ProtectionServiceDispatchGuardTest` deckt source-seitig Prompt-, stale-, backward-time- und failed-dispatch-Grenzen ab.
-
-### Same-Instance Fast Restart
-
-Wenn Android eine neue Startanforderung an dieselbe noch lebende Service-Instanz liefert, übernimmt diese nach erfolgreicher Confirmation die neue Request-Generation:
-
-```text
-serviceStartRequestAtOnCreate = lastStartRequestAt
-```
-
-Ein altes `explicitStopRequested=true` darf den späteren echten Destroy dieser neu bestätigten Generation nicht dauerhaft maskieren.
-
-### Generation-bound Notification Stop
-
-Die Foreground-Notification trägt:
-
-```text
-EXTRA_STOP_START_REQUEST_AT = serviceStartRequestAtOnCreate
-```
-
-Ein Notification-Stop ist nur aktuell, wenn:
-
-```text
-actionStartRequestAt > 0
-UND
-actionStartRequestAt == serviceStartRequestAtOnCreate
-UND
-actionStartRequestAt == latestStartRequestAt
-```
-
-Fehlende oder alte `ACTION_STOP`-Generationen werden vor jeder `notification_action_stop`-Persistenz ignoriert. Nach erfolgreichem Same-Instance-Restart wird die Notification mit der neuen Generation veröffentlicht.
+Bei Same-Instance-Restart übernimmt die lebende Service-Instanz nach erfolgreicher Confirmation die neue Request-Generation. Die Foreground-Notification trägt diese Generation im Stop-`PendingIntent`; fehlende oder alte `ACTION_STOP`-Generationen werden vor jeder `notification_action_stop`-Persistenz ignoriert.
 
 ## Android Instrumentation
 
@@ -203,14 +173,6 @@ Fehlende oder alte `ACTION_STOP`-Generationen werden vor jeder `notification_act
 npm run check:android-instrumentation
 cd android
 ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
-```
-
-`ProtectionDiagnosticsInstrumentedTest` schützt source-seitig insbesondere:
-
-```text
-startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence
-terminalStopWinsAgainstDelayedStartConfirmationWithoutOverwrite
-restartRequestAdvancesBeyondLatestStopBoundary
 ```
 
 `ProtectionConfigDurabilityInstrumentedTest` schützt source-seitig insbesondere:
@@ -223,7 +185,7 @@ configChangeBeforeConfirmationFailsClosedWithoutConfirmingOldRequest
 legacyDurableConfigReceivesGenerationBeforeBootStyleStartRequest
 ```
 
-Die tatsächliche Zustellung einer alten/queued Notification-`PendingIntent`-Aktion sowie ein realer Storage-/Commit-Fehler sind bewusst Device-/System-E2E-Evidence. Ein reiner Source- oder Persistenztest darf nicht als Ersatz gewertet werden.
+Die tatsächliche Zustellung einer alten/queued Notification-`PendingIntent`-Aktion sowie reale Storage-/Commit-/Rollback-Fehler sind Device-/System-E2E-Evidence. Ein Source- oder Persistenztest darf nicht als Ersatz gewertet werden.
 
 ## Android JUnit / Build
 
@@ -235,45 +197,30 @@ cd android
 Relevant sind insbesondere:
 
 - `ProtectionStartHandshakePolicyTest`;
-- `ProtectionServiceLifecyclePolicyTest` inklusive Notification-Generation;
+- `ProtectionServiceLifecyclePolicyTest`;
 - `ProtectionServiceDispatchGuardTest`;
 - `ProtectionConfigDurabilityStoreTest`;
+- `ProtectionConfigWriteCertaintyPolicyTest`;
 - bestehende Coordinator-/Worker-/Stop-Code-/Lifecycle-Tests.
 
 ## Device-/E2E-Evidence
 
 `docs/ANDROID_DEVICE_TEST_MATRIX.md` verlangt zusätzlich:
 
-- `APP-07`: durable Config-Sync + gebundener Start; bei erzwungenem Commit-Fehler kein Candidate-Start und keine Candidate-Regel-Veröffentlichung;
+- `APP-07`: durable Config-Sync + gebundener Start; Candidate-Fehler darf keine Candidate-Regel veröffentlichen;
 - `APP-08`: Config-Wechsel zwischen Request und Confirmation endet `FAILED_CLOSED`/`start_failed`;
-- `LIFE-12`: terminaler Stop gewinnt vor verspäteter Confirmation;
-- `LIFE-13`: Pending-Doppelstart erzeugt keine neue Generation;
-- `LIFE-14`: sofortiger Stop→Restart wird nicht durch altes `onDestroy()` zerstört;
-- `LIFE-15`: alte Notification-Stop-Aktion aus `R1` bleibt nach bestätigtem Restart `R2` wirkungslos; die aktuelle `R2`-Aktion stoppt weiterhin mit `notification_action_stop`.
+- `APP-09`: Candidate- und Rollback-Commit schlagen fehl → `UNSICHER`, neuer Start/Recovery blockiert, laufender Dienst bleibt auf letzter bestätigter Regelbasis, erfolgreicher späterer Sync stellt `SICHER` wieder her;
+- `LIFE-12` bis `LIFE-15`: Start-/Stop-/Restart-/Notification-Races.
 
 Die Dispatch-Spezifikation verlangt zusätzlich `DISPATCH-01` bis `DISPATCH-05`.
 
 ## Process-Loss / Recovery
 
-Pre-Confirmation-Abbruch und echter Post-Start-Process-Kill bleiben getrennt.
-
-```text
-lastStartRequestAt > max(lastStartAt,lastStopAt)
-→ start-pending / start-interrupted
-```
-
-```text
-lastStartAt > lastStopAt
-lastStartRequestAt <= lastStartAt
-running=false && enabled=true
-→ unclean-process-stop
-```
-
-Nur der zweite Fall verwendet `Schutz wiederherstellen`.
+Pre-Confirmation-Abbruch und echter Post-Start-Process-Kill bleiben getrennt. Nur ein bestätigter Start, der später ohne terminalen Stopp verschwindet, wird als `unclean-process-stop` behandelt.
 
 ## Aktuelle Ausführungsgrenze
 
-GitHub Actions liefert auf diesem Draft-Branch weiterhin Verify-Jobs ohne ausgeführte Steps. Die **exakte aktuelle Head-SHA und der zugehörige Lauf werden ausschließlich in PR #8 geführt**, damit committed Dokumente nicht durch ihren eigenen Commit sofort veralten.
+GitHub Actions liefert auf diesem Draft-Branch weiterhin Verify-Jobs ohne ausgeführte Steps. Die exakte aktuelle Head-SHA und der zugehörige Lauf werden ausschließlich in PR #8 geführt.
 
 Deshalb sind aktuell **nicht als bestanden belegt**:
 
@@ -284,10 +231,10 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - `check:lifecycle`;
 - `check:android-instrumentation`;
 - Android JUnit;
+- `ProtectionConfigWriteCertaintyPolicyTest`;
 - Android Instrumentation;
-- Gradle Debug Build;
-- APK;
-- `APP-07` / `APP-08`;
+- Gradle Debug Build / APK;
+- `APP-07` bis `APP-09`;
 - `LIFE-12` bis `LIFE-15`;
 - `DISPATCH-01` bis `DISPATCH-05`;
 - reale Storage-Failure-/Process-Kill-/Start-/Stop-/PendingIntent-Race-Evidence.
@@ -298,12 +245,11 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 2. `npm run verify`;
 3. `./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace`;
 4. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace`;
-5. `APP-07` / `APP-08` inklusive Storage-Failure-Fall real ausführen;
+5. `APP-07` bis `APP-09` inklusive Storage-/Rollback-Failure real ausführen;
 6. `LIFE-12` bis `LIFE-15` real ausführen;
 7. `DISPATCH-01` bis `DISPATCH-05` mit Diagnose-JSON und Logcat ausführen;
-8. Pre-Confirmation-Abbruch → `start-interrupted` → Retry;
-9. Post-Start-Process-Kill → `unclean-process-stop` → Recovery;
-10. App-/aktuelle Notification-Stopp-, Start-/Foreground-/Destroy-, Boot/App-Update-, Permission-Loss- und Target-App-Pfade;
-11. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
-12. finaler Supply-Chain-/Binary-/Security-Audit;
-13. erst danach Candidate Freeze und Release.
+8. Pre-/Post-Confirmation Process Loss real prüfen;
+9. App-/Notification-/Start-/Foreground-/Destroy-/Boot-/Permission-/Target-App-Pfade real prüfen;
+10. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
+11. finaler Supply-Chain-/Binary-/Security-Audit;
+12. erst danach Candidate Freeze und Release.
