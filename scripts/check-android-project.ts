@@ -15,6 +15,11 @@ function requireMatch(file: string, content: string, pattern: RegExp, text: stri
   findings.push({ file, text });
 }
 
+function rejectMatch(file: string, content: string, pattern: RegExp, text: string) {
+  if (!pattern.test(content)) return;
+  findings.push({ file, text });
+}
+
 function requireNumberAtLeast(file: string, label: string, value: number | undefined, min: number) {
   if (value !== undefined && value >= min) return;
   findings.push({ file, text: `${label} must be at least ${min}; found ${value ?? 'missing'}.` });
@@ -144,19 +149,31 @@ requireMatch(
 requireMatch(
   pluginPath,
   plugin,
-  /setProtectionEnabled\(context, true\)/,
-  'Starting native protection must persist explicit user activation.',
+  /recordProtectionStartRequested\(Context context, String expectedConfigGeneration\)[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, true\)[\s\S]*LAST_START_REQUEST_AT_KEY[\s\S]*START_REQUEST_CONFIG_GENERATION_KEY[\s\S]*\.commit\(\)/,
+  'Starting native protection must atomically persist activation, request time, and config generation.',
 );
 requireMatch(
   pluginPath,
   plugin,
-  /setProtectionEnabled\(context, false\)/,
-  'Stopping native protection must clear persisted user activation.',
+  /startProtectionService\(PluginCall call\)[\s\S]*recordProtectionStartRequested\(context, expectedConfigGeneration\)[\s\S]*startForegroundService\(intent\)/,
+  'Android service dispatch must occur only after the durable start request is persisted.',
 );
 requireMatch(
   pluginPath,
   plugin,
-  /hasInstalledPackage\(context, packages\)/,
+  /recordProtectionSystemStop[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, false\)[\s\S]*EVENT_QUEUE_KEY[\s\S]*\.commit\(\)/,
+  'System shutdown must atomically clear activation with warning evidence.',
+);
+requireMatch(
+  pluginPath,
+  plugin,
+  /recordProtectionTerminalStop[\s\S]*putBoolean\(SERVICE_ENABLED_KEY, false\)[\s\S]*LAST_STOP_CODE_KEY[\s\S]*\.commit\(\)/,
+  'Deliberate terminal shutdown must atomically clear activation with exact stop diagnostics.',
+);
+requireMatch(
+  pluginPath,
+  plugin,
+  /hasInstalledPackage\(context, app\.optJSONArray\("packages"\)\)/,
   'Native protection must validate supported installed packages.',
 );
 requireMatch(
@@ -164,6 +181,13 @@ requireMatch(
   plugin,
   /drainProtectionEvents/,
   'Native events and measured usage must remain drainable into React state.',
+);
+
+rejectMatch(
+  pluginPath,
+  plugin,
+  /setProtectionEnabled\(context, true\)/,
+  'Productive activation must not bypass the atomic start-request transaction.',
 );
 
 requireMatch(
@@ -248,8 +272,20 @@ requireMatch(
 requireMatch(
   servicePath,
   service,
-  /stopForMissingPermission/,
-  'Native protection must clear explicit activation and record a warning when a required condition disappears.',
+  /stopForProtectionPrerequisite\(String reasonCode, String description\)[\s\S]*persistProtectionSystemStopWithFallback[\s\S]*ProtectionServiceDispatchGuard\.dispatchControlledStop\(this\)/,
+  'Native prerequisite loss must use atomic stop evidence plus controlled dispatch.',
+);
+rejectMatch(
+  servicePath,
+  service,
+  /stopForMissingPermission\s*\(/,
+  'Legacy text-derived prerequisite shutdown must not return.',
+);
+rejectMatch(
+  servicePath,
+  service,
+  /\bstopSelf\(\)/,
+  'Service lifecycle shutdown must not bypass the shared controlled dispatch guard.',
 );
 
 requireMatch(
@@ -269,6 +305,12 @@ requireMatch(
   bootReceiver,
   /hasNotificationsEnabled\(context\)/,
   'Boot recovery must re-check visible notifications before starting protection.',
+);
+requireMatch(
+  bootReceiverPath,
+  bootReceiver,
+  /recordProtectionStartRequested\(context\)[\s\S]*startForegroundService\(serviceIntent\)/,
+  'Boot/update recovery must persist a generation-bound start request before Android service dispatch.',
 );
 
 requireMatch(
@@ -381,5 +423,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `Android project check passed. SDK ${minSdk}/${targetSdk}/${compileSdk}, ${permissions.length} permissions.`,
+  `Android project check passed. SDK ${minSdk}/${targetSdk}/${compileSdk}, ${permissions.length} permissions; lifecycle activation/stop paths use generation-bound atomic persistence and controlled dispatch.`,
 );
