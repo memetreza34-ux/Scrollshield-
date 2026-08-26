@@ -319,6 +319,12 @@ public class ScrollShieldProtectionService extends Service {
             );
             return;
         }
+        if (!isCurrentRuntimeConfigGeneration(cachedConfigGeneration)) {
+            // A durable sync may race after this poll parsed the previous generation. Never use
+            // old grants or rules during that gap; the next poll will publish the new snapshot.
+            hideOverlay();
+            return;
+        }
 
         long now = System.currentTimeMillis();
         if (now - lastConfigurationHealthCheckMs >= CONFIGURATION_HEALTH_INTERVAL_MS) {
@@ -544,13 +550,33 @@ public class ScrollShieldProtectionService extends Service {
                 return;
             }
 
+            boolean invalidateRuntimeState = ProtectionConfigRuntimePolicy.shouldInvalidateRuntimeState(
+                cachedConfigGeneration,
+                configGeneration
+            );
             cachedConfigJson = configJson;
             cachedConfigGeneration = configGeneration;
             rulesByPackage.clear();
             rulesByPackage.putAll(nextRulesByPackage);
             focusMode = nextFocusMode;
             hasActiveConfiguredRule = nextHasActiveConfiguredRule;
-            pruneTemporaryAccess();
+
+            if (invalidateRuntimeState) {
+                temporaryAccessUntil.clear();
+                hideOverlay();
+            } else {
+                pruneTemporaryAccess();
+            }
+        }
+    }
+
+    private boolean isCurrentRuntimeConfigGeneration(String generation) {
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            return ProtectionConfigDurabilityStore.isWriteStateCertain()
+                && ProtectionConfigRuntimePolicy.isCurrentGeneration(
+                    generation,
+                    ProtectionConfigDurabilityStore.getCurrentGeneration(this)
+                );
         }
     }
 
@@ -626,6 +652,9 @@ public class ScrollShieldProtectionService extends Service {
     ) {
         hideOverlay();
         if (windowManager == null) return;
+
+        final String actionConfigGeneration = cachedConfigGeneration;
+        if (!isCurrentRuntimeConfigGeneration(actionConfigGeneration)) return;
 
         boolean strict = strictReason != null;
         boolean adaptiveFrictionActive = !strict && AdaptiveFrictionPolicy.isEscalated(
@@ -776,56 +805,66 @@ public class ScrollShieldProtectionService extends Service {
         }
 
         continueButton.setOnClickListener(view -> {
-            long actionTime = System.currentTimeMillis();
-            if (strict) {
-                String emergencyReason = emergencyReasonInput == null
-                    ? ""
-                    : EmergencyUnlockPolicy.normalizeReason(emergencyReasonInput.getText().toString());
-                boolean stillAvailable = hasEmergencyAvailable(rule, actionTime);
-                if (!EmergencyUnlockPolicy.canEmergencyUnlock(
-                    stillAvailable,
-                    countdownFinished[0],
-                    rule.emergencyRequireReason,
-                    emergencyReason
-                )) {
-                    updateContinueButtonState(
-                        continueButton,
-                        stillAvailable,
-                        countdownFinished[0],
-                        rule.emergencyRequireReason,
-                        emergencyReasonInput
-                    );
+            synchronized (ProtectionServiceDispatchGuard.LOCK) {
+                if (
+                    !isCurrentRuntimeConfigGeneration(actionConfigGeneration)
+                        || !packageName.equals(overlayPackage)
+                ) {
+                    hideOverlay();
                     return;
                 }
 
-                incrementEmergencyCount(rule.id, actionTime);
-                temporaryAccessUntil.put(
-                    packageName,
-                    actionTime + rule.emergencyDurationMinutes * 60_000L
-                );
-                String eventDescription =
-                    "Notfallfreigabe für " + rule.emergencyDurationMinutes + " Minuten";
-                if (!emergencyReason.isEmpty()) {
-                    eventDescription += " · Grund: " + emergencyReason;
+                long actionTime = System.currentTimeMillis();
+                if (strict) {
+                    String emergencyReason = emergencyReasonInput == null
+                        ? ""
+                        : EmergencyUnlockPolicy.normalizeReason(emergencyReasonInput.getText().toString());
+                    boolean stillAvailable = hasEmergencyAvailable(rule, actionTime);
+                    if (!EmergencyUnlockPolicy.canEmergencyUnlock(
+                        stillAvailable,
+                        countdownFinished[0],
+                        rule.emergencyRequireReason,
+                        emergencyReason
+                    )) {
+                        updateContinueButtonState(
+                            continueButton,
+                            stillAvailable,
+                            countdownFinished[0],
+                            rule.emergencyRequireReason,
+                            emergencyReasonInput
+                        );
+                        return;
+                    }
+
+                    incrementEmergencyCount(rule.id, actionTime);
+                    temporaryAccessUntil.put(
+                        packageName,
+                        actionTime + rule.emergencyDurationMinutes * 60_000L
+                    );
+                    String eventDescription =
+                        "Notfallfreigabe für " + rule.emergencyDurationMinutes + " Minuten";
+                    if (!emergencyReason.isEmpty()) {
+                        eventDescription += " · Grund: " + emergencyReason;
+                    }
+                    ScrollShieldNativePlugin.appendProtectionEvent(
+                        this,
+                        "emergency",
+                        rule.id,
+                        eventDescription
+                    );
+                } else {
+                    if (!countdownFinished[0]) return;
+                    recordIntentionalOpen(rule.id, actionTime);
+                    temporaryAccessUntil.put(packageName, actionTime + rule.sessionMinutes * 60_000L);
+                    ScrollShieldNativePlugin.appendProtectionEvent(
+                        this,
+                        "open",
+                        rule.id,
+                        "Bewusst geöffnet für bis zu " + rule.sessionMinutes + " Minuten"
+                    );
                 }
-                ScrollShieldNativePlugin.appendProtectionEvent(
-                    this,
-                    "emergency",
-                    rule.id,
-                    eventDescription
-                );
-            } else {
-                if (!countdownFinished[0]) return;
-                recordIntentionalOpen(rule.id, actionTime);
-                temporaryAccessUntil.put(packageName, actionTime + rule.sessionMinutes * 60_000L);
-                ScrollShieldNativePlugin.appendProtectionEvent(
-                    this,
-                    "open",
-                    rule.id,
-                    "Bewusst geöffnet für bis zu " + rule.sessionMinutes + " Minuten"
-                );
+                hideOverlay();
             }
-            hideOverlay();
         });
         LinearLayout.LayoutParams continueParams = matchWidth();
         continueParams.topMargin = dp(12);
@@ -861,35 +900,42 @@ public class ScrollShieldProtectionService extends Service {
         layoutParams.gravity = Gravity.TOP | Gravity.START;
         layoutParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
 
-        overlayView = scrollView;
-        try {
-            windowManager.addView(overlayView, layoutParams);
-            ScrollShieldNativePlugin.appendProtectionEvent(
-                this,
-                strict ? "block" : "warning",
-                rule.id,
-                strict
-                    ? strictReason
-                    : adaptiveFrictionActive
-                        ? "Adaptive Anti-Binge-Pause: " + effectiveNormalDelaySeconds
-                            + " Sekunden nach " + recentWarningOpens + " bewussten Öffnungen"
-                        : antiBingeWarning
-                            ? "Anti-Binge-Warnung vor erneuter Öffnung"
-                            : "Bewusste Öffnungspause ausgelöst"
-            );
-            startCountdown(
-                countdown,
-                continueButton,
-                countdownSeconds,
-                !strict || emergencyAvailable,
-                countdownFinished,
-                strict && rule.emergencyRequireReason,
-                emergencyReasonInput
-            );
-        } catch (RuntimeException error) {
-            overlayView = null;
-            overlayPackage = null;
-            error.printStackTrace();
+        synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            if (!isCurrentRuntimeConfigGeneration(actionConfigGeneration)) {
+                overlayPackage = null;
+                return;
+            }
+
+            overlayView = scrollView;
+            try {
+                windowManager.addView(overlayView, layoutParams);
+                ScrollShieldNativePlugin.appendProtectionEvent(
+                    this,
+                    strict ? "block" : "warning",
+                    rule.id,
+                    strict
+                        ? strictReason
+                        : adaptiveFrictionActive
+                            ? "Adaptive Anti-Binge-Pause: " + effectiveNormalDelaySeconds
+                                + " Sekunden nach " + recentWarningOpens + " bewussten Öffnungen"
+                            : antiBingeWarning
+                                ? "Anti-Binge-Warnung vor erneuter Öffnung"
+                                : "Bewusste Öffnungspause ausgelöst"
+                );
+                startCountdown(
+                    countdown,
+                    continueButton,
+                    countdownSeconds,
+                    !strict || emergencyAvailable,
+                    countdownFinished,
+                    strict && rule.emergencyRequireReason,
+                    emergencyReasonInput
+                );
+            } catch (RuntimeException error) {
+                overlayView = null;
+                overlayPackage = null;
+                error.printStackTrace();
+            }
         }
     }
 
