@@ -863,7 +863,7 @@ public class ScrollShieldProtectionService extends Service {
                         return;
                     }
 
-                    incrementEmergencyCount(rule.id, actionTime);
+                    if (!incrementEmergencyCount(rule.id, actionTime)) return;
                     temporaryAccessUntil.put(
                         packageName,
                         actionTime + rule.emergencyDurationMinutes * 60_000L
@@ -881,7 +881,7 @@ public class ScrollShieldProtectionService extends Service {
                     );
                 } else {
                     if (!countdownFinished[0]) return;
-                    recordIntentionalOpen(rule.id, actionTime);
+                    if (!recordIntentionalOpen(rule.id, actionTime)) return;
                     temporaryAccessUntil.put(packageName, actionTime + rule.sessionMinutes * 60_000L);
                     ScrollShieldNativePlugin.appendProtectionEvent(
                         this,
@@ -1138,7 +1138,7 @@ public class ScrollShieldProtectionService extends Service {
         return current + increment;
     }
 
-    private void recordIntentionalOpen(String appId, long now) {
+    private boolean recordIntentionalOpen(String appId, long now) {
         SharedPreferences preferences = getNativePreferences();
         String key = OPEN_KEY_PREFIX + getDayKey(now) + "_" + appId;
         JSONArray result = new JSONArray();
@@ -1155,7 +1155,7 @@ public class ScrollShieldProtectionService extends Service {
 
         result.put(now);
         while (result.length() > 100) result.remove(0);
-        preferences.edit().putString(key, result.toString()).apply();
+        return preferences.edit().putString(key, result.toString()).commit();
     }
 
     private int countRecentOpens(String appId, int windowMinutes, long now) {
@@ -1206,10 +1206,10 @@ public class ScrollShieldProtectionService extends Service {
         );
     }
 
-    private void incrementEmergencyCount(String appId, long now) {
+    private boolean incrementEmergencyCount(String appId, long now) {
         SharedPreferences preferences = getNativePreferences();
         String key = EMERGENCY_KEY_PREFIX + getDayKey(now) + "_" + appId;
-        preferences.edit().putInt(key, preferences.getInt(key, 0) + 1).apply();
+        return preferences.edit().putInt(key, preferences.getInt(key, 0) + 1).commit();
     }
 
     private boolean isInsideBlockedHours(String blockHours, long now) {
