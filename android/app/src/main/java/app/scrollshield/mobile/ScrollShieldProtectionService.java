@@ -62,6 +62,7 @@ public class ScrollShieldProtectionService extends Service {
     private static final long MAX_USAGE_TICK_MS = 5_000L;
     private static final AtomicBoolean RUNNING = new AtomicBoolean(false);
     private static volatile String publishedConfigGeneration = "";
+    private static volatile long publishedConfigOwnerStartRequestAt;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Map<String, ProtectionRule> rulesByPackage = new HashMap<>();
@@ -230,6 +231,9 @@ public class ScrollShieldProtectionService extends Service {
                 }
 
                 serviceStartRequestAtOnCreate = ScrollShieldNativePlugin.getLastProtectionStartRequestAt(this);
+                if (!publishedConfigGeneration.isEmpty()) {
+                    publishedConfigOwnerStartRequestAt = serviceStartRequestAtOnCreate;
+                }
                 refreshProtectionNotification();
             }
             return START_STICKY;
@@ -240,7 +244,10 @@ public class ScrollShieldProtectionService extends Service {
     public void onDestroy() {
         synchronized (ProtectionServiceDispatchGuard.LOCK) {
             RUNNING.set(false);
-            publishedConfigGeneration = "";
+            if (publishedConfigOwnerStartRequestAt == serviceStartRequestAtOnCreate) {
+                publishedConfigGeneration = "";
+                publishedConfigOwnerStartRequestAt = 0L;
+            }
 
             boolean controlledDispatchDestroy =
                 ProtectionServiceDispatchGuard.consumeControlledStopDestroy();
@@ -568,6 +575,7 @@ public class ScrollShieldProtectionService extends Service {
             cachedConfigJson = configJson;
             cachedConfigGeneration = configGeneration;
             publishedConfigGeneration = configGeneration;
+            publishedConfigOwnerStartRequestAt = serviceStartRequestAtOnCreate;
             rulesByPackage.clear();
             rulesByPackage.putAll(nextRulesByPackage);
             focusMode = nextFocusMode;
