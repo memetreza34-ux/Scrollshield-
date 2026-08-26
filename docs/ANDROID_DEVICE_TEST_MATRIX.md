@@ -75,8 +75,9 @@ Do not reuse evidence from a different build number.
 | APP-04 | Uninstall the final installed protected app | Running service stops within the configuration-health interval, persisted activation clears, and diagnostics retain `target_app_missing`. |
 | APP-05 | Disable the final active rule | Running service stops, no empty foreground service remains, and diagnostics retain `no_active_rules`. |
 | APP-06 | Clone or work-profile variant | Record package visibility and behavior; do not mark supported unless the exact package is validated. |
-| APP-07 | Durable config sync before protection start | Start protection after changing active targets or rules. Native sync must return only after `configJson`, unavailable-app metadata, and a new `protectionConfigGeneration` are durably committed. The following start request must expose the same `startRequestConfigGeneration`; if the commit is forced to fail, no Android service start may be dispatched. |
+| APP-07 | Durable config sync before protection start | Start protection after changing active targets or rules. Native sync must return only after `configJson`, unavailable-app metadata, and a new `protectionConfigGeneration` are durably committed. The following start request must expose the same `startRequestConfigGeneration`; if the candidate commit is forced to fail but rollback succeeds, no Android service start may be dispatched and the previous durable config remains authoritative. |
 | APP-08 | Config generation changes before start confirmation | Pause after a valid start request is persisted but before the foreground start is confirmed, then durably sync a different config generation. The delayed confirmation must fail closed with `start_failed`, must not advance `lastProtectionStartAt`, and must clear activation rather than running under an unbound configuration. |
+| APP-09 | Candidate and rollback persistence both fail | Force the candidate config commit to fail and force restoration of the previous tuple to report failure too. `protectionConfigWriteStateCertain` must become `false` / Debug `UNSICHER`; no new app start, boot/update recovery start, pending-current acceptance, or foreground confirmation may be accepted in that process. A service that was already running must keep its last published confirmed rules and must not publish the rejected candidate. Restore storage, perform a clean successful config sync, verify `protectionConfigWriteStateCertain=true` / Debug `SICHER`, and only then allow a new generation-bound start. |
 
 ## Commitment Mode Lifecycle
 
@@ -175,6 +176,7 @@ Every copied diagnostic JSON must contain at least:
 - persisted protection activation and live service state
 - whether an installed configured target is available
 - `protectionConfigGeneration`
+- `protectionConfigWriteStateCertain`
 - `startRequestConfigGeneration`
 - `lastProtectionStartRequestAt`
 - `lastProtectionStartAt`
@@ -186,7 +188,7 @@ The in-app Permissions status panel must derive its label from both persisted ac
 
 Lifecycle-race evidence must capture diagnostic JSON before and after each boundary. The ordered relation between `lastProtectionStartRequestAt`, `lastProtectionStartAt`, and `lastProtectionStopAt` is part of acceptance, not just the visible button label.
 
-For `APP-07` and `APP-08`, additionally capture `protectionConfigGeneration` and `startRequestConfigGeneration`. A confirmed request must show equality; a config change before confirmation must show a different current generation and end fail-closed without a new `lastProtectionStartAt`.
+For `APP-07`, `APP-08`, and `APP-09`, additionally capture `protectionConfigGeneration`, `protectionConfigWriteStateCertain`, and `startRequestConfigGeneration`. A confirmed request must show equality and certainty; a config change before confirmation must fail closed; a double write failure must show `protectionConfigWriteStateCertain=false` until a later clean sync restores certainty.
 
 For `LIFE-15`, additionally capture the generation carried by the stale action if instrumentation/debug hooks are used, plus the current `lastProtectionStartRequestAt` before and after delivery. The stale action must produce no new terminal evidence.
 
@@ -220,7 +222,7 @@ The Android release candidate remains blocked until:
 7. Controlled shutdown paths, terminal stop winners, newer restart generations, and current notification-action generations retain their specific evidence instead of being overwritten by delayed start confirmation, stale actions, or `unexpected_service_destroy`.
 8. The Permissions screen correctly distinguishes `start-pending`, `start-interrupted`, `unclean-process-stop`, active, deliberately stopped, stale-activation, and running-without-activation states.
 9. `LIFE-12` through `LIFE-15` pass on the exact candidate, including strict request/stop/restart ordering, old-service teardown isolation, and stale notification-action rejection.
-10. `APP-07` and `APP-08` pass on the exact candidate, proving durable config commit before start and fail-closed behavior when the config generation changes before foreground confirmation.
+10. `APP-07` through `APP-09` pass on the exact candidate, proving durable config commit before start, fail-closed behavior on config change before confirmation, and start/recovery blocking during unresolved double-write uncertainty.
 11. Emergency unlock countdown/reason friction and the daily maximum pass `LIFE-11` on the exact candidate without network transmission of the local reason.
 12. `UI-06` proves the block overlay remains scrollable and both safe-return and emergency actions stay reachable with maximum font scaling and the software keyboard visible.
 13. The copied diagnostic JSON matches the installed version and build under test.
