@@ -23,12 +23,12 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 | G1 | Architektur & Repo-Prozess | **FERTIG** | React/TS, lokale Daten, Capacitor/Native Android, Draft-PR-Prozess und Verantwortungsgrenzen sind dokumentiert | bei Architekturänderung erneut öffnen |
 | G2 | Datenmodell & Migration | **TEILWEISE** | starke transaktionale/V0.7-Migration im Source; reale Alt-Daten-Evidenz fehlt | echter V0.7-Upgrade-Test + bytegenauer Archivvergleich |
 | G3 | Kern-UI/UX & Accessibility | **TEILWEISE** | Release-Screens und Source-A11y-Checks existieren; reale Usability-/Large-Font-/TalkBack-Evidenz fehlt | physische Accessibility- und User-Research-Sessions |
-| G4 | Native Android Schutz | **TEILWEISE** | atomare Stops, persistenter Start-Handshake, generationgebundene durable Config, Candidate-Rollback, process-lokaler Config-Write-Certainty-State, stabile Rule-Snapshot-Publikation, serialisierte Dispatches und generationgebundene Notification-Stop-Aktionen sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + APP-07..09 + LIFE-12..15 + DISPATCH-01..05 + Process-Kill real |
+| G4 | Native Android Schutz | **TEILWEISE** | atomare Stops, persistenter Start-Handshake, durable Config-Generation, Candidate-Rollback/Write-Certainty, getrennte veröffentlichte Runtime-Generation, generationgebundene temporäre Grants/Overlays, serialisierte Dispatches und generationgebundene Notification-Stop-Aktionen sind im Source implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + APP-07..10 + LIFE-12..15 + DISPATCH-01..05 + Process-Kill real |
 | G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First-Manifest, Privacy-Guard, gepinnter Gradle-SHA256 und `check:supply-chain` existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-Check + Dependency-/Manifest-Snapshot + finaler Binary-Audit + Threat-Review |
-| G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` inklusive `check:native-stop-atomicity`, `check:start-handshake`, `check:config-durability`, `check:lifecycle` und `check:android-instrumentation` ist vorbereitet; GitHub Runner liefert weiterhin keine ausgeführten Steps | kompletter echter Verify-Lauf auf exaktem Head |
-| G7 | Android Instrumentation/E2E | **TEILWEISE** | App-/Notification-, Prerequisite-, Boot/Update-, Start-/Destroy-, Process-Loss-, Config-Durability-/Write-Certainty-, Start↔Stop-, Service-Dispatch- und stale-PendingIntent-Verträge existieren; echte Android-Ausführung fehlt | `connectedDebugAndroidTest` + APP-07..09 + LIFE-12..15 + DISPATCH-01..05 + Pre-/Post-Confirmation-Process-Kill real |
+| G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` inklusive `check:native-stop-atomicity`, `check:start-handshake`, `check:config-durability`, `check:lifecycle`, `check:device-matrix` und `check:android-instrumentation` ist vorbereitet; GitHub Runner liefert weiterhin keine ausgeführten Steps | kompletter echter Verify-Lauf auf exaktem Head |
+| G7 | Android Instrumentation/E2E | **TEILWEISE** | App-/Notification-, Prerequisite-, Boot/Update-, Start-/Destroy-, Process-Loss-, Config-Durability-/Write-Certainty-/Runtime-Generation-, Start↔Stop-, Service-Dispatch- und stale-PendingIntent-Verträge existieren; echte Android-Ausführung fehlt | `connectedDebugAndroidTest` + APP-07..10 + LIFE-12..15 + DISPATCH-01..05 + Pre-/Post-Confirmation-Process-Kill real |
 | G8 | Performance & Batterie | **TEILWEISE** | Worker/Coordinator-Architektur und Shutdown-Drain im Source; reale JUnit-/Instrumentation-/Gradle-/Device-Evidenz fehlt | Worker-/Coordinator-JUnit + Usage-Flush-Instrumentation real ausführen + `assembleDebug` + 12h-Baseline |
-| G9 | Physical Device Matrix | **FEHLT** | Matrix inklusive APP-07..09 und LIFE-12..15 ist definiert; DISPATCH-01..05 sind spezifiziert, aber reale Geräte-Evidence fehlt | Pflichtgeräte/Szenarien mit Build-ID, Diagnose-JSON, Logcat und Screenrecord vollständig dokumentieren |
+| G9 | Physical Device Matrix | **FEHLT** | Matrix inklusive APP-07..10 und LIFE-12..15 ist definiert; DISPATCH-01..05 sind spezifiziert, aber reale Geräte-Evidence fehlt | Pflichtgeräte/Szenarien mit Build-ID, Diagnose-JSON, Logcat und Screenrecord vollständig dokumentieren |
 | G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Evidence-Schema v2 existiert; Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Kandidaten-SHA + echte Referenzen |
 | G11 | Legal / Privacy / Support | **TEILWEISE** | Dokumente/Struktur existieren; finale reale Identität, Support-Mailbox und öffentliche Privacy-Domain fehlen | keine Platzhalter + überprüfbare öffentliche Angaben |
 | G12 | Store / Play Review | **TEILWEISE** | Submission Packet, Screenshots und Deklarationstexte vorbereitet; finaler AAB/Reviewer-Nachweis fehlt | gegen signierten AAB verifizierte Angaben + Videos |
@@ -56,15 +56,6 @@ Vor einem Config-Write wird der alte Config-/Availability-/Generation-Tupelzusta
 
 Ein bereits laufender Schutz arbeitet weiter mit seiner letzten bestätigten Regelbasis. Ein erster Start ohne durable Config bleibt blockiert.
 
-Der Service veröffentlicht neue Regeln erst nach zwei generationstreuen Lock-Grenzen:
-
-```text
-Snapshot configJson + configGeneration
-→ lokal parsen
-→ aktuelle configJson + configGeneration erneut prüfen
-→ nur bei exakter Gleichheit rulesByPackage übernehmen
-```
-
 ### Config Write Certainty
 
 Process-lokal gilt:
@@ -75,13 +66,35 @@ candidate=false + rollback=true  → SICHER
 candidate=false + rollback=false → UNSICHER
 ```
 
-Bei `UNSICHER` dürfen im selben Prozess kein neuer App-Start, kein Boot-/Update-Startrequest und keine current Pending-/Confirmation-Entscheidung erfolgen. Erst ein späterer erfolgreicher Config-Commit setzt den Zustand wieder auf `SICHER`.
+Bei `UNSICHER` dürfen im selben Prozess kein neuer App-Start, kein Boot-/Update-Startrequest und keine current Pending-/Confirmation-Entscheidung erfolgen. Preference-basierte Config darf die bereits veröffentlichte Runtime-Regelbasis nicht ersetzen. Erst ein späterer erfolgreicher Config-Commit setzt den Zustand wieder auf `SICHER`.
 
-Diagnose/Debug exportiert bzw. zeigt:
+### Published Runtime Config / Grants / Overlay
+
+Die tatsächlich vom laufenden Dienst veröffentlichte Regelgeneration wird zusätzlich als Evidence geführt:
+
+```text
+protectionRuntimeConfigGeneration
+```
+
+Bei `UNSICHER` bleibt diese Generation auf der letzten bestätigten Runtime-Regelbasis.
+
+Bei einem bestätigten `G1 → G2`-Publish gilt dagegen:
+
+```text
+alte temporaryAccessUntil-Grants löschen
+altes Overlay + Countdown entfernen
+G2 als Runtime-Generation veröffentlichen
+```
+
+Overlay-Aktionen erfassen `actionConfigGeneration` und prüfen sie vor `WindowManager.addView(...)` sowie direkt vor `Bewusst öffnen`/Notfall-Freigabe erneut unter dem Dispatch-Lock. Eine stale `G1`-Aktion darf nach `G2` keinen neuen Grant und kein `open`-/`emergency`-Event erzeugen.
+
+Diagnose/Debug zeigt damit:
 
 ```text
 protectionConfigWriteStateCertain
-SICHER / UNSICHER
+protectionConfigGeneration
+protectionRuntimeConfigGeneration
+startRequestConfigGeneration
 ```
 
 ### Lifecycle / Dispatch
@@ -102,22 +115,24 @@ Pflichtbestandteile sind insbesondere:
 - `check:config-durability`;
 - `check:start-handshake`;
 - `check:lifecycle`;
+- `check:device-matrix`;
 - `check:native-stop-atomicity`;
 - `ProtectionConfigDurabilityStoreTest`;
 - `ProtectionConfigWriteCertaintyPolicyTest`;
+- `ProtectionConfigRuntimePolicyTest`;
 - `ProtectionConfigDurabilityInstrumentedTest`;
 - `ProtectionServiceLifecyclePolicyTest`;
 - `ProtectionServiceDispatchGuardTest`;
 - `docs/PROTECTION_CONFIG_DURABILITY.md`;
 - `docs/PROTECTION_SERVICE_DISPATCH_RACES.md`;
-- `docs/ANDROID_DEVICE_TEST_MATRIX.md` mit APP-07..09 und LIFE-12..15.
+- `docs/ANDROID_DEVICE_TEST_MATRIX.md` mit APP-07..10 und LIFE-12..15.
 
 ## Aktueller Arbeitsfokus
 
 1. G6 extern entsperren und `npm run verify` auf exaktem Head ausführen.
 2. Android JUnit + `assembleDebug`.
 3. `connectedDebugAndroidTest`.
-4. APP-07 bis APP-09 real ausführen, einschließlich Candidate-/Rollback-Storage-Failure und `UNSICHER→SICHER`-Recovery.
+4. APP-07 bis APP-10 real ausführen, einschließlich Candidate-/Rollback-Storage-Failure, `UNSICHER→SICHER`, Runtime-Generation sowie stale Overlay-/Grant-Aktionen.
 5. LIFE-12 bis LIFE-15 real ausführen.
 6. DISPATCH-01 bis DISPATCH-05 real ausführen.
 7. Pre-/Post-Confirmation Process Loss real prüfen.
@@ -137,15 +152,17 @@ Damit sind insbesondere **nicht als bestanden belegt**:
 - `check:start-handshake`;
 - `check:config-durability`;
 - `check:lifecycle`;
+- `check:device-matrix`;
 - `check:android-instrumentation`;
 - Android JUnit;
 - `ProtectionConfigWriteCertaintyPolicyTest`;
+- `ProtectionConfigRuntimePolicyTest`;
 - Android Instrumentation;
 - Gradle Debug Build / APK;
-- APP-07 bis APP-09;
+- APP-07 bis APP-10;
 - LIFE-12 bis LIFE-15;
 - DISPATCH-01 bis DISPATCH-05;
-- reale Storage-Failure-/`start-pending`-/`start-interrupted`-/`unclean-process-stop`-/PendingIntent-Evidence.
+- reale Storage-Failure-/Overlay-/Grant-/`start-pending`-/`start-interrupted`-/`unclean-process-stop`-/PendingIntent-Evidence.
 
 ## Änderungsregel
 
