@@ -13,7 +13,7 @@ describe('native protection recovery policy', () => {
     expect(getInstalledActiveProtectionIds(appsConfig, ['youtube'])).toEqual(['instagram']);
   });
 
-  it('recovers only a safe stale or confirmed process-loss state with an installed active target', () => {
+  it('restarts only a safe stale activation with an installed active target', () => {
     expect(
       shouldRecoverStaleProtection(
         { enabled: true, running: false, health: 'stale-activation' },
@@ -25,7 +25,7 @@ describe('native protection recovery policy', () => {
         { enabled: true, running: false, health: 'unclean-process-stop' },
         ['instagram'],
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       shouldRecoverStaleProtection(
         { enabled: true, running: false, health: 'start-pending' },
