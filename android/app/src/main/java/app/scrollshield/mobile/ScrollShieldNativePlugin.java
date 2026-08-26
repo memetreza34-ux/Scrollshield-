@@ -421,7 +421,7 @@ public class ScrollShieldNativePlugin extends Plugin {
         call.resolve(result);
     }
 
-    public static void appendProtectionEvent(
+    public static boolean appendProtectionEvent(
         Context context,
         String type,
         String appId,
@@ -464,9 +464,10 @@ public class ScrollShieldNativePlugin extends Plugin {
                             ProtectionDiagnosticPolicy.normalizeMessage(description, "Systemwarnung")
                         );
                 }
-                editor.commit();
+                return editor.commit();
             } catch (JSONException error) {
                 error.printStackTrace();
+                return false;
             }
         }
     }
