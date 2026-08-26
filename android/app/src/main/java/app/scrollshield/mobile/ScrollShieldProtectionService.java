@@ -61,6 +61,7 @@ public class ScrollShieldProtectionService extends Service {
     private static final long CONFIGURATION_HEALTH_INTERVAL_MS = 30_000L;
     private static final long MAX_USAGE_TICK_MS = 5_000L;
     private static final AtomicBoolean RUNNING = new AtomicBoolean(false);
+    private static volatile String publishedConfigGeneration = "";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Map<String, ProtectionRule> rulesByPackage = new HashMap<>();
@@ -101,6 +102,10 @@ public class ScrollShieldProtectionService extends Service {
 
     public static boolean isRunning() {
         return RUNNING.get();
+    }
+
+    public static String getPublishedConfigGeneration() {
+        return publishedConfigGeneration;
     }
 
     @Override
@@ -182,7 +187,10 @@ public class ScrollShieldProtectionService extends Service {
                 ProtectionServiceDispatchGuard.dispatchControlledStop(this);
                 return START_NOT_STICKY;
             }
-            if (!ScrollShieldNativePlugin.hasConfiguredApps(this)) {
+            if (
+                ProtectionConfigDurabilityStore.isWriteStateCertain()
+                    && !ScrollShieldNativePlugin.hasConfiguredApps(this)
+            ) {
                 stopForProtectionPrerequisite(
                     ProtectionStopReasonPolicy.TARGET_APP_MISSING,
                     "Keine aktive installierte Ziel-App ist mehr konfiguriert; der Android-Schutz wurde gestoppt"
@@ -232,6 +240,7 @@ public class ScrollShieldProtectionService extends Service {
     public void onDestroy() {
         synchronized (ProtectionServiceDispatchGuard.LOCK) {
             RUNNING.set(false);
+            publishedConfigGeneration = "";
 
             boolean controlledDispatchDestroy =
                 ProtectionServiceDispatchGuard.consumeControlledStopDestroy();
@@ -327,16 +336,18 @@ public class ScrollShieldProtectionService extends Service {
         long now = System.currentTimeMillis();
         if (now - lastConfigurationHealthCheckMs >= CONFIGURATION_HEALTH_INTERVAL_MS) {
             lastConfigurationHealthCheckMs = now;
-            boolean hasConfiguredApps;
-            synchronized (ProtectionServiceDispatchGuard.LOCK) {
-                hasConfiguredApps = ScrollShieldNativePlugin.hasConfiguredApps(this);
-            }
-            if (!hasConfiguredApps) {
-                stopForProtectionPrerequisite(
-                    ProtectionStopReasonPolicy.TARGET_APP_MISSING,
-                    "Keine aktive installierte Ziel-App ist mehr verfügbar; der Android-Schutz wurde gestoppt"
-                );
-                return;
+            if (ProtectionConfigDurabilityStore.isWriteStateCertain()) {
+                boolean hasConfiguredApps;
+                synchronized (ProtectionServiceDispatchGuard.LOCK) {
+                    hasConfiguredApps = ScrollShieldNativePlugin.hasConfiguredApps(this);
+                }
+                if (!hasConfiguredApps) {
+                    stopForProtectionPrerequisite(
+                        ProtectionStopReasonPolicy.TARGET_APP_MISSING,
+                        "Keine aktive installierte Ziel-App ist mehr verfügbar; der Android-Schutz wurde gestoppt"
+                    );
+                    return;
+                }
             }
         }
 
@@ -556,6 +567,7 @@ public class ScrollShieldProtectionService extends Service {
             );
             cachedConfigJson = configJson;
             cachedConfigGeneration = configGeneration;
+            publishedConfigGeneration = configGeneration;
             rulesByPackage.clear();
             rulesByPackage.putAll(nextRulesByPackage);
             focusMode = nextFocusMode;
