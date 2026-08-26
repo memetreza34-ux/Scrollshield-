@@ -19,6 +19,8 @@ const paths = {
   startPolicyTest: `${javaTestRoot}/ProtectionStartHandshakePolicyTest.java`,
   configStore: `${javaRoot}/ProtectionConfigDurabilityStore.java`,
   configStoreTest: `${javaTestRoot}/ProtectionConfigDurabilityStoreTest.java`,
+  runtimePolicy: `${javaRoot}/ProtectionConfigRuntimePolicy.java`,
+  runtimePolicyTest: `${javaTestRoot}/ProtectionConfigRuntimePolicyTest.java`,
   diagnostics: `${javaRoot}/ScrollShieldDiagnosticsPlugin.java`,
   bridge: 'src/lib/nativeProtection.ts',
   bridgeTest: 'src/lib/nativeProtection.test.ts',
@@ -75,6 +77,16 @@ requirePattern(
 );
 forbidText('configStore', '.apply()', 'Start-critical config storage must not use apply().');
 requirePattern('configStoreTest', /generationNormalizationAcceptsOnlyCanonicalUuidValues[\s\S]*generationEqualityIsExactAfterNormalization/, 'Config-generation JUnit contract is incomplete.');
+requirePattern(
+  'runtimePolicy',
+  /canUsePublishedRuntimeState[\s\S]*shouldInvalidateRuntimeState/,
+  'Lifecycle must retain a separate published runtime config-generation policy.',
+);
+requirePattern(
+  'runtimePolicyTest',
+  /certainWritesRequirePublishedGenerationToStillMatchPersistence[\s\S]*uncertainWritesKeepOnlyLastPublishedGenerationUsable[\s\S]*publishedGenerationChangeInvalidatesExistingRuntimeState/,
+  'Runtime config JUnit must cover certain, uncertain and generation-change behavior.',
+);
 
 requirePattern(
   'plugin',
@@ -138,8 +150,18 @@ requirePattern(
 );
 requirePattern(
   'service',
-  /onDestroy\(\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*RUNNING\.set\(false\)[\s\S]*consumeControlledStopDestroy\(\)[\s\S]*shouldRecordUnexpectedDestroy[\s\S]*UNEXPECTED_SERVICE_DESTROY_CODE/,
-  'onDestroy must publish dying state first and classify only true unexpected destruction.',
+  /onDestroy\(\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*RUNNING\.set\(false\)[\s\S]*publishedConfigGeneration = ""[\s\S]*consumeControlledStopDestroy\(\)[\s\S]*shouldRecordUnexpectedDestroy[\s\S]*UNEXPECTED_SERVICE_DESTROY_CODE/,
+  'onDestroy must clear live runtime-generation evidence and classify only true unexpected destruction.',
+);
+requirePattern(
+  'service',
+  /refreshConfiguration\(\)[\s\S]*if \(!ProtectionConfigDurabilityStore\.isWriteStateCertain\(\)\) return;[\s\S]*shouldInvalidateRuntimeState[\s\S]*publishedConfigGeneration = configGeneration[\s\S]*temporaryAccessUntil\.clear\(\)[\s\S]*hideOverlay\(\)/,
+  'Lifecycle must preserve last published rules during uncertainty and invalidate grants/overlay on confirmed generation change.',
+);
+requirePattern(
+  'service',
+  /showOverlay\([\s\S]*actionConfigGeneration = cachedConfigGeneration[\s\S]*setOnClickListener[\s\S]*isCurrentRuntimeConfigGeneration\(actionConfigGeneration\)[\s\S]*temporaryAccessUntil\.put/,
+  'Old overlay actions must be generation-checked before creating runtime grants.',
 );
 
 requirePattern(
@@ -205,24 +227,24 @@ requirePattern('health', /case 'start-pending':[\s\S]*STARTET[\s\S]*case 'start-
 
 requirePattern(
   'diagnostics',
-  /protectionConfigGeneration[\s\S]*startRequestConfigGeneration[\s\S]*lastProtectionStartRequestAt[\s\S]*lastProtectionStartAt[\s\S]*lastProtectionStopAt[\s\S]*lastProtectionStopCode[\s\S]*lastProtectionStopMessage/,
-  'Native diagnostics must expose config/lifecycle evidence.',
+  /protectionConfigGeneration[\s\S]*protectionConfigWriteStateCertain[\s\S]*protectionRuntimeConfigGeneration[\s\S]*startRequestConfigGeneration[\s\S]*lastProtectionStartRequestAt[\s\S]*lastProtectionStartAt[\s\S]*lastProtectionStopAt[\s\S]*lastProtectionStopCode[\s\S]*lastProtectionStopMessage/,
+  'Native diagnostics must expose persisted/runtime config and lifecycle evidence.',
 );
 requirePattern(
   'diagnosticsBridge',
-  /protectionConfigGeneration:\s*string[\s\S]*startRequestConfigGeneration:\s*string[\s\S]*lastProtectionStartRequestAt:\s*number[\s\S]*lastProtectionStartAt:\s*number[\s\S]*lastProtectionStopAt:\s*number/,
-  'TypeScript diagnostics must type config/lifecycle evidence.',
+  /protectionConfigGeneration:\s*string[\s\S]*protectionConfigWriteStateCertain:\s*boolean[\s\S]*protectionRuntimeConfigGeneration:\s*string[\s\S]*startRequestConfigGeneration:\s*string[\s\S]*lastProtectionStartRequestAt:\s*number[\s\S]*lastProtectionStartAt:\s*number[\s\S]*lastProtectionStopAt:\s*number/,
+  'TypeScript diagnostics must type persisted/runtime config and lifecycle evidence.',
 );
-requirePattern('debug', /Letzte Startanforderung[\s\S]*Letzter Schutzstart[\s\S]*Letzter Stoppzeitpunkt[\s\S]*Letzter Stoppcode[\s\S]*Letzter Stoppgrund/, 'Debug UI must retain lifecycle evidence rows.');
-requirePattern('debugTest', /notifications_missing/, 'Debug regression test must retain exact stop diagnostics.');
+requirePattern('debug', /Config-Schreibzustand[\s\S]*Config-Generation[\s\S]*Runtime-Config[\s\S]*Startrequest-Config[\s\S]*Letzte Startanforderung[\s\S]*Letzter Schutzstart[\s\S]*Letzter Stoppcode/, 'Debug UI must retain runtime config and lifecycle evidence rows.');
+requirePattern('debugTest', /protectionRuntimeConfigGeneration[\s\S]*Runtime-Config[\s\S]*notifications_missing/, 'Debug regression test must retain runtime config and exact stop diagnostics.');
 requirePattern('permissions', /NativeProtection\.getStatus\(\)[\s\S]*NativeProtectionStatusPanel/, 'Permissions screen must render native truth.');
 requirePattern('permissionsTest', /Wiederherstellung[\s\S]*Schutz/, 'Permissions tests must retain recovery behavior.');
 
-for (const id of ['LIFE-12', 'LIFE-13', 'LIFE-14', 'LIFE-15', 'APP-07', 'APP-08']) {
+for (const id of ['LIFE-12', 'LIFE-13', 'LIFE-14', 'LIFE-15', 'APP-07', 'APP-08', 'APP-09', 'APP-10']) {
   requirePattern('matrix', new RegExp(`\\| ${id} \\|`), `Device matrix is missing ${id}.`);
 }
 requirePattern('dispatchSpec', /DISPATCH-01[\s\S]*DISPATCH-02[\s\S]*DISPATCH-03[\s\S]*DISPATCH-04[\s\S]*DISPATCH-05/, 'Dispatch race specification is incomplete.');
-requirePattern('configSpec', /commit\(\)[\s\S]*expectedConfigGeneration[\s\S]*startRequestConfigGeneration[\s\S]*APP-07[\s\S]*APP-08/, 'Config durability lifecycle specification is incomplete.');
+requirePattern('configSpec', /commit\(\)[\s\S]*writeStateCertain[\s\S]*temporary[\s\S]*overlay[\s\S]*APP-07[\s\S]*APP-08[\s\S]*APP-09[\s\S]*APP-10/i, 'Config durability lifecycle specification is incomplete.');
 
 if (findings.length > 0) {
   console.log('Protection lifecycle diagnostics check failed:\n');
@@ -231,5 +253,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection lifecycle diagnostics check passed. Durable config-bound starts, atomic stops, serialized dispatch, stale notification rejection, bounded destroy suppression, lifecycle health, diagnostics and physical evidence requirements remain guarded.',
+  'Protection lifecycle diagnostics check passed. Durable config-bound starts, runtime config generation, stale grant/overlay invalidation, atomic stops, serialized dispatch, stale notification rejection, lifecycle health, diagnostics and physical evidence remain guarded.',
 );
