@@ -29,7 +29,7 @@ Capture the following before each scenario:
 - Installation source: debug APK, internal testing, closed testing, or release candidate
 - Clean install or upgrade path
 - Copied Android diagnostic JSON
-- Screen recording for permission, overlay, notification, migration, lifecycle, recovery, commitment, adaptive-friction, and lifecycle-race scenarios
+- Screen recording for permission, overlay, notification, migration, lifecycle, recovery, commitment, adaptive-friction, runtime-config, and lifecycle-race scenarios
 - Relevant `adb logcat` excerpt for failures
 - Result: `PASS`, `FAIL`, or `BLOCKED`
 - Defect or GitHub issue reference for every failure
@@ -79,6 +79,17 @@ Do not reuse evidence from a different build number.
 | APP-08 | Config generation changes before start confirmation | Pause after a valid start request is persisted but before the foreground start is confirmed, then durably sync a different config generation. The delayed confirmation must fail closed with `start_failed`, must not advance `lastProtectionStartAt`, and must clear activation rather than running under an unbound configuration. |
 | APP-09 | Candidate and rollback persistence both fail | Force the candidate config commit to fail and force restoration of the previous tuple to report failure too. `protectionConfigWriteStateCertain` must become `false` / Debug `UNSICHER`; no new app start, boot/update recovery start, pending-current acceptance, or foreground confirmation may be accepted in that process. A service that was already running must keep its last published confirmed rules; `protectionRuntimeConfigGeneration` must remain on that published generation and the rejected candidate must not be published. Restore storage, perform a clean successful config sync, verify `protectionConfigWriteStateCertain=true` / Debug `SICHER`, and only then allow a new generation-bound start. |
 | APP-10 | Runtime grant and overlay invalidation across config generations | Under durable generation `G1`, obtain a normal temporary session or emergency release and separately leave an intervention overlay visible. Durably sync a changed generation `G2` that modifies, tightens, or disables the same rule. The old temporary grant must stop authorizing access as soon as `G2` is published, `protectionRuntimeConfigGeneration` must become `G2`, the `G1` overlay must be removed/rebuilt from `G2`, and an already-queued `G1` `Bewusst öffnen`/emergency action must not create a new temporary grant or append an `open`/`emergency` event after `G2`. During an APP-09 `UNSICHER` state, by contrast, the running service must continue only its last already-published confirmed generation until a clean sync succeeds. |
+
+## Runtime Configuration and Action Durability
+
+| ID | Scenario | Acceptance criteria |
+| --- | --- | --- |
+| RUNTIME-01 | Temporary access revoked on config generation change | Create a normal or emergency temporary grant under `G1`, durably publish `G2`, and verify the old grant stops authorizing access immediately. |
+| RUNTIME-02 | Stale overlay action cannot authorize after G2 | Leave a `G1` overlay visible, publish `G2`, then trigger the stale action. It must create no grant and append no `open` or `emergency` event. |
+| RUNTIME-03 | Uncertain write keeps last published runtime only | Force candidate and rollback persistence failure. While `protectionConfigWriteStateCertain=false`, the running service may use only its last already-published confirmed runtime generation; the rejected candidate must not become active. |
+| RUNTIME-04 | Usage boundary across generation switch | Keep a protected app in one foreground session while changing from `G1` to `G2`. Usage accumulated before the confirmed generation boundary must remain attributed to the rule active under `G1`; usage after the boundary starts under `G2`. A rule ID introduced only by `G2` must never receive pre-boundary usage. |
+| RUNTIME-05 | Intentional-open evidence survives process loss | Complete `Bewusst öffnen`, immediately terminate the process/service after authorization, restart/recover, and verify the successful intentional-open history is still present and contributes to Anti-Binge warning/block thresholds. If durable history or the local `open` event cannot be committed, no temporary access may be granted. |
+| RUNTIME-06 | Emergency counter survives process loss | Use an emergency release, immediately terminate the process/service after authorization, restart/recover, and verify the daily emergency counter remains consumed. If the durable counter or local `emergency` event cannot be committed, no temporary access may be granted. |
 
 ## Commitment Mode Lifecycle
 
@@ -192,6 +203,8 @@ Lifecycle-race evidence must capture diagnostic JSON before and after each bound
 
 For `APP-07` through `APP-10`, additionally capture `protectionConfigGeneration`, `protectionConfigWriteStateCertain`, `protectionRuntimeConfigGeneration`, and `startRequestConfigGeneration`. For `APP-09`, the runtime generation must remain on the last published confirmed generation while certainty is false. For `APP-10`, screen-record the visible overlay/grant transition across `G1 → G2` and compare event history before/after the stale overlay action; no post-`G2` `open`/`emergency` event may be attributable to the stale `G1` action.
 
+For `RUNTIME-01` through `RUNTIME-06`, capture the same config-generation fields plus event history and the affected local usage/open/emergency evidence before and after the action. `RUNTIME-04` must prove the persisted usage bucket split around the confirmed `G1 → G2` boundary. `RUNTIME-05` and `RUNTIME-06` must include a process/service termination immediately after successful authorization and a post-recovery read proving the durable counter/history survived.
+
 For `LIFE-15`, additionally capture the generation carried by the stale action if instrumentation/debug hooks are used, plus the current `lastProtectionStartRequestAt` before and after delivery. The stale action must produce no new terminal evidence.
 
 Commitment evidence must show the exact native `running` and `enabled` state immediately before activation, the installed-target result, the persisted deadline, the blocked in-app stop action, recovery start availability, and the dashboard response if native protection later stops.
@@ -225,10 +238,11 @@ The Android release candidate remains blocked until:
 8. The Permissions screen correctly distinguishes `start-pending`, `start-interrupted`, `unclean-process-stop`, active, deliberately stopped, stale-activation, and running-without-activation states.
 9. `LIFE-12` through `LIFE-15` pass on the exact candidate, including strict request/stop/restart ordering, old-service teardown isolation, and stale notification-action rejection.
 10. `APP-07` through `APP-10` pass on the exact candidate, proving durable config commit before start, fail-closed behavior on config change before confirmation, start/recovery blocking during unresolved double-write uncertainty, preservation of the last published confirmed runtime state during uncertainty, and invalidation of old temporary grants/overlay actions after a new durable generation is published.
-11. Emergency unlock countdown/reason friction and the daily maximum pass `LIFE-11` on the exact candidate without network transmission of the local reason.
-12. `UI-06` proves the block overlay remains scrollable and both safe-return and emergency actions stay reachable with maximum font scaling and the software keyboard visible.
-13. The copied diagnostic JSON matches the installed version and build under test.
-14. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, instrumentation, and `assembleDebug`.
-15. Play reviewer videos demonstrate the same tested build.
-16. `COMMIT-01` through `COMMIT-06` pass on the exact candidate, including refusal before live protection is ready, blocked in-app stop, restart recovery, explicit factory-reset shutdown, and honest dashboard recovery after a later native-service failure.
-17. `ADAPT-01` through `ADAPT-05` pass on the exact candidate, including deterministic 5-second escalation, the 60-second cap, strict Anti-Binge precedence, non-counting safety paths, unchanged emergency timing, and local-midnight behavior.
+11. `RUNTIME-01` through `RUNTIME-06` pass on the exact candidate, proving generation-scoped grants/overlay actions, the `G1 → G2` usage boundary, and durable intentional-open/emergency evidence that cannot be bypassed by an immediate process/service termination.
+12. Emergency unlock countdown/reason friction and the daily maximum pass `LIFE-11` on the exact candidate without network transmission of the local reason.
+13. `UI-06` proves the block overlay remains scrollable and both safe-return and emergency actions stay reachable with maximum font scaling and the software keyboard visible.
+14. The copied diagnostic JSON matches the installed version and build under test.
+15. GitHub or local verification successfully runs TypeScript, React tests, migration tests, Android JUnit tests, instrumentation, and `assembleDebug`.
+16. Play reviewer videos demonstrate the same tested build.
+17. `COMMIT-01` through `COMMIT-06` pass on the exact candidate, including refusal before live protection is ready, blocked in-app stop, restart recovery, explicit factory-reset shutdown, and honest dashboard recovery after a later native-service failure.
+18. `ADAPT-01` through `ADAPT-05` pass on the exact candidate, including deterministic 5-second escalation, the 60-second cap, strict Anti-Binge precedence, non-counting safety paths, unchanged emergency timing, and local-midnight behavior.
