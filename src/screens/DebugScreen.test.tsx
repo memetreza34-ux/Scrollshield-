@@ -40,6 +40,9 @@ describe('DebugScreen native diagnostics', () => {
       protectionEnabled: true,
       serviceRunning: false,
       configuredInstalledApps: true,
+      protectionConfigGeneration: '11111111-2222-4333-8444-555555555555',
+      protectionConfigWriteStateCertain: true,
+      startRequestConfigGeneration: '11111111-2222-4333-8444-555555555555',
       lastProtectionStartRequestAt: 1_785_998_900_000,
       lastProtectionStartAt: 1_785_999_000_000,
       lastProtectionStopAt: 1_785_999_500_000,
@@ -48,7 +51,7 @@ describe('DebugScreen native diagnostics', () => {
     });
   });
 
-  it('renders build, notification, and protection lifecycle diagnostics', async () => {
+  it('renders build, config durability, notification, and protection lifecycle diagnostics', async () => {
     render(
       <DebugScreen
         state={{ ...DEFAULT_STATE, operatingSystem: 'android' }}
@@ -68,6 +71,10 @@ describe('DebugScreen native diagnostics', () => {
     expect(screen.getByText(/Schutz-Benachrichtigung/)).toBeInTheDocument();
     expect(screen.getAllByText('DEAKTIVIERT')).toHaveLength(1);
     expect(screen.getByText('NICHT BEREIT')).toBeInTheDocument();
+    expect(screen.getByText(/Config-Schreibzustand/)).toBeInTheDocument();
+    expect(screen.getByText('SICHER')).toBeInTheDocument();
+    expect(screen.getByText(/Config-Generation/)).toBeInTheDocument();
+    expect(screen.getByText(/Startrequest-Config/)).toBeInTheDocument();
     expect(screen.getByText(/Letzte Startanforderung/)).toBeInTheDocument();
     expect(screen.getByText(/Letzter Schutzstart/)).toBeInTheDocument();
     expect(screen.getByText(/Letzter Stoppzeitpunkt/)).toBeInTheDocument();
