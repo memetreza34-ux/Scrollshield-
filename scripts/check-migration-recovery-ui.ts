@@ -61,19 +61,19 @@ requirePattern(
 requirePattern(
   appPath,
   app,
-  /if \(isLoaded && !migrationBlocked\)[\s\S]*StorageService\.saveState\(appState\)/,
+  /if \(!isLoaded \|\| migrationBlocked\) return;[\s\S]*StorageService\.saveState\(appState\)/,
   'Normal React state persistence must stay paused while migration is blocked.',
 );
 requirePattern(
   appPath,
   app,
-  /!isLoaded \|\| migrationBlocked \|\| !NativeProtection\.isAvailable\(\)[\s\S]*NativeProtection\.sync/,
-  'Native configuration sync must stay paused while migration is blocked.',
+  /!isLoaded \|\|[\s\S]*migrationBlocked \|\|[\s\S]*!appState\.hasCompletedOnboarding \|\|[\s\S]*!NativeProtection\.isAvailable\(\)[\s\S]*NativeProtection\.getStatus\(\)[\s\S]*NativeProtection\.sync/,
+  'Native configuration sync/recovery must stay paused while migration is blocked and must inspect lifecycle status first.',
 );
 requirePattern(
   appPath,
   app,
-  /!isLoaded \|\| migrationBlocked \|\| !NativeProtection\.isAvailable\(\)[\s\S]*NativeProtection\.drain/,
+  /!isLoaded \|\|[\s\S]*migrationBlocked \|\|[\s\S]*!appState\.hasCompletedOnboarding \|\|[\s\S]*!NativeProtection\.isAvailable\(\)[\s\S]*NativeProtection\.drain/,
   'Native event and usage draining must stay paused while migration is blocked.',
 );
 requirePattern(
@@ -196,5 +196,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Migration recovery UI check passed. Command wiring, app blocking, explicit migration stop reason, native-stop and restart disclosure, save/sync/drain pause, retry, local raw backup, UI guidance, and integration tests remain guarded.',
+  'Migration recovery UI check passed. Command wiring, fail-closed app guards, explicit migration stop reason, native-stop and restart disclosure, save/sync/drain pause, retry, local raw backup, UI guidance, and integration tests remain guarded.',
 );
