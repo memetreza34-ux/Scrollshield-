@@ -95,8 +95,8 @@ requireMatch(
 requireMatch(
   pluginPath,
   plugin,
-  /factoryResetProtectionData[\s\S]*NativeDrainBatchStore\.markFactoryReset[\s\S]*stopService/,
-  'Factory reset must mark native data before stopping the protection service.',
+  /factoryResetProtectionData[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*synchronized \(EVENT_LOCK\)[\s\S]*NativeDrainBatchStore\.markFactoryReset[\s\S]*ProtectionServiceDispatchGuard\.dispatchControlledStop\(context\)/,
+  'Factory reset must mark native data atomically before a serialized controlled service stop.',
 );
 
 requireMatch(
@@ -229,5 +229,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Native drain ACK contract check passed. Persistent batch, transactional journal, reset tombstone, onboarding gate, and ACK guards are present.',
+  'Native drain ACK contract check passed. Persistent batch, transactional journal, reset tombstone, serialized factory-reset stop, onboarding gate, and ACK guards are present.',
 );
