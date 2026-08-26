@@ -1,81 +1,131 @@
 import { readFile } from 'node:fs/promises';
 
-const servicePath =
-  'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldProtectionService.java';
-const policyPath = 'android/app/src/main/java/app/scrollshield/mobile/UsageAccountingPolicy.java';
-const policyTestPath = 'android/app/src/test/java/app/scrollshield/mobile/UsageAccountingPolicyTest.java';
-const matrixPath = 'docs/ANDROID_DEVICE_TEST_MATRIX.md';
+const javaRoot = 'android/app/src/main/java/app/scrollshield/mobile';
+const javaTestRoot = 'android/app/src/test/java/app/scrollshield/mobile';
 
-const [service, policy, policyTest, matrix] = await Promise.all([
-  readFile(servicePath, 'utf8'),
-  readFile(policyPath, 'utf8'),
-  readFile(policyTestPath, 'utf8'),
-  readFile(matrixPath, 'utf8'),
-]);
+const paths = {
+  service: `${javaRoot}/ScrollShieldProtectionService.java`,
+  policy: `${javaRoot}/UsageAccountingPolicy.java`,
+  policyTest: `${javaTestRoot}/UsageAccountingPolicyTest.java`,
+  coordinator: `${javaRoot}/UsageFlushCoordinator.java`,
+  coordinatorTest: `${javaTestRoot}/UsageFlushCoordinatorTest.java`,
+  worker: `${javaRoot}/UsageFlushWorker.java`,
+  workerTest: `${javaTestRoot}/UsageFlushWorkerTest.java`,
+  runtimeSpec: 'docs/PROTECTION_RUNTIME_CONFIG_STATE.md',
+  matrix: 'docs/ANDROID_DEVICE_TEST_MATRIX.md',
+} as const;
 
+const entries = await Promise.all(
+  Object.entries(paths).map(async ([key, file]) => [key, await readFile(file, 'utf8')] as const),
+);
+const source = Object.fromEntries(entries) as Record<keyof typeof paths, string>;
 const findings: string[] = [];
 
-function requirePattern(file: string, content: string, pattern: RegExp, message: string) {
-  if (pattern.test(content)) return;
-  findings.push(`${file}: ${message}`);
+function requirePattern(key: keyof typeof paths, pattern: RegExp, message: string) {
+  if (!pattern.test(source[key])) findings.push(`${paths[key]}: ${message}`);
 }
 
-function rejectPattern(file: string, content: string, pattern: RegExp, message: string) {
-  if (!pattern.test(content)) return;
-  findings.push(`${file}: ${message}`);
+function forbidPattern(key: keyof typeof paths, pattern: RegExp, message: string) {
+  if (pattern.test(source[key])) findings.push(`${paths[key]}: ${message}`);
 }
 
 requirePattern(
-  policyPath,
-  policy,
+  'policy',
   /splitAtBoundary\(long startMs, long endMs, long boundaryMs\)[\s\S]*endMs <= startMs[\s\S]*boundaryMs - startMs[\s\S]*endMs - boundaryMs/,
   'UsageAccountingPolicy must split intervals deterministically and reject backward time.',
 );
 requirePattern(
-  policyTestPath,
-  policyTest,
+  'policyTest',
   /splitsExactlyAtMidnightBoundary[\s\S]*doesNotProduceNegativeUsageWhenClockMovesBackward/,
   'JVM tests must cover midnight splitting and backward-clock safety.',
 );
+
 requirePattern(
-  servicePath,
-  service,
+  'service',
+  /recordAllowedUsage\(@Nullable String foregroundPackage, long now\)[\s\S]*ProtectionRule previousRule = rulesByPackage\.get\(lastUsagePackage\)[\s\S]*temporaryAccessUntil\.get\(lastUsagePackage\)[\s\S]*boundedEnd[\s\S]*addPendingUsage\(previousRule\.id, lastUsageTickMs, boundedEnd\)/,
+  'Allowed usage must be attributed through the rule that owned the previous measured interval.',
+);
+requirePattern(
+  'service',
   /String startDay = getDayKey\(startMs\)[\s\S]*String endDay = getDayKey\(endMs - 1L\)[\s\S]*UsageAccountingPolicy\.splitAtBoundary/,
   'Measured usage must be assigned using the interval day, not the later flush time.',
 );
 requirePattern(
-  servicePath,
-  service,
-  /String bucketKey = dayKey \+ "_" \+ appId[\s\S]*pendingUsageMs\.put\(bucketKey/,
-  'Pending usage must be keyed by local day plus app.',
+  'service',
+  /addPendingUsageBucket\(String dayKey, String appId, long durationMs\)[\s\S]*usageFlushCoordinator\.addPendingUsage\(dayKey \+ "_" \+ appId, durationMs\)/,
+  'Service must hand precomputed local-day + rule-id buckets to UsageFlushCoordinator.',
+);
+forbidPattern(
+  'service',
+  /Map<String, Long>\s+pendingUsageMs/,
+  'Service-local pendingUsageMs must not return; coordinator owns pending/in-flight accounting.',
+);
+
+requirePattern(
+  'coordinator',
+  /pendingUsageMs = new HashMap[\s\S]*addPendingUsage\(String bucketKey, long durationMs\)[\s\S]*activeBatch[\s\S]*getUnpersistedUsageMs/,
+  'Coordinator must own pending plus in-flight usage accounting.',
 );
 requirePattern(
-  servicePath,
-  service,
-  /String key = USAGE_KEY_PREFIX \+ entry\.getKey\(\)/,
-  'Flush must persist the precomputed day-and-app bucket without rebucketing to the flush day.',
-);
-rejectPattern(
-  servicePath,
-  service,
-  /String dayKey = getDayKey\(now\);[\s\S]{0,500}USAGE_KEY_PREFIX \+ dayKey \+ "_" \+ entry\.getKey\(\)/,
-  'The old flush-time day assignment must not return.',
+  'coordinator',
+  /beginFlush[\s\S]*activeBatch != null[\s\S]*snapshot = new HashMap<>\(pendingUsageMs\)[\s\S]*pendingUsageMs\.clear\(\)[\s\S]*Collections\.unmodifiableMap/,
+  'At most one immutable usage snapshot may be in flight.',
 );
 requirePattern(
-  servicePath,
-  service,
-  /String dayAndAppKey = getDayKey\(now\) \+ "_" \+ appId[\s\S]*pendingUsageMs\.containsKey\(dayAndAppKey\)/,
-  'Daily-limit checks must include only pending usage for the current local day.',
+  'coordinator',
+  /completeFlush[\s\S]*activeBatch\.id != batchId[\s\S]*if \(success\)[\s\S]*pendingUsageMs\.put/,
+  'Only the current batch may complete; failed increments must merge back into pending usage.',
 );
 requirePattern(
-  servicePath,
-  service,
+  'coordinatorTest',
+  /onlyOneFlushCanBeInFlightAndNewUsageStaysPending[\s\S]*failedFlushMergesSnapshotBackWithUsageThatArrivedDuringWrite[\s\S]*staleCompletionCannotAcknowledgeAnotherBatch[\s\S]*dailyLimitViewIncludesPendingAndInFlightUsage/,
+  'Coordinator JUnit must retain in-flight, mergeback, stale-completion and daily-limit coverage.',
+);
+
+requirePattern(
+  'worker',
+  /Executors\.newSingleThreadExecutor[\s\S]*persistAndComplete[\s\S]*completeFlush\(batch\.id, success/,
+  'Usage persistence must remain serialized off the service thread and ACK the exact batch.',
+);
+requirePattern(
+  'worker',
+  /persistBatch[\s\S]*String key = usageKeyPrefix \+ entry\.getKey\(\)[\s\S]*editor\.putLong[\s\S]*editor\.commit\(\)/,
+  'Worker must persist the precomputed bucket key synchronously without rebucketing by flush time.',
+);
+requirePattern(
+  'worker',
+  /closeAfterDrainingPending[\s\S]*drainPendingBeforeShutdown[\s\S]*beginFlush\([\s\S]*true,[\s\S]*0L/,
+  'Shutdown must force-drain pending usage through the serialized worker.',
+);
+requirePattern(
+  'workerTest',
+  /commitFailureMergesBatchBackIntoPendingAccounting[\s\S]*newUsageRemainsCountedWhileWorkerIsBlocked[\s\S]*shutdownDrainPersistsUsageAddedWhileFirstBatchIsInFlight[\s\S]*shutdownDrainRetriesOneFailedInFlightBatch/,
+  'Worker JUnit must retain commit-failure, in-flight and shutdown-drain coverage.',
+);
+
+requirePattern(
+  'service',
+  /String dayAndAppKey = getDayKey\(now\) \+ "_" \+ appId[\s\S]*usageFlushCoordinator == null[\s\S]*usageFlushCoordinator\.getUnpersistedUsageMs\(dayAndAppKey\)/,
+  'Daily-limit checks must include coordinator pending and in-flight usage for the current local day.',
+);
+requirePattern(
+  'service',
   /String previousDay = getPreviousDayKey\(now\)[\s\S]*countRecentOpensForKey[\s\S]*OPEN_KEY_PREFIX \+ previousDay/,
   'Anti-Binge windows must include previous-day opens when the rolling window crosses midnight.',
 );
+
 requirePattern(
-  matrixPath,
-  matrix,
+  'service',
+  /shouldInvalidateRuntimeState\([\s\S]*if \(invalidateRuntimeState\)[\s\S]*generationBoundaryAt = System\.currentTimeMillis\(\)[\s\S]*recordAllowedUsage\(null, generationBoundaryAt\)[\s\S]*cachedConfigGeneration = configGeneration[\s\S]*rulesByPackage\.clear\(\)/,
+  'A confirmed config generation switch must close the G1 usage interval before G2 replaces the rule map.',
+);
+requirePattern(
+  'runtimeSpec',
+  /RUNTIME-04[\s\S]*generationBoundaryAt[\s\S]*previousRule\.id[\s\S]*keine doppelte Zählung/i,
+  'Runtime specification must define the source-hardened generation usage boundary and physical evidence.',
+);
+requirePattern(
+  'matrix',
   /TIME-01[\s\S]*Daily usage, opens, and emergency counters move to the correct date/,
   'Device matrix must retain local-midnight counter validation.',
 );
@@ -87,5 +137,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Native usage accounting check passed. Measured usage is bucketed by local day before flush, daily limits use the current-day pending bucket, and Anti-Binge windows bridge midnight.',
+  'Native usage accounting check passed. Coordinator/worker ownership, local-day bucketing, pending/in-flight daily-limit accounting, shutdown drain, midnight handling, and the G1→G2 usage boundary remain guarded.',
 );
