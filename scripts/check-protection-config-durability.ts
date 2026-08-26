@@ -12,6 +12,8 @@ const paths = {
   storeTest: `${javaTestRoot}/ProtectionConfigDurabilityStoreTest.java`,
   certaintyPolicy: `${javaRoot}/ProtectionConfigWriteCertaintyPolicy.java`,
   certaintyPolicyTest: `${javaTestRoot}/ProtectionConfigWriteCertaintyPolicyTest.java`,
+  runtimePolicy: `${javaRoot}/ProtectionConfigRuntimePolicy.java`,
+  runtimePolicyTest: `${javaTestRoot}/ProtectionConfigRuntimePolicyTest.java`,
   service: `${javaRoot}/ScrollShieldProtectionService.java`,
   boot: `${javaRoot}/ScrollShieldBootReceiver.java`,
   bridge: 'src/lib/nativeProtection.ts',
@@ -66,6 +68,21 @@ requirePattern(
   'Pure-Java tests must cover all config write-certainty outcomes.',
 );
 requirePattern(
+  'runtimePolicy',
+  /canUsePublishedRuntimeState\([\s\S]*isCurrentGeneration\(evidenceGeneration, publishedGeneration\)[\s\S]*if \(!writeStateCertain\)[\s\S]*return true[\s\S]*isCurrentGeneration\(publishedGeneration, currentPersistedGeneration\)/,
+  'Runtime config policy must keep only the last published generation usable while persistence is uncertain.',
+);
+requirePattern(
+  'runtimePolicy',
+  /shouldInvalidateRuntimeState\([\s\S]*previousGeneration\.equals\(nextGeneration\)/,
+  'Runtime config policy must invalidate grants/overlay state when a new generation is published.',
+);
+requirePattern(
+  'runtimePolicyTest',
+  /certainWritesRequirePublishedGenerationToStillMatchPersistence[\s\S]*uncertainWritesKeepOnlyLastPublishedGenerationUsable[\s\S]*publishedGenerationChangeInvalidatesExistingRuntimeState/,
+  'Pure-Java tests must cover certain, uncertain, and generation-change runtime behavior.',
+);
+requirePattern(
   'store',
   /PreferenceSnapshot[\s\S]*hadConfig[\s\S]*hadUnavailableApps[\s\S]*hadUnavailableActiveApps[\s\S]*hadGeneration/,
   'Rollback must preserve whether every previous config tuple key existed, not just its fallback value.',
@@ -114,13 +131,33 @@ requirePattern(
 
 requirePattern(
   'service',
-  /cachedConfigGeneration\s*=\s*""[\s\S]*refreshConfiguration\(\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*CONFIG_GENERATION_KEY[\s\S]*nextRulesByPackage = new HashMap/,
-  'The running service must snapshot config JSON and generation under the dispatch lock before parsing a candidate.',
+  /refreshConfiguration\(\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*if \(!ProtectionConfigDurabilityStore\.isWriteStateCertain\(\)\) return;[\s\S]*CONFIG_GENERATION_KEY[\s\S]*nextRulesByPackage = new HashMap/,
+  'The running service must refuse to republish preference state while config persistence is uncertain.',
 );
 requirePattern(
   'service',
-  /refreshConfiguration\(\)[\s\S]*latestConfigJson[\s\S]*latestConfigGeneration[\s\S]*!configJson\.equals\(latestConfigJson\) \|\| !configGeneration\.equals\(latestConfigGeneration\)[\s\S]*return;[\s\S]*cachedConfigJson = configJson[\s\S]*cachedConfigGeneration = configGeneration[\s\S]*rulesByPackage\.putAll\(nextRulesByPackage\)/,
-  'Parsed rules may publish only if both config JSON and generation are still current at the second locked boundary.',
+  /refreshConfiguration\(\)[\s\S]*latestConfigJson[\s\S]*latestConfigGeneration[\s\S]*!configJson\.equals\(latestConfigJson\) \|\| !configGeneration\.equals\(latestConfigGeneration\)[\s\S]*shouldInvalidateRuntimeState[\s\S]*cachedConfigGeneration = configGeneration[\s\S]*temporaryAccessUntil\.clear\(\)[\s\S]*hideOverlay\(\)/,
+  'Publishing a new durable generation must invalidate temporary access and the old overlay.',
+);
+requirePattern(
+  'service',
+  /isCurrentRuntimeConfigGeneration\(String generation\)[\s\S]*canUsePublishedRuntimeState\([\s\S]*writeStateCertain[\s\S]*generation[\s\S]*cachedConfigGeneration[\s\S]*getCurrentGeneration/,
+  'Runtime actions must be judged against the published generation and current persistence certainty.',
+);
+requirePattern(
+  'service',
+  /enforceCurrentApp\(\)[\s\S]*isCurrentRuntimeConfigGeneration\(cachedConfigGeneration\)[\s\S]*hideOverlay\(\)[\s\S]*return;/,
+  'Rule/grant evaluation must not continue from a stale published generation after a confirmed config change.',
+);
+requirePattern(
+  'service',
+  /showOverlay\([\s\S]*actionConfigGeneration = cachedConfigGeneration[\s\S]*setOnClickListener[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*isCurrentRuntimeConfigGeneration\(actionConfigGeneration\)[\s\S]*temporaryAccessUntil\.put[\s\S]*appendProtectionEvent/,
+  'Overlay grants/events must re-check the exact generation immediately before writing access or evidence.',
+);
+requirePattern(
+  'service',
+  /WindowManager\.LayoutParams[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*isCurrentRuntimeConfigGeneration\(actionConfigGeneration\)[\s\S]*windowManager\.addView[\s\S]*appendProtectionEvent/,
+  'A stale overlay must not be published or emit a warning/block event after a config generation changes.',
 );
 requirePattern(
   'service',
@@ -176,13 +213,13 @@ for (const method of [
   requirePattern('instrumentation', new RegExp(`void\\s+${method}\\s*\\(`), `Android instrumentation is missing ${method}.`);
 }
 
-for (const id of ['APP-07', 'APP-08', 'APP-09']) {
+for (const id of ['APP-07', 'APP-08', 'APP-09', 'APP-10']) {
   requirePattern('matrix', new RegExp(`\\| ${id} \\|`), `Device matrix is missing ${id}.`);
 }
 requirePattern(
   'spec',
-  /commit\(\)[\s\S]*rollback[\s\S]*writeStateCertain[\s\S]*UNSICHER[\s\S]*APP-07[\s\S]*APP-08[\s\S]*APP-09/,
-  'Durability spec must document rollback uncertainty, generation binding, and all real device evidence.',
+  /commit\(\)[\s\S]*rollback[\s\S]*writeStateCertain[\s\S]*UNSICHER[\s\S]*temporary[\s\S]*overlay[\s\S]*APP-07[\s\S]*APP-08[\s\S]*APP-09[\s\S]*APP-10/i,
+  'Durability spec must document rollback uncertainty, runtime invalidation, and all real device evidence.',
 );
 
 requirePattern('packageJson', /"check:config-durability":\s*"tsx scripts\/check-protection-config-durability\.ts"/, 'package.json must expose check:config-durability.');
@@ -196,5 +233,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection config durability check passed. Candidate, rollback, and legacy-bootstrap certainty are explicit; uncertain writes block new starts until a clean sync succeeds, while running rules publish only from a still-current confirmed config generation.',
+  'Protection config durability check passed. Candidate/rollback certainty is explicit; uncertain writes preserve only the last published runtime generation, while confirmed generation changes invalidate stale grants and overlay actions before they can write access or events.',
 );
