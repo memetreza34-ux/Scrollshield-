@@ -25,113 +25,110 @@ function requireText(key: FileKey, text: string, message: string) {
   if (!source[key].includes(text)) findings.push(`${paths[key]}: ${message}`);
 }
 
-function forbidText(key: FileKey, text: string, message: string) {
-  if (source[key].includes(text)) findings.push(`${paths[key]}: ${message}`);
+for (const required of [
+  'recordProtectionStartRequested',
+  'stopForProtectionPrerequisite',
+  'Productive activation must not bypass the atomic start-request transaction.',
+  'Legacy text-derived prerequisite shutdown must not return.',
+]) {
+  requireText(
+    'androidProject',
+    required,
+    `Android project checker is missing current start/prerequisite architecture marker: ${required}`,
+  );
 }
 
-requireText(
-  'androidProject',
-  'recordProtectionStartRequested',
-  'Android project checker must guard the atomic generation-bound start request.',
-);
-requireText(
-  'androidProject',
-  'stopForProtectionPrerequisite',
-  'Android project checker must guard the current prerequisite-stop helper.',
-);
-forbidText(
-  'androidProject',
-  'setProtectionEnabled\\(context, true\\)',
-  'Android project checker must not require the removed direct enabled=true start write.',
-);
-forbidText(
-  'androidProject',
-  'stopForMissingPermission',
-  'Android project checker must not require the removed legacy prerequisite helper.',
-);
-
-requireText(
-  'prerequisiteStops',
+for (const required of [
   'dispatchControlledStop',
-  'Prerequisite checker must require serialized controlled Android stop dispatch.',
-);
-forbidText(
-  'prerequisiteStops',
-  'stopSelf\\(\\)',
-  'Prerequisite checker must not require the removed direct stopSelf shutdown path.',
-);
+  "'stopSelf()'",
+  'centralized atomic stop + controlled dispatch path',
+]) {
+  requireText(
+    'prerequisiteStops',
+    required,
+    `Prerequisite checker is missing controlled-stop or legacy-rejection marker: ${required}`,
+  );
+}
 
-for (const required of ['syncCommittedConfig', 'expectedConfigGeneration', 'start-pending', 'start-interrupted']) {
+for (const required of [
+  'syncCommittedConfig',
+  'expectedConfigGeneration',
+  'start-pending',
+  'start-interrupted',
+  'generation-bound',
+]) {
   requireText(
     'processLoss',
     required,
-    `Process-loss checker is missing the current generation/health contract token ${required}.`,
+    `Process-loss checker is missing current generation/health contract marker: ${required}`,
   );
 }
-forbidText(
-  'processLoss',
-  'AndroidProtection\\.startProtectionService\\(\\)',
-  'Process-loss checker must not require a generation-less native service start.',
-);
 
-for (const required of ['incrementEmergencyCount', 'recordIntentionalOpen', 'appendProtectionEvent', 'temporaryAccessUntil']) {
+for (const required of [
+  'incrementEmergencyCount',
+  'recordIntentionalOpen',
+  'appendProtectionEvent',
+  'temporaryAccessUntil',
+  'only after the counter and event are durably persisted',
+  'only after history and event evidence are durably persisted',
+]) {
   requireText(
     'configDurability',
     required,
-    `Config durability checker is missing durable authorization token ${required}.`,
+    `Config durability checker is missing durable-before-grant marker: ${required}`,
   );
 }
-forbidText(
-  'configDurability',
-  'temporaryAccessUntil\\.put[\\s\\S]*appendProtectionEvent',
-  'Config durability checker must never require granting temporary access before durable event evidence.',
-);
 
-requireText(
-  'nativeDrain',
+for (const required of [
+  'markFactoryReset',
   'dispatchControlledStop',
-  'Native drain checker must require controlled dispatch after the factory-reset tombstone.',
-);
-forbidText(
-  'nativeDrain',
-  'markFactoryReset[\\s\\S]*stopService',
-  'Native drain checker must not require a direct stopService path after factory reset.',
-);
+  'mark native data atomically before a serialized controlled service stop',
+]) {
+  requireText(
+    'nativeDrain',
+    required,
+    `Native drain checker is missing factory-reset/controlled-dispatch marker: ${required}`,
+  );
+}
 
-requireText(
-  'transparency',
+for (const required of [
   'rejectProtectionStartPrerequisite',
-  'Transparency checker must guard the shared atomic prerequisite rejection helper.',
-);
-forbidText(
-  'transparency',
-  'call\\.reject\\(\\"Notifications are required',
-  'Transparency checker must not require a bare notification prerequisite rejection.',
-);
+  'NOTIFICATIONS_MISSING',
+  'persist exact stop evidence and serialize Android stop dispatch before rejecting',
+]) {
+  requireText(
+    'transparency',
+    required,
+    `Transparency checker is missing atomic notification prerequisite marker: ${required}`,
+  );
+}
 
-for (const required of ['start-pending', 'recoverAfterProcessLoss', 'NativeProtection\\.getStatus', 'NativeProtection\\.sync']) {
+for (const required of [
+  'start-pending',
+  'recoverAfterProcessLoss',
+  'NativeProtection\\.getStatus',
+  'NativeProtection\\.sync',
+  'directly to controlled recovery before generic config sync',
+  'redundant generic config sync',
+]) {
   requireText(
     'recovery',
     required,
-    `Protection recovery checker is missing health-aware app-open recovery token ${required}.`,
+    `Protection recovery checker is missing health-aware app-open recovery marker: ${required}`,
   );
 }
-forbidText(
-  'recovery',
-  'status\\.enabled && !status\\.running && installedActiveAppIds\\.length > 0',
-  'Protection recovery checker must not collapse all enabled-but-stopped lifecycle states into one recovery state.',
-);
 
-requireText(
-  'migrationRecovery',
+for (const required of [
   'if \\(!isLoaded \\|\\| migrationBlocked\\) return;',
-  'Migration recovery checker must guard the current fail-closed save condition.',
-);
-forbidText(
-  'migrationRecovery',
-  'if \\(isLoaded && !migrationBlocked\\)',
-  'Migration recovery checker must not require the removed positive save guard form.',
-);
+  'fail-closed save condition',
+  'inspect lifecycle status first',
+]) {
+  requireText(
+    'migrationRecovery',
+    required,
+    `Migration recovery checker is missing current fail-closed guard marker: ${required}`,
+  );
+}
 
 requireText(
   'packageJson',
@@ -156,5 +153,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Checker architecture drift guard passed. Verify contracts remain aligned with generation-bound starts, atomic/controlled stops, durable grants, health-aware recovery, reset dispatch, and fail-closed migration guards.',
+  'Checker architecture drift guard passed. Verify contracts remain aligned with generation-bound starts, explicit legacy rejection rules, atomic/controlled stops, durable-before-grant authorization, health-aware app-open recovery, reset dispatch, and fail-closed migration guards.',
 );
