@@ -13,10 +13,48 @@ describe('native protection recovery policy', () => {
     expect(getInstalledActiveProtectionIds(appsConfig, ['youtube'])).toEqual(['instagram']);
   });
 
-  it('recovers only a previously enabled but stopped service with an installed active target', () => {
-    expect(shouldRecoverStaleProtection({ enabled: true, running: false }, ['instagram'])).toBe(true);
-    expect(shouldRecoverStaleProtection({ enabled: false, running: false }, ['instagram'])).toBe(false);
-    expect(shouldRecoverStaleProtection({ enabled: true, running: true }, ['instagram'])).toBe(false);
-    expect(shouldRecoverStaleProtection({ enabled: true, running: false }, [])).toBe(false);
+  it('recovers only a safe stale or confirmed process-loss state with an installed active target', () => {
+    expect(
+      shouldRecoverStaleProtection(
+        { enabled: true, running: false, health: 'stale-activation' },
+        ['instagram'],
+      ),
+    ).toBe(true);
+    expect(
+      shouldRecoverStaleProtection(
+        { enabled: true, running: false, health: 'unclean-process-stop' },
+        ['instagram'],
+      ),
+    ).toBe(true);
+    expect(
+      shouldRecoverStaleProtection(
+        { enabled: true, running: false, health: 'start-pending' },
+        ['instagram'],
+      ),
+    ).toBe(false);
+    expect(
+      shouldRecoverStaleProtection(
+        { enabled: true, running: false, health: 'start-interrupted' },
+        ['instagram'],
+      ),
+    ).toBe(false);
+    expect(
+      shouldRecoverStaleProtection(
+        { enabled: false, running: false, health: 'never-started' },
+        ['instagram'],
+      ),
+    ).toBe(false);
+    expect(
+      shouldRecoverStaleProtection(
+        { enabled: true, running: true, health: 'active' },
+        ['instagram'],
+      ),
+    ).toBe(false);
+    expect(
+      shouldRecoverStaleProtection(
+        { enabled: true, running: false, health: 'stale-activation' },
+        [],
+      ),
+    ).toBe(false);
   });
 });
