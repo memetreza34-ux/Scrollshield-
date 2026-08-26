@@ -77,8 +77,8 @@ requirePattern(
 );
 requirePattern(
   'store',
-  /ensureGenerationForExistingConfig\(Context context\)[\s\S]*if \(!writeStateCertain\) return ""[\s\S]*validateConfig\(configJson\)/,
-  'Boot-style generation bootstrap must be blocked while persistence certainty is unresolved.',
+  /ensureGenerationForExistingConfig\(Context context\)[\s\S]*if \(!writeStateCertain\) return ""[\s\S]*validateConfig\(configJson\)[\s\S]*hadGeneration[\s\S]*previousGeneration[\s\S]*putString\(CONFIG_GENERATION_KEY, generation\)\.commit\(\)[\s\S]*if \(persisted\)[\s\S]*restoreString\(rollback, CONFIG_GENERATION_KEY, hadGeneration, previousGeneration\)[\s\S]*rollback\.commit\(\)[\s\S]*isCertainAfterWrite/,
+  'Legacy generation bootstrap must rollback its candidate key and update certainty when persistence fails.',
 );
 requirePattern(
   'store',
@@ -196,5 +196,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection config durability check passed. Candidate/rollback certainty is explicit; uncertain writes block new starts until a clean sync succeeds, while running rules publish only from a still-current confirmed config generation.',
+  'Protection config durability check passed. Candidate, rollback, and legacy-bootstrap certainty are explicit; uncertain writes block new starts until a clean sync succeeds, while running rules publish only from a still-current confirmed config generation.',
 );
