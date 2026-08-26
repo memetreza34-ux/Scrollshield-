@@ -121,30 +121,71 @@ Bei `UNSICHER` gilt im selben Prozess:
 - Boot-/Update-Generation-Bootstrap ist blockiert;
 - `recordProtectionStartRequested(...)` ist blockiert;
 - eine Foreground-Confirmation kann nicht als current durchgehen;
+- preference-basierte Runtime-Config und Target-App-Prüfung werden nicht neu veröffentlicht/ausgewertet;
 - erst ein späterer erfolgreicher Config-Commit setzt den Zustand wieder auf `SICHER`.
 
 Ein bereits laufender Dienst darf seine zuvor veröffentlichte bestätigte Regelbasis weiterverwenden.
 
-### Stable Service Publication
+### Stable Service Publication / Runtime Generation
 
 `ScrollShieldProtectionService.refreshConfiguration()` verwendet zwei Lock-Grenzen:
 
 ```text
-1. configJson + configGeneration snapshotten
+1. writeStateCertain prüfen und configJson + configGeneration snapshotten
 2. lokal in nextRulesByPackage parsen
-3. configJson + configGeneration erneut prüfen
+3. writeStateCertain sowie configJson + configGeneration erneut prüfen
 4. nur bei exakter Gleichheit veröffentlichen
 ```
 
 Damit darf weder ein fehlgeschlagener Candidate noch ein während des Parsens überholter erfolgreicher Sync in `rulesByPackage` veröffentlicht werden.
 
-Der Debug-/Diagnosevertrag exportiert zusätzlich:
+Die tatsächlich veröffentlichte Service-Regelbasis wird separat als Diagnose-Evidence geführt:
 
 ```text
-protectionConfigWriteStateCertain
+protectionRuntimeConfigGeneration
 ```
 
-und zeigt im Debug-Screen `SICHER` oder `UNSICHER`.
+Sie ist **Evidence**, nicht die Persistenzquelle. Die Schutzentscheidung verwendet weiterhin `cachedConfigGeneration` plus `ProtectionConfigRuntimePolicy`.
+
+Bei `UNSICHER` bleibt nur die zuletzt veröffentlichte bestätigte Runtime-Generation nutzbar. Preferences dürfen diese Regelbasis nicht ersetzen.
+
+### Runtime Grants / Overlay Generation
+
+Bei einem bestätigten Generationwechsel `G1 → G2` gilt:
+
+```text
+alte temporaryAccessUntil-Grants löschen
+altes Overlay/Countdown entfernen
+G2 als Runtime-Generation veröffentlichen
+```
+
+Ein Overlay bindet sich beim Aufbau an `actionConfigGeneration`. Vor `WindowManager.addView(...)` und direkt vor jeder normalen oder Notfall-Freigabe wird diese Generation unter dem Dispatch-Lock erneut geprüft.
+
+Eine stale `G1`-Action nach `G2` darf daher weder:
+
+- `temporaryAccessUntil` neu setzen;
+- ein `open`-Event schreiben;
+- ein `emergency`-Event schreiben;
+- ein altes warning/block-Overlay neu veröffentlichen.
+
+Pure-Java-Vertrag:
+
+```text
+ProtectionConfigRuntimePolicyTest
+```
+
+Er trennt ausdrücklich bestimmte Persistenz, `UNSICHER` mit letzter veröffentlichter Generation sowie bestätigte Generationwechsel.
+
+Der Debug-/Diagnosevertrag exportiert:
+
+```text
+protectionConfigGeneration
+protectionConfigWriteStateCertain
+protectionRuntimeConfigGeneration
+startRequestConfigGeneration
+```
+
+und zeigt im Debug-Screen `SICHER`/`UNSICHER` sowie `Config-Generation`, `Runtime-Config` und `Startrequest-Config`.
 
 ## Android Service Dispatch Races
 
@@ -157,7 +198,7 @@ ProtectionServiceDispatchGuard.LOCK
 → EVENT_LOCK
 ```
 
-Unter dem Dispatch-Lock werden Config Candidate-Commit/Rollback, Startrequest + Android-Startdispatch, Stop-Persistenz + `stopService()`, Factory Reset sowie kritische Service-Lifecycle-Grenzen serialisiert.
+Unter dem Dispatch-Lock werden Config Candidate-Commit/Rollback, Startrequest + Android-Startdispatch, Stop-Persistenz + `stopService()`, Factory Reset sowie kritische Service-Lifecycle- und Overlay-Action-Grenzen serialisiert.
 
 ### Controlled-stop Destroy Token
 
@@ -185,7 +226,7 @@ configChangeBeforeConfirmationFailsClosedWithoutConfirmingOldRequest
 legacyDurableConfigReceivesGenerationBeforeBootStyleStartRequest
 ```
 
-Die tatsächliche Zustellung einer alten/queued Notification-`PendingIntent`-Aktion sowie reale Storage-/Commit-/Rollback-Fehler sind Device-/System-E2E-Evidence. Ein Source- oder Persistenztest darf nicht als Ersatz gewertet werden.
+Die tatsächliche Lebensdauer eines WindowManager-Overlays, bereits gequeueete UI-Aktionen, alte Notification-`PendingIntent`-Aktionen sowie reale Storage-/Commit-/Rollback-Fehler sind Device-/System-E2E-Evidence. Ein Source- oder Persistenztest darf nicht als Ersatz gewertet werden.
 
 ## Android JUnit / Build
 
@@ -201,6 +242,7 @@ Relevant sind insbesondere:
 - `ProtectionServiceDispatchGuardTest`;
 - `ProtectionConfigDurabilityStoreTest`;
 - `ProtectionConfigWriteCertaintyPolicyTest`;
+- `ProtectionConfigRuntimePolicyTest`;
 - bestehende Coordinator-/Worker-/Stop-Code-/Lifecycle-Tests.
 
 ## Device-/E2E-Evidence
@@ -209,7 +251,8 @@ Relevant sind insbesondere:
 
 - `APP-07`: durable Config-Sync + gebundener Start; Candidate-Fehler darf keine Candidate-Regel veröffentlichen;
 - `APP-08`: Config-Wechsel zwischen Request und Confirmation endet `FAILED_CLOSED`/`start_failed`;
-- `APP-09`: Candidate- und Rollback-Commit schlagen fehl → `UNSICHER`, neuer Start/Recovery blockiert, laufender Dienst bleibt auf letzter bestätigter Regelbasis, erfolgreicher späterer Sync stellt `SICHER` wieder her;
+- `APP-09`: Candidate- und Rollback-Commit schlagen fehl → `UNSICHER`, neuer Start/Recovery blockiert, `protectionRuntimeConfigGeneration` bleibt auf letzter veröffentlichter Regelbasis, erfolgreicher späterer Sync stellt `SICHER` wieder her;
+- `APP-10`: bestätigter `G1 → G2`-Wechsel invalidiert alte temporäre Grants und alte Overlay-Aktionen; stale `G1` darf nach `G2` keinen Grant oder `open`/`emergency`-Event erzeugen;
 - `LIFE-12` bis `LIFE-15`: Start-/Stop-/Restart-/Notification-Races.
 
 Die Dispatch-Spezifikation verlangt zusätzlich `DISPATCH-01` bis `DISPATCH-05`.
@@ -229,15 +272,17 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 - `check:start-handshake`;
 - `check:config-durability`;
 - `check:lifecycle`;
+- `check:device-matrix`;
 - `check:android-instrumentation`;
 - Android JUnit;
 - `ProtectionConfigWriteCertaintyPolicyTest`;
+- `ProtectionConfigRuntimePolicyTest`;
 - Android Instrumentation;
 - Gradle Debug Build / APK;
-- `APP-07` bis `APP-09`;
+- `APP-07` bis `APP-10`;
 - `LIFE-12` bis `LIFE-15`;
 - `DISPATCH-01` bis `DISPATCH-05`;
-- reale Storage-Failure-/Process-Kill-/Start-/Stop-/PendingIntent-Race-Evidence.
+- reale Storage-Failure-/Overlay-/Grant-/Process-Kill-/Start-/Stop-/PendingIntent-Race-Evidence.
 
 ## Reihenfolge nach Entsperrung
 
@@ -245,7 +290,7 @@ Deshalb sind aktuell **nicht als bestanden belegt**:
 2. `npm run verify`;
 3. `./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace`;
 4. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace`;
-5. `APP-07` bis `APP-09` inklusive Storage-/Rollback-Failure real ausführen;
+5. `APP-07` bis `APP-10` inklusive Storage-/Rollback-Failure und stale Overlay-/Grant-Aktionen real ausführen;
 6. `LIFE-12` bis `LIFE-15` real ausführen;
 7. `DISPATCH-01` bis `DISPATCH-05` mit Diagnose-JSON und Logcat ausführen;
 8. Pre-/Post-Confirmation Process Loss real prüfen;
