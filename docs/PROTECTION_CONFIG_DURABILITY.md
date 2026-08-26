@@ -2,7 +2,7 @@
 
 Status: **verbindlicher Source-/Evidence-Vertrag**
 
-Diese Spezifikation ergänzt `PROTECTION_START_HANDSHAKE.md`. Sie definiert die persistente Grenze zwischen einer neuen Schutzkonfiguration und einem Android-Service-Start.
+Diese Spezifikation ergänzt `PROTECTION_START_HANDSHAKE.md`. Sie definiert die persistente Grenze zwischen einer neuen Schutzkonfiguration, dem Android-Service-Start und der bereits laufenden Runtime-Regelbasis.
 
 ## 1. Problem
 
@@ -10,7 +10,7 @@ Diese Spezifikation ergänzt `PROTECTION_START_HANDSHAKE.md`. Sie definiert die 
 
 Auch `SharedPreferences.commit()` kann fehlschlagen. Ein fehlgeschlagener Candidate darf deshalb weder als erfolgreich synchronisiert gelten noch vom bereits laufenden Service als neue Regelbasis übernommen werden.
 
-Zusätzlich darf ein konkurrierender zweiter Config-Sync nicht unbemerkt mit einem Startrequest der vorherigen Konfiguration vermischt werden.
+Zusätzlich dürfen ein konkurrierender Config-Sync, eine bestehende temporäre Freigabe oder ein bereits aufgebautes Overlay nicht unbemerkt über eine neue Config-Generation hinweg weiterwirken.
 
 ## 2. Durable Config Commit
 
@@ -84,7 +84,7 @@ keine Foreground-Confirmation als current
 
 bis ein späterer **erfolgreicher Config-Commit** `writeStateCertain` wieder auf `SICHER` setzt.
 
-Damit wird ein doppelter Speicherfehler nicht als bestätigte Persistenz behandelt.
+Solange `UNSICHER` gilt, darf `ScrollShieldProtectionService.refreshConfiguration()` den Preference-Tupelzustand nicht neu veröffentlichen. Die Preferences sind in diesem Zustand nicht hinreichend vertrauenswürdig; maßgeblich bleibt ausschließlich die bereits veröffentlichte `cachedConfigGeneration` mit ihren In-Memory-Regeln.
 
 ## 5. Laufender Service veröffentlicht nur stabile Snapshots
 
@@ -94,11 +94,15 @@ Damit wird ein doppelter Speicherfehler nicht als bestätigte Persistenz behande
 ProtectionServiceDispatchGuard.LOCK
 ```
 
-Danach wird die Config in einen lokalen Rule-Snapshot geparst. Bevor dieser Snapshot in `rulesByPackage`, `focusMode` und `hasActiveConfiguredRule` veröffentlicht wird, liest der Service unter demselben Lock erneut die aktuelle Config und Generation.
+und nur bei `writeStateCertain == true`.
 
-Nur wenn beide Grenzen identisch sind:
+Danach wird die Config in einen lokalen Rule-Snapshot geparst. Bevor dieser Snapshot in `rulesByPackage`, `focusMode` und `hasActiveConfiguredRule` veröffentlicht wird, liest der Service unter demselben Lock erneut die aktuelle Config und Generation und prüft erneut die Write Certainty.
+
+Nur wenn beide Grenzen identisch und sicher sind:
 
 ```text
+writeStateCertain == true
+UND
 parsedConfigJson == latestConfigJson
 UND
 parsedConfigGeneration == latestConfigGeneration
@@ -106,11 +110,78 @@ parsedConfigGeneration == latestConfigGeneration
 
 wird der Snapshot veröffentlicht.
 
-Ändert sich die Config während des Parsens oder wird ein fehlgeschlagener Candidate zurückgerollt, wird dieser Parse verworfen und der nächste Poll beginnt mit der aktuellen bestätigten Generation.
+Ändert sich die Config während des Parsens, wird der Candidate verworfen. Wird der Schreibzustand währenddessen `UNSICHER`, bleibt die vorherige veröffentlichte Runtime-Regelbasis erhalten.
 
 Auch der periodische Target-App-Health-Check darf die Config nicht parallel zu Candidate-Commit/Rollback bewerten.
 
-## 6. App-Start bindet die Generation
+## 6. Runtime-Grants und Overlays sind generationgebunden
+
+Die laufende Schutzlogik besitzt eigene flüchtige Runtime-Evidence:
+
+```text
+temporaryAccessUntil
+sichtbares Overlay + Button-Callbacks
+cachedConfigGeneration
+```
+
+`ProtectionConfigRuntimePolicy` trennt zwei Fälle.
+
+### Bestätigter Generationwechsel
+
+Wenn eine neue durable Generation `G2` erfolgreich veröffentlicht wird und vorher `G1` aktiv war:
+
+```text
+G1 → G2
+```
+
+werden vor der weiteren Regelauswertung:
+
+```text
+alle temporaryAccessUntil-Grants gelöscht
+altes Overlay entfernt
+alte Countdown-/Overlay-Interaktion beendet
+```
+
+Damit darf eine unter `G1` erteilte normale Session oder Notfallfreigabe keine geänderte/strengere Regel aus `G2` umgehen.
+
+### Config wechselt zwischen Poll und Aktion
+
+Vor jeder Regelauswertung prüft der Service, ob seine veröffentlichte Generation noch zur aktuell bestätigten Generation gehört.
+
+Ein Overlay erfasst beim Aufbau:
+
+```text
+actionConfigGeneration = cachedConfigGeneration
+```
+
+Vor dem tatsächlichen `WindowManager.addView(...)` und direkt im `Bewusst öffnen`-/Notfall-Callback wird die Generation erneut unter `ProtectionServiceDispatchGuard.LOCK` geprüft.
+
+Ist die Action stale:
+
+```text
+kein temporaryAccessUntil.put(...)
+kein open-Event
+kein emergency-Event
+kein stale warning/block-Overlay-Publish
+Overlay entfernen / Aktion verwerfen
+```
+
+### UNSICHER ist anders als ein bestätigter G1→G2-Wechsel
+
+Bei `writeStateCertain == false` darf ein eventuell im Preference-Speicher sichtbarer Candidate die veröffentlichte Runtime-Basis nicht ersetzen.
+
+Deshalb gilt:
+
+```text
+UNSICHER
+→ nur Evidence aus cachedConfigGeneration bleibt nutzbar
+→ keine Preference-Neuveröffentlichung
+→ kein neuer persistenter Start
+```
+
+Erst ein späterer erfolgreicher Config-Commit erzeugt wieder eine bestätigte neue Generation; bei deren Publish werden alte Grants und Overlays invalidiert.
+
+## 7. App-Start bindet die Generation
 
 TypeScript erhält nach erfolgreichem Sync:
 
@@ -134,7 +205,7 @@ expectedConfigGeneration == protection_config_generation
 
 Fehlt die Generation, ist sie veraltet oder ist der Schreibzustand `UNSICHER`, wird kein neuer Startrequest akzeptiert. Der Pfad endet fail-closed mit `start_failed`.
 
-## 7. Startrequest bindet die Config dauerhaft
+## 8. Startrequest bindet die Config dauerhaft
 
 `recordProtectionStartRequested(...)` persistiert atomar:
 
@@ -148,7 +219,7 @@ startRequestConfigGeneration
 
 Ein noch frischer Pending-Request ist nur idempotent, wenn seine gebundene Config-Generation weiterhin aktuell und der Schreibzustand sicher ist.
 
-## 8. Foreground-Confirmation prüft erneut
+## 9. Foreground-Confirmation prüft erneut
 
 `recordProtectionServiceStarted(...)` darf `lastStartAt` nur schreiben, wenn:
 
@@ -160,7 +231,7 @@ startRequestConfigGeneration == protectionConfigGeneration
 
 Ändert sich die Config zwischen Request und Confirmation oder wird der Schreibzustand unsicher, liefert die Confirmation `FAILED_CLOSED`, `enabled=false` wird persistiert und `start_failed` bleibt als Stop-Evidence zurück.
 
-## 9. Boot-/App-Update-Kompatibilität
+## 10. Boot-/App-Update-Kompatibilität
 
 Ältere Installationen können bereits ein dauerhaft gespeichertes `protection_config`, aber noch keine Config-Generation besitzen.
 
@@ -172,9 +243,11 @@ Der Boot-/App-Update-Pfad darf deshalb einmalig eine Generation nachrüsten, abe
 - ein `apps`-Array vorhanden ist;
 - die neue Generation selbst erfolgreich per `commit()` persistiert wurde.
 
-Fehlt oder scheitert eine dieser Bedingungen, bleibt Recovery fail-closed.
+Der Bootstrap verwendet dieselbe Rollback-/Certainty-Regel. Ein fehlgeschlagener Generation-Commit darf keine lediglich process-sichtbare UUID als gültig zurücklassen.
 
-## 10. Diagnose
+Fehlt oder scheitert eine Bedingung, bleibt Recovery fail-closed.
+
+## 11. Diagnose
 
 Der Native-Snapshot muss mindestens enthalten:
 
@@ -196,7 +269,7 @@ SICHER
 UNSICHER
 ```
 
-## 11. Automatisierte Verträge
+## 12. Automatisierte Verträge
 
 Pflichtcheck:
 
@@ -212,9 +285,13 @@ Der Checker schützt insbesondere:
 - vollständigen Pre-Commit-Snapshot;
 - synchronen Rollback;
 - `ProtectionConfigWriteCertaintyPolicy`;
+- `ProtectionConfigRuntimePolicy`;
 - Startblockade bei `UNSICHER`;
+- keine Preference-Neuveröffentlichung bei `UNSICHER`;
 - kein `apply()` im Durability-Store;
 - zweistufige Config-/Generation-Prüfung vor Service-Publish;
+- Invalidation alter temporärer Grants/Overlays bei bestätigtem Generationwechsel;
+- Generation-Recheck vor Overlay-Publish sowie `open`-/`emergency`-Action;
 - generationgebundene Pending-/Start-/Confirmation-Pfade;
 - Diagnose-/Debug-Evidence.
 
@@ -223,6 +300,7 @@ Pure-Java-Verträge:
 ```text
 ProtectionConfigDurabilityStoreTest
 ProtectionConfigWriteCertaintyPolicyTest
+ProtectionConfigRuntimePolicyTest
 ```
 
 Android-Instrumentation:
@@ -235,9 +313,11 @@ ProtectionConfigDurabilityInstrumentedTest.configChangeBeforeConfirmationFailsCl
 ProtectionConfigDurabilityInstrumentedTest.legacyDurableConfigReceivesGenerationBeforeBootStyleStartRequest
 ```
 
+Die tatsächliche Lebensdauer eines WindowManager-Overlays und die Zustellung eines bereits gequeued UI-Callbacks bleiben Device-/System-E2E-Evidence und werden nicht durch einen Source-Checker ersetzt.
+
 Diese Verträge sind erst dann Execution-Evidence, wenn sie auf dem exakten Candidate tatsächlich ausgeführt wurden.
 
-## 12. Reale Device-Evidence
+## 13. Reale Device-Evidence
 
 ### APP-07 — Durable config sync before protection start / write failure
 
@@ -269,7 +349,8 @@ protectionConfigWriteStateCertain=false
 Debug: Config-Schreibzustand = UNSICHER
 kein neuer Startrequest
 kein Boot-/Update-Recovery-Start
-laufender Dienst veröffentlicht keine Candidate-Regel
+keine Preference-Neuveröffentlichung im laufenden Service
+laufender Dienst nutzt weiter seine letzte veröffentlichte bestätigte Regelbasis
 ```
 
 Danach Storage-Bedingung wiederherstellen und einen neuen Config-Sync erfolgreich committen.
@@ -279,9 +360,28 @@ Erwartung:
 ```text
 protectionConfigWriteStateCertain=true
 Debug: Config-Schreibzustand = SICHER
-neue Generation darf wieder normal gestartet werden
+neue Generation darf wieder normal gestartet/veröffentlicht werden
 ```
 
-## 13. Gate-Regel
+### APP-10 — Temporäre Freigabe / Overlay über Generationwechsel
 
-G4/G7/G9 bleiben unvollständig, bis JUnit/Instrumentation sowie APP-07, APP-08 und APP-09 auf dem exakten Kandidaten real ausgeführt und dokumentiert wurden.
+Unter `G1`:
+
+1. normale temporäre Session oder Notfallfreigabe erzeugen;
+2. separat ein Intervention-Overlay offen lassen;
+3. anschließend eine geänderte/strengere Config als `G2` erfolgreich synchronisieren.
+
+Erwartung:
+
+```text
+G1 temporary grant wird nicht mehr akzeptiert
+G1 Overlay wird entfernt oder aus G2 neu aufgebaut
+queued G1 Bewusst-öffnen-Aktion → kein neuer Grant, kein open-Event
+queued G1 Notfall-Aktion        → kein neuer Grant, kein emergency-Event
+```
+
+Das Eventlog ist unmittelbar vor und nach dem stale Action-Versuch zu sichern.
+
+## 14. Gate-Regel
+
+G4/G7/G9 bleiben unvollständig, bis JUnit/Instrumentation sowie APP-07 bis APP-10 auf dem exakten Kandidaten real ausgeführt und dokumentiert wurden.
