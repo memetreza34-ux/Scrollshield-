@@ -10,6 +10,7 @@ const steps: Step[] = [
   { command: 'npm', args: ['run', 'check:runtime'], required: true },
   { command: 'npm', args: ['run', 'check:version'], required: true },
   { command: 'npm', args: ['run', 'check:android'], required: true },
+  { command: 'npm', args: ['run', 'check:checker-drift'], required: true },
   { command: 'npm', args: ['run', 'check:device-matrix'], required: true },
   { command: 'npm', args: ['run', 'check:lifecycle'], required: true },
   { command: 'npm', args: ['run', 'check:native-stop-atomicity'], required: true },
