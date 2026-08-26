@@ -2,7 +2,7 @@
 
 Status: **verbindlicher Source-/Evidence-Vertrag**
 
-Diese Spezifikation ergänzt `PROTECTION_CONFIG_DURABILITY.md`. Sie beschreibt, welche bereits laufenden In-Memory-Zustände an eine veröffentlichte Config-Generation gebunden sind.
+Diese Spezifikation ergänzt `PROTECTION_CONFIG_DURABILITY.md`. Sie beschreibt, welche bereits laufenden In-Memory-Zustände an eine veröffentlichte Config-Generation gebunden sind und welche lokalen Schutzaktionen vor einer temporären Freigabe dauerhaft bestätigt sein müssen.
 
 ## Grundregel
 
@@ -16,6 +16,17 @@ G1 veröffentlicht
 → G2 veröffentlichen
 → G1-Laufzeitzustand invalidieren
 ```
+
+Zusätzlich gilt für jede neue temporäre Freigabe:
+
+```text
+Schutzentscheidung gültig
+→ Enforcement-Zähler/History durable speichern
+→ lokales Action-Event durable speichern
+→ erst dann temporären Zugang gewähren
+```
+
+Ein Speicherfehler darf niemals zu Zugang ohne bestätigte Schutz-Evidence führen.
 
 ## Generation-scoped Runtime State
 
@@ -89,6 +100,46 @@ und schreibt die bis zur Grenze anrechenbare Zeit deshalb unter `previousRule.id
 
 Damit ist `RUNTIME-04` **source-seitig gehärtet**. Das ersetzt nicht die reale Android-Evidence der gespeicherten Usage-Buckets.
 
+## Durable Intentional Open
+
+`recordIntentionalOpen(...)` ist eine Autorisierungsgrenze, weil seine History die spätere Anti-Binge-Entscheidung beeinflusst.
+
+Darum gilt:
+
+```text
+countdown abgeschlossen
+→ recordIntentionalOpen(...).commit() == true
+→ appendProtectionEvent(type=open).commit() == true
+→ temporaryAccessUntil.put(...)
+```
+
+`SharedPreferences.apply()` ist für diese Autorisierungs-Evidence verboten.
+
+Schlägt der History-Commit oder der Event-Commit fehl, bleibt das Overlay aktiv und es wird **kein** temporärer Zugang erteilt.
+
+## Durable Emergency Unlock
+
+Der Emergency-Tageszähler ist enforcement-kritisch, weil `maxPerDay` sonst durch einen Prozesskill umgangen werden könnte.
+
+Darum gilt:
+
+```text
+Emergency weiterhin berechtigt
+→ incrementEmergencyCount(...).commit() == true
+→ appendProtectionEvent(type=emergency).commit() == true
+→ temporaryAccessUntil.put(...)
+```
+
+Auch hier ist `apply()` verboten. Ein fehlgeschlagener Commit erzeugt keinen temporären Zugang.
+
+### Konservative Partial-Failure-Semantik
+
+Counter/History und Event sind zwei synchrone persistente Schritte. Wenn der erste Commit erfolgreich war, der zweite aber fehlschlägt, wird **kein Zugang** erteilt. Der bereits bestätigte Counter/History-Schritt wird nicht zurückgedreht.
+
+Das kann bei einem seltenen Storage-Fehler konservativ eine Öffnung bzw. Emergency-Nutzung zählen, obwohl der Zugang anschließend nicht gewährt wurde. Es kann aber nicht zu einem Schutz-Bypass führen.
+
+Ebenso kann ein Prozesskill nach beiden erfolgreichen Commits, aber vor dem In-Memory-Grant, einen bestätigten Action-Count ohne tatsächliche Session hinterlassen. Auch das ist bewusst fail-closed statt fail-open.
+
 ## Reale Device-/E2E-Evidence
 
 ### RUNTIME-01 — Temporary access revoked on config generation change
@@ -122,6 +173,38 @@ keine doppelte Zählung über der Grenze
 
 Dieser Fall benötigt reale Android-Evidence und bleibt bis zur Ausführung offen.
 
+### RUNTIME-05 — Intentional-open evidence survives process loss
+
+1. Erzeuge eine normale `Bewusst öffnen`-Freigabe.
+2. Prüfe unmittelbar danach, dass Open-History und lokales `open`-Event vorhanden sind.
+3. Beende den Prozess unmittelbar nach der Aktion und starte ScrollShield erneut.
+4. Prüfe erneut die Anti-Binge-History und Event-Evidence.
+
+Erwartung:
+
+```text
+Open-History bleibt vorhanden
+open-Event bleibt vorhanden
+Anti-Binge berücksichtigt die bestätigte Öffnung weiterhin
+kein Zugang wurde erteilt, bevor beide Commits bestätigt waren
+```
+
+### RUNTIME-06 — Emergency counter survives process loss
+
+1. Konfiguriere einen kleinen `maxPerDay`-Wert.
+2. Führe einen gültigen Emergency-Unlock aus.
+3. Beende den Prozess unmittelbar danach und starte App/Schutz erneut.
+4. Prüfe Tageszähler, lokales Emergency-Event und verbleibende Freigaben.
+
+Erwartung:
+
+```text
+Emergency-Tageszähler bleibt konsumiert
+emergency-Event bleibt vorhanden
+maxPerDay kann durch Prozessneustart nicht zurückgesetzt werden
+kein Emergency-Zugang ohne erfolgreich bestätigten Counter- und Event-Commit
+```
+
 ## Automatisierter Source-Vertrag
 
 ```text
@@ -138,6 +221,9 @@ Der Check schützt:
 - `UNSICHER`-Semantik für zuletzt veröffentlichte Runtime-Regeln;
 - die Reihenfolge `recordAllowedUsage(null, generationBoundaryAt)` **vor** G2-Rule-Publish/Grant-Invalidierung;
 - Verwendung der noch aktuellen `previousRule.id` beim Abschluss des alten Usage-Ticks;
+- synchrones `commit()` für Intentional-Open-History und Emergency-Tageszähler;
+- `appendProtectionEvent(...)` als überprüfbaren synchronen Commit;
+- keine temporäre Freigabe vor bestätigter History-/Counter- und Event-Persistenz;
 - Verdrahtung in `verify` und `readiness`.
 
-Der Check ist **keine** reale Android-Evidence für RUNTIME-01 bis RUNTIME-04.
+Der Check ist **keine** reale Android-Evidence für RUNTIME-01 bis RUNTIME-06.
