@@ -572,6 +572,11 @@ public class ScrollShieldProtectionService extends Service {
                 cachedConfigGeneration,
                 configGeneration
             );
+            if (invalidateRuntimeState) {
+                long generationBoundaryAt = System.currentTimeMillis();
+                recordAllowedUsage(null, generationBoundaryAt);
+            }
+
             cachedConfigJson = configJson;
             cachedConfigGeneration = configGeneration;
             publishedConfigGeneration = configGeneration;
