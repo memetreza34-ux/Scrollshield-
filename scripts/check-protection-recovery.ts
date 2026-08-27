@@ -4,6 +4,7 @@ const appPath = 'src/App.tsx';
 const policyPath = 'src/lib/protectionRecovery.ts';
 const policyTestPath = 'src/lib/protectionRecovery.test.ts';
 const appTestPath = 'src/App.protectionRecovery.test.tsx';
+const preparedStartTestPath = 'src/lib/nativeProtectionPreparedStart.test.ts';
 const bootReceiverPath =
   'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldBootReceiver.java';
 const pluginPath =
@@ -11,11 +12,21 @@ const pluginPath =
 const bootRecoveryTestPath =
   'android/app/src/androidTest/java/app/scrollshield/mobile/BootRecoveryInstrumentedTest.java';
 
-const [app, policy, policyTest, appTest, bootReceiver, plugin, bootRecoveryTest] = await Promise.all([
+const [
+  app,
+  policy,
+  policyTest,
+  appTest,
+  preparedStartTest,
+  bootReceiver,
+  plugin,
+  bootRecoveryTest,
+] = await Promise.all([
   readFile(appPath, 'utf8'),
   readFile(policyPath, 'utf8'),
   readFile(policyTestPath, 'utf8'),
   readFile(appTestPath, 'utf8'),
+  readFile(preparedStartTestPath, 'utf8'),
   readFile(bootReceiverPath, 'utf8'),
   readFile(pluginPath, 'utf8'),
   readFile(bootRecoveryTestPath, 'utf8'),
@@ -54,26 +65,38 @@ requirePattern(
 requirePattern(
   appPath,
   app,
-  /serviceStatus\.health === 'unclean-process-stop'[\s\S]*NativeProtection\.recoverAfterProcessLoss\([\s\S]*return;[\s\S]*NativeProtection\.sync\([\s\S]*getInstalledActiveProtectionIds[\s\S]*shouldRecoverStaleProtection[\s\S]*NativeProtection\.start\(/,
-  'Confirmed process loss must route directly to controlled recovery before generic config sync; only stale activation may use the normal start path.',
+  /serviceStatus\.health === 'unclean-process-stop'[\s\S]*NativeProtection\.recoverAfterProcessLoss\([\s\S]*return;[\s\S]*NativeProtection\.syncCommitted\([\s\S]*getInstalledActiveProtectionIds[\s\S]*shouldRecoverStaleProtection[\s\S]*NativeProtection\.startCommitted\(synced\.configGeneration\)/,
+  'Confirmed process loss must route directly to controlled recovery; generic stale activation must reuse the single durable app-open config generation instead of syncing again inside start.',
 );
 requirePattern(
   appTestPath,
   appTest,
-  /restarts a previously enabled stale service[\s\S]*uses controlled process-loss recovery without a duplicate app-level config sync[\s\S]*does not invalidate a fresh pending start request with config sync or a duplicate start[\s\S]*never automatically enables protection that was deliberately disabled[\s\S]*does not restart when every configured active target is unavailable/,
-  'App integration tests must guard stale recovery, single-sync process-loss routing, pending-generation protection, disabled state, and unavailable targets.',
+  /restarts a stale service with the single durable generation produced by app-open sync[\s\S]*syncCommittedMock\)\.toHaveBeenCalledTimes\(1\)[\s\S]*startCommittedMock\)\.toHaveBeenCalledTimes\(1\)[\s\S]*syncMock\)\.not\.toHaveBeenCalled[\s\S]*startMock\)\.not\.toHaveBeenCalled/,
+  'App integration tests must prove stale activation commits one config generation and dispatches that exact prepared generation without a second sync.',
 );
 requirePattern(
   appTestPath,
   appTest,
-  /unclean-process-stop[\s\S]*recoverMock\)\.toHaveBeenCalled[\s\S]*syncMock\)\.not\.toHaveBeenCalled[\s\S]*startMock\)\.not\.toHaveBeenCalled/,
-  'App-open process-loss handling must not perform a redundant generic config sync or normal start before controlled recovery.',
+  /uses controlled process-loss recovery without a duplicate app-level config sync[\s\S]*recoverMock\)\.toHaveBeenCalled[\s\S]*syncCommittedMock\)\.not\.toHaveBeenCalled[\s\S]*startCommittedMock\)\.not\.toHaveBeenCalled/,
+  'App-open process-loss handling must not perform a generic prepared sync/start before controlled recovery.',
 );
 requirePattern(
   appTestPath,
   appTest,
-  /start-pending[\s\S]*syncMock\)\.not\.toHaveBeenCalled[\s\S]*startMock\)\.not\.toHaveBeenCalled[\s\S]*recoverMock\)\.not\.toHaveBeenCalled/,
-  'A fresh pending start must not be invalidated by app-open sync or duplicate recovery dispatch.',
+  /does not invalidate a fresh pending start request with config sync or a duplicate start[\s\S]*syncCommittedMock\)\.not\.toHaveBeenCalled[\s\S]*startCommittedMock\)\.not\.toHaveBeenCalled/,
+  'A fresh pending start must not be invalidated by app-open prepared sync or duplicate recovery dispatch.',
+);
+requirePattern(
+  preparedStartTestPath,
+  preparedStartTest,
+  /starts an already committed generation without performing a second config sync[\s\S]*syncProtectionConfigMock\)\.toHaveBeenCalledTimes\(1\)[\s\S]*expectedConfigGeneration: CONFIG_GENERATION/,
+  'Bridge tests must prove startCommitted reuses the exact durable generation without a second native config sync.',
+);
+requirePattern(
+  preparedStartTestPath,
+  preparedStartTest,
+  /fails closed before Android dispatch when the prepared generation is invalid[\s\S]*startProtectionServiceMock\)\.not\.toHaveBeenCalled/,
+  'Prepared native starts must fail closed before Android dispatch when their durable generation is invalid.',
 );
 requirePattern(
   bootReceiverPath,
@@ -128,5 +151,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection recovery check passed. App-open recovery preserves fresh pending starts, routes confirmed process loss directly through controlled generation-bound recovery without duplicate sync, and limits generic restart to safe stale activation.',
+  'Protection recovery check passed. App-open recovery preserves pending starts, routes process loss through controlled recovery, and reuses one durable config generation for safe stale-activation restart.',
 );
