@@ -264,6 +264,11 @@ describe('NativeProtection lifecycle reasons', () => {
     expect(syncProtectionConfigMock).toHaveBeenCalledTimes(1);
     expect(startProtectionServiceMock).toHaveBeenCalledWith({
       expectedConfigGeneration: CONFIG_GENERATION,
+      requireLifecycleSnapshot: true,
+      expectedEnabled: true,
+      expectedLastStartRequestAt: 150,
+      expectedLastStartAt: 200,
+      expectedLastStopAt: 100,
     });
     expect(getProtectionServiceStatusMock).toHaveBeenCalledTimes(2);
     expect(result).toMatchObject({ running: true, enabled: true, health: 'active' });
@@ -367,6 +372,11 @@ describe('NativeProtection lifecycle reasons', () => {
     expect(stopProtectionServiceMock).not.toHaveBeenCalled();
     expect(startProtectionServiceMock).toHaveBeenCalledWith({
       expectedConfigGeneration: CONFIG_GENERATION,
+      requireLifecycleSnapshot: true,
+      expectedEnabled: true,
+      expectedLastStartRequestAt: 150,
+      expectedLastStartAt: 200,
+      expectedLastStopAt: 100,
     });
     expect(result).toMatchObject({
       running: true,
