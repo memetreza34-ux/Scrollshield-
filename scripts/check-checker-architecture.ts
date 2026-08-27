@@ -50,11 +50,11 @@ for (const required of [
   );
 }
 
-for (const required of ['syncCommittedConfig', 'expectedConfigGeneration', 'start-pending', 'start-interrupted']) {
+for (const required of ['syncCommitted', 'startCommitted', 'start-pending', 'start-interrupted']) {
   requireText(
     'processLoss',
     required,
-    `Process-loss checker is missing current generation/health contract marker: ${required}`,
+    `Process-loss checker is missing current committed-generation/health marker: ${required}`,
   );
 }
 
@@ -101,14 +101,15 @@ for (const required of [
   'start-pending',
   'recoverAfterProcessLoss',
   'NativeProtection\\.getStatus',
-  'NativeProtection\\.sync',
-  'directly to controlled recovery before generic config sync',
-  'redundant generic config sync',
+  'NativeProtection\\.syncCommitted',
+  'NativeProtection\\.startCommitted',
+  'single durable app-open config generation',
+  'preparedStartTestPath',
 ]) {
   requireText(
     'recovery',
     required,
-    `Protection recovery checker is missing health-aware app-open recovery marker: ${required}`,
+    `Protection recovery checker is missing health-aware single-generation app-open recovery marker: ${required}`,
   );
 }
 
@@ -147,5 +148,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Checker architecture drift guard passed. Verify contracts remain aligned with generation-bound starts, explicit legacy rejection rules, atomic/controlled stops, durable-before-grant authorization, health-aware app-open recovery, reset dispatch, and fail-closed migration guards.',
+  'Checker architecture drift guard passed. Verify contracts remain aligned with generation-bound starts, explicit legacy rejection rules, atomic/controlled stops, durable-before-grant authorization, single-generation health-aware app-open recovery, reset dispatch, and fail-closed migration guards.',
 );
