@@ -2,15 +2,15 @@
 
 Status: **verbindlicher Source-Vertrag; noch nicht ausgeführt**
 
-Letzte Aktualisierung: **26. August 2026**
+Letzte Aktualisierung: **27. August 2026**
 
 ## Zweck
 
-Die Android-Schutzarchitektur wurde in mehreren Schritten gehärtet: atomare Stopps, generationgebundener Start-Handshake, `ProtectionServiceDispatchGuard`, durable Config-Generationen, generationgebundener Runtime-State und durable Action-Evidence vor temporären Grants.
+Die Android-Schutzarchitektur wurde schrittweise gehärtet: atomare Stopps, generationgebundener Start-Handshake, `ProtectionServiceDispatchGuard`, durable Config-Generationen, Runtime-Generation, durable Action-Evidence und jetzt lifecycle-snapshot-gebundene automatische Recovery.
 
-Ein Source-Checker darf dabei nicht auf einer älteren Architektur stehen bleiben. Sonst kann eine korrekte Implementierung bei wieder laufender CI fälschlich scheitern oder ein alter unsicherer Vertrag unbemerkt zurückkehren.
+Ein Source-Checker darf dabei nicht auf einer älteren Architektur stehen bleiben. Sonst kann korrekter gehärteter Code bei wieder laufender CI fälschlich scheitern oder ein unsicherer Altvertrag zurückkehren.
 
-Darum existiert jetzt:
+Darum existiert:
 
 ```bash
 npm run check:checker-drift
@@ -22,22 +22,21 @@ Implementierung:
 scripts/check-checker-architecture.ts
 ```
 
-Der Check ist verpflichtender Bestandteil von `npm run verify` und `scripts/readiness-report.ts`.
+Der Check ist Pflichtbestandteil von `npm run verify` und `scripts/readiness-report.ts`.
 
-## Audit-Ergebnis
+## Bisher gefundene reale Drift-Fälle
 
-Der repo-weite Verify-Checker-Audit hat konkrete veraltete Verträge gefunden und korrigiert.
+### Android Start / Prerequisites
 
-### `check:android`
-
-Veraltet waren Erwartungen auf:
+Veraltete Erwartungen:
 
 ```text
 setProtectionEnabled(context, true)
 stopForMissingPermission(...)
+stopSelf()
 ```
 
-Aktuell gilt:
+Aktuell:
 
 ```text
 recordProtectionStartRequested(...)
@@ -45,40 +44,101 @@ stopForProtectionPrerequisite(...)
 ProtectionServiceDispatchGuard.dispatchControlledStop(...)
 ```
 
-Direkte produktive `enabled=true`-Writes bleiben verboten.
+### Process-Loss / Config Generation
 
-### `check:prerequisite-stop-codes`
+Der alte Vertrag erwartete einen generationlosen Recovery-Start.
 
-Der alte Vertrag erwartete Service-Shutdown über `stopSelf()`.
-
-Aktuell gilt:
+Aktuell:
 
 ```text
-atomic system-stop evidence
-→ controlled stop dispatch
+syncCommitted(...)
+→ configGeneration
+→ startCommitted(configGeneration, lifecycleSnapshot)
 ```
 
-`stopSelf()` ist im produktiven Schutz-Service kein erlaubter Lifecycle-Shutdown mehr.
-
-### `check:process-loss`
-
-Der alte Checker erwartete generationlosen Recovery-Start.
-
-Aktuell gilt:
+Für normale bewusste Starts bleibt:
 
 ```text
-syncCommittedConfig(...)
-→ expectedConfigGeneration
-→ startProtectionService({ expectedConfigGeneration })
+start(...)
+→ syncCommitted(...)
+→ startCommitted(configGeneration)
 ```
 
-Zusätzlich bleiben `start-pending`, `start-interrupted` und `unclean-process-stop` getrennte Zustände.
+Damit gibt es genau einen durable Config-Sync pro Startentscheidung.
 
-### `check:config-durability`
+### Automatische App-Open-Recovery
 
-Der alte Checker enthielt noch eine Grant-vor-Event-Reihenfolge.
+Der Audit deckte zunächst auf, dass der App-Open-Recovery-Pfad aus `App.tsx` verschwunden war. Nach Wiederherstellung zeigte ein weiterer Audit einen Doppel-Sync:
 
-Aktuell gilt für normale Freigabe:
+```text
+sync(...)
+→ start(...)
+→ start() synchronisiert erneut
+```
+
+Der aktuelle Vertrag ist:
+
+```text
+getStatus()
+├─ start-pending        → kein Sync/Start, später erneut lesen
+├─ start-interrupted    → kein Auto-Restart
+├─ unclean-process-stop → recoverAfterProcessLoss(...)
+└─ stale-activation     → syncCommitted(...)
+                          → installed target prüfen
+                          → startCommitted(generation, serviceStatus)
+```
+
+`recoverAfterProcessLoss(...)` selbst verwendet entsprechend:
+
+```text
+before = getStatus()
+→ syncCommitted(...)
+→ startCommitted(generation, before)
+→ getStatus()
+```
+
+### Manual Stop gegen Auto-Recovery
+
+Ein weiterer Race-Fall entstand zwischen Recovery-Entscheidung und Native-Start:
+
+```text
+stale/process-loss Status gelesen
+→ Config synchronisiert
+→ Nutzer stoppt bewusst
+→ verspäteter Auto-Restart
+```
+
+Der aktuelle Source-Vertrag verlangt deshalb:
+
+```text
+requireLifecycleSnapshot = true
+expectedEnabled
+expectedLastStartRequestAt
+expectedLastStartAt
+expectedLastStopAt
+```
+
+Native prüft unter:
+
+```text
+ProtectionServiceDispatchGuard.LOCK
+→ EVENT_LOCK
+→ matchesLifecycleSnapshot(...)
+```
+
+und zwar **vor** Config-Validation, Prerequisite-Stopps, Startrequest-Commit und Android-Service-Dispatch.
+
+Snapshot-Mismatch bedeutet ausschließlich:
+
+```text
+resolve / no-op
+```
+
+Kein neuer Startrequest, kein `start_failed`, kein Überschreiben des neueren manuellen/Notification-Stops.
+
+### Config Durability / Grants
+
+Der alte Checker enthielt Grant-vor-Event-Reihenfolge. Aktuell gilt:
 
 ```text
 Intentional-Open-History commit == true
@@ -86,7 +146,7 @@ Intentional-Open-History commit == true
 → temporaryAccessUntil
 ```
 
-und für Notfallfreigabe:
+und:
 
 ```text
 Emergency-Tageszähler commit == true
@@ -94,26 +154,9 @@ Emergency-Tageszähler commit == true
 → temporaryAccessUntil
 ```
 
-Ein Persistenzfehler darf keinen temporären Zugang erzeugen.
+### Factory Reset / Native Drain
 
-### `check:transparency`
-
-Benachrichtigungs-Prerequisite darf nicht über einen nackten `call.reject(...)` modelliert werden.
-
-Aktuell gilt:
-
-```text
-NOTIFICATIONS_MISSING
-→ persistProtectionSystemStopWithFallback(...)
-→ dispatchControlledStop(...)
-→ call.reject(...)
-```
-
-### `check:native-drain-ack`
-
-Factory Reset darf keinen direkten unkoordinierten Service-Stopp voraussetzen.
-
-Aktuell gilt:
+Aktuell:
 
 ```text
 ProtectionServiceDispatchGuard.LOCK
@@ -122,64 +165,58 @@ ProtectionServiceDispatchGuard.LOCK
 → dispatchControlledStop(...)
 ```
 
-### `check:migration`
+### Notification-Prerequisite
 
-Der Recovery-UI-Checker erwartete noch die alte positive Save-Bedingung.
+Aktuell:
 
-Aktuell arbeitet `App.tsx` fail-closed:
+```text
+NOTIFICATIONS_MISSING
+→ persistProtectionSystemStopWithFallback(...)
+→ dispatchControlledStop(...)
+→ call.reject(...)
+```
+
+### Migration
+
+Der Migration-Checker arbeitet fail-closed und verlangt jetzt explizit den durable Recovery-Sync statt eines zufälligen Regex-Präfix-Treffers:
 
 ```text
 if (!isLoaded || migrationBlocked) return;
-```
-
-Save, Native Config Sync/Recovery und Native Drain bleiben während blockierter Migration ausgesetzt.
-
-## App-Open Recovery – echter Architekturfehler aus dem Audit
-
-Der Audit hat zusätzlich einen realen App-Pfadfehler sichtbar gemacht: der frühere App-Open-Recovery-Pfad war aus `App.tsx` verschwunden, während Tests und Checker ihn weiterhin voraussetzten. Die ältere Recovery-Policy hätte außerdem jedes `enabled=true && running=false` gleich behandelt und damit die neu eingeführten Start-Handshake-Zustände vermischt.
-
-Der aktuelle Vertrag lautet:
-
-```text
+...
 NativeProtection.getStatus()
-│
-├─ start-pending
-│  └─ weder Config-Sync noch zweiter Start; Status später erneut lesen
-│
-├─ unclean-process-stop
-│  └─ direkt recoverAfterProcessLoss(...)
-│     └─ Recovery besitzt selbst durable Config-Sync + Generation-Bindung
-│
-├─ stale-activation
-│  └─ Config sync
-│     └─ mindestens eine installierte aktive Ziel-App
-│        └─ normaler generationgebundener NativeProtection.start(...)
-│
-├─ start-interrupted
-│  └─ kein automatischer Neustart; sichtbarer Retry-Pfad bleibt zuständig
-│
-└─ active / deliberately disabled / other
-   └─ kein automatischer Start
+...
+NativeProtection.syncCommitted(...)
 ```
 
-Wichtig: `unclean-process-stop` wird **vor** dem generischen App-Level-Config-Sync abgefangen. Dadurch entsteht kein unnötiger doppelter Config-Generation-Wechsel; `recoverAfterProcessLoss(...)` führt seinen eigenen kontrollierten Sync aus.
+Save, Native Recovery/Config-Sync und Native Drain bleiben bei blockierter Migration ausgesetzt.
 
 ## Permanente Meta-Guard-Invarianten
 
-`check:checker-drift` liest die besonders lifecycle-kritischen Checker selbst ein und verlangt stabile Architekturmarker für:
+`check:checker-drift` liest besonders lifecycle-kritische Checker selbst ein und verlangt Marker für:
 
 - atomaren generationgebundenen Startrequest;
-- explizite Ablehnung alter Direkt-Start-/Prerequisite-Pfade;
 - kontrollierten Android-Stop-Dispatch;
-- generationgebundenes Process-Loss-Recovery;
+- `syncCommitted()` / `startCommitted()` statt generationlosem Start;
+- `start-pending` / `start-interrupted` / `unclean-process-stop`;
+- Lifecycle-Snapshot für automatische `stale-activation`- und Process-Loss-Recovery;
+- Native Snapshot-No-op vor startkritischen Writes;
 - durable Action-Evidence vor Grant;
-- Factory-Reset-Tombstone vor kontrolliertem Stop;
+- Factory-Reset-Tombstone vor controlled stop;
 - atomare Notification-Prerequisite-Persistenz;
-- health-aware App-Open-Recovery ohne Doppel-Sync;
-- fail-closed Migration-Guards;
+- expliziten durable Migration-Sync;
 - Wiring in `verify` und `readiness`.
 
-Der Meta-Guard ersetzt keine fachlichen Checker. Er verhindert nur, dass diese bekannten Architekturgrenzen später wieder auf einen älteren Vertrag zurückfallen.
+Der Meta-Guard ersetzt keine fachlichen Checker. Er verhindert, dass bekannte Architekturgrenzen später auf einen älteren Vertrag zurückfallen.
+
+## Reale Evidence
+
+`docs/ANDROID_DEVICE_TEST_MATRIX.md` führt jetzt zusätzlich:
+
+```text
+LIFE-16 — Manual stop wins against in-flight automatic app-open recovery
+```
+
+Der Fall muss sowohl `stale-activation` als auch `unclean-process-stop` abdecken.
 
 ## Evidence-Grenze
 
@@ -189,18 +226,18 @@ Noch nicht als ausgeführt/bestanden belegt sind insbesondere:
 
 ```text
 npm run check:checker-drift
+npm run check:start-handshake
 npm run check:protection-recovery
 npm run check:process-loss
 npm run check:config-durability
-npm run check:transparency
-npm run check:native-drain-ack
 npm run check:migration
+npm run check:device-matrix
 npm run verify
 Vitest
 Android JUnit
 Android Instrumentation
 Gradle build
-physical device recovery evidence
+LIFE-16 physical/device evidence
 ```
 
-Solange auf dem aktuellen Kandidaten kein vollständiger erfolgreicher Verify-Lauf vorliegt – unabhängig davon, ob noch gar kein Workflow-Run registriert ist oder ein registrierter Run ohne belastbare ausgeführte Steps endet – darf aus diesen Source-Verträgen keine bestandene Release-Evidence abgeleitet werden.
+Solange auf dem exakten Kandidaten kein vollständiger erfolgreicher Verify-Lauf vorliegt – egal ob noch kein Workflow-Run registriert ist oder ein Run ohne belastbare ausgeführte Steps endet – darf aus diesen Source-Verträgen keine bestandene Release-Evidence abgeleitet werden.
