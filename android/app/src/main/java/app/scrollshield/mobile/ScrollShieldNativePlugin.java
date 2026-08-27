@@ -173,7 +173,65 @@ public class ScrollShieldNativePlugin extends Plugin {
         String expectedConfigGeneration = ProtectionConfigDurabilityStore.normalizeGeneration(
             call.getString("expectedConfigGeneration")
         );
+
+        Object requireSnapshotValue = call.getData().opt("requireLifecycleSnapshot");
+        boolean requireLifecycleSnapshot = false;
+        if (requireSnapshotValue != null && requireSnapshotValue != JSONObject.NULL) {
+            if (!(requireSnapshotValue instanceof Boolean)) {
+                call.reject("Invalid automatic protection recovery lifecycle snapshot");
+                return;
+            }
+            requireLifecycleSnapshot = ((Boolean) requireSnapshotValue).booleanValue();
+        }
+
+        Boolean expectedEnabled = null;
+        Long expectedLastStartRequestAt = null;
+        Long expectedLastStartAt = null;
+        Long expectedLastStopAt = null;
+        if (requireLifecycleSnapshot) {
+            Object expectedEnabledValue = call.getData().opt("expectedEnabled");
+            expectedEnabled = expectedEnabledValue instanceof Boolean
+                ? (Boolean) expectedEnabledValue
+                : null;
+            expectedLastStartRequestAt = getNonNegativeLongOption(call, "expectedLastStartRequestAt");
+            expectedLastStartAt = getNonNegativeLongOption(call, "expectedLastStartAt");
+            expectedLastStopAt = getNonNegativeLongOption(call, "expectedLastStopAt");
+            if (
+                !Boolean.TRUE.equals(expectedEnabled) ||
+                expectedLastStartRequestAt == null ||
+                expectedLastStartAt == null ||
+                expectedLastStopAt == null
+            ) {
+                call.reject("Invalid automatic protection recovery lifecycle snapshot");
+                return;
+            }
+        }
+
         synchronized (ProtectionServiceDispatchGuard.LOCK) {
+            if (requireLifecycleSnapshot) {
+                synchronized (EVENT_LOCK) {
+                    SharedPreferences preferences = context.getSharedPreferences(
+                        PREFERENCES_NAME,
+                        Context.MODE_PRIVATE
+                    );
+                    if (
+                        !ProtectionStartHandshakePolicy.matchesLifecycleSnapshot(
+                            preferences.getBoolean(SERVICE_ENABLED_KEY, false),
+                            preferences.getLong(LAST_START_REQUEST_AT_KEY, 0L),
+                            preferences.getLong(LAST_START_AT_KEY, 0L),
+                            preferences.getLong(LAST_STOP_AT_KEY, 0L),
+                            expectedEnabled.booleanValue(),
+                            expectedLastStartRequestAt.longValue(),
+                            expectedLastStartAt.longValue(),
+                            expectedLastStopAt.longValue()
+                        )
+                    ) {
+                        call.resolve();
+                        return;
+                    }
+                }
+            }
+
             if (!ProtectionConfigDurabilityStore.matchesCurrentGeneration(context, expectedConfigGeneration)) {
                 persistProtectionSystemStopWithFallback(
                     context,
@@ -275,6 +333,22 @@ public class ScrollShieldNativePlugin extends Plugin {
                 call.reject("Protection service could not be started", error);
             }
         }
+    }
+
+    private static Long getNonNegativeLongOption(PluginCall call, String key) {
+        Object value = call.getData().opt(key);
+        if (!(value instanceof Number)) return null;
+        double numericValue = ((Number) value).doubleValue();
+        long longValue = ((Number) value).longValue();
+        if (
+            Double.isNaN(numericValue) ||
+            Double.isInfinite(numericValue) ||
+            numericValue < 0D ||
+            numericValue != (double) longValue
+        ) {
+            return null;
+        }
+        return Long.valueOf(longValue);
     }
 
     private static void rejectProtectionStartPrerequisite(
