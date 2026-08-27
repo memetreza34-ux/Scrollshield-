@@ -164,11 +164,6 @@ const DEFAULT_STOP_REASON: NativeProtectionStopReason = {
   message: 'Der Android-Schutz wurde in ScrollShield manuell gestoppt',
 };
 
-const TARGET_APP_MISSING_STOP_REASON: NativeProtectionStopReason = {
-  code: 'target_app_missing',
-  message: 'Keine aktive installierte Ziel-App ist mehr verfügbar; die Wiederherstellung wurde blockiert',
-};
-
 const START_CONFIRMATION_GRACE_MS = 15_000;
 const MAX_FUTURE_CLOCK_SKEW_MS = 5_000;
 
@@ -331,9 +326,6 @@ const buildConfig = (appsConfig: Record<string, AppConfig>, focusMode: boolean):
   }),
 });
 
-const getActiveAndroidAppIds = (appsConfig: Record<string, AppConfig>, focusMode: boolean): string[] =>
-  buildConfig(appsConfig, focusMode).apps.filter((app) => app.active).map((app) => app.id);
-
 const syncCommittedConfig = async (
   appsConfig: Record<string, AppConfig>,
   focusMode: boolean,
@@ -350,6 +342,13 @@ const syncCommittedConfig = async (
     configGeneration,
   };
 };
+
+const hasNewTerminalEvidenceSince = (
+  status: NativeProtectionStatus,
+  before: NativeProtectionLifecycleSnapshot,
+): boolean =>
+  status.lastStopAt > before.lastStopAt ||
+  (!status.enabled && status.lastStopAt > 0 && status.lastStopCode.length > 0);
 
 export const NativeProtection = {
   isAvailable(): boolean {
@@ -415,18 +414,14 @@ export const NativeProtection = {
       throw new Error('Android process-loss recovery requires an unclean-process-stop state');
     }
 
-    const activeAndroidAppIds = getActiveAndroidAppIds(appsConfig, focusMode);
     const synced = await this.syncCommitted(appsConfig, focusMode);
-    const noInstalledActiveTarget =
-      activeAndroidAppIds.length === 0 ||
-      activeAndroidAppIds.every((appId) => synced.unavailableAppIds.includes(appId));
-
-    if (noInstalledActiveTarget) {
-      await this.stop(TARGET_APP_MISSING_STOP_REASON);
-      return this.getStatus();
+    try {
+      await this.startCommitted(synced.configGeneration, before);
+    } catch (error) {
+      const afterFailure = await this.getStatus();
+      if (hasNewTerminalEvidenceSince(afterFailure, before)) return afterFailure;
+      throw error;
     }
-
-    await this.startCommitted(synced.configGeneration, before);
     return this.getStatus();
   },
 
