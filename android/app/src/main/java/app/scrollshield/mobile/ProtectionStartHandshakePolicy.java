@@ -58,4 +58,20 @@ final class ProtectionStartHandshakePolicy {
         if (!protectionEnabled) return true;
         return lastStartRequestAt > 0L && lastStopAt >= lastStartRequestAt;
     }
+
+    static boolean matchesLifecycleSnapshot(
+        boolean currentEnabled,
+        long currentLastStartRequestAt,
+        long currentLastStartAt,
+        long currentLastStopAt,
+        boolean expectedEnabled,
+        long expectedLastStartRequestAt,
+        long expectedLastStartAt,
+        long expectedLastStopAt
+    ) {
+        return currentEnabled == expectedEnabled &&
+            currentLastStartRequestAt == expectedLastStartRequestAt &&
+            currentLastStartAt == expectedLastStartAt &&
+            currentLastStopAt == expectedLastStopAt;
+    }
 }
