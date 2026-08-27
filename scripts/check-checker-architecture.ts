@@ -107,9 +107,10 @@ for (const required of [
 for (const required of [
   'if \\(!isLoaded \\|\\| migrationBlocked\\) return;',
   'Normal React state persistence must stay paused while migration is blocked.',
-  'must inspect lifecycle status first.',
+  'inspect lifecycle truth first',
+  'NativeProtection\\.syncCommitted\\(',
 ]) {
-  requireText('migrationRecovery', required, `Migration recovery checker is missing fail-closed marker: ${required}`);
+  requireText('migrationRecovery', required, `Migration recovery checker is missing explicit durable-sync marker: ${required}`);
 }
 
 requireText(
@@ -131,5 +132,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Checker architecture drift guard passed. Verify contracts remain aligned with lifecycle-snapshot auto recovery, committed-generation reuse, atomic/controlled stops, durable-before-grant authorization, reset dispatch, and fail-closed migration guards.',
+  'Checker architecture drift guard passed. Verify contracts remain aligned with lifecycle-snapshot auto recovery, committed-generation reuse, atomic/controlled stops, durable-before-grant authorization, reset dispatch, and explicit fail-closed migration sync guards.',
 );
