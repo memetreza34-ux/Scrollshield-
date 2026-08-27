@@ -56,12 +56,15 @@ for (const required of [
 for (const required of [
   'syncCommitted',
   'startCommitted',
-  'requireLifecycleSnapshot: true',
-  'expectedLastStartRequestAt: 150',
+  'hasNewTerminalEvidenceSince',
+  'native preflight owns fail-closed stop evidence',
+  'preserves a newer manual stop that wins while process-loss recovery is in flight',
+  'returns fresh native target_app_missing evidence instead of writing a TypeScript stop',
+  'rethrows a native start failure when no newer terminal evidence was persisted',
   'start-pending',
   'start-interrupted',
 ]) {
-  requireText('processLoss', required, `Process-loss checker is missing snapshot/health marker: ${required}`);
+  requireText('processLoss', required, `Process-loss checker is missing native-owned snapshot/terminal marker: ${required}`);
 }
 
 for (const required of [
@@ -132,5 +135,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Checker architecture drift guard passed. Verify contracts remain aligned with lifecycle-snapshot auto recovery, committed-generation reuse, atomic/controlled stops, durable-before-grant authorization, reset dispatch, and explicit fail-closed migration sync guards.',
+  'Checker architecture drift guard passed. Verify contracts remain aligned with lifecycle-snapshot auto recovery, native-owned fail-closed recovery evidence, committed-generation reuse, atomic/controlled stops, durable-before-grant authorization, reset dispatch, and explicit fail-closed migration sync guards.',
 );
