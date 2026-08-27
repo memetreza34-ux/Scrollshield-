@@ -238,7 +238,7 @@ export default function App() {
         );
         if (!shouldRecoverStaleProtection(serviceStatus, installedActiveAppIds)) return;
 
-        await NativeProtection.startCommitted(synced.configGeneration);
+        await NativeProtection.startCommitted(synced.configGeneration, serviceStatus);
       } catch (error) {
         console.error('Failed to sync or recover native protection configuration', error);
       }
