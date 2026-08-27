@@ -4,6 +4,8 @@ import App from './App';
 import { DEFAULT_APP_CONFIG, DEFAULT_STATE } from './types';
 import type { NativeProtectionHealth } from './lib/nativeProtection';
 
+const CONFIG_GENERATION = '11111111-2222-4333-8444-555555555555';
+
 const {
   acknowledgeDrainMock,
   factoryResetMock,
@@ -11,8 +13,10 @@ const {
   pendingMigrationMock,
   saveStateMock,
   syncMock,
+  syncCommittedMock,
   getStatusMock,
   startMock,
+  startCommittedMock,
   recoverMock,
   drainMock,
 } = vi.hoisted(() => ({
@@ -22,8 +26,10 @@ const {
   pendingMigrationMock: vi.fn(),
   saveStateMock: vi.fn(),
   syncMock: vi.fn(),
+  syncCommittedMock: vi.fn(),
   getStatusMock: vi.fn(),
   startMock: vi.fn(),
+  startCommittedMock: vi.fn(),
   recoverMock: vi.fn(),
   drainMock: vi.fn(),
 }));
@@ -41,8 +47,10 @@ vi.mock('./lib/nativeProtection', () => ({
   NativeProtection: {
     isAvailable: () => true,
     sync: (...args: unknown[]) => syncMock(...args),
+    syncCommitted: (...args: unknown[]) => syncCommittedMock(...args),
     getStatus: (...args: unknown[]) => getStatusMock(...args),
     start: (...args: unknown[]) => startMock(...args),
+    startCommitted: (...args: unknown[]) => startCommittedMock(...args),
     recoverAfterProcessLoss: (...args: unknown[]) => recoverMock(...args),
     drain: (...args: unknown[]) => drainMock(...args),
     acknowledgeDrain: (...args: unknown[]) => acknowledgeDrainMock(...args),
@@ -92,8 +100,10 @@ describe('App native protection recovery', () => {
     pendingMigrationMock.mockReset();
     saveStateMock.mockReset();
     syncMock.mockReset();
+    syncCommittedMock.mockReset();
     getStatusMock.mockReset();
     startMock.mockReset();
+    startCommittedMock.mockReset();
     recoverMock.mockReset();
     drainMock.mockReset();
     acknowledgeDrainMock.mockReset();
@@ -103,20 +113,28 @@ describe('App native protection recovery', () => {
     pendingMigrationMock.mockReturnValue(false);
     saveStateMock.mockReturnValue(true);
     syncMock.mockResolvedValue([]);
+    syncCommittedMock.mockResolvedValue({
+      unavailableAppIds: [],
+      configGeneration: CONFIG_GENERATION,
+    });
     getStatusMock.mockResolvedValue(status(true, false));
     startMock.mockResolvedValue(undefined);
+    startCommittedMock.mockResolvedValue(undefined);
     recoverMock.mockResolvedValue(status(true, true, 'active'));
     drainMock.mockResolvedValue({ batchId: '', events: [], usage: [] });
     acknowledgeDrainMock.mockResolvedValue(undefined);
     factoryResetMock.mockResolvedValue(undefined);
   });
 
-  it('restarts a previously enabled stale service when an active target is installed', async () => {
+  it('restarts a stale service with the single durable generation produced by app-open sync', async () => {
     render(<App />);
 
-    await waitFor(() => expect(startMock).toHaveBeenCalled());
-    expect(syncMock).toHaveBeenCalledWith(expect.any(Object), false);
-    expect(startMock).toHaveBeenCalledWith(expect.any(Object), false);
+    await waitFor(() => expect(startCommittedMock).toHaveBeenCalledWith(CONFIG_GENERATION));
+    expect(syncCommittedMock).toHaveBeenCalledTimes(1);
+    expect(syncCommittedMock).toHaveBeenCalledWith(expect.any(Object), false);
+    expect(startCommittedMock).toHaveBeenCalledTimes(1);
+    expect(syncMock).not.toHaveBeenCalled();
+    expect(startMock).not.toHaveBeenCalled();
     expect(recoverMock).not.toHaveBeenCalled();
   });
 
@@ -126,6 +144,8 @@ describe('App native protection recovery', () => {
 
     await waitFor(() => expect(recoverMock).toHaveBeenCalled());
     expect(recoverMock).toHaveBeenCalledWith(expect.any(Object), false);
+    expect(syncCommittedMock).not.toHaveBeenCalled();
+    expect(startCommittedMock).not.toHaveBeenCalled();
     expect(syncMock).not.toHaveBeenCalled();
     expect(startMock).not.toHaveBeenCalled();
   });
@@ -135,6 +155,8 @@ describe('App native protection recovery', () => {
     render(<App />);
 
     await waitFor(() => expect(getStatusMock).toHaveBeenCalled());
+    expect(syncCommittedMock).not.toHaveBeenCalled();
+    expect(startCommittedMock).not.toHaveBeenCalled();
     expect(syncMock).not.toHaveBeenCalled();
     expect(startMock).not.toHaveBeenCalled();
     expect(recoverMock).not.toHaveBeenCalled();
@@ -144,16 +166,21 @@ describe('App native protection recovery', () => {
     getStatusMock.mockResolvedValue(status(false, false));
     render(<App />);
 
-    await waitFor(() => expect(syncMock).toHaveBeenCalled());
+    await waitFor(() => expect(syncCommittedMock).toHaveBeenCalled());
+    expect(startCommittedMock).not.toHaveBeenCalled();
     expect(startMock).not.toHaveBeenCalled();
     expect(recoverMock).not.toHaveBeenCalled();
   });
 
   it('does not restart when every configured active target is unavailable', async () => {
-    syncMock.mockResolvedValue(['instagram']);
+    syncCommittedMock.mockResolvedValue({
+      unavailableAppIds: ['instagram'],
+      configGeneration: CONFIG_GENERATION,
+    });
     render(<App />);
 
-    await waitFor(() => expect(syncMock).toHaveBeenCalled());
+    await waitFor(() => expect(syncCommittedMock).toHaveBeenCalled());
+    expect(startCommittedMock).not.toHaveBeenCalled();
     expect(startMock).not.toHaveBeenCalled();
     expect(recoverMock).not.toHaveBeenCalled();
   });
