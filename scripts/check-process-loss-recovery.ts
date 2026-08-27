@@ -69,8 +69,8 @@ requirePattern(
 requirePattern(
   bridgePath,
   bridge,
-  /recoverAfterProcessLoss\([\s\S]*const before = await this\.getStatus\(\)[\s\S]*before\.running && before\.enabled[\s\S]*before\.health !== 'unclean-process-stop'[\s\S]*const synced = await syncCommittedConfig\(appsConfig, focusMode\)[\s\S]*AndroidProtection\.startProtectionService\(\{[\s\S]*expectedConfigGeneration: synced\.configGeneration[\s\S]*\}\)[\s\S]*return this\.getStatus\(\)/,
-  'Controlled process-loss recovery must re-read native truth, require confirmed unclean-process-stop, durably resync config, bind service start to the returned config generation, and re-read status afterward.',
+  /recoverAfterProcessLoss\([\s\S]*const before = await this\.getStatus\(\)[\s\S]*before\.running && before\.enabled[\s\S]*before\.health !== 'unclean-process-stop'[\s\S]*const synced = await this\.syncCommitted\(appsConfig, focusMode\)[\s\S]*await this\.startCommitted\(synced\.configGeneration\)[\s\S]*return this\.getStatus\(\)/,
+  'Controlled process-loss recovery must re-read native truth, require confirmed unclean-process-stop, durably resync config, reuse that exact committed generation for service start, and re-read status afterward.',
 );
 requirePattern(
   bridgeTestPath,
@@ -106,8 +106,8 @@ requirePattern(
 requirePattern(
   bridgePath,
   bridge,
-  /activeAndroidAppIds[\s\S]*const synced = await syncCommittedConfig\(appsConfig, focusMode\)[\s\S]*activeAndroidAppIds\.length === 0[\s\S]*activeAndroidAppIds\.every\(\(appId\) => synced\.unavailableAppIds\.includes\(appId\)\)[\s\S]*await this\.stop\(TARGET_APP_MISSING_STOP_REASON\)[\s\S]*return this\.getStatus\(\)[\s\S]*AndroidProtection\.startProtectionService/,
-  'Recovery must fail closed before service start when every active Android target is unavailable, then persist target_app_missing and re-read status.',
+  /activeAndroidAppIds[\s\S]*const synced = await this\.syncCommitted\(appsConfig, focusMode\)[\s\S]*activeAndroidAppIds\.length === 0[\s\S]*activeAndroidAppIds\.every\(\(appId\) => synced\.unavailableAppIds\.includes\(appId\)\)[\s\S]*await this\.stop\(TARGET_APP_MISSING_STOP_REASON\)[\s\S]*return this\.getStatus\(\)[\s\S]*await this\.startCommitted\(synced\.configGeneration\)/,
+  'Recovery must fail closed before service start when every active Android target is unavailable, otherwise start exactly the committed generation and re-read status.',
 );
 requirePattern(
   bridgeTestPath,
@@ -283,5 +283,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Process-loss recovery contract check passed. Pending/interrupted starts remain distinct from confirmed process loss; recovery is config-generation bound, names exact permission blockers, and fails closed with target_app_missing when no installed active Android target remains.',
+  'Process-loss recovery contract check passed. Pending/interrupted starts remain distinct from confirmed process loss; recovery reuses the exact durable config generation, names exact permission blockers, and fails closed with target_app_missing when no installed active Android target remains.',
 );
