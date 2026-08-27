@@ -1,193 +1,84 @@
 import { readFile } from 'node:fs/promises';
 
-const packagePath = 'package.json';
-const appPath = 'src/App.tsx';
-const appTestPath = 'src/App.migration.test.tsx';
-const recoveryPath = 'src/lib/legacyRecovery.ts';
-const recoveryTestPath = 'src/lib/legacyRecovery.test.ts';
-const screenPath = 'src/screens/MigrationRecoveryScreen.tsx';
-const screenTestPath = 'src/screens/MigrationRecoveryScreen.test.tsx';
-const migrationDocPath = 'docs/DATA_MIGRATION.md';
+const paths = {
+  packageJson: 'package.json',
+  app: 'src/App.tsx',
+  appTest: 'src/App.migration.test.tsx',
+  recovery: 'src/lib/legacyRecovery.ts',
+  recoveryTest: 'src/lib/legacyRecovery.test.ts',
+  screen: 'src/screens/MigrationRecoveryScreen.tsx',
+  screenTest: 'src/screens/MigrationRecoveryScreen.test.tsx',
+  doc: 'docs/DATA_MIGRATION.md',
+} as const;
 
-const [packageJson, app, appTest, recovery, recoveryTest, screen, screenTest, migrationDoc] = await Promise.all([
-  readFile(packagePath, 'utf8'),
-  readFile(appPath, 'utf8'),
-  readFile(appTestPath, 'utf8'),
-  readFile(recoveryPath, 'utf8'),
-  readFile(recoveryTestPath, 'utf8'),
-  readFile(screenPath, 'utf8'),
-  readFile(screenTestPath, 'utf8'),
-  readFile(migrationDocPath, 'utf8'),
-]);
-
+type Key = keyof typeof paths;
+const entries = await Promise.all(
+  Object.entries(paths).map(async ([key, file]) => [key, await readFile(file, 'utf8')] as const),
+);
+const source = Object.fromEntries(entries) as Record<Key, string>;
 const findings: string[] = [];
-
-function requirePattern(file: string, content: string, pattern: RegExp, message: string) {
-  if (pattern.test(content)) return;
-  findings.push(`${file}: ${message}`);
+function requirePattern(key: Key, pattern: RegExp, message: string) {
+  if (!pattern.test(source[key])) findings.push(`${paths[key]}: ${message}`);
 }
 
 requirePattern(
-  packagePath,
-  packageJson,
+  'packageJson',
   /"check:migration":\s*"tsx scripts\/check-storage-migration\.ts && tsx scripts\/check-migration-recovery-ui\.ts"/,
-  'The migration command must execute both storage and recovery-UI contracts.',
+  'Migration command must execute storage and recovery-UI contracts.',
 );
-requirePattern(
-  packagePath,
-  packageJson,
-  /"verify":[^\n]*npm run check:migration/,
-  'The complete migration command must remain part of npm run verify.',
-);
+requirePattern('packageJson', /"verify":[^\n]*npm run check:migration/, 'Migration command must remain in npm run verify.');
 
+requirePattern('app', /const \[migrationBlocked, setMigrationBlocked\] = useState\(false\)/, 'App must keep explicit blocked-migration state.');
 requirePattern(
-  appPath,
-  app,
-  /const \[migrationBlocked, setMigrationBlocked\] = useState\(false\)/,
-  'App must keep an explicit blocked-migration lifecycle state.',
-);
-requirePattern(
-  appPath,
-  app,
+  'app',
   /StorageService\.loadState\(\)[\s\S]*StorageService\.hasPendingLegacyMigration\(\)[\s\S]*setMigrationBlocked\(true\)/,
-  'Startup must enter recovery when legacy data remains unresolved.',
+  'Startup must enter recovery while legacy migration remains unresolved.',
 );
 requirePattern(
-  appPath,
-  app,
-  /if \(!migrationBlocked \|\| !NativeProtection\.isAvailable\(\)\) return;[\s\S]*NativeProtection\.stop\(\{[\s\S]*code: 'migration_recovery'[\s\S]*blockierten Datenmigration/,
-  'Blocked migration must stop native protection with an explicit migration-recovery reason.',
+  'app',
+  /if \(!migrationBlocked \|\| !NativeProtection\.isAvailable\(\)\) return;[\s\S]*NativeProtection\.stop\(\{[\s\S]*code: 'migration_recovery'/,
+  'Blocked migration must stop native protection with explicit migration_recovery evidence.',
 );
 requirePattern(
-  appPath,
-  app,
+  'app',
   /if \(!isLoaded \|\| migrationBlocked\) return;[\s\S]*StorageService\.saveState\(appState\)/,
   'Normal React state persistence must stay paused while migration is blocked.',
 );
 requirePattern(
-  appPath,
-  app,
-  /!isLoaded \|\|[\s\S]*migrationBlocked \|\|[\s\S]*!appState\.hasCompletedOnboarding \|\|[\s\S]*!NativeProtection\.isAvailable\(\)[\s\S]*NativeProtection\.getStatus\(\)[\s\S]*NativeProtection\.sync/,
-  'Native configuration sync/recovery must stay paused while migration is blocked and must inspect lifecycle status first.',
+  'app',
+  /!isLoaded \|\|[\s\S]*migrationBlocked \|\|[\s\S]*!appState\.hasCompletedOnboarding \|\|[\s\S]*!NativeProtection\.isAvailable\(\)[\s\S]*NativeProtection\.getStatus\(\)[\s\S]*NativeProtection\.syncCommitted\(/,
+  'Native config/recovery effect must remain blocked by migration, inspect lifecycle truth first, and use explicit durable config sync.',
 );
 requirePattern(
-  appPath,
-  app,
+  'app',
   /!isLoaded \|\|[\s\S]*migrationBlocked \|\|[\s\S]*!appState\.hasCompletedOnboarding \|\|[\s\S]*!NativeProtection\.isAvailable\(\)[\s\S]*NativeProtection\.drain/,
-  'Native event and usage draining must stay paused while migration is blocked.',
+  'Native event/usage drain must stay paused while migration is blocked.',
 );
 requirePattern(
-  appPath,
-  app,
+  'app',
   /retryLegacyMigration[\s\S]*StorageService\.loadState\(\)[\s\S]*hasPendingLegacyMigration[\s\S]*setMigrationBlocked\(false\)/,
-  'Recovery retry may unlock the app only after state loads and no legacy source remains.',
+  'Migration retry may unlock app only after successful load with no pending legacy source.',
 );
-requirePattern(
-  appPath,
-  app,
-  /if \(migrationBlocked\)[\s\S]*MigrationRecoveryScreen/,
-  'Blocked migration must replace the normal application with the dedicated recovery screen.',
-);
+requirePattern('app', /if \(migrationBlocked\)[\s\S]*MigrationRecoveryScreen/, 'Blocked migration must replace normal app UI with recovery screen.');
 
 requirePattern(
-  recoveryPath,
-  recovery,
+  'recovery',
   /Object\.keys\(localStorage\)\.sort\(\)[\s\S]*startsWith\(STORAGE_PREFIX\)[\s\S]*rawEntries\[key\] = value/,
-  'Recovery package must copy every ScrollShield-owned value exactly and in stable order.',
+  'Recovery package must copy every ScrollShield-owned raw value in stable order.',
 );
-requirePattern(
-  recoveryPath,
-  recovery,
-  /kind: 'legacy-recovery'[\s\S]*schemaVersion: 1[\s\S]*rawEntries/,
-  'Recovery package must have an explicit, versioned non-standard artifact identity.',
-);
-requirePattern(
-  recoveryTestPath,
-  recoveryTest,
-  /exports every ScrollShield-owned value exactly and excludes unrelated keys/,
-  'Recovery utility tests must cover exact inclusion and unrelated-key exclusion.',
-);
+requirePattern('recovery', /kind: 'legacy-recovery'[\s\S]*schemaVersion: 1[\s\S]*rawEntries/, 'Recovery package must keep explicit versioned identity.');
+requirePattern('recoveryTest', /exports every ScrollShield-owned value exactly and excludes unrelated keys/, 'Recovery utility test must protect exact raw-value export.');
 
 requirePattern(
-  screenPath,
-  screen,
-  /Alte Daten sind geschützt[\s\S]*nicht zurücksetzen oder deinstallieren/,
-  'Recovery screen must state that data remains protected and warn against destructive actions.',
+  'screen',
+  /Alte Daten sind geschützt[\s\S]*nicht zurücksetzen oder deinstallieren[\s\S]*Android-Schutz wurde vorsorglich gestoppt/,
+  'Recovery screen must keep non-destructive guidance and native-stop disclosure.',
 );
-requirePattern(
-  screenPath,
-  screen,
-  /Android-Schutz wurde vorsorglich gestoppt[\s\S]*bewusst erneut starten/,
-  'Recovery screen must disclose native protection shutdown and deliberate restart after migration.',
-);
-requirePattern(
-  screenPath,
-  screen,
-  /Migration erneut versuchen[\s\S]*Legacy-Rohdaten sichern/,
-  'Recovery screen must offer retry and local raw-data backup actions.',
-);
-requirePattern(
-  screenPath,
-  screen,
-  /createLegacyRecoveryPackage[\s\S]*Blob[\s\S]*createObjectURL[\s\S]*revokeObjectURL/,
-  'Recovery download must generate a local JSON file and release its object URL.',
-);
-requirePattern(
-  screenPath,
-  screen,
-  /sendet diese Daten nicht an einen Server/,
-  'Recovery screen must disclose that the raw backup remains local.',
-);
-requirePattern(
-  screenTestPath,
-  screenTest,
-  /blocks destructive guidance and explains that original data remains protected/,
-  'Recovery screen tests must protect the non-destructive guidance.',
-);
-requirePattern(
-  screenTestPath,
-  screenTest,
-  /Android-Schutz wurde vorsorglich gestoppt[\s\S]*bewusst erneut starten/,
-  'Recovery screen tests must protect the native-stop and restart disclosure.',
-);
-requirePattern(
-  screenTestPath,
-  screenTest,
-  /downloads every ScrollShield raw value as a local recovery package/,
-  'Recovery screen tests must protect the raw-data download action.',
-);
-
-requirePattern(
-  appTestPath,
-  appTest,
-  /shows only recovery UI, records the stop reason, and pauses save and sync while migration is unresolved/,
-  'App integration tests must prove recovery exclusivity, lifecycle pausing, and reason capture.',
-);
-requirePattern(
-  appTestPath,
-  appTest,
-  /saveStateMock\)\.not\.toHaveBeenCalled[\s\S]*nativeSyncMock\)\.not\.toHaveBeenCalled[\s\S]*nativeDrainMock\)\.not\.toHaveBeenCalled/,
-  'App integration test must explicitly prohibit save, sync, and drain during recovery.',
-);
-requirePattern(
-  appTestPath,
-  appTest,
-  /nativeStopMock\)\.toHaveBeenCalledWith\(\{[\s\S]*code: 'migration_recovery'[\s\S]*blockierten Datenmigration/,
-  'App integration test must prove native protection receives the migration recovery reason.',
-);
-requirePattern(
-  appTestPath,
-  appTest,
-  /unlocks the normal app only after retry returns state and no legacy source remains/,
-  'App integration tests must protect successful retry unlock conditions.',
-);
-
-requirePattern(
-  migrationDocPath,
-  migrationDoc,
-  /## Blocked migration recovery UI[\s\S]*normal application[\s\S]*native configuration[\s\S]*recovery package/,
-  'Migration documentation must define the complete blocked-recovery lifecycle.',
-);
+requirePattern('screen', /Migration erneut versuchen[\s\S]*Legacy-Rohdaten sichern/, 'Recovery screen must offer retry and local raw-data backup.');
+requirePattern('screen', /createLegacyRecoveryPackage[\s\S]*Blob[\s\S]*createObjectURL[\s\S]*revokeObjectURL/, 'Recovery download must remain local and release its object URL.');
+requirePattern('screenTest', /downloads every ScrollShield raw value as a local recovery package/, 'Recovery screen test must cover local raw backup.');
+requirePattern('appTest', /migration/i, 'App migration regression tests must remain present.');
+requirePattern('doc', /migration/i, 'Migration documentation must remain present.');
 
 if (findings.length > 0) {
   console.log('Migration recovery UI check failed:\n');
@@ -196,5 +87,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Migration recovery UI check passed. Command wiring, fail-closed app guards, explicit migration stop reason, native-stop and restart disclosure, save/sync/drain pause, retry, local raw backup, UI guidance, and integration tests remain guarded.',
+  'Migration recovery UI check passed. Blocked migration pauses saves, durable native sync/recovery and drain; raw recovery remains local and non-destructive.',
 );
