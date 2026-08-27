@@ -6,7 +6,7 @@ Letzte Aktualisierung: **27. August 2026**
 
 ## Zweck
 
-Die Android-Schutzarchitektur wurde schrittweise gehärtet: atomare Stopps, generationgebundener Start-Handshake, `ProtectionServiceDispatchGuard`, durable Config-Generationen, Runtime-Generation, durable Action-Evidence und jetzt lifecycle-snapshot-gebundene automatische Recovery.
+Die Android-Schutzarchitektur wurde schrittweise gehärtet: atomare Stopps, generationgebundener Start-Handshake, `ProtectionServiceDispatchGuard`, durable Config-Generationen, Runtime-Generation, durable Action-Evidence, lifecycle-snapshot-gebundene automatische Recovery und Native-owned Fail-Closed-Recovery-Evidence.
 
 Ein Source-Checker darf dabei nicht auf einer älteren Architektur stehen bleiben. Sonst kann korrekter gehärteter Code bei wieder laufender CI fälschlich scheitern oder ein unsicherer Altvertrag zurückkehren.
 
@@ -76,7 +76,7 @@ sync(...)
 → start() synchronisiert erneut
 ```
 
-Der aktuelle Vertrag ist:
+Aktuell:
 
 ```text
 getStatus()
@@ -88,18 +88,9 @@ getStatus()
                           → startCommitted(generation, serviceStatus)
 ```
 
-`recoverAfterProcessLoss(...)` selbst verwendet entsprechend:
-
-```text
-before = getStatus()
-→ syncCommitted(...)
-→ startCommitted(generation, before)
-→ getStatus()
-```
-
 ### Manual Stop gegen Auto-Recovery
 
-Ein weiterer Race-Fall entstand zwischen Recovery-Entscheidung und Native-Start:
+Race:
 
 ```text
 stale/process-loss Status gelesen
@@ -108,7 +99,7 @@ stale/process-loss Status gelesen
 → verspäteter Auto-Restart
 ```
 
-Der aktuelle Source-Vertrag verlangt deshalb:
+Vertrag:
 
 ```text
 requireLifecycleSnapshot = true
@@ -126,7 +117,7 @@ ProtectionServiceDispatchGuard.LOCK
 → matchesLifecycleSnapshot(...)
 ```
 
-und zwar **vor** Config-Validation, Prerequisite-Stopps, Startrequest-Commit und Android-Service-Dispatch.
+und zwar **vor** Config-Validation, Prerequisite-/Target-Stopps, Startrequest-Commit und Android-Service-Dispatch.
 
 Snapshot-Mismatch bedeutet ausschließlich:
 
@@ -134,11 +125,82 @@ Snapshot-Mismatch bedeutet ausschließlich:
 resolve / no-op
 ```
 
-Kein neuer Startrequest, kein `start_failed`, kein Überschreiben des neueren manuellen/Notification-Stops.
+Kein neuer Startrequest, kein `start_failed`, kein `target_app_missing`, kein Permission-Stop und kein Überschreiben der neueren Lifecycle-Evidence.
+
+### Process-Loss Fail-Closed-Evidence muss Native-owned sein
+
+Ein weiterer Audit fand folgenden Race:
+
+```text
+before = unclean-process-stop
+→ syncCommitted läuft
+→ Nutzer stoppt manuell
+→ Sync meldet danach keine installierte aktive Ziel-App
+→ alter TypeScript-Pfad schreibt target_app_missing
+```
+
+Damit hätte ein älterer Recovery-Versuch den neueren manuellen Stop überschreiben können.
+
+Der alte Vertrag mit:
+
+```text
+TARGET_APP_MISSING_STOP_REASON
+→ this.stop(...)
+```
+
+ist deshalb für Process-Loss-Recovery verboten.
+
+Aktuell gilt:
+
+```text
+before = getStatus()
+→ syncCommitted(...)
+→ startCommitted(generation, before)
+```
+
+Native besitzt dann die komplette Reihenfolge:
+
+```text
+Lifecycle-Snapshot
+→ Config-Generation
+→ Usage Access
+→ Overlay
+→ Notifications
+→ Target-App
+→ Startrequest
+→ Service-Dispatch
+```
+
+Bei nativer Rejection liest TypeScript Native Truth zurück:
+
+```text
+afterFailure = getStatus()
+├─ neue terminale Evidence seit before
+│  → Status zurückgeben
+└─ keine neue terminale Evidence
+   → ursprünglichen Fehler weiterwerfen
+```
+
+Damit gilt zugleich:
+
+- ein neuerer manueller/Notification-Stop bleibt Gewinner;
+- `target_app_missing` entsteht nur im aktuellen Native-Snapshot;
+- Permission-Blocker bleiben Native-owned;
+- ein Transport-/Pluginfehler ohne neue Stop-Evidence wird nicht verschluckt.
+
+### Shared Snapshot Test Fixture
+
+Der Start-Handshake-Checker erwartete Snapshot-Felder zunächst inline in einem einzelnen Vitest. Die Tests verwenden jetzt bewusst:
+
+```text
+expectedRecoveryStart
+```
+
+als gemeinsame exakte Fixture für mehrere Recovery-Races. `check:start-handshake` prüft daher die Definition dieser Fixture und deren Nutzung statt redundante Inline-Werte zu erzwingen.
 
 ### Config Durability / Grants
 
-Der alte Checker enthielt Grant-vor-Event-Reihenfolge. Aktuell gilt:
+Aktuell gilt:
 
 ```text
 Intentional-Open-History commit == true
@@ -156,8 +218,6 @@ Emergency-Tageszähler commit == true
 
 ### Factory Reset / Native Drain
 
-Aktuell:
-
 ```text
 ProtectionServiceDispatchGuard.LOCK
 → EVENT_LOCK
@@ -166,8 +226,6 @@ ProtectionServiceDispatchGuard.LOCK
 ```
 
 ### Notification-Prerequisite
-
-Aktuell:
 
 ```text
 NOTIFICATIONS_MISSING
@@ -178,7 +236,7 @@ NOTIFICATIONS_MISSING
 
 ### Migration
 
-Der Migration-Checker arbeitet fail-closed und verlangt jetzt explizit den durable Recovery-Sync statt eines zufälligen Regex-Präfix-Treffers:
+Der Migration-Checker arbeitet fail-closed und verlangt explizit den durable Recovery-Sync statt eines zufälligen Regex-Präfix-Treffers:
 
 ```text
 if (!isLoaded || migrationBlocked) return;
@@ -192,14 +250,18 @@ Save, Native Recovery/Config-Sync und Native Drain bleiben bei blockierter Migra
 
 ## Permanente Meta-Guard-Invarianten
 
-`check:checker-drift` liest besonders lifecycle-kritische Checker selbst ein und verlangt Marker für:
+`check:checker-drift` verlangt Marker für:
 
 - atomaren generationgebundenen Startrequest;
 - kontrollierten Android-Stop-Dispatch;
 - `syncCommitted()` / `startCommitted()` statt generationlosem Start;
 - `start-pending` / `start-interrupted` / `unclean-process-stop`;
 - Lifecycle-Snapshot für automatische `stale-activation`- und Process-Loss-Recovery;
-- Native Snapshot-No-op vor startkritischen Writes;
+- Native Snapshot-No-op vor startkritischen/Fail-Closed-Writes;
+- `hasNewTerminalEvidenceSince(...)` im Process-Loss-Wrapper;
+- Verbot des alten TypeScript-owned `TARGET_APP_MISSING_STOP_REASON`-Recovery-Pfads;
+- Rückgabe frischer nativer terminaler Evidence;
+- Weiterwerfen eines Fehlers ohne neue terminale Evidence;
 - durable Action-Evidence vor Grant;
 - Factory-Reset-Tombstone vor controlled stop;
 - atomare Notification-Prerequisite-Persistenz;
@@ -210,13 +272,13 @@ Der Meta-Guard ersetzt keine fachlichen Checker. Er verhindert, dass bekannte Ar
 
 ## Reale Evidence
 
-`docs/ANDROID_DEVICE_TEST_MATRIX.md` führt jetzt zusätzlich:
+`docs/ANDROID_DEVICE_TEST_MATRIX.md` führt:
 
 ```text
 LIFE-16 — Manual stop wins against in-flight automatic app-open recovery
 ```
 
-Der Fall muss sowohl `stale-activation` als auch `unclean-process-stop` abdecken.
+Der Fall muss `stale-activation` und `unclean-process-stop` abdecken. Die technische LIFE-16-Spezifikation verlangt zusätzlich beim Process-Loss-Fall den Race, bei dem nach dem manuellen Stop derselbe laufende Config-Sync auch noch keine installierte aktive Ziel-App meldet. Trotzdem muss der bewusste Stop final bleiben.
 
 ## Evidence-Grenze
 
