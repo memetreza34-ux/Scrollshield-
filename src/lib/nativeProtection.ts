@@ -50,6 +50,11 @@ export interface NativeProtectionStopReason {
   message: string;
 }
 
+export interface DurableConfigSyncResult {
+  unavailableAppIds: string[];
+  configGeneration: string;
+}
+
 interface NativeProtectionPlugin {
   syncProtectionConfig(options: {
     configJson: string;
@@ -102,11 +107,6 @@ interface NativeProtectionConfig {
       requireReason: boolean;
     };
   }>;
-}
-
-interface DurableConfigSyncResult {
-  unavailableAppIds: string[];
-  configGeneration: string;
 }
 
 const AndroidProtection = registerPlugin<NativeProtectionPlugin>('ScrollShieldNative');
@@ -333,17 +333,33 @@ export const NativeProtection = {
     return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
   },
 
+  async syncCommitted(
+    appsConfig: Record<string, AppConfig>,
+    focusMode: boolean,
+  ): Promise<DurableConfigSyncResult> {
+    if (!this.isAvailable()) return { unavailableAppIds: [], configGeneration: '' };
+    return syncCommittedConfig(appsConfig, focusMode);
+  },
+
   async sync(appsConfig: Record<string, AppConfig>, focusMode: boolean): Promise<string[]> {
-    if (!this.isAvailable()) return [];
-    return (await syncCommittedConfig(appsConfig, focusMode)).unavailableAppIds;
+    return (await this.syncCommitted(appsConfig, focusMode)).unavailableAppIds;
+  },
+
+  async startCommitted(expectedConfigGeneration: string): Promise<void> {
+    if (!this.isAvailable()) return;
+    const configGeneration = normalizeConfigGeneration(expectedConfigGeneration);
+    if (!configGeneration) {
+      throw new Error('A valid durable protection config generation is required before Android protection start');
+    }
+    await AndroidProtection.startProtectionService({
+      expectedConfigGeneration: configGeneration,
+    });
   },
 
   async start(appsConfig: Record<string, AppConfig>, focusMode: boolean): Promise<void> {
     if (!this.isAvailable()) return;
-    const synced = await syncCommittedConfig(appsConfig, focusMode);
-    await AndroidProtection.startProtectionService({
-      expectedConfigGeneration: synced.configGeneration,
-    });
+    const synced = await this.syncCommitted(appsConfig, focusMode);
+    await this.startCommitted(synced.configGeneration);
   },
 
   async recoverAfterProcessLoss(
@@ -359,7 +375,7 @@ export const NativeProtection = {
     }
 
     const activeAndroidAppIds = getActiveAndroidAppIds(appsConfig, focusMode);
-    const synced = await syncCommittedConfig(appsConfig, focusMode);
+    const synced = await this.syncCommitted(appsConfig, focusMode);
     const noInstalledActiveTarget =
       activeAndroidAppIds.length === 0 ||
       activeAndroidAppIds.every((appId) => synced.unavailableAppIds.includes(appId));
@@ -369,9 +385,7 @@ export const NativeProtection = {
       return this.getStatus();
     }
 
-    await AndroidProtection.startProtectionService({
-      expectedConfigGeneration: synced.configGeneration,
-    });
+    await this.startCommitted(synced.configGeneration);
     return this.getStatus();
   },
 
