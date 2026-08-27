@@ -2,17 +2,19 @@
 
 Status: **verbindlicher technischer Verifikationsvertrag**
 
-Letzte Aktualisierung: **26. August 2026**
+Letzte Aktualisierung: **27. August 2026**
 
 ## Grundregel
 
-Es gibt drei Ebenen:
+Es gibt drei getrennte Evidenzstufen:
 
-1. **Source Contract** – verlangter Vertrag ist im Repository vorhanden.
-2. **Executed Test** – Test/Build wurde auf dem exakten Commit tatsächlich ausgeführt.
+1. **Source Contract** – der verlangte Vertrag ist im Repository vorhanden.
+2. **Executed Test** – Test oder Build wurde auf dem exakten Commit tatsächlich ausgeführt.
 3. **Release Evidence** – Ergebnis ist eindeutig Candidate-SHA, Version Name und Version Code zugeordnet.
 
-Ein Source-Checker oder vorbereiteter Test ist niemals ein ausgeführter Android-Test.
+Source-Code, Source-Checker, vorbereitete JUnit-/Vitest-/Instrumentation-Tests und Dokumentation sind **keine ausgeführte Android-Evidence**.
+
+Mutable Head-SHAs sowie Workflow-/Job-IDs gehören ausschließlich in PR #8 und nicht in committed Dokumente.
 
 ## Zentrale Verify-Kette
 
@@ -20,9 +22,23 @@ Ein Source-Checker oder vorbereiteter Test ist niemals ein ausgeführter Android
 npm run verify
 ```
 
-Die Kette umfasst unter anderem TypeScript/Lint/Prettier, Android Project/Instrumentation, `check:checker-drift`, Supply Chain, Native Drain/ACK/Retention, Usage Flush Worker, Stop-Codes, Lifecycle/Diagnostics, `check:native-stop-atomicity`, `check:start-handshake`, `check:config-durability`, `check:runtime-config-state`, `check:usage-accounting`, Process-Loss/Recovery, Device Matrix, Migration/Release/Privacy/Store/Security, Vitest, Build, PWA und Bundle Checks.
+Die Kette umfasst unter anderem:
 
-Die Android-Source-Checker müssen die **aktuelle** Architektur prüfen. Veraltete Erwartungen wie produktives `setProtectionEnabled(context, true)`, `stopForMissingPermission(...)` oder Service-`stopSelf()` sind nicht zulässig. Aktivierung läuft über den generationgebundenen Startrequest; kontrollierte Stopps laufen über den zentralen Dispatch Guard.
+- TypeScript, ESLint, Prettier und Vitest;
+- Android Project-/Instrumentation-Source-Verträge;
+- `check:checker-drift`;
+- `check:native-stop-atomicity`;
+- `check:start-handshake`;
+- `check:config-durability`;
+- `check:runtime-config-state`;
+- `check:usage-accounting`;
+- `check:usage-flush-worker`;
+- `check:process-loss`;
+- `check:protection-recovery`;
+- `check:device-matrix`;
+- Migration, Release, Privacy, Store, Supply Chain, Security, PWA und Bundle Checks.
+
+Die Source-Checker müssen die **aktuelle** Architektur prüfen. Veraltete Erwartungen wie produktives `setProtectionEnabled(context, true)`, `stopForMissingPermission(...)`, generationlose Starts oder Service-`stopSelf()` sind nicht zulässig.
 
 ## Checker Architecture Drift
 
@@ -32,22 +48,22 @@ npm run check:checker-drift
 
 Spezifikation: `docs/CHECKER_ARCHITECTURE_DRIFT.md`.
 
-Der Meta-Guard schützt nicht die Produktlogik selbst, sondern die **Source-Checker**, die diese Produktlogik prüfen. Der Verify-Audit hat veraltete Verträge in Android Project, Prerequisite Stop Codes, Process Loss, Config Durability, Transparency, Native Drain/Factory Reset und Migration Recovery gefunden und auf die aktuelle Architektur gezogen.
-
-Verbindliche Marker sind insbesondere:
+Der Meta-Guard schützt die Source-Checker vor Architekturdrift. Aktuelle verpflichtende Marker sind insbesondere:
 
 ```text
 recordProtectionStartRequested(...)
 ProtectionServiceDispatchGuard.dispatchControlledStop(...)
-syncCommittedConfig(...) + expectedConfigGeneration
+syncCommitted(...) → configGeneration
+startCommitted(configGeneration, optionalLifecycleSnapshot)
 start-pending / start-interrupted / unclean-process-stop
+matchesLifecycleSnapshot(...)
 durable History/Counter + Event vor temporaryAccessUntil
 Factory-Reset-Tombstone vor controlled stop
-rejectProtectionStartPrerequisite(...) für Notification-Prerequisites
+rejectProtectionStartPrerequisite(...)
 fail-closed Migration-Guards
 ```
 
-`check:checker-drift` ist Bestandteil von `verify` und `readiness`. Auch dieser Meta-Guard ist erst nach realer Ausführung Executed Evidence.
+`check:checker-drift` ist Bestandteil von `verify` und `readiness`.
 
 ## Native Stop Atomicity
 
@@ -64,8 +80,26 @@ persistProtectionSystemStopWithFallback(...)
 persistProtectionTerminalStopWithFallback(...)
 ```
 
-System-Stops schreiben atomar `enabled=false + warning/system + timestamp + code + message`.
-Explizite Terminal-Stopps schreiben atomar `enabled=false + timestamp + code + message` und verändern die Event-Queue nicht.
+System-Stops persistieren atomar:
+
+```text
+enabled=false
++ warning/system Event
++ lastStopAt
++ exakter Stop-Code
++ Stop-Nachricht
+```
+
+Explizite Terminal-Stopps persistieren atomar:
+
+```text
+enabled=false
++ lastStopAt
++ exakter Stop-Code
++ Stop-Nachricht
+```
+
+und verändern die Event-Queue nicht.
 
 ## Android Start-Handshake
 
@@ -83,7 +117,7 @@ lastStartAt        = Foreground-Start bestätigt
 lastStopAt         = terminaler Stopp
 ```
 
-Wichtige Invarianten:
+Verbindliche Invarianten:
 
 - kein separates produktives `enabled=true` vor dem Start;
 - Request vor App-/Boot-/Update-Service-Dispatch;
@@ -92,9 +126,46 @@ Wichtige Invarianten:
 - `RUNNING=true` erst nach erfolgreichem `startForeground(...)` und `CONFIRMED`;
 - Stop vor verspäteter Confirmation → `SUPERSEDED_BY_STOP`;
 - Stop-Code, Stop-Nachricht und Event-Evidence bleiben dabei erhalten;
-- echter Restart nach Stop erhält eine strikt neuere Request-Generation.
+- echter Restart nach Stop erhält eine strikt neuere Request-Generation;
+- automatische Recovery darf nur aus dem Lifecycle-Snapshot starten, auf dessen Basis sie beschlossen wurde.
 
-## Protection Config Durability
+### Snapshot-gebundene automatische Recovery
+
+Automatische App-Open-/Process-Loss-Restarts unterscheiden sich bewusst von einem neuen bewussten Nutzer-Start.
+
+TypeScript bindet einen Auto-Restart an:
+
+```text
+expectedEnabled
+expectedLastStartRequestAt
+expectedLastStartAt
+expectedLastStopAt
+```
+
+Native prüft diese Werte unter der globalen Lock-Reihenfolge:
+
+```text
+ProtectionServiceDispatchGuard.LOCK
+→ EVENT_LOCK
+→ ProtectionStartHandshakePolicy.matchesLifecycleSnapshot(...)
+```
+
+und zwar **vor** Config-Fehler-, Prerequisite-, Startrequest- oder Service-Start-Evidence.
+
+Wenn sich der Lifecycle seit der Recovery-Entscheidung verändert hat:
+
+```text
+Snapshot mismatch
+→ resolve / no-op
+→ kein neuer Startrequest
+→ kein Auto-Reenable
+→ kein start_failed
+→ kein Android-Service-Dispatch
+```
+
+Damit gewinnt ein neuerer manueller oder aktueller Notification-Stop gegen einen bereits laufenden automatischen Recovery-Sync.
+
+## Durable Config Generation / Single-Generation Start
 
 ```bash
 npm run check:config-durability
@@ -111,29 +182,53 @@ unavailable_active_app_ids
 protection_config_generation
 ```
 
-Ein erfolgreicher Native-Sync verwendet einen synchronen `commit()` und liefert erst danach die neue UUID-Generation an TypeScript. Der normale Start und Process-Loss-Recovery reichen genau diese UUID als `expectedConfigGeneration` zurück; der Startrequest persistiert `startRequestConfigGeneration`.
+Ein erfolgreicher Native-Sync verwendet einen synchronen `commit()` und liefert danach eine validierte UUID-Generation.
 
-### Candidate-Commit-Fehler
-
-Vor dem Config-Write wird der vorherige komplette Tupelzustand gesichert. Liefert der Candidate-Commit `false`, stellt `ProtectionConfigDurabilityStore` vor Freigabe des Dispatch-Locks den vorherigen Config-/Availability-/Generation-Zustand wieder her und lehnt den Sync ab.
-
-Für einen bereits laufenden Schutz gilt:
+Bridge-Grenzen:
 
 ```text
-Candidate nicht durable
-→ Candidate nicht veröffentlichen
-→ letzte bestätigte Regelbasis weiterverwenden
+syncCommitted(appsConfig, focusMode)
+→ { unavailableAppIds, configGeneration }
+
+startCommitted(configGeneration, optionalLifecycleSnapshot)
+→ kein zweiter Config-Sync
 ```
 
-### Doppelter Schreibfehler / Certainty State
-
-Zusätzlich existiert process-lokal:
+Ein normaler bewusster Start bleibt selbständig:
 
 ```text
-writeStateCertain
+start(...)
+→ syncCommitted(...)
+→ startCommitted(configGeneration)
 ```
 
-`ProtectionConfigWriteCertaintyPolicy` erzwingt:
+Der App-Open-`stale-activation`-Pfad verwendet dagegen exakt die bereits erzeugte Generation:
+
+```text
+serviceStatus = getStatus()
+→ syncCommitted(...)
+→ installierte aktive Ziele prüfen
+→ startCommitted(configGeneration, serviceStatus)
+```
+
+Process-Loss-Recovery entsprechend:
+
+```text
+before = getStatus()
+→ nur unclean-process-stop akzeptieren
+→ syncCommitted(...)
+→ installierte aktive Ziele prüfen
+→ startCommitted(configGeneration, before)
+→ getStatus()
+```
+
+Damit erzeugt eine einzelne Recovery-Entscheidung nicht zwei aufeinanderfolgende Config-Generationen.
+
+### Candidate-/Rollback-Schreibfehler
+
+Vor dem Config-Write wird der vorherige komplette Tupelzustand gesichert. Scheitert der Candidate-Commit, wird der vorherige Zustand synchron restauriert.
+
+Process-lokal gilt:
 
 ```text
 candidate=true                   → SICHER
@@ -141,17 +236,7 @@ candidate=false + rollback=true  → SICHER
 candidate=false + rollback=false → UNSICHER
 ```
 
-Bei `UNSICHER` gilt im selben Prozess:
-
-- `matchesCurrentGeneration(...)` liefert false;
-- `isCurrentRequestGeneration(...)` liefert false;
-- Boot-/Update-Generation-Bootstrap ist blockiert;
-- `recordProtectionStartRequested(...)` ist blockiert;
-- eine Foreground-Confirmation kann nicht als current durchgehen;
-- preference-basierte Runtime-Config und Target-App-Prüfung werden nicht neu veröffentlicht/ausgewertet;
-- erst ein späterer erfolgreicher Config-Commit setzt den Zustand wieder auf `SICHER`.
-
-Ein bereits laufender Dienst darf seine zuvor veröffentlichte bestätigte Regelbasis weiterverwenden.
+Bei `UNSICHER` sind neue Start-/Recovery-/Pending-/Confirmation-Pfade blockiert, bis ein späterer erfolgreicher Config-Sync wieder `SICHER` herstellt. Ein bereits laufender Service darf ausschließlich seine zuletzt veröffentlichte bestätigte Runtime-Regelbasis weiterverwenden.
 
 ## Runtime Config State
 
@@ -161,119 +246,45 @@ npm run check:runtime-config-state
 
 Spezifikation: `docs/PROTECTION_RUNTIME_CONFIG_STATE.md`.
 
-### Stable Service Publication / Runtime Generation
+`ScrollShieldProtectionService.refreshConfiguration()` veröffentlicht nur eine Config, deren JSON und Generation vor und nach dem Parsen weiterhin exakt aktuell und deren Persistenzzustand sicher sind.
 
-`ScrollShieldProtectionService.refreshConfiguration()` verwendet zwei Lock-Grenzen:
-
-```text
-1. writeStateCertain prüfen und configJson + configGeneration snapshotten
-2. lokal in nextRulesByPackage parsen
-3. writeStateCertain sowie configJson + configGeneration erneut prüfen
-4. nur bei exakter Gleichheit veröffentlichen
-```
-
-Damit darf weder ein fehlgeschlagener Candidate noch ein während des Parsens überholter erfolgreicher Sync in `rulesByPackage` veröffentlicht werden.
-
-Die tatsächlich veröffentlichte Service-Regelbasis wird separat als Diagnose-Evidence geführt:
+Die tatsächlich veröffentlichte Regelbasis wird separat als Evidence geführt:
 
 ```text
 protectionRuntimeConfigGeneration
 ```
 
-Sie ist **Evidence**, nicht die Persistenzquelle. Die Schutzentscheidung verwendet weiterhin `cachedConfigGeneration` plus `ProtectionConfigRuntimePolicy`.
-
-Bei `UNSICHER` bleibt nur die zuletzt veröffentlichte bestätigte Runtime-Generation nutzbar. Preferences dürfen diese Regelbasis nicht ersetzen.
-
-### Runtime Grants / Overlay Generation
-
-Bei einem bestätigten Generationwechsel `G1 → G2` gilt:
+Bei einem bestätigten `G1 → G2` gilt:
 
 ```text
-laufenden G1-Usage-Tick mit G1-Regelbasis schließen
-alte temporaryAccessUntil-Grants löschen
-altes Overlay/Countdown entfernen
-G2 als Runtime-Generation veröffentlichen
+G1-Usage-Tick schließen
+→ G2-Regelbasis veröffentlichen
+→ alte temporaryAccessUntil-Grants löschen
+→ altes Overlay/Countdown entfernen
+→ Runtime-Generation = G2
 ```
 
-Ein Overlay bindet sich beim Aufbau an `actionConfigGeneration`. Vor `WindowManager.addView(...)` und direkt vor jeder normalen oder Notfall-Freigabe wird diese Generation unter dem Dispatch-Lock erneut geprüft.
+Eine stale G1-Aktion nach G2 darf weder einen Grant setzen noch `open`-/`emergency`-Evidence erzeugen.
 
-Eine stale `G1`-Action nach `G2` darf daher weder:
-
-- `temporaryAccessUntil` neu setzen;
-- ein `open`-Event schreiben;
-- ein `emergency`-Event schreiben;
-- ein altes warning/block-Overlay neu veröffentlichen.
-
-### RUNTIME-04 — Usage-Grenze vor G2-Publish
-
-Ein echter Generationwechsel schließt den laufenden G1-Usage-Tick **vor** dem Austausch der Regelbasis:
-
-```text
-G1 rulesByPackage + G1 temporaryAccessUntil
-↓
-generationBoundaryAt = System.currentTimeMillis()
-↓
-recordAllowedUsage(null, generationBoundaryAt)
-↓
-Usage wird noch über previousRule.id aus G1 gebucketet
-↓
-cachedConfigGeneration = G2
-rulesByPackage = G2
-Grants/Overlay aus G1 invalidieren
-```
-
-Damit kann die Zeit vor der Publish-Grenze nicht einer ausschließlich in G2 neu eingeführten oder neu zugeordneten Rule-ID zugerechnet werden. Der folgende Enforcement-Pass startet die neue Messperiode unter G2 mit einer frischen Tick-Grenze.
-
-`check:usage-accounting` wurde gleichzeitig auf die tatsächliche `UsageFlushCoordinator`-/`UsageFlushWorker`-Architektur aktualisiert. Der alte Source-Vertrag für ein Service-lokales `pendingUsageMs` ist entfernt.
-
-Source-seitig ist RUNTIME-04 damit gehärtet. Der reale Bucket-Nachweis bleibt offen.
-
-### RUNTIME-05/06 — Durable Action Evidence vor Grant
-
-Normale und Emergency-Freigaben dürfen keinen In-Memory-Grant erzeugen, solange die Enforcement-Evidence nicht synchron gespeichert ist.
+## Durable Action Evidence vor Grant
 
 Normale Freigabe:
 
 ```text
 recordIntentionalOpen(...).commit() == true
-↓
-appendProtectionEvent("open", ...).commit() == true
-↓
-temporaryAccessUntil.put(...)
+→ appendProtectionEvent("open", ...).commit() == true
+→ temporaryAccessUntil.put(...)
 ```
 
 Emergency-Freigabe:
 
 ```text
 incrementEmergencyCount(...).commit() == true
-↓
-appendProtectionEvent("emergency", ...).commit() == true
-↓
-temporaryAccessUntil.put(...)
+→ appendProtectionEvent("emergency", ...).commit() == true
+→ temporaryAccessUntil.put(...)
 ```
 
-`ScrollShieldNativePlugin.appendProtectionEvent(...)` liefert deshalb den echten `boolean`-Commit-Erfolg zurück. `recordIntentionalOpen(...)` und `incrementEmergencyCount(...)` verwenden ebenfalls `commit()` statt `apply()`.
-
-Schlägt der erste oder zweite persistente Schritt fehl, wird **kein Zugang** gewährt. Wenn Schritt 1 bereits erfolgreich war und Schritt 2 scheitert, bleibt der bereits geschriebene Counter/History-Eintrag bestehen. Das ist bewusst konservativ: ein lokaler Schreibfehler darf Schutz höchstens strenger, niemals schwächer machen.
-
-Ein Process-/Service-Kill nach erfolgreicher Freigabe darf deshalb Anti-Binge-History beziehungsweise Emergency-Tagesverbrauch nicht vergessen. Der reale Kill-/Recovery-Nachweis bleibt Device-Evidence.
-
-Pure-Java-Vertrag:
-
-```text
-ProtectionConfigRuntimePolicyTest
-```
-
-Der Debug-/Diagnosevertrag exportiert:
-
-```text
-protectionConfigGeneration
-protectionConfigWriteStateCertain
-protectionRuntimeConfigGeneration
-startRequestConfigGeneration
-```
-
-und zeigt im Debug-Screen `SICHER`/`UNSICHER` sowie `Config-Generation`, `Runtime-Config` und `Startrequest-Config`.
+Schlägt History/Counter oder Event-Persistenz fehl, wird **kein Zugang** gewährt. Ein lokaler Persistenzfehler darf Schutz höchstens strenger, niemals schwächer machen.
 
 ## Usage Accounting / Flush
 
@@ -282,24 +293,24 @@ npm run check:usage-accounting
 npm run check:usage-flush-worker
 ```
 
-Aktuelle Ownership:
+Ownership:
 
 ```text
 ScrollShieldProtectionService
 → day + ruleId Bucket
-→ UsageFlushCoordinator (pending + höchstens ein in-flight Batch)
-→ UsageFlushWorker (single-thread)
+→ UsageFlushCoordinator
+→ UsageFlushWorker
 → SharedPreferences.commit()
 ```
 
-Wichtige Invarianten:
+Verbindlich:
 
-- Tageszuordnung geschieht beim gemessenen Intervall, nicht beim späteren Flush;
-- Pending und In-Flight bleiben für Daily-Limit-Berechnung sichtbar;
-- fehlgeschlagene Writes werden zurück in Pending gemerged;
-- stale Completion darf keinen anderen Batch bestätigen;
+- höchstens ein In-Flight-Batch;
+- Pending + In-Flight bleiben für Daily-Limit sichtbar;
+- fehlgeschlagene Writes werden zurückgemerged;
+- stale Completion bestätigt keinen anderen Batch;
 - Shutdown drainiert über denselben serialisierten Worker;
-- Config-Generationwechsel schließen den alten Usage-Tick vor Austausch der Rule-Map.
+- G1-Usage wird vor G2-Regelveröffentlichung abgeschlossen.
 
 ## Android Service Dispatch Races
 
@@ -312,46 +323,42 @@ ProtectionServiceDispatchGuard.LOCK
 → EVENT_LOCK
 ```
 
-Unter dem Dispatch-Lock werden Config Candidate-Commit/Rollback, Startrequest + Android-Startdispatch, Stop-Persistenz + `stopService()`, Factory Reset sowie kritische Service-Lifecycle- und Overlay-Action-Grenzen serialisiert.
+Darunter werden Startrequest + Startdispatch, Stop-Persistenz + `stopService()`, Config Candidate-/Rollback-Grenzen, Factory Reset sowie kritische Service-/Overlay-Lifecycle-Grenzen serialisiert.
 
-### Controlled-stop Destroy Token
+Ein erfolgreicher kontrollierter `stopService()` setzt einen bounded one-shot Destroy-Token. Alte oder fehlgeschlagene Stop-Dispatches dürfen einen späteren echten `unexpected_service_destroy` nicht unterdrücken.
 
-Ein erfolgreicher kontrollierter `stopService()` setzt einen process-lokalen one-shot Token auf Basis von `System.nanoTime()`, maximal 30 Sekunden gültig. Ein abgelaufener Token, negativer monotonic age-Wert oder fehlgeschlagener Stop-Dispatch darf einen späteren echten `unexpected_service_destroy` nicht unterdrücken.
+Bei Same-Instance-Restart übernimmt der Service die neue Request-Generation. Die Foreground-Notification trägt diese Generation im Stop-PendingIntent; alte Notification-Aktionen werden vor terminaler Stop-Persistenz verworfen.
 
-### Same-Instance Fast Restart / Notification Stop
+## Process-Loss / App-Open Recovery
 
-Bei Same-Instance-Restart übernimmt die lebende Service-Instanz nach erfolgreicher Confirmation die neue Request-Generation. Die Foreground-Notification trägt diese Generation im Stop-`PendingIntent`; fehlende oder alte `ACTION_STOP`-Generationen werden vor jeder `notification_action_stop`-Persistenz ignoriert.
+`start-pending`, `start-interrupted`, `unclean-process-stop` und `stale-activation` bleiben getrennte Zustände.
 
-## Android Instrumentation
-
-```bash
-npm run check:android-instrumentation
-cd android
-./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
-```
-
-`ProtectionConfigDurabilityInstrumentedTest` schützt source-seitig insbesondere:
+App-Open:
 
 ```text
-durableConfigGenerationBindsStartRequestAndConfirmation
-staleConfigGenerationCannotCreateStartRequest
-freshPendingRequestFromPreviousConfigIsNotCurrent
-configChangeBeforeConfirmationFailsClosedWithoutConfirmingOldRequest
-legacyDurableConfigReceivesGenerationBeforeBootStyleStartRequest
+getStatus()
+├─ start-pending
+│  → kein Config-Sync, kein zweiter Start; später erneut lesen
+├─ unclean-process-stop
+│  → recoverAfterProcessLoss(...)
+│  → eigener Single-Generation-Sync + Lifecycle-Snapshot
+├─ stale-activation
+│  → syncCommitted(...)
+│  → installierte aktive Ziel-App prüfen
+│  → startCommitted(configGeneration, serviceStatus)
+├─ start-interrupted
+│  → kein Auto-Restart; Nutzer-Retry
+└─ active / deliberately disabled / other
+   → kein automatischer Start
 ```
 
-Die tatsächliche Lebensdauer eines WindowManager-Overlays, bereits gequeueete UI-Aktionen, alte Notification-`PendingIntent`-Aktionen, reale Storage-/Commit-/Rollback-Fehler, echte Usage-Bucket-Grenzen und Process-Kills direkt nach normalen/Emergency-Freigaben sind Device-/System-E2E-Evidence. Ein Source- oder Persistenztest darf nicht als Ersatz gewertet werden.
+Ein App-Open darf einen frischen Pending-Request weder resynchronisieren noch duplizieren. Ein neuerer manueller Stop während Auto-Recovery gewinnt durch den Snapshot-Guard.
 
-## Android JUnit / Build
+## Android JUnit / Instrumentation / Build
 
-```bash
-cd android
-./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace
-```
+Source-Verträge existieren unter anderem für:
 
-Relevant sind insbesondere:
-
-- `ProtectionStartHandshakePolicyTest`;
+- `ProtectionStartHandshakePolicyTest` einschließlich Lifecycle-Snapshot-Regel;
 - `ProtectionServiceLifecyclePolicyTest`;
 - `ProtectionServiceDispatchGuardTest`;
 - `ProtectionConfigDurabilityStoreTest`;
@@ -360,92 +367,63 @@ Relevant sind insbesondere:
 - `UsageAccountingPolicyTest`;
 - `UsageFlushCoordinatorTest`;
 - `UsageFlushWorkerTest`;
-- bestehende Stop-Code-/Lifecycle-Tests.
+- Protection Diagnostics / Config Durability Instrumentation.
+
+Auszuführende Android-Kommandos:
+
+```bash
+cd android
+./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace
+./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+```
+
+Vor erfolgreicher realer Ausführung gelten diese Tests nicht als bestanden.
 
 ## Device-/E2E-Evidence
 
-`docs/ANDROID_DEVICE_TEST_MATRIX.md` verlangt:
+`docs/ANDROID_DEVICE_TEST_MATRIX.md` verlangt insbesondere:
 
-- `APP-07`: durable Config-Sync + gebundener Start; Candidate-Fehler darf keine Candidate-Regel veröffentlichen;
-- `APP-08`: Config-Wechsel zwischen Request und Confirmation endet `FAILED_CLOSED`/`start_failed`;
-- `APP-09`: Candidate- und Rollback-Commit schlagen fehl → `UNSICHER`, neuer Start/Recovery blockiert, `protectionRuntimeConfigGeneration` bleibt auf letzter veröffentlichter Regelbasis, erfolgreicher späterer Sync stellt `SICHER` wieder her;
-- `APP-10`: bestätigter `G1 → G2`-Wechsel invalidiert alte temporäre Grants und alte Overlay-Aktionen;
-- `RUNTIME-01`: alte temporäre Freigabe nach G2 ungültig;
-- `RUNTIME-02`: stale Overlay-Aktion kann nach G2 nicht autorisieren;
-- `RUNTIME-03`: `UNSICHER` behält nur die letzte veröffentlichte bestätigte Runtime-Regelbasis;
-- `RUNTIME-04`: Usage-Buckets werden an der Generation-Publish-Grenze getrennt;
-- `RUNTIME-05`: erfolgreiche Intentional-Open-History überlebt sofortigen Process-/Service-Kill; fehlende durable History/Event-Evidence gewährt keinen Grant;
-- `RUNTIME-06`: erfolgreicher Emergency-Tagesverbrauch überlebt sofortigen Process-/Service-Kill; fehlender durable Counter/Event gewährt keinen Grant;
-- `LIFE-12` bis `LIFE-15`: Start-/Stop-/Restart-/Notification-Races.
+- `APP-07` bis `APP-10` – Config Durability / Generation / Rollback / Runtime-Invalidierung;
+- `RUNTIME-01` bis `RUNTIME-06` – generationgebundene Grants/Actions, Usage-Grenze, durable Intentional-/Emergency-Evidence;
+- `LIFE-12` – terminaler Stop gewinnt vor delayed Confirmation;
+- `LIFE-13` – Duplicate Start während Pending;
+- `LIFE-14` – Stop → unmittelbarer Restart vor altem Teardown;
+- `LIFE-15` – stale Notification-Stop nach bestätigtem Restart;
+- `LIFE-16` – manueller/aktueller Notification-Stop gewinnt gegen bereits laufende automatische App-Open-Recovery;
+- `DISPATCH-01` bis `DISPATCH-05` – reale Android-Dispatch-/PendingIntent-Races.
 
-Die Dispatch-Spezifikation verlangt zusätzlich `DISPATCH-01` bis `DISPATCH-05`.
-
-## Process-Loss / App-Open Recovery
-
-Pre-Confirmation-Abbruch und echter Post-Start-Process-Kill bleiben getrennt. Nur ein bestätigter Start, der später ohne terminalen Stopp verschwindet, wird als `unclean-process-stop` behandelt.
-
-Beim App-Open wird deshalb zuerst Native Lifecycle Truth gelesen:
-
-```text
-getStatus()
-├─ start-pending          → kein Config-Sync, kein zweiter Start; erneut prüfen
-├─ unclean-process-stop   → direkt recoverAfterProcessLoss(...)
-│                           (eigener durable Config-Sync + Generation-Bindung)
-├─ stale-activation       → normaler Config-Sync; bei installierter aktiver Ziel-App normaler start(...)
-├─ start-interrupted      → kein automatischer Neustart; sichtbarer Retry-Pfad
-└─ active/disabled/other  → kein automatischer Start
-```
-
-Die `unclean-process-stop`-Abzweigung liegt **vor** dem generischen App-Level-Config-Sync. Dadurch entsteht beim Recovery kein doppelter unnötiger Config-Generation-Wechsel. Ein frischer `start-pending`-Request darf durch App-Open weder resynchronisiert noch dupliziert werden.
+Für `LIFE-16` müssen mindestens `stale-activation` und `unclean-process-stop` real reproduziert werden. Zwischen Recovery-Entscheidung bzw. Config-Sync und Auto-Start wird bewusst gestoppt. Danach müssen `enabled=false`, Stop-Code/-Nachricht/-Zeitpunkt unverändert bleiben; es darf kein neuer Startrequest, kein `lastStartAt`, kein `start_failed` und kein Auto-Reenable entstehen.
 
 ## Aktuelle Ausführungsgrenze
 
-GitHub Actions liefert auf diesem Draft-Branch weiterhin Verify-Jobs ohne ausgeführte Steps. Die exakte aktuelle Head-SHA und der zugehörige Lauf werden ausschließlich in PR #8 geführt.
+Die exakte aktuelle Head-SHA und der zugehörige GitHub-Actions-Status werden ausschließlich in PR #8 geführt.
 
-Deshalb sind aktuell **nicht als bestanden belegt**:
+Solange kein vollständiger erfolgreicher Verify-/Android-Lauf auf dem exakten Kandidaten vorliegt, sind insbesondere **nicht als bestanden belegt**:
 
 - `npm run verify`;
-- `check:checker-drift`;
-- `check:android-project`;
-- `check:prerequisite-stop-codes`;
-- `check:process-loss`;
-- `check:protection-recovery`;
-- `check:native-stop-atomicity`;
-- `check:start-handshake`;
-- `check:config-durability`;
-- `check:runtime-config-state`;
-- `check:usage-accounting`;
-- `check:lifecycle`;
-- `check:device-matrix`;
-- `check:android-instrumentation`;
-- Vitest einschließlich App-Open-Recovery-Tests;
+- alle oben genannten Source-Checker;
+- TypeScript / ESLint / Prettier / Vitest;
+- App-Open-Recovery-React-Tests;
 - Android JUnit;
-- `ProtectionConfigWriteCertaintyPolicyTest`;
-- `ProtectionConfigRuntimePolicyTest`;
-- `UsageAccountingPolicyTest`;
-- `UsageFlushCoordinatorTest`;
-- `UsageFlushWorkerTest`;
 - Android Instrumentation;
 - Gradle Debug Build / APK;
 - `APP-07` bis `APP-10`;
 - `RUNTIME-01` bis `RUNTIME-06`;
-- `LIFE-12` bis `LIFE-15`;
+- `LIFE-12` bis `LIFE-16`;
 - `DISPATCH-01` bis `DISPATCH-05`;
-- reale Storage-Failure-/Overlay-/Grant-/Usage-Boundary-/Action-Commit-/Process-Kill-/App-Open-/Start-/Stop-/PendingIntent-Race-Evidence.
+- reale Storage-Failure-, Overlay-, Grant-, Usage-, Process-Kill-, Start-/Stop-/Auto-Recovery- und PendingIntent-Race-Evidence.
 
-## Reihenfolge nach Entsperrung
+## Reihenfolge nach CI-/Runner-Entsperrung
 
 1. `npm ci`;
 2. `npm run verify`;
-3. `./gradlew testDebugUnitTest assembleDebug --no-daemon --stacktrace`;
-4. `./gradlew connectedDebugAndroidTest --no-daemon --stacktrace`;
+3. Android JUnit + `assembleDebug`;
+4. `connectedDebugAndroidTest`;
 5. App-Open-Recovery mit `start-pending`, `start-interrupted`, `unclean-process-stop`, `stale-activation` real prüfen;
 6. `APP-07` bis `APP-10` real ausführen;
-7. `RUNTIME-01` bis `RUNTIME-06` inklusive echter Usage-Bucket-Grenze und sofortigem Kill/Recovery nach normaler/Emergency-Freigabe real ausführen;
-8. `LIFE-12` bis `LIFE-15` real ausführen;
-9. `DISPATCH-01` bis `DISPATCH-05` mit Diagnose-JSON und Logcat ausführen;
-10. Pre-/Post-Confirmation Process Loss real prüfen;
-11. App-/Notification-/Start-/Foreground-/Destroy-/Boot-/Permission-/Target-App-Pfade real prüfen;
-12. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
-13. finaler Supply-Chain-/Binary-/Security-Audit;
-14. erst danach Candidate Freeze und Release.
+7. `RUNTIME-01` bis `RUNTIME-06` real ausführen;
+8. `LIFE-12` bis `LIFE-16` real ausführen;
+9. `DISPATCH-01` bis `DISPATCH-05` real ausführen;
+10. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
+11. finaler Supply-Chain-/Binary-/Security-Audit;
+12. erst danach Candidate Freeze und Release.
