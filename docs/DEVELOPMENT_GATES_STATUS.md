@@ -2,289 +2,217 @@
 
 Status: **lebende Projektsteuerung**
 
-Letzte Aktualisierung: **26. August 2026**
+Letzte Aktualisierung: **27. August 2026**
 
 Dieses Dokument beantwortet: **Wo steht ScrollShield jetzt, was ist belegt und was ist der nächste erlaubte Schritt?**
 
 ## Statusregeln
 
-- **FERTIG** = Implementierung + passende Verifikation/Evidenz liegen für die Stufe ausreichend vor.
-- **TEILWEISE** = wesentliche Arbeit existiert, aber mindestens ein Pflichtnachweis oder Teilbereich fehlt.
+- **FERTIG** = Implementierung und die für das Gate erforderliche reale Verifikation/Evidenz liegen vor.
+- **TEILWEISE** = wesentliche Arbeit existiert, mindestens ein Pflichtnachweis fehlt.
 - **FEHLT** = die Stufe ist noch nicht ausreichend implementiert.
-- **BLOCKIERT** = die Stufe kann aktuell nicht abgeschlossen werden, weil eine externe oder vorgelagerte Voraussetzung fehlt.
+- **BLOCKIERT** = eine externe oder vorgelagerte Voraussetzung verhindert den Abschluss.
 
-Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`, wenn reale Android-Ausführung gefordert ist.
+Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`, wenn echte Android-/Device-Ausführung gefordert ist.
 
 ## Gate-Übersicht
 
-| Gate | Bereich | Status | Warum | Nächster konkreter Abschlussnachweis |
-|---|---|---|---|---|
-| G0 | Produktproblem & v1-Scope | **TEILWEISE** | `PRODUCT_REQUIREMENTS.md` formalisiert PR-01..18; `USER_RESEARCH.md` definiert echte Erstnutzungsaufgaben; reale Sessions fehlen | 5–8 beobachtete neue Nutzer + dokumentierte Ergebnisse |
-| G1 | Architektur & Repo-Prozess | **FERTIG** | React/TS, lokale Daten, Capacitor/Native Android, Draft-PR-Prozess und Verantwortungsgrenzen sind dokumentiert | bei Architekturänderung erneut öffnen |
-| G2 | Datenmodell & Migration | **TEILWEISE** | starke transaktionale/V0.7-Migration im Source; reale Alt-Daten-Evidenz fehlt | echter V0.7-Upgrade-Test + bytegenauer Archivvergleich |
-| G3 | Kern-UI/UX & Accessibility | **TEILWEISE** | Release-Screens und Source-A11y-Checks existieren; reale Usability-/Large-Font-/TalkBack-Evidenz fehlt | physische Accessibility- und User-Research-Sessions |
-| G4 | Native Android Schutz | **TEILWEISE** | atomare Stops, persistenter Start-Handshake, durable Config-Generation, Candidate-Rollback/Write-Certainty, getrennte Runtime-Generation, generationgebundene Grants/Overlays, G1→G2-Usage-Grenze, durable Intentional-/Emergency-Evidence vor jedem Grant sowie health-aware App-Open-Recovery sind source-seitig implementiert; reale Ausführung fehlt | Android JUnit + Instrumentation + `assembleDebug` + APP-07..10 + RUNTIME-01..06 + LIFE-12..15 + DISPATCH-01..05 + Process-Kill real |
-| G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First-Manifest, Privacy-Guard, gepinnter Gradle-SHA256 und `check:supply-chain` existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-Check + Dependency-/Manifest-Snapshot + finaler Binary-Audit + Threat-Review |
-| G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` inklusive aktualisierter Architektur-Checker und neuem `check:checker-drift`, `check:native-stop-atomicity`, `check:start-handshake`, `check:config-durability`, `check:runtime-config-state`, `check:usage-accounting`, `check:lifecycle`, `check:device-matrix` und `check:android-instrumentation` ist vorbereitet; echte Runner-Ausführung auf dem aktuellen Kandidaten fehlt | kompletter echter Verify-Lauf auf exaktem Head |
-| G7 | Android Instrumentation/E2E | **TEILWEISE** | App-/Notification-, Prerequisite-, Boot/Update-, Start-/Destroy-, Process-Loss-, health-aware App-Open-Recovery-, Config-Durability-/Write-Certainty-/Runtime-Generation-/Usage-Boundary-/Action-Durability-, Start↔Stop-, Service-Dispatch- und stale-PendingIntent-Verträge existieren; echte Android-Ausführung fehlt | `connectedDebugAndroidTest` + APP-07..10 + RUNTIME-01..06 + LIFE-12..15 + DISPATCH-01..05 + Pre-/Post-Confirmation-Process-Kill real |
-| G8 | Performance & Batterie | **TEILWEISE** | Usage-Accounting-Guard ist auf die reale `UsageFlushCoordinator`-/`UsageFlushWorker`-Architektur aktualisiert; Worker/Coordinator, Shutdown-Drain und Generation-Boundary sind source-guarded; reale JUnit-/Instrumentation-/Gradle-/Device-Evidenz fehlt | `UsageAccountingPolicyTest` + Coordinator-/Worker-JUnit + Usage-Flush-Instrumentation + RUNTIME-04 real + `assembleDebug` + 12h-Baseline |
-| G9 | Physical Device Matrix | **FEHLT** | APP-07..10, RUNTIME-01..06, LIFE-12..15 und DISPATCH-01..05 sind als Pflichtszenarien spezifiziert; reale Geräte-Evidence fehlt | Pflichtgeräte/Szenarien mit Build-ID, Diagnose-JSON, Usage-/Action-Evidence, Logcat und Screenrecord vollständig dokumentieren |
-| G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Evidence-Schema v2 existiert; Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Kandidaten-SHA + echte Referenzen |
-| G11 | Legal / Privacy / Support | **TEILWEISE** | Dokumente/Struktur existieren; finale reale Identität, Support-Mailbox und öffentliche Privacy-Domain fehlen | keine Platzhalter + überprüfbare öffentliche Angaben |
-| G12 | Store / Play Review | **TEILWEISE** | Submission Packet, Screenshots und Deklarationstexte vorbereitet; finaler AAB/Reviewer-Nachweis fehlt | gegen signierten AAB verifizierte Angaben + Videos |
-| G13 | Signing / Binary / Internal & Closed Test | **BLOCKIERT** | Release-Gate blockiert bewusst; kein final signierter freigegebener Kandidat | Gate PASS → AAB → Internal/Closed Test |
-| G14 | Production Rollout & Operations | **BLOCKIERT** | Rollout- und Incident-Response-Prozess existieren; Produktion darf vor G13 nicht beginnen | Produktionsfreigabe + gestaffelter Rollout + benannte Verantwortliche |
+| Gate | Bereich | Status | Warum | Nächster Abschlussnachweis |
+| --- | --- | --- | --- | --- |
+| G0 | Produktproblem & v1-Scope | **TEILWEISE** | Produktanforderungen und User-Research-Aufgaben existieren; reale Erstnutzer-Sessions fehlen | 5–8 beobachtete neue Nutzer + dokumentierte Ergebnisse |
+| G1 | Architektur & Repo-Prozess | **FERTIG** | React/TS, lokale Daten, Native Android, Draft-PR-Prozess und Architekturverträge sind dokumentiert | bei Architekturänderung erneut öffnen |
+| G2 | Datenmodell & Migration | **TEILWEISE** | transaktionale/V0.7-Migration und Recovery existieren source-seitig; reale Alt-Daten-Evidence fehlt | echter V0.7-Upgrade-Test + bytegenauer Archivvergleich |
+| G3 | Kern-UI/UX & Accessibility | **TEILWEISE** | Release-Screens und Source-A11y-Verträge existieren; reale Usability-/TalkBack-/Large-Font-Evidence fehlt | physische Accessibility- und User-Research-Sessions |
+| G4 | Native Android Schutz | **TEILWEISE** | atomare Stops, Start-Handshake, durable Config-/Runtime-Generation, Usage-Grenze, durable Grants, Dispatch-/PendingIntent-Races und lifecycle-snapshot-gebundene Auto-Recovery sind source-seitig gehärtet | Android JUnit + Instrumentation + `assembleDebug` + APP-07..10 + RUNTIME-01..06 + LIFE-12..16 + DISPATCH-01..05 + Process-Kill real |
+| G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First, Privacy/Supply-Chain-Guards existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-/Dependency-/Binary-Audit + Threat Review |
+| G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` ist inklusive `check:checker-drift`, Start-/Config-/Runtime-/Lifecycle-/Device-Checks vorbereitet; auf dem aktuellen Draft-Head liegt noch kein vollständiger erfolgreicher Verify-Lauf vor | kompletter echter `npm run verify` auf exaktem Head |
+| G7 | Android Instrumentation/E2E | **TEILWEISE** | Start-/Stop-/Process-Loss-/Config-/Runtime-/Usage-/Dispatch-/Notification-/Auto-Recovery-Verträge existieren; echte Android-Ausführung fehlt | `connectedDebugAndroidTest` + APP-07..10 + RUNTIME-01..06 + LIFE-12..16 + DISPATCH-01..05 + Pre-/Post-Confirmation-Kill real |
+| G8 | Performance & Batterie | **TEILWEISE** | UsageFlushCoordinator/Worker, Shutdown-Drain und Generation-Boundary sind source-guarded; reale JUnit-/Device-/12h-Evidence fehlt | Usage-JUnit + Instrumentation + `assembleDebug` + RUNTIME-04 real + 12h-Baseline |
+| G9 | Physical Device Matrix | **FEHLT** | Pflichtszenarien sind spezifiziert, inklusive LIFE-16; reale Geräte-Evidence fehlt | Pflichtgeräte mit Build-ID, Diagnose-JSON, Logcat und Screenrecord vollständig dokumentieren |
+| G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Candidate-SHA + echte Referenzen |
+| G11 | Legal / Privacy / Support | **TEILWEISE** | Struktur/Dokumente existieren; finale reale Identität, Support-Mailbox und öffentliche Privacy-Domain fehlen | keine Platzhalter + überprüfbare öffentliche Angaben |
+| G12 | Store / Play Review | **TEILWEISE** | Submission Packet und Texte sind vorbereitet; finaler AAB-/Reviewer-Nachweis fehlt | Angaben gegen signierten AAB + Reviewer-Videos verifizieren |
+| G13 | Signing / Binary / Internal & Closed Test | **BLOCKIERT** | Release-Gate blockiert bewusst; kein final freigegebener Kandidat | Gate PASS → AAB → Internal/Closed Test |
+| G14 | Production Rollout & Operations | **BLOCKIERT** | Rollout-/Incident-Prozess existiert; Produktion darf vor G13 nicht starten | Produktionsfreigabe + gestaffelter Rollout |
 
-## Aktueller Config-/Lifecycle-Vertrag
+## Aktueller Native-Lifecycle-Vertrag
 
-### Durable Config
-
-Ein erfolgreicher Config-Sync persistiert synchron:
+### Start / Stop
 
 ```text
-protection_config
-unavailable_app_ids
-unavailable_active_app_ids
-protection_config_generation
+Config durable commit
+→ configGeneration
+→ recordProtectionStartRequested(configGeneration)
+→ Android service dispatch
+→ startForeground(...)
+→ durable confirmation
+→ RUNNING=true
 ```
 
-TypeScript erhält die neue UUID erst nach erfolgreichem `commit()` und reicht sie beim Start als `expectedConfigGeneration` zurück. `recordProtectionStartRequested(...)` bindet die gleiche Generation an den Request.
+Terminale/System-Stopps bleiben atomar. Start-/Stop-Dispatch wird unter `ProtectionServiceDispatchGuard.LOCK` serialisiert; Lifecycle-Persistenz nutzt danach `EVENT_LOCK`.
 
-### Candidate-Commit / Rollback
-
-Vor einem Config-Write wird der alte Config-/Availability-/Generation-Tupelzustand gesichert. Scheitert der Candidate-Commit, wird dieser alte Zustand vor Freigabe des Dispatch-Locks wiederhergestellt und der neue Sync abgelehnt.
-
-Ein bereits laufender Schutz arbeitet weiter mit seiner letzten bestätigten Regelbasis. Ein erster Start ohne durable Config bleibt blockiert.
-
-### Config Write Certainty
-
-Process-lokal gilt:
-
-```text
-candidate=true                   → SICHER
-candidate=false + rollback=true  → SICHER
-candidate=false + rollback=false → UNSICHER
-```
-
-Bei `UNSICHER` dürfen im selben Prozess kein neuer App-Start, kein Boot-/Update-Startrequest und keine current Pending-/Confirmation-Entscheidung erfolgen. Preference-basierte Config darf die bereits veröffentlichte Runtime-Regelbasis nicht ersetzen. Erst ein späterer erfolgreicher Config-Commit setzt den Zustand wieder auf `SICHER`.
-
-### Published Runtime Config / Grants / Overlay
-
-Die tatsächlich vom laufenden Dienst veröffentlichte Regelgeneration wird zusätzlich als Evidence geführt:
-
-```text
-protectionRuntimeConfigGeneration
-```
-
-Bei `UNSICHER` bleibt diese Generation auf der letzten bestätigten Runtime-Regelbasis.
-
-Bei einem bestätigten `G1 → G2`-Publish gilt:
-
-```text
-laufenden G1-Usage-Tick mit G1-Regelbasis schließen
-alte temporaryAccessUntil-Grants löschen
-altes Overlay + Countdown entfernen
-G2 als Runtime-Generation veröffentlichen
-```
-
-Overlay-Aktionen erfassen `actionConfigGeneration` und prüfen sie vor `WindowManager.addView(...)` sowie direkt vor `Bewusst öffnen`/Notfall-Freigabe erneut unter dem Dispatch-Lock. Eine stale `G1`-Aktion darf nach `G2` keinen neuen Grant und kein `open`-/`emergency`-Event erzeugen.
-
-### Runtime Usage Boundary
-
-Bei einem echten Generationwechsel wird die alte Messperiode geschlossen, **bevor** G2 die Rule-Map ersetzt:
-
-```text
-G1 rulesByPackage + G1 temporaryAccessUntil
-→ generationBoundaryAt = System.currentTimeMillis()
-→ recordAllowedUsage(null, generationBoundaryAt)
-→ Usage wird noch über previousRule.id aus G1 gebucketet
-→ cachedConfigGeneration = G2
-→ rulesByPackage = G2
-→ Grants/Overlay aus G1 invalidieren
-→ nächste Messperiode startet frisch unter G2
-```
-
-Damit ist `RUNTIME-04` source-seitig gehärtet. Der reale Android-Bucket-Nachweis bleibt offen.
-
-### Durable Action Evidence
-
-Normale und Emergency-Autorisierung sind fail-closed an synchrone lokale Persistenz gekoppelt:
-
-```text
-Bewusst öffnen:
-recordIntentionalOpen(...).commit() == true
-→ appendProtectionEvent("open", ...).commit() == true
-→ erst dann temporaryAccessUntil
-
-Notfall:
-incrementEmergencyCount(...).commit() == true
-→ appendProtectionEvent("emergency", ...).commit() == true
-→ erst dann temporaryAccessUntil
-```
-
-`appendProtectionEvent(...)` liefert den echten Commit-Erfolg zurück. Scheitert History/Counter oder Event, entsteht kein Grant. Ein bereits erfolgreicher erster Persistenzschritt wird bei einem Fehler im zweiten Schritt nicht zurückgenommen; das ist bewusst fail-closed und kann Schutz nur strenger, nicht schwächer machen.
-
-Damit sind `RUNTIME-05` und `RUNTIME-06` source-seitig gehärtet. Der reale sofortige Process-/Service-Kill nach erfolgreicher Freigabe bleibt als Device-Evidence offen.
-
-Diagnose/Debug zeigt:
-
-```text
-protectionConfigWriteStateCertain
-protectionConfigGeneration
-protectionRuntimeConfigGeneration
-startRequestConfigGeneration
-```
-
-### Lifecycle / Dispatch
-
-- System-/Terminal-Stopps bleiben atomar und source-guarded.
-- Produktive Aktivierung läuft nur über `recordProtectionStartRequested(...)`; ein direktes `setProtectionEnabled(..., true)` ist nicht zulässig.
-- frischer Pending-Start ist nur mit aktueller, sicherer Config-Generation idempotent;
-- `recordProtectionServiceStarted(...)` liefert `CONFIRMED`, `SUPERSEDED_BY_STOP` oder `FAILED_CLOSED`; nur `CONFIRMED` darf `RUNNING=true` erreichen;
-- globale Dispatch-Reihenfolge: `ProtectionServiceDispatchGuard.LOCK → EVENT_LOCK`;
-- Startpersistenz und Android-Startdispatch sowie Stop-Persistenz und `stopService()` werden gemeinsam serialisiert;
-- Service-Prerequisite- und Startfehlerpfade nutzen `ProtectionServiceDispatchGuard.dispatchControlledStop(...)`, nicht `stopSelf()`;
-- Controlled-stop Destroy-Suppression ist process-lokal, one-shot und auf 30 Sekunden `System.nanoTime()` begrenzt;
-- Same-Instance-Restart überträgt die aktuelle Request-Generation auf die lebende Service-Instanz;
-- alte Notification-Stop-Aktionen dürfen neue Generationen nicht stoppen.
-
-### App-Open Recovery
-
-Der App-Start liest zuerst den nativen Health-State, bevor er neue Config schreibt oder einen Start auslöst:
+### Health-Zustände
 
 ```text
 start-pending
-→ kein Config-Sync
-→ kein zweiter Start
-→ Status nach kurzer Verzögerung erneut lesen
-
-unclean-process-stop
-→ direkt recoverAfterProcessLoss(...)
-→ Recovery synchronisiert selbst durable Config + Generation
-
-stale-activation
-→ Config-Sync
-→ installierte aktive Ziel-App prüfen
-→ normaler generationgebundener Start
-
 start-interrupted
-→ kein automatischer Neustart
-→ bestehender Nutzer-Retry bleibt zuständig
+unclean-process-stop
+stale-activation
 ```
 
-Damit darf ein App-Open insbesondere keinen frischen Pending-Start durch einen neuen Config-Sync selbst entwerten. Ein bestätigter Process-Loss wird nicht über den normalen Startpfad repariert.
+werden getrennt behandelt. Ein frischer Pending-Start wird nicht durch einen App-Open-Sync entwertet. `start-interrupted` startet nicht automatisch neu.
 
-## Checker-Architektur-Drift
+### Single-Generation App-Open Recovery
 
-`npm run check:checker-drift` (`scripts/check-checker-architecture.ts`) ist Teil von `verify` und `readiness`.
-
-Der Meta-Guard schützt unter anderem, dass Source-Checker weiterhin die aktuelle Architektur verlangen:
-
-- generationgebundener `recordProtectionStartRequested(...)` statt produktivem direkten `enabled=true`;
-- `dispatchControlledStop(...)` statt Service-`stopSelf()`;
-- generationgebundener Process-Loss-Recovery-Start;
-- durable History/Event-/Emergency-Evidence **vor** temporärem Grant;
-- Factory-Reset-Tombstone vor kontrolliertem Stop-Dispatch;
-- atomare Prerequisite-Rejection über den gemeinsamen Helper;
-- health-aware App-Open-Recovery statt pauschalem `enabled && !running`;
-- fail-closed Migration-Save-Guard.
-
-Spezifikation: `docs/CHECKER_ARCHITECTURE_DRIFT.md`.
-
-## Usage Accounting Ownership
-
-Aktuelle Architektur:
+Für sichere `stale-activation`-Recovery gilt:
 
 ```text
-ScrollShieldProtectionService
-→ lokaler Tag + Rule-ID Bucket
-→ UsageFlushCoordinator
-→ UsageFlushWorker
-→ SharedPreferences.commit()
+serviceStatus = NativeProtection.getStatus()
+→ NativeProtection.syncCommitted(...)
+→ installed target prüfen
+→ NativeProtection.startCommitted(configGeneration, serviceStatus)
 ```
 
-`check:usage-accounting` ist auf diese Architektur aktualisiert. Es schützt Pending+In-Flight-Sichtbarkeit für Daily Limits, immutable one-in-flight Batches, Mergeback bei Fehlern, Shutdown-Drain, Midnight-Bucketing und die G1→G2-Usage-Grenze.
+Es gibt **keinen zweiten Config-Sync** im Start.
 
-## Source-/Testvertrag
+Für bestätigten Process Loss:
 
-Pflichtbestandteile sind insbesondere:
+```text
+before = getStatus()
+→ recoverAfterProcessLoss(...)
+   → syncCommitted(...)
+   → startCommitted(configGeneration, before)
+   → getStatus()
+```
 
-- `check:checker-drift`;
-- `check:android-project`;
-- `check:prerequisite-stop-codes`;
-- `check:protection-recovery`;
-- `check:config-durability`;
-- `check:runtime-config-state`;
-- `check:usage-accounting`;
-- `check:usage-flush-worker`;
-- `check:start-handshake`;
-- `check:lifecycle`;
-- `check:device-matrix`;
-- `check:native-stop-atomicity`;
-- `ProtectionConfigDurabilityStoreTest`;
-- `ProtectionConfigWriteCertaintyPolicyTest`;
-- `ProtectionConfigRuntimePolicyTest`;
-- `UsageAccountingPolicyTest`;
-- `UsageFlushCoordinatorTest`;
-- `UsageFlushWorkerTest`;
-- `ProtectionConfigDurabilityInstrumentedTest`;
-- `ProtectionServiceLifecyclePolicyTest`;
-- `ProtectionServiceDispatchGuardTest`;
-- `docs/CHECKER_ARCHITECTURE_DRIFT.md`;
-- `docs/PROTECTION_CONFIG_DURABILITY.md`;
-- `docs/PROTECTION_RUNTIME_CONFIG_STATE.md`;
-- `docs/PROTECTION_SERVICE_DISPATCH_RACES.md`;
-- `docs/ANDROID_DEVICE_TEST_MATRIX.md` mit APP-07..10, RUNTIME-01..06 und LIFE-12..15.
+### Lifecycle-Snapshot: neuerer Stop gewinnt
 
-## Aktueller Arbeitsfokus
+Automatische Starts senden:
 
-1. G6 extern entsperren und `npm run verify` auf exaktem Head ausführen.
-2. Android JUnit + `assembleDebug`.
-3. `connectedDebugAndroidTest`.
-4. APP-07 bis APP-10 real ausführen, einschließlich Candidate-/Rollback-Storage-Failure, `UNSICHER→SICHER`, Runtime-Generation sowie stale Overlay-/Grant-Aktionen.
-5. RUNTIME-01 bis RUNTIME-06 real ausführen; RUNTIME-04 mit explizitem G1-/G2-Bucketvergleich, RUNTIME-05/06 mit sofortigem Kill/Recovery nach erfolgreicher Freigabe.
-6. LIFE-12 bis LIFE-15 real ausführen.
-7. DISPATCH-01 bis DISPATCH-05 real ausführen.
-8. Pre-/Post-Confirmation Process Loss und App-Open-Recovery-Grenzen real prüfen.
-9. App-/Notification-/Start-/Destroy-/Boot-/Permission-/Target-App-Pfade real prüfen.
-10. G8 Worker/Coordinator/Usage-Flush + 12h-Baseline.
-11. G9 vollständige Physical Device Matrix.
-12. G2/G5/G0/G3: Migration, Security-Audit, User Research und Accessibility-Evidence.
+```text
+expectedEnabled
+expectedLastStartRequestAt
+expectedLastStartAt
+expectedLastStopAt
+```
 
-## Aktuelle CI-Grenze
+Native prüft unter:
 
-Auf diesem Draft-Branch fehlt weiterhin ein vollständiger erfolgreicher Verify-Lauf. Manche jüngsten Zwischen-Heads haben keine registrierte Ausführung; andere registrierte Läufe erreichen keine belastbare vollständige Step-Evidence. **Exakte mutable Head-/Run-/Job-IDs werden ausschließlich in PR #8 geführt**.
+```text
+ProtectionServiceDispatchGuard.LOCK
+→ EVENT_LOCK
+→ matchesLifecycleSnapshot(...)
+```
 
-Damit sind insbesondere **nicht als bestanden belegt**:
+**vor** Config-Validation, Prerequisite-Stopps, neuem Startrequest und Service-Dispatch.
+
+Hat der Nutzer oder die aktuelle Notification nach der Recovery-Entscheidung gestoppt, gilt:
+
+```text
+Snapshot mismatch
+→ no-op
+→ kein neuer Startrequest
+→ kein Auto-Reenable
+→ kein start_failed
+→ winning stop evidence bleibt unverändert
+```
+
+Realer Pflichtfall: `LIFE-16` für `stale-activation` und `unclean-process-stop`.
+
+## Config-/Runtime-Vertrag
+
+- Config-Sync liefert die UUID erst nach synchron bestätigtem Commit.
+- Candidate-Commit-Fehler rollt auf das vorige Tupel zurück.
+- Candidate + Rollback fehlgeschlagen → process-lokal `UNSICHER`; neue Starts/Recovery sind blockiert.
+- Laufender Dienst behält bei `UNSICHER` seine zuletzt veröffentlichte bestätigte Runtime-Generation.
+- bestätigter `G1 → G2`-Wechsel schließt G1-Usage vor Rule-Publish, invalidiert alte Grants und entfernt alte Overlays.
+- `Bewusst öffnen`: History commit → Event commit → Grant.
+- Emergency: Tageszähler commit → Event commit → Grant.
+
+## Checker-Architektur
+
+Pflichtbestandteile der Verify-Kette umfassen insbesondere:
+
+```text
+check:checker-drift
+check:android
+check:prerequisite-stop-codes
+check:process-loss
+check:protection-recovery
+check:native-stop-atomicity
+check:start-handshake
+check:config-durability
+check:runtime-config-state
+check:usage-accounting
+check:usage-flush-worker
+check:lifecycle
+check:device-matrix
+check:android-instrumentation
+check:migration
+```
+
+`check:checker-drift` verhindert, dass alte Verträge wie direktes `enabled=true`, `stopSelf()`, generationloser Recovery-Start, Grant-vor-Event oder ein unspezifischer Migration-Sync wieder als erwartete Architektur auftauchen.
+
+## Reale Pflicht-Evidence
+
+### Config / Runtime
+
+```text
+APP-07 .. APP-10
+RUNTIME-01 .. RUNTIME-06
+```
+
+### Lifecycle
+
+```text
+LIFE-12 .. LIFE-16
+DISPATCH-01 .. DISPATCH-05
+```
+
+`LIFE-16` verlangt explizit:
+
+1. automatische Recovery liest Snapshot;
+2. Config-Sync wird abgeschlossen;
+3. manueller oder aktueller Notification-Stop gewinnt vor Native-Start;
+4. verspätete Auto-Recovery liefert No-op;
+5. kein neuer Request-/Start-Zeitpunkt und kein `start_failed`;
+6. Stop-Zeitpunkt/-Code/-Nachricht bleiben Gewinner.
+
+## Aktuelle Ausführungsgrenze
+
+Source-Code, Checker und Testquellcode sind **keine Executed Evidence**. Mutable exakte Head-/Workflow-/Job-IDs werden ausschließlich in PR #8 geführt.
+
+Nicht als bestanden belegt sind insbesondere:
 
 - `npm run verify`;
 - `check:checker-drift`;
-- `check:android-project`;
-- `check:prerequisite-stop-codes`;
-- `check:protection-recovery`;
-- `check:native-stop-atomicity`;
 - `check:start-handshake`;
+- `check:process-loss`;
+- `check:protection-recovery`;
 - `check:config-durability`;
-- `check:runtime-config-state`;
-- `check:usage-accounting`;
-- `check:usage-flush-worker`;
-- `check:lifecycle`;
 - `check:device-matrix`;
-- `check:android-instrumentation`;
+- TypeScript / ESLint / Prettier / Vitest;
 - Android JUnit;
-- `ProtectionConfigWriteCertaintyPolicyTest`;
-- `ProtectionConfigRuntimePolicyTest`;
-- `UsageAccountingPolicyTest`;
-- `UsageFlushCoordinatorTest`;
-- `UsageFlushWorkerTest`;
-- React/Vitest-App-Open-Recovery-Tests;
 - Android Instrumentation;
 - Gradle Debug Build / APK;
 - APP-07 bis APP-10;
 - RUNTIME-01 bis RUNTIME-06;
-- LIFE-12 bis LIFE-15;
+- LIFE-12 bis LIFE-16;
 - DISPATCH-01 bis DISPATCH-05;
-- reale Storage-Failure-/Overlay-/Grant-/Usage-Boundary-/Action-Commit-/`start-pending`-/`start-interrupted`-/`unclean-process-stop`-/App-Open-/PendingIntent-Evidence.
+- reale Auto-Recovery-vs.-Manual-Stop-Evidence.
+
+## Nächster erlaubter Abschlussweg
+
+1. G6 Runner/Actions-Ausführung entsperren bzw. echten lokalen Verify-Lauf auf exaktem Head durchführen.
+2. `npm ci` + `npm run verify`.
+3. Android JUnit + `assembleDebug`.
+4. `connectedDebugAndroidTest`.
+5. APP-07..10 und RUNTIME-01..06 real ausführen.
+6. LIFE-12..16 und DISPATCH-01..05 real ausführen.
+7. Pre-/Post-Confirmation Process Kill und App-Open-Recovery-Races real prüfen.
+8. Physical Device Matrix + 12h/OEM/Batterie.
+9. Migration, Security-/Supply-Chain-/Binary-Audit, User Research und Accessibility abschließen.
+10. Erst danach Candidate Freeze und Release.
 
 ## Änderungsregel
 
@@ -292,6 +220,6 @@ Nach jedem größeren Repo-Block:
 
 1. Gate-Status neu bewerten;
 2. nur mit realer Evidenz auf `FERTIG` setzen;
-3. neue Blocker konkret eintragen;
+3. neue Blocker konkret dokumentieren;
 4. nächsten Arbeitsblock aus dem frühesten sinnvoll bearbeitbaren offenen Gate wählen;
 5. PR bleibt Draft, bis die Release-Gates erfüllt sind.
