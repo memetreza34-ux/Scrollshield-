@@ -45,6 +45,13 @@ export interface NativeProtectionStatus {
   health: NativeProtectionHealth;
 }
 
+export interface NativeProtectionLifecycleSnapshot {
+  enabled: boolean;
+  lastStartRequestAt: number;
+  lastStartAt: number;
+  lastStopAt: number;
+}
+
 export interface NativeProtectionStopReason {
   code: string;
   message: string;
@@ -55,11 +62,20 @@ export interface DurableConfigSyncResult {
   configGeneration: string;
 }
 
+interface NativeProtectionStartOptions {
+  expectedConfigGeneration: string;
+  requireLifecycleSnapshot?: boolean;
+  expectedEnabled?: boolean;
+  expectedLastStartRequestAt?: number;
+  expectedLastStartAt?: number;
+  expectedLastStopAt?: number;
+}
+
 interface NativeProtectionPlugin {
   syncProtectionConfig(options: {
     configJson: string;
   }): Promise<{ unavailableAppIdsJson: string; configGeneration: string }>;
-  startProtectionService(options: { expectedConfigGeneration: string }): Promise<void>;
+  startProtectionService(options: NativeProtectionStartOptions): Promise<void>;
   stopProtectionService(options: { reasonCode: string; reasonMessage: string }): Promise<void>;
   getProtectionServiceStatus(): Promise<{
     running: boolean;
@@ -239,6 +255,13 @@ const normalizeConfigGeneration = (value: unknown): string => {
   return CONFIG_GENERATION_PATTERN.test(normalized) ? normalized.toLowerCase() : '';
 };
 
+const normalizeLifecycleSnapshotTimestamp = (value: number): number => {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error('Automatic Android protection restart requires a valid lifecycle snapshot');
+  }
+  return value;
+};
+
 export const assessNativeProtectionHealth = (
   status: {
     running: boolean;
@@ -345,15 +368,33 @@ export const NativeProtection = {
     return (await this.syncCommitted(appsConfig, focusMode)).unavailableAppIds;
   },
 
-  async startCommitted(expectedConfigGeneration: string): Promise<void> {
+  async startCommitted(
+    expectedConfigGeneration: string,
+    expectedLifecycle?: NativeProtectionLifecycleSnapshot,
+  ): Promise<void> {
     if (!this.isAvailable()) return;
     const configGeneration = normalizeConfigGeneration(expectedConfigGeneration);
     if (!configGeneration) {
       throw new Error('A valid durable protection config generation is required before Android protection start');
     }
-    await AndroidProtection.startProtectionService({
+
+    const options: NativeProtectionStartOptions = {
       expectedConfigGeneration: configGeneration,
-    });
+    };
+    if (expectedLifecycle) {
+      if (expectedLifecycle.enabled !== true) {
+        throw new Error('Automatic Android protection restart requires enabled lifecycle evidence');
+      }
+      options.requireLifecycleSnapshot = true;
+      options.expectedEnabled = true;
+      options.expectedLastStartRequestAt = normalizeLifecycleSnapshotTimestamp(
+        expectedLifecycle.lastStartRequestAt,
+      );
+      options.expectedLastStartAt = normalizeLifecycleSnapshotTimestamp(expectedLifecycle.lastStartAt);
+      options.expectedLastStopAt = normalizeLifecycleSnapshotTimestamp(expectedLifecycle.lastStopAt);
+    }
+
+    await AndroidProtection.startProtectionService(options);
   },
 
   async start(appsConfig: Record<string, AppConfig>, focusMode: boolean): Promise<void> {
@@ -385,7 +426,7 @@ export const NativeProtection = {
       return this.getStatus();
     }
 
-    await this.startCommitted(synced.configGeneration);
+    await this.startCommitted(synced.configGeneration, before);
     return this.getStatus();
   },
 
