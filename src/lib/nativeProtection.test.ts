@@ -35,6 +35,26 @@ import { assessNativeProtectionHealth, NativeProtection } from './nativeProtecti
 
 const CONFIG_GENERATION = '11111111-2222-4333-8444-555555555555';
 
+const uncleanStatus = {
+  running: false,
+  enabled: true,
+  unavailableAppIdsJson: '[]',
+  lastStartRequestAt: 150,
+  lastStartAt: 200,
+  lastStopAt: 100,
+  lastStopCode: 'notification_action_stop',
+  lastStopMessage: 'Ein älterer sauberer Stopp',
+};
+
+const expectedRecoveryStart = {
+  expectedConfigGeneration: CONFIG_GENERATION,
+  requireLifecycleSnapshot: true,
+  expectedEnabled: true,
+  expectedLastStartRequestAt: 150,
+  expectedLastStartAt: 200,
+  expectedLastStopAt: 100,
+};
+
 describe('NativeProtection lifecycle reasons', () => {
   beforeEach(() => {
     isNativePlatformMock.mockReset();
@@ -229,16 +249,7 @@ describe('NativeProtection lifecycle reasons', () => {
 
   it('recovers only from a confirmed unclean process stop and re-reads native truth', async () => {
     getProtectionServiceStatusMock
-      .mockResolvedValueOnce({
-        running: false,
-        enabled: true,
-        unavailableAppIdsJson: '[]',
-        lastStartRequestAt: 150,
-        lastStartAt: 200,
-        lastStopAt: 100,
-        lastStopCode: 'notification_action_stop',
-        lastStopMessage: 'Ein älterwer sauberer Stopp',
-      })
+      .mockResolvedValueOnce(uncleanStatus)
       .mockResolvedValueOnce({
         running: true,
         enabled: true,
@@ -262,30 +273,44 @@ describe('NativeProtection lifecycle reasons', () => {
     );
 
     expect(syncProtectionConfigMock).toHaveBeenCalledTimes(1);
-    expect(startProtectionServiceMock).toHaveBeenCalledWith({
-      expectedConfigGeneration: CONFIG_GENERATION,
-      requireLifecycleSnapshot: true,
-      expectedEnabled: true,
-      expectedLastStartRequestAt: 150,
-      expectedLastStartAt: 200,
-      expectedLastStopAt: 100,
-    });
+    expect(startProtectionServiceMock).toHaveBeenCalledWith(expectedRecoveryStart);
     expect(getProtectionServiceStatusMock).toHaveBeenCalledTimes(2);
     expect(result).toMatchObject({ running: true, enabled: true, health: 'active' });
   });
 
-  it('fails closed with target_app_missing when every active Android target is unavailable', async () => {
+  it('preserves a newer manual stop that wins while process-loss recovery is in flight', async () => {
     getProtectionServiceStatusMock
+      .mockResolvedValueOnce(uncleanStatus)
       .mockResolvedValueOnce({
         running: false,
-        enabled: true,
+        enabled: false,
         unavailableAppIdsJson: '[]',
         lastStartRequestAt: 150,
         lastStartAt: 200,
-        lastStopAt: 100,
-        lastStopCode: 'notification_action_stop',
-        lastStopMessage: 'Ein älterer sauberer Stopp',
-      })
+        lastStopAt: 260,
+        lastStopCode: 'manual_app_stop',
+        lastStopMessage: 'Bewusst gestoppt',
+      });
+
+    const result = await NativeProtection.recoverAfterProcessLoss({}, false);
+
+    expect(syncProtectionConfigMock).toHaveBeenCalledTimes(1);
+    expect(startProtectionServiceMock).toHaveBeenCalledWith(expectedRecoveryStart);
+    expect(stopProtectionServiceMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      running: false,
+      enabled: false,
+      lastStopAt: 260,
+      lastStopCode: 'manual_app_stop',
+      lastStopMessage: 'Bewusst gestoppt',
+      health: 'stopped-with-reason',
+    });
+  });
+
+  it('returns fresh native target_app_missing evidence instead of writing a TypeScript stop', async () => {
+    startProtectionServiceMock.mockRejectedValueOnce(new Error('At least one installed active protected app is required'));
+    getProtectionServiceStatusMock
+      .mockResolvedValueOnce(uncleanStatus)
       .mockResolvedValueOnce({
         running: false,
         enabled: false,
@@ -312,12 +337,8 @@ describe('NativeProtection lifecycle reasons', () => {
       false,
     );
 
-    expect(syncProtectionConfigMock).toHaveBeenCalledTimes(1);
-    expect(startProtectionServiceMock).not.toHaveBeenCalled();
-    expect(stopProtectionServiceMock).toHaveBeenCalledWith({
-      reasonCode: 'target_app_missing',
-      reasonMessage: 'Keine aktive installierte Ziel-App ist mehr verfügbar; die Wiederherstellung wurde blockiert',
-    });
+    expect(startProtectionServiceMock).toHaveBeenCalledWith(expectedRecoveryStart);
+    expect(stopProtectionServiceMock).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       running: false,
       enabled: false,
@@ -328,16 +349,7 @@ describe('NativeProtection lifecycle reasons', () => {
 
   it('still recovers when one active target is unavailable but another remains installed', async () => {
     getProtectionServiceStatusMock
-      .mockResolvedValueOnce({
-        running: false,
-        enabled: true,
-        unavailableAppIdsJson: '[]',
-        lastStartRequestAt: 150,
-        lastStartAt: 200,
-        lastStopAt: 100,
-        lastStopCode: 'notification_action_stop',
-        lastStopMessage: 'Ein älterer sauberer Stopp',
-      })
+      .mockResolvedValueOnce(uncleanStatus)
       .mockResolvedValueOnce({
         running: true,
         enabled: true,
@@ -370,20 +382,24 @@ describe('NativeProtection lifecycle reasons', () => {
     );
 
     expect(stopProtectionServiceMock).not.toHaveBeenCalled();
-    expect(startProtectionServiceMock).toHaveBeenCalledWith({
-      expectedConfigGeneration: CONFIG_GENERATION,
-      requireLifecycleSnapshot: true,
-      expectedEnabled: true,
-      expectedLastStartRequestAt: 150,
-      expectedLastStartAt: 200,
-      expectedLastStopAt: 100,
-    });
+    expect(startProtectionServiceMock).toHaveBeenCalledWith(expectedRecoveryStart);
     expect(result).toMatchObject({
       running: true,
       enabled: true,
       unavailableAppIds: ['instagram'],
       health: 'active',
     });
+  });
+
+  it('rethrows a native start failure when no newer terminal evidence was persisted', async () => {
+    startProtectionServiceMock.mockRejectedValueOnce(new Error('transport failed'));
+    getProtectionServiceStatusMock
+      .mockResolvedValueOnce(uncleanStatus)
+      .mockResolvedValueOnce(uncleanStatus);
+
+    await expect(NativeProtection.recoverAfterProcessLoss({}, false)).rejects.toThrow('transport failed');
+    expect(getProtectionServiceStatusMock).toHaveBeenCalledTimes(2);
+    expect(stopProtectionServiceMock).not.toHaveBeenCalled();
   });
 
   it('does not restart when process-loss recovery finds the service already active', async () => {
