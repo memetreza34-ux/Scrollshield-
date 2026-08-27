@@ -143,8 +143,8 @@ requirePattern(
 );
 requirePattern(
   'bridgeTest',
-  /recovers only from a confirmed unclean process stop[\s\S]*requireLifecycleSnapshot: true[\s\S]*expectedLastStartRequestAt: 150[\s\S]*expectedLastStartAt: 200[\s\S]*expectedLastStopAt: 100/,
-  'Process-loss Vitest must lock lifecycle snapshot forwarding.',
+  /const expectedRecoveryStart = \{[\s\S]*expectedConfigGeneration: CONFIG_GENERATION[\s\S]*requireLifecycleSnapshot: true[\s\S]*expectedLastStartRequestAt: 150[\s\S]*expectedLastStartAt: 200[\s\S]*expectedLastStopAt: 100[\s\S]*recovers only from a confirmed unclean process stop[\s\S]*toHaveBeenCalledWith\(expectedRecoveryStart\)/,
+  'Process-loss Vitest must lock the shared exact lifecycle snapshot fixture used by automatic recovery.',
 );
 requirePattern(
   'app',
