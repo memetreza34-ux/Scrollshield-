@@ -89,4 +89,44 @@ public class ProtectionStartHandshakePolicyTest {
             ProtectionStartHandshakePolicy.hasUnconfirmedStartRequest(true, 300L, 200L, 300L)
         );
     }
+
+    @Test
+    public void autoRecoverySnapshotMatchesOnlyUnchangedLifecycleTruth() {
+        assertTrue(
+            ProtectionStartHandshakePolicy.matchesLifecycleSnapshot(
+                true,
+                300L,
+                200L,
+                250L,
+                true,
+                300L,
+                200L,
+                250L
+            )
+        );
+        assertFalse(
+            ProtectionStartHandshakePolicy.matchesLifecycleSnapshot(
+                false,
+                300L,
+                200L,
+                400L,
+                true,
+                300L,
+                200L,
+                250L
+            )
+        );
+        assertFalse(
+            ProtectionStartHandshakePolicy.matchesLifecycleSnapshot(
+                true,
+                301L,
+                200L,
+                250L,
+                true,
+                300L,
+                200L,
+                250L
+            )
+        );
+    }
 }
