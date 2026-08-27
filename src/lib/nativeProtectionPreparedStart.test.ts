@@ -67,11 +67,43 @@ describe('NativeProtection committed-start boundary', () => {
     });
   });
 
+  it('forwards a lifecycle snapshot for conditional automatic restart', async () => {
+    const synced = await NativeProtection.syncCommitted({}, false);
+    await NativeProtection.startCommitted(synced.configGeneration, {
+      enabled: true,
+      lastStartRequestAt: 300,
+      lastStartAt: 200,
+      lastStopAt: 250,
+    });
+
+    expect(syncProtectionConfigMock).toHaveBeenCalledTimes(1);
+    expect(startProtectionServiceMock).toHaveBeenCalledWith({
+      expectedConfigGeneration: CONFIG_GENERATION,
+      requireLifecycleSnapshot: true,
+      expectedEnabled: true,
+      expectedLastStartRequestAt: 300,
+      expectedLastStartAt: 200,
+      expectedLastStopAt: 250,
+    });
+  });
+
   it('fails closed before Android dispatch when the prepared generation is invalid', async () => {
     await expect(NativeProtection.startCommitted('invalid')).rejects.toThrow(
       'valid durable protection config generation',
     );
     expect(syncProtectionConfigMock).not.toHaveBeenCalled();
+    expect(startProtectionServiceMock).not.toHaveBeenCalled();
+  });
+
+  it('fails closed before Android dispatch when automatic restart snapshot is invalid', async () => {
+    await expect(
+      NativeProtection.startCommitted(CONFIG_GENERATION, {
+        enabled: false,
+        lastStartRequestAt: 300,
+        lastStartAt: 200,
+        lastStopAt: 250,
+      }),
+    ).rejects.toThrow('enabled lifecycle evidence');
     expect(startProtectionServiceMock).not.toHaveBeenCalled();
   });
 });
