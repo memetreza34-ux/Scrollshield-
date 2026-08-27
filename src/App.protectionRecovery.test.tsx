@@ -126,10 +126,22 @@ describe('App native protection recovery', () => {
     factoryResetMock.mockResolvedValue(undefined);
   });
 
-  it('restarts a stale service with the single durable generation produced by app-open sync', async () => {
+  it('restarts a stale service with the single durable generation and exact lifecycle snapshot', async () => {
     render(<App />);
 
-    await waitFor(() => expect(startCommittedMock).toHaveBeenCalledWith(CONFIG_GENERATION));
+    await waitFor(() =>
+      expect(startCommittedMock).toHaveBeenCalledWith(
+        CONFIG_GENERATION,
+        expect.objectContaining({
+          enabled: true,
+          running: false,
+          lastStartRequestAt: 0,
+          lastStartAt: 1,
+          lastStopAt: 0,
+          health: 'stale-activation',
+        }),
+      ),
+    );
     expect(syncCommittedMock).toHaveBeenCalledTimes(1);
     expect(syncCommittedMock).toHaveBeenCalledWith(expect.any(Object), false);
     expect(startCommittedMock).toHaveBeenCalledTimes(1);
