@@ -226,7 +226,7 @@ export default function App() {
           return;
         }
 
-        const unavailableAppIds = await NativeProtection.sync(
+        const synced = await NativeProtection.syncCommitted(
           appState.appsConfig,
           appState.isFocusModeActive,
         );
@@ -234,11 +234,11 @@ export default function App() {
 
         const installedActiveAppIds = getInstalledActiveProtectionIds(
           appState.appsConfig,
-          unavailableAppIds,
+          synced.unavailableAppIds,
         );
         if (!shouldRecoverStaleProtection(serviceStatus, installedActiveAppIds)) return;
 
-        await NativeProtection.start(appState.appsConfig, appState.isFocusModeActive);
+        await NativeProtection.startCommitted(synced.configGeneration);
       } catch (error) {
         console.error('Failed to sync or recover native protection configuration', error);
       }
