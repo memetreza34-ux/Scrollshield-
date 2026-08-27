@@ -5,6 +5,7 @@ const paths = {
   readiness: 'scripts/readiness-report.ts',
   androidProject: 'scripts/check-android-project.ts',
   prerequisiteStops: 'scripts/check-prerequisite-stop-codes.ts',
+  startHandshake: 'scripts/check-start-handshake.ts',
   processLoss: 'scripts/check-process-loss-recovery.ts',
   configDurability: 'scripts/check-protection-config-durability.ts',
   nativeDrain: 'scripts/check-native-drain-ack.ts',
@@ -14,7 +15,6 @@ const paths = {
 } as const;
 
 type FileKey = keyof typeof paths;
-
 const entries = await Promise.all(
   Object.entries(paths).map(async ([key, file]) => [key, await readFile(file, 'utf8')] as const),
 );
@@ -31,11 +31,7 @@ for (const required of [
   'Productive activation must not bypass the atomic start-request transaction.',
   'Legacy text-derived prerequisite shutdown must not return.',
 ]) {
-  requireText(
-    'androidProject',
-    required,
-    `Android project checker is missing current start/prerequisite architecture marker: ${required}`,
-  );
+  requireText('androidProject', required, `Android project checker is missing current marker: ${required}`);
 }
 
 for (const required of [
@@ -43,19 +39,29 @@ for (const required of [
   "'stopSelf()'",
   'centralized atomic stop + controlled dispatch path',
 ]) {
-  requireText(
-    'prerequisiteStops',
-    required,
-    `Prerequisite checker is missing controlled-stop or legacy-rejection marker: ${required}`,
-  );
+  requireText('prerequisiteStops', required, `Prerequisite checker is missing current marker: ${required}`);
 }
 
-for (const required of ['syncCommitted', 'startCommitted', 'start-pending', 'start-interrupted']) {
-  requireText(
-    'processLoss',
-    required,
-    `Process-loss checker is missing current committed-generation/health marker: ${required}`,
-  );
+for (const required of [
+  'matchesLifecycleSnapshot',
+  'requireLifecycleSnapshot',
+  'startCommitted',
+  'serviceStatus',
+  'before',
+  'autoRecoverySnapshotMatchesOnlyUnchangedLifecycleTruth',
+]) {
+  requireText('startHandshake', required, `Start-handshake checker is missing auto-recovery snapshot marker: ${required}`);
+}
+
+for (const required of [
+  'syncCommitted',
+  'startCommitted',
+  'requireLifecycleSnapshot: true',
+  'expectedLastStartRequestAt: 150',
+  'start-pending',
+  'start-interrupted',
+]) {
+  requireText('processLoss', required, `Process-loss checker is missing snapshot/health marker: ${required}`);
 }
 
 for (const required of [
@@ -66,11 +72,7 @@ for (const required of [
   'only after the counter and event are durably persisted',
   'only after history and event evidence are durably persisted',
 ]) {
-  requireText(
-    'configDurability',
-    required,
-    `Config durability checker is missing durable-before-grant marker: ${required}`,
-  );
+  requireText('configDurability', required, `Config durability checker is missing marker: ${required}`);
 }
 
 for (const required of [
@@ -78,11 +80,7 @@ for (const required of [
   'dispatchControlledStop',
   'mark native data atomically before a serialized controlled service stop',
 ]) {
-  requireText(
-    'nativeDrain',
-    required,
-    `Native drain checker is missing factory-reset/controlled-dispatch marker: ${required}`,
-  );
+  requireText('nativeDrain', required, `Native drain checker is missing marker: ${required}`);
 }
 
 for (const required of [
@@ -90,27 +88,18 @@ for (const required of [
   'NOTIFICATIONS_MISSING',
   'persist exact stop evidence and serialize Android stop dispatch before rejecting',
 ]) {
-  requireText(
-    'transparency',
-    required,
-    `Transparency checker is missing atomic notification prerequisite marker: ${required}`,
-  );
+  requireText('transparency', required, `Transparency checker is missing marker: ${required}`);
 }
 
 for (const required of [
   'start-pending',
   'recoverAfterProcessLoss',
-  'NativeProtection\\.getStatus',
   'NativeProtection\\.syncCommitted',
-  'NativeProtection\\.startCommitted',
-  'single durable app-open config generation',
-  'preparedStartTestPath',
+  'NativeProtection\\.startCommitted\\(synced\\.configGeneration, serviceStatus\\)',
+  'exact lifecycle snapshot',
+  'matchesLifecycleSnapshot',
 ]) {
-  requireText(
-    'recovery',
-    required,
-    `Protection recovery checker is missing health-aware single-generation app-open recovery marker: ${required}`,
-  );
+  requireText('recovery', required, `Protection recovery checker is missing snapshot-aware marker: ${required}`);
 }
 
 for (const required of [
@@ -118,11 +107,7 @@ for (const required of [
   'Normal React state persistence must stay paused while migration is blocked.',
   'must inspect lifecycle status first.',
 ]) {
-  requireText(
-    'migrationRecovery',
-    required,
-    `Migration recovery checker is missing current fail-closed guard marker: ${required}`,
-  );
+  requireText('migrationRecovery', required, `Migration recovery checker is missing fail-closed marker: ${required}`);
 }
 
 requireText(
@@ -130,15 +115,11 @@ requireText(
   '"check:checker-drift": "tsx scripts/check-checker-architecture.ts"',
   'package.json must expose check:checker-drift.',
 );
-requireText(
-  'packageJson',
-  'npm run check:checker-drift',
-  'npm run verify must execute check:checker-drift.',
-);
+requireText('packageJson', 'npm run check:checker-drift', 'npm run verify must execute check:checker-drift.');
 requireText(
   'readiness',
   "args: ['run', 'check:checker-drift'], required: true",
-  'readiness must require the checker-drift guard.',
+  'readiness must require check:checker-drift.',
 );
 
 if (findings.length > 0) {
@@ -148,5 +129,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Checker architecture drift guard passed. Verify contracts remain aligned with generation-bound starts, explicit legacy rejection rules, atomic/controlled stops, durable-before-grant authorization, single-generation health-aware app-open recovery, reset dispatch, and fail-closed migration guards.',
+  'Checker architecture drift guard passed. Verify contracts remain aligned with generation-bound lifecycle-snapshot auto recovery, atomic/controlled stops, durable-before-grant authorization, reset dispatch, and fail-closed migration guards.',
 );
