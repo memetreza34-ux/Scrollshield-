@@ -69,8 +69,10 @@ for (const required of [
   'recordIntentionalOpen',
   'appendProtectionEvent',
   'temporaryAccessUntil',
-  'only after the counter and event are durably persisted',
-  'only after history and event evidence are durably persisted',
+  'Emergency grant may exist only after durable counter and event evidence.',
+  'Intentional-open grant may exist only after durable history and event evidence.',
+  'startCommitted',
+  'syncCommitted',
 ]) {
   requireText('configDurability', required, `Config durability checker is missing marker: ${required}`);
 }
@@ -129,5 +131,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Checker architecture drift guard passed. Verify contracts remain aligned with generation-bound lifecycle-snapshot auto recovery, atomic/controlled stops, durable-before-grant authorization, reset dispatch, and fail-closed migration guards.',
+  'Checker architecture drift guard passed. Verify contracts remain aligned with lifecycle-snapshot auto recovery, committed-generation reuse, atomic/controlled stops, durable-before-grant authorization, reset dispatch, and fail-closed migration guards.',
 );
