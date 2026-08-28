@@ -13,9 +13,5 @@ export const getInstalledActiveProtectionIds = (
 
 export const shouldRecoverStaleProtection = (
   status: Pick<NativeProtectionStatus, 'enabled' | 'running' | 'health'>,
-  installedActiveAppIds: string[],
-): boolean =>
-  status.enabled &&
-  !status.running &&
-  installedActiveAppIds.length > 0 &&
-  status.health === 'stale-activation';
+  _installedActiveAppIds: string[],
+): boolean => status.enabled && !status.running && status.health === 'stale-activation';
