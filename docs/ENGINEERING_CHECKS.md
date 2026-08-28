@@ -2,7 +2,7 @@
 
 Status: **verbindlicher technischer Verifikationsvertrag**
 
-Letzte Aktualisierung: **27. August 2026**
+Letzte Aktualisierung: **28. August 2026**
 
 ## Grundregel
 
@@ -38,7 +38,7 @@ Die Kette umfasst unter anderem:
 - `check:device-matrix`;
 - Migration, Release, Privacy, Store, Supply Chain, Security, PWA und Bundle Checks.
 
-Veraltete Erwartungen wie produktives `setProtectionEnabled(context, true)`, `stopForMissingPermission(...)`, generationlose Starts, TypeScript-owned Process-Loss-Fail-Closed-Stopps oder Service-`stopSelf()` sind nicht zulässig.
+Veraltete Erwartungen wie produktives `setProtectionEnabled(context, true)`, `stopForMissingPermission(...)`, generationlose Starts, React-/TypeScript-owned Recovery-Blocker oder Service-`stopSelf()` sind nicht zulässig.
 
 ## Checker Architecture Drift
 
@@ -58,7 +58,7 @@ startCommitted(configGeneration, optionalLifecycleSnapshot)
 start-pending / start-interrupted / unclean-process-stop
 matchesLifecycleSnapshot(...)
 hasNewTerminalEvidenceSince(...)
-Native-owned Fail-Closed-Recovery-Evidence
+Native-owned Config/Permission/Target Fail-Closed-Evidence
 durable History/Counter + Event vor temporaryAccessUntil
 Factory-Reset-Tombstone vor controlled stop
 rejectProtectionStartPrerequisite(...)
@@ -206,9 +206,11 @@ App-Open-`stale-activation`:
 ```text
 serviceStatus = getStatus()
 → syncCommitted(...)
-→ installierte aktive Ziele prüfen
 → startCommitted(configGeneration, serviceStatus)
+→ Native entscheidet Config / Permissions / installierte aktive Ziel-App
 ```
+
+`unavailableAppIds` darf den stale-Recovery-Versuch im React-Layer nicht unterdrücken. Die Liste bleibt Diagnose-/UI-Information; fail-closed `target_app_missing`-/Permission-Evidence gehört dem aktuellen Native-Snapshot.
 
 Process-Loss-Recovery:
 
@@ -360,11 +362,11 @@ getStatus()
 ├─ unclean-process-stop
 │  → recoverAfterProcessLoss(...)
 │  → Single-Generation + Snapshot
-│  → Native besitzt Target-/Permission-/Start-Fail-Closed-Evidence
+│  → Native besitzt Config-/Target-/Permission-/Start-Fail-Closed-Evidence
 ├─ stale-activation
 │  → syncCommitted(...)
-│  → installierte aktive Ziel-App prüfen
 │  → startCommitted(configGeneration, serviceStatus)
+│  → Native besitzt Config-/Target-/Permission-/Start-Fail-Closed-Evidence
 ├─ start-interrupted
 │  → kein Auto-Restart; Nutzer-Retry
 └─ active / deliberately disabled / other
