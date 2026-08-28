@@ -26,24 +26,27 @@ const findings: string[] = [];
 function requirePattern(file: string, content: string, pattern: RegExp, message: string) {
   if (!pattern.test(content)) findings.push(`${file}: ${message}`);
 }
+function forbidText(file: string, content: string, text: string, message: string) {
+  if (content.includes(text)) findings.push(`${file}: ${message}`);
+}
 
 requirePattern(
   policyPath,
   policy,
-  /config\.active && !unavailable\.has\(config\.id\)/,
-  'Recovery target selection must require an active installed app.',
+  /status\.enabled[\s\S]*!status\.running[\s\S]*status\.health === 'stale-activation'/,
+  'Generic app-open restart must be limited to stale activation lifecycle truth.',
 );
-requirePattern(
+forbidText(
   policyPath,
   policy,
-  /status\.enabled[\s\S]*!status\.running[\s\S]*installedActiveAppIds\.length > 0[\s\S]*status\.health === 'stale-activation'/,
-  'Generic app-open restart must be limited to stale activation with an installed target.',
+  'installedActiveAppIds.length > 0',
+  'React recovery policy must not suppress stale recovery based on target availability; native preflight owns target evidence.',
 );
 requirePattern(
   policyTestPath,
   policyTest,
-  /restarts only a safe stale activation with an installed active target[\s\S]*unclean-process-stop[\s\S]*start-pending[\s\S]*start-interrupted/,
-  'Recovery policy tests must keep process loss and pending/interrupted starts out of generic stale restart.',
+  /attempts automatic restart only for stale activation and delegates target availability to native[\s\S]*stale-activation[\s\S]*\[\][\s\S]*toBe\(true\)[\s\S]*unclean-process-stop[\s\S]*start-pending[\s\S]*start-interrupted/,
+  'Recovery policy tests must prove target availability cannot bypass native stale-recovery preflight.',
 );
 
 requirePattern(
@@ -55,14 +58,20 @@ requirePattern(
 requirePattern(
   appPath,
   app,
-  /serviceStatus\.health === 'unclean-process-stop'[\s\S]*recoverAfterProcessLoss\([\s\S]*return;[\s\S]*NativeProtection\.syncCommitted\([\s\S]*getInstalledActiveProtectionIds[\s\S]*shouldRecoverStaleProtection[\s\S]*NativeProtection\.startCommitted\(synced\.configGeneration, serviceStatus\)/,
-  'Process loss must route directly to controlled recovery; stale activation must reuse one durable generation and the exact decision snapshot.',
+  /serviceStatus\.health === 'unclean-process-stop'[\s\S]*recoverAfterProcessLoss\([\s\S]*return;[\s\S]*NativeProtection\.syncCommitted\([\s\S]*shouldRecoverStaleProtection\(serviceStatus, installedActiveAppIds\)[\s\S]*NativeProtection\.startCommitted\(synced\.configGeneration, serviceStatus\)/,
+  'Process loss must route directly to controlled recovery; stale activation must always reach the snapshot-bound native preflight after one durable sync.',
 );
 requirePattern(
   appTestPath,
   appTest,
   /restarts a stale service with the single durable generation and exact lifecycle snapshot[\s\S]*startCommittedMock[\s\S]*CONFIG_GENERATION[\s\S]*lastStartRequestAt: 0[\s\S]*lastStartAt: 1[\s\S]*lastStopAt: 0[\s\S]*syncCommittedMock\)\.toHaveBeenCalledTimes\(1\)/,
   'App integration test must prove single-generation stale restart with exact lifecycle snapshot.',
+);
+requirePattern(
+  appTestPath,
+  appTest,
+  /delegates unavailable-target stale recovery to the native snapshot-bound preflight[\s\S]*unavailableAppIds: \['instagram'\][\s\S]*startCommittedMock\)\.toHaveBeenCalledWith[\s\S]*CONFIG_GENERATION[\s\S]*health: 'stale-activation'/,
+  'App integration test must prove unavailable targets do not suppress native stale-recovery preflight.',
 );
 requirePattern(
   appTestPath,
@@ -86,8 +95,8 @@ requirePattern(
 requirePattern(
   pluginPath,
   plugin,
-  /requireLifecycleSnapshot[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*synchronized \(EVENT_LOCK\)[\s\S]*matchesLifecycleSnapshot[\s\S]*call\.resolve\(\);[\s\S]*return;[\s\S]*matchesCurrentGeneration/,
-  'Native automatic restart must no-op on a changed lifecycle snapshot before writing start/error evidence.',
+  /requireLifecycleSnapshot[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*synchronized \(EVENT_LOCK\)[\s\S]*matchesLifecycleSnapshot[\s\S]*call\.resolve\(\);[\s\S]*return;[\s\S]*matchesCurrentGeneration[\s\S]*hasUsageAccess[\s\S]*canDrawOverlays[\s\S]*hasNotificationsEnabled[\s\S]*hasConfiguredApps[\s\S]*TARGET_APP_MISSING[\s\S]*recordProtectionStartRequested/,
+  'Native automatic restart must check snapshot first, then own config/permission/target fail-closed evidence before request persistence.',
 );
 
 requirePattern(
@@ -116,5 +125,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Protection recovery check passed. Pending starts remain untouched; stale/process-loss auto recovery reuses one durable config generation and is cancelled by newer lifecycle evidence.',
+  'Protection recovery check passed. Pending starts remain untouched; stale/process-loss auto recovery reaches one snapshot-bound native preflight, and native owns current config/permission/target fail-closed evidence.',
 );
