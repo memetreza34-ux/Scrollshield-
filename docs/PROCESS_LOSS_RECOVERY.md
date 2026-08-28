@@ -2,281 +2,184 @@
 
 Status: **Source-Vertrag vorhanden, reale Android-Evidence offen**
 
-Letzte Aktualisierung: **27. August 2026**
+Letzte Aktualisierung: **28. August 2026**
 
 ## Ziel
 
-ScrollShield trennt drei unterschiedliche Fälle:
+Ein harter Android-Prozessabbruch darf nicht wie ein normaler manueller oder permission-bedingter Stopp behandelt werden. Zusätzlich darf ein Prozessabbruch **vor** einem bestätigten Foreground-Service-Start nicht wie ein späterer Kill eines bereits laufenden Schutzdienstes aussehen.
 
-1. Startanforderung gespeichert, Foreground-Start noch nicht bestätigt;
-2. bestätigter Foreground-Service verschwindet später ohne terminalen Stopp;
-3. Nutzer/System erzeugt eine neuere terminale Stop-Evidence.
+ScrollShield trennt deshalb:
+
+1. persistierte Startanforderung;
+2. bestätigten Foreground-Service-Start;
+3. späteren terminalen Stopp.
 
 Detaillierter Startvertrag: `docs/PROTECTION_START_HANDSHAKE.md`.
 
-## Persistente Lifecycle-Evidence
+## Persistente Start-Evidence
+
+Der Native-Layer führt getrennt:
 
 ```text
-lastStartRequestAt = Aktivierungsabsicht + Startanforderung durable
-lastStartAt        = Foreground-Service-Start durable bestätigt
-lastStopAt         = terminaler Stopp durable
+lastStartRequestAt
+lastStartAt
+lastStopAt
 ```
 
-Ein Request ist niemals gleichbedeutend mit einem bestätigten Dienststart.
+`lastStartRequestAt` bedeutet nur: Aktivierungsabsicht + Startanforderung wurden dauerhaft gespeichert.
 
-## Nicht-Laufend-Zustände
+`lastStartAt` bedeutet stärker: `startForeground(...)` war erfolgreich und die bestätigte Start-Evidence wurde danach ebenfalls dauerhaft gespeichert.
 
-### `start-pending`
+Ein Request darf daher nie als tatsächlicher Dienststart interpretiert werden.
+
+## Drei relevante Nicht-Laufend-Zustände
+
+### 1. `start-pending`
+
+Gilt bei:
 
 ```text
-running=false
-enabled=true
+running == false
+enabled == true
 lastStartRequestAt > max(lastStartAt, lastStopAt)
-Request-Alter <= 15 Sekunden
+Alter der Anfrage <= 15 Sekunden
 ```
 
-UI: `STARTET`, kein alter Stop-Grund, kein Doppelstart, Status später erneut lesen.
+Die Startanforderung ist frisch und darf noch auf Androids Foreground-Bestätigung warten.
 
-### `start-interrupted`
+UI:
+
+- Badge `STARTET`;
+- kein alter Stop-Grund als aktuelle Ursache;
+- Doppelstart in der Statuskarte blockiert;
+- Aktion zeigt `Start wird bestätigt…`.
+
+### 2. `start-interrupted`
+
+Gilt bei:
 
 ```text
-running=false
-enabled=true
+running == false
+enabled == true
 lastStartRequestAt > max(lastStartAt, lastStopAt)
-Request-Alter > 15 Sekunden
+Alter der Anfrage > 15 Sekunden
 ```
 
-UI: `START ABGEBROCHEN`, normaler Retry `Schutz erneut starten`, keine Process-Loss-Recovery.
+Die neueste Startanforderung wurde nicht durch einen bestätigten `lastStartAt` abgeschlossen. Der Prozess kann zwischen Startanforderung und Foreground-Bestätigung beendet worden sein.
 
-### `unclean-process-stop`
+UI:
+
+- Badge `START ABGEBROCHEN`;
+- kein älterer Stop-Grund als aktuelle Ursache;
+- normaler Retry `Schutz erneut starten`;
+- **keine** Process-Loss-Recovery.
+
+### 3. `unclean-process-stop`
+
+Der Health-State `unclean-process-stop` gilt nur bei bestätigtem früheren Dienststart:
 
 ```text
-running=false
-enabled=true
+running == false
+enabled == true
 lastStartAt > 0
 lastStartAt > lastStopAt
 lastStartRequestAt <= lastStartAt
 ```
 
-Nur dieser Zustand bedeutet: Ein früherer Service-Start war bestätigt und verschwand später ohne terminalen Stopp.
+Damit ist ein **bestätigter** Dienststart neuer als jede bekannte Stop-Evidence. Ein älterer Stop-Code darf in diesem Zustand nicht als aktuelle Ursache dargestellt werden.
 
-UI: `PROZESS ABGEBROCHEN`, keine alte Stop-Evidence als aktuelle Ursache, Aktion `Schutz wiederherstellen`, Busy `Wiederherstellung läuft…`.
+## Nutzerführung für bestätigten Process-Loss
 
-## Kontrollierte Process-Loss-Recovery
+Für `unclean-process-stop` zeigt ScrollShield:
+
+- Badge `PROZESS ABGEBROCHEN`;
+- Erklärung, dass Prozessabbruch/System-Kill möglich ist;
+- keine alte Stop-Evidence als aktuelle Ursache;
+- Aktion `Schutz wiederherstellen` statt generischem `Schutzdienst starten`;
+- Busy-Zustand `Wiederherstellung läuft…`.
+
+Diese Recovery-Aktion ist bewusst nur für einen vorher **bestätigten** Dienststart vorgesehen.
+
+## Kontrollierte Recovery
 
 `NativeProtection.recoverAfterProcessLoss(appsConfig, focusMode)` muss:
 
-1. Native-Status erneut lesen;
-2. bei `running && enabled` sofort zurückkehren;
-3. ausschließlich `unclean-process-stop` akzeptieren;
-4. diesen Status als Lifecycle-Snapshot `before` behalten;
-5. die Protection-Config genau einmal über `syncCommitted(...)` durable synchronisieren;
-6. `startCommitted(configGeneration, before)` aufrufen;
-7. Native darf erst nach erfolgreichem Snapshot-Match Config-/Permission-/Target-/Start-Evidence erzeugen;
-8. bei nativer Rejection den Native-Status erneut lesen;
-9. wenn neue terminale Evidence seit `before` existiert, diesen Status zurückgeben;
-10. wenn keine neue terminale Evidence existiert, den ursprünglichen Fehler weiterwerfen;
-11. bei akzeptiertem Start den Native-Status erneut lesen und zurückgeben.
+1. den echten Native-Status erneut lesen;
+2. sofort zurückkehren, falls der Dienst inzwischen bereits `running && enabled` ist;
+3. ansonsten ausschließlich `unclean-process-stop` akzeptieren;
+4. die aktuelle Protection-Config **genau einmal durable** synchronisieren;
+5. die exakt zurückgegebene `configGeneration` zusammen mit dem ursprünglichen Lifecycle-Snapshot an `startCommitted(...)` übergeben;
+6. Target-/Permission-/Config-/Start-Blocker ausschließlich dem aktuellen Native-Preflight überlassen;
+7. nach nativer Rejection den Native-Status erneut lesen;
+8. neue terminale Native-Evidence zurückgeben, falls sie seit dem ursprünglichen Snapshot entstanden ist;
+9. den ursprünglichen Fehler weiterwerfen, falls keine neue terminale Evidence persistiert wurde;
+10. bei erfolgreichem Start den Native-Status erneut lesen und zurückgeben.
 
-Kernfluss:
+`start-pending` und `start-interrupted` dürfen nicht in diese Recovery-Funktion umgeleitet werden.
+
+Der Permissions-Screen prüft weiterhin vor dem Recovery-Aufruf die aktuell sichtbaren Pflichtzugriffe und mindestens eine aktive App-Auswahl für Nutzerführung. Diese React-Vorprüfung besitzt jedoch **nicht** die finale Fail-Closed-Evidence.
+
+## Native-owned Fail-Closed-Evidence
+
+Automatische Recovery – sowohl `unclean-process-stop` als auch App-Open-`stale-activation` – muss am selben Native-Preflight enden:
 
 ```text
-before = getStatus()
-→ syncCommitted(...)
-→ startCommitted(configGeneration, before)
-→ getStatus()
+Lifecycle-Snapshot
+→ Config-Generation
+→ Usage Access
+→ Overlay
+→ Notifications
+→ installierte aktive Ziel-App
+→ Startrequest
+→ Service-Dispatch
 ```
 
-Fehlerfluss:
+`unavailableAppIds` darf einen `stale-activation`-Versuch im React-Layer nicht lokal unterdrücken. Auch wenn der vorherige Config-Sync alle aktiven Ziele als unavailable meldet, wird die committed Generation zusammen mit dem alten Lifecycle-Snapshot an Native übergeben. Nur Native darf daraus `target_app_missing` oder einen anderen aktuellen Prerequisite-Stop erzeugen.
+
+Dadurch gilt auch im Race:
 
 ```text
-startCommitted(...) reject
-→ afterFailure = getStatus()
-├─ neue terminale Evidence seit before
-│  → afterFailure zurückgeben
-└─ keine neue terminale Evidence
-   → Fehler weiterwerfen
-```
-
-Damit wird ein Transport-/Pluginfehler nicht als falscher erfolgreicher Fail-Closed-Status verschluckt.
-
-## Native besitzt die Recovery-Fehler-Evidence
-
-TypeScript schreibt für Process-Loss-Recovery **keinen proaktiven `target_app_missing`-Stop mehr**.
-
-Warum: Ein TypeScript-Stop nach einem längeren Config-Sync könnte einen inzwischen neueren manuellen oder Notification-Stop überschreiben.
-
-Stattdessen läuft jede automatische Recovery durch denselben snapshotgebundenen Native-Preflight:
-
-```text
-Lifecycle-Snapshot prüfen
-↓
-Config-Generation prüfen
-↓
-Usage Access prüfen
-↓
-Overlay prüfen
-↓
-Notifications prüfen
-↓
-installierte aktive Ziel-App prüfen
-↓
-Startrequest persistieren
-↓
-Service dispatchen
-```
-
-Ergebnis:
-
-```text
-Snapshot veraltet
-→ No-op
-→ neuere Lifecycle-Evidence bleibt Gewinner
-
-Snapshot aktuell + Target fehlt
-→ nativer target_app_missing System-Stop
-→ React liest diese Evidence zurück
-
-Snapshot aktuell + Permission fehlt
-→ exakter nativer Permission-System-Stop
-→ React liest diese Evidence zurück
-
-Snapshot aktuell + alles okay
-→ generationgebundener Startrequest
-```
-
-## Lifecycle-Snapshot: neuerer Stop gewinnt
-
-Der Auto-Restart-Snapshot enthält:
-
-```text
-expectedEnabled
-expectedLastStartRequestAt
-expectedLastStartAt
-expectedLastStopAt
-```
-
-Native prüft unter:
-
-```text
-ProtectionServiceDispatchGuard.LOCK
-→ EVENT_LOCK
-→ ProtectionStartHandshakePolicy.matchesLifecycleSnapshot(...)
-```
-
-und zwar **vor** Config-Fehler-, Prerequisite-, Target-, Startrequest- oder Service-Start-Evidence.
-
-Bei Snapshot-Mismatch gilt:
-
-```text
-resolve / no-op
-```
-
-und ausdrücklich:
-
-- kein neuer `lastStartRequestAt`;
-- kein `enabled=true`;
-- kein `start_failed`;
-- kein `target_app_missing`;
-- keine neue Permission-Stop-Evidence;
-- kein Android-Service-Dispatch.
-
-Das ist bewusst kein Fehler: Ein neuerer manueller Stop, aktueller Notification-Stop, anderer Start oder bereits geänderter Lifecycle ist neuere Wahrheit.
-
-## App-Open-Recovery
-
-```text
-getStatus()
-│
-├─ start-pending
-│  └─ kein Config-Sync, kein zweiter Start; nach 1 s erneut lesen
-│
-├─ unclean-process-stop
-│  └─ recoverAfterProcessLoss(...)
-│     └─ Single-Generation + Snapshot before + Native-Preflight-Evidence
-│
-├─ stale-activation
-│  └─ syncCommitted(...)
-│     └─ installierte aktive Ziele prüfen
-│        └─ startCommitted(configGeneration, serviceStatus)
-│
-├─ start-interrupted
-│  └─ kein Auto-Restart; sichtbarer Nutzer-Retry
-│
-└─ active / deliberately disabled / andere
-   └─ kein automatischer Start
-```
-
-Für `stale-activation` verwendet der Auto-Start exakt die Config-Generation des App-Open-Syncs und den Lifecycle-Snapshot der Entscheidung.
-
-## `LIFE-16` – Stop gegen laufende Auto-Recovery
-
-Die reale Device Matrix verlangt `LIFE-16` für mindestens:
-
-```text
-stale-activation
-unclean-process-stop
-```
-
-Basisablauf:
-
-1. automatische App-Open-Recovery beginnt;
-2. Status-Snapshot wird gelesen;
-3. Config-Sync läuft oder ist abgeschlossen;
-4. Nutzer stoppt bewusst über App oder aktuelle Notification;
-5. verspäteter Auto-Start erreicht Native.
-
-Erwartung:
-
-```text
-enabled=false bleibt bestehen
-lastStopAt bleibt Gewinner
-lastStopCode bleibt unverändert
-lastStopMessage bleibt unverändert
-kein neuer lastStartRequestAt
-kein neues lastStartAt
-kein start_failed
-kein Auto-Reenable
-```
-
-Zusätzlicher Pflicht-Race für Process-Loss-Recovery:
-
-```text
-before = unclean-process-stop
-→ syncCommitted läuft
-→ Nutzer stoppt manuell
-→ derselbe Sync ergibt anschließend: keine installierte aktive Ziel-App
-→ startCommitted(configGeneration, before)
-→ Snapshot mismatch
+Recovery liest alten Snapshot
+→ Config-Sync läuft
+→ Nutzer stoppt bewusst
+→ Sync meldet danach Target/Permission-Problem
+→ startCommitted(generation, alterSnapshot)
+→ Native sieht Snapshot-Mismatch
 → No-op
 ```
 
-Auch dann muss **manual_app_stop / notification_action_stop** Gewinner bleiben. Das nachträglich festgestellte `target_app_missing` darf den neueren bewussten Stop nicht überschreiben.
-
-Source-Vertrag vorhanden; reale Android-Evidence weiterhin offen.
+Der neuere manuelle/Notification-Stop bleibt final und wird nicht durch `target_app_missing`, `start_failed` oder einen Permission-Stop überschrieben.
 
 ## Persistenter Start-Handshake
 
+Vor der eigentlichen Service-Anforderung gilt:
+
 ```text
 recordProtectionStartRequested(...)
-→ enabled=true + lastStartRequestAt + startRequestConfigGeneration in einem Commit
+→ enabled=true + lastStartRequestAt in einem Commit
 → startForegroundService/startService
 ```
 
-Im Service:
+Schlägt dieser Request-Commit fehl, wird mit `START_FAILED` fail-closed gestoppt und Android erhält keinen Service-Startauftrag.
+
+Im Service gilt danach:
 
 ```text
 startForeground(...)
 → recordProtectionServiceStarted(...)
-→ lastStartAt durable
+→ lastStartAt dauerhaft gespeichert
 → RUNNING=true
 ```
 
-Stop vor verspäteter Confirmation ergibt `SUPERSEDED_BY_STOP` und darf Stop-Evidence nicht überschreiben.
+Kann `lastStartAt` nicht dauerhaft gespeichert werden, persistiert der Native-Layer `START_FAILED` und wirft eine Exception, bevor `RUNNING=true` erreicht wird.
 
-## Native Start-Preflight
+Damit bleibt ein abgebrochener Start vor der Bestätigung eindeutig von einem späteren Kill eines bestätigten Dienstes unterscheidbar.
 
-Stabile Native-Blocker:
+## Atomarer Native-Start-Preflight
+
+Der Capacitor-Plugin-Pfad `ScrollShieldNativePlugin.startProtectionService()` ist selbst eine Sicherheitsgrenze. React-Vorprüfungen dienen nur der Nutzerführung und dürfen nicht die letzte Wahrheit sein.
+
+Für diese vier nativen Startvoraussetzungen gilt derselbe stabile Vertrag:
 
 ```text
 usage_access_missing
@@ -285,28 +188,25 @@ notifications_missing
 target_app_missing
 ```
 
-Fehlt eine Voraussetzung bei **aktuellem** Snapshot, persistiert `rejectProtectionStartPrerequisite(...)` zuerst den atomaren System-Stop und lehnt danach den Capacitor-Aufruf ab.
+Fehlt eine davon, ruft `startProtectionService()` `rejectProtectionStartPrerequisite(...)` auf. Dieser Helper:
 
-Ist der Snapshot dagegen bereits veraltet, endet der Auto-Restart vorher als No-op und darf keine neue Fehler-Evidence erzeugen.
+1. ruft den zentralen System-Stop-Wrapper auf;
+2. persistiert im Primärpfad unter `EVENT_LOCK` in **einem** synchronen Commit:
+   - `enabled=false`;
+   - `warning/system` in der Event-Queue;
+   - Stop-Zeitpunkt;
+   - exakten stabilen Stop-Code;
+   - Stop-Nachricht;
+3. verwendet nur bei `commit=false` den Best-Effort-Fallback aus `setProtectionEnabled(false)` + `recordProtectionStop(...)`;
+4. lehnt **erst danach** den Capacitor-Aufruf über `call.reject(...)` ab.
 
-## Target-App-Recovery
+Bei automatischer Recovery wird vor dieser gesamten Fail-Closed-Kette zusätzlich der Lifecycle-Snapshot unter `ProtectionServiceDispatchGuard.LOCK → EVENT_LOCK` geprüft. Snapshot-Mismatch bedeutet ausschließlich No-op und darf **keine** neue Prerequisite-/Target-/Startfehler-Evidence erzeugen.
 
-`syncCommitted(...)` liefert weiterhin `unavailableAppIds` für UI-/Diagnosezwecke zusammen mit der durable Config-Generation.
+## Exakte Prerequisite-Diagnose
 
-Die finale Process-Loss-Startentscheidung bleibt jedoch Native-owned. Fehlt bei aktuellem Snapshot jede installierte aktive Ziel-App:
+Die UI verwendet eine zentrale Pure-TypeScript-Policy in `androidProtectionPrerequisites.ts`.
 
-```text
-Service-Start: NEIN
-enabled=false
-lastStopCode=target_app_missing
-warning/system Event
-```
-
-Teilweise Unverfügbarkeit blockiert Native nicht, solange mindestens eine aktive installierte Ziel-App verbleibt.
-
-## Permission-Recovery
-
-Der Permissions-Screen liest vor Recovery die Pflichtzugriffe frisch:
+Pflichtzugriffe werden in stabiler Reihenfolge ausgewertet:
 
 ```text
 usageAccess
@@ -314,65 +214,81 @@ overlay
 notifications
 ```
 
-Native Stop-Codes werden stabil zurückgemappt:
+Die stabilen nativen Stop-Codes werden auf dieselben UI-Prerequisites zurückgeführt:
 
 ```text
-usage_access_missing       → usageAccess
-overlay_permission_missing → overlay
-notifications_missing      → notifications
+usage_access_missing       -> usageAccess
+overlay_permission_missing -> overlay
+notifications_missing      -> notifications
 ```
 
-Bei einem Recovery-Fehler bzw. nicht aktiven Rückgabestatus liest die UI aktuelle Permission- und Protection-Evidence und zeigt den konkreten Blocker.
+### Vorprüfung und Race
+
+Vor `recoverAfterProcessLoss(...)` wird `NativePermissions.getAndroidStatus()` frisch gelesen und in den sichtbaren App-State übernommen. Fehlt ein Pflichtzugriff, wird aus UX-Gründen kein Recovery-Aufruf versucht.
+
+Wenn sich der Zustand **nach** dieser Vorprüfung ändert, besitzt Native die finale Wahrheit. Bei Recovery-Fehler liest der Screen erneut Permission- und Service-Status, damit ein frisch persistierter Native-Prerequisite-Stop konkret angezeigt wird.
+
+## Ziel-App-Vertrag
+
+Die React-/TypeScript-Schicht darf `unavailableAppIds` für Hinweise und UX verwenden, aber bei automatischer stale-/process-loss-Recovery keine eigene terminale Target-Evidence schreiben.
+
+Native prüft die installierte aktive Ziel-App unmittelbar vor Startrequest-Persistenz. Verändert sich der Zustand zwischen Config-Sync und Start, entsteht bei unverändertem Lifecycle-Snapshot exakt `target_app_missing`; hat dagegen inzwischen ein neuerer manueller/Notification-Stop gewonnen, endet die Recovery als Snapshot-No-op.
 
 ## Erfolgsregel
 
-Die UI darf `wiederhergestellt` nur melden bei:
+Die UI darf `wiederhergestellt` nur melden, wenn der zurückgelesene Zustand gleichzeitig erfüllt:
 
 ```text
-running=true
-enabled=true
-health=active
+running == true
+enabled == true
+health == active
 ```
+
+Andernfalls wird entweder ein konkreter Native-Prerequisite-/Ziel-App-Blocker, ein noch nicht bestätigter Recovery-Status oder der neuere absichtliche Stop angezeigt.
 
 ## Source-Verifikation
 
-`npm run check:start-handshake` schützt:
+`npm run check:start-handshake` schützt unter anderem:
 
-- getrennte Request-/Confirmed-/Stop-Evidence;
-- 15-Sekunden-Pending-Window;
-- logisch monotone Lifecycle-Grenzen;
-- atomaren generationgebundenen Startrequest;
-- Stop-Winner gegen delayed Confirmation;
-- Lifecycle-Snapshot-Matching vor automatischem Restart;
-- Snapshot-Mismatch als No-op;
-- Pure-Java-JUnit `autoRecoverySnapshotMatchesOnlyUnchangedLifecycleTruth`.
+- getrennte Request-/Start-/Stop-Evidence;
+- atomaren generationgebundenen Request-Commit;
+- bestätigte Foreground-Evidence;
+- Stop-wins-Confirmation;
+- Lifecycle-Snapshot-No-op vor Fail-Closed-Writes;
+- `start-pending` / `start-interrupted` / `unclean-process-stop` als getrennte Zustände.
 
-`npm run check:process-loss` schützt:
+`npm run check:process-loss` schützt unter anderem:
 
-- Health-Klassifizierung;
-- Recovery nur aus `unclean-process-stop`;
-- genau einen `syncCommitted(...)`;
-- `startCommitted(configGeneration, before)`;
-- Native-owned Target-/Permission-/Start-Fail-Closed-Evidence;
-- Verbot des alten TypeScript-`TARGET_APP_MISSING_STOP_REASON`;
+- bestätigte Process-Loss-Klassifizierung;
+- Single-Generation-Recovery;
+- Snapshot-Weitergabe;
+- Verbot des alten TypeScript-owned `TARGET_APP_MISSING_STOP_REASON`-Recovery-Pfads;
+- `hasNewTerminalEvidenceSince(...)`;
 - Rückgabe frischer nativer terminaler Evidence;
-- Weiterwerfen eines Fehlers ohne neue terminale Evidence;
-- neuerer manueller Stop gewinnt während Recovery;
-- Status-/UI-/Prerequisite-Verträge.
+- Weiterwerfen eines Fehlers ohne neue terminale Evidence.
 
-`npm run check:protection-recovery` schützt den App-Open-Pfad, `check:checker-drift` verhindert die Rückkehr generationloser, snapshotloser oder TypeScript-owned Recovery-Stop-Verträge.
+`npm run check:protection-recovery` schützt zusätzlich:
+
+- `start-pending` ohne Sync/Start;
+- stale-Recovery auch bei unavailable Targets bis zum Native-Preflight;
+- Native-Reihenfolge Snapshot → Config → Permissions → Target → Startrequest;
+- App-/Policy-Tests, die unavailable Targets nicht mehr als lokales Startverbot behandeln;
+- Boot-/Update-Recovery-Fail-Closed-Vertrag.
+
+Diese Checker sind Bestandteil von `npm run verify`; die zentralen Lifecycle-/Recovery-Checks laufen ebenfalls im Readiness-Report.
 
 ## Noch nicht bewiesen
 
-Real offen bleiben:
+Dieser Source-Vertrag ersetzt keine reale Android-Evidence. Weiter offen:
 
-- Pre-Confirmation-Prozessabbruch → `start-pending` → `start-interrupted`;
-- echter Process-Kill nach bestätigtem Start → `unclean-process-stop`;
-- erfolgreiche Recovery zu `active`;
-- Permission-Races vor/zwischen Sync und Start;
-- vollständige/partielle Target-App-Unverfügbarkeit;
-- LIFE-16 inklusive „manueller Stop + danach Target fehlt“;
-- OEM-/Background-Kill-Verhalten;
-- Android JUnit-/Instrumentation-/Gradle-Ausführung auf dem exakten Kandidaten.
-
-Die exakte aktuelle Candidate-SHA und CI-Evidence wird ausschließlich in PR #8 geführt.
+- Prozess nach `lastStartRequestAt`, aber vor `lastStartAt` beenden;
+- `start-pending` und `start-interrupted` real beobachten;
+- bestätigten Process-Kill und `unclean-process-stop` real beobachten;
+- `Schutz wiederherstellen` ausführen;
+- Native First-Start-/Recovery-Preflight für Usage, Overlay, Notifications und Target real prüfen;
+- stale-activation mit unavailable Ziel-App real bis zum nativen `target_app_missing`-Preflight führen;
+- manuellen/Notification-Stop während stale-/process-loss-Recovery gewinnen lassen;
+- dabei zusätzlich Target-/Permission-Zustand nach dem Sync ändern und bestätigen, dass der neuere bewusste Stop final bleibt;
+- mehrere aktive Ziele testen: eines fehlt, mindestens eines installiert → Recovery muss weiterlaufen;
+- erfolgreichen Übergang zu `active` bestätigen;
+- OEM-/Background-Kill-Verhalten auf der Device Matrix prüfen.
