@@ -103,8 +103,11 @@ for (const required of [
   'NativeProtection\\.startCommitted\\(synced\\.configGeneration, serviceStatus\\)',
   'exact lifecycle snapshot',
   'matchesLifecycleSnapshot',
+  'target availability cannot bypass native stale-recovery preflight',
+  'unavailable targets do not suppress native stale-recovery preflight',
+  'Native automatic restart must check snapshot first, then own config/permission/target fail-closed evidence before request persistence.',
 ]) {
-  requireText('recovery', required, `Protection recovery checker is missing snapshot-aware marker: ${required}`);
+  requireText('recovery', required, `Protection recovery checker is missing native-owned stale-recovery marker: ${required}`);
 }
 
 for (const required of [
@@ -135,5 +138,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Checker architecture drift guard passed. Verify contracts remain aligned with lifecycle-snapshot auto recovery, native-owned fail-closed recovery evidence, committed-generation reuse, atomic/controlled stops, durable-before-grant authorization, reset dispatch, and explicit fail-closed migration sync guards.',
+  'Checker architecture drift guard passed. Verify contracts remain aligned with lifecycle-snapshot auto recovery, native-owned config/permission/target fail-closed recovery evidence, committed-generation reuse, atomic/controlled stops, durable-before-grant authorization, reset dispatch, and explicit fail-closed migration sync guards.',
 );
