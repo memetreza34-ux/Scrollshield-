@@ -13,7 +13,7 @@ Dieses Dokument beantwortet: **Wo steht ScrollShield jetzt, was ist belegt und w
 - **FEHLT** = die Stufe ist noch nicht ausreichend implementiert.
 - **BLOCKIERT** = eine externe oder vorgelagerte Voraussetzung verhindert den Abschluss.
 
-Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`, wenn echte Android-/Device-Ausführung gefordert ist.
+Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`, wenn echte Android-/Device-/Billing-Ausführung gefordert ist.
 
 ## Gate-Übersicht
 
@@ -24,16 +24,53 @@ Ein Source-Checker oder vorbereiteter Test allein macht ein Gate nicht `FERTIG`,
 | G2 | Datenmodell & Migration | **TEILWEISE** | transaktionale/V0.7-Migration und Recovery existieren source-seitig; reale Alt-Daten-Evidence fehlt | echter V0.7-Upgrade-Test + bytegenauer Archivvergleich |
 | G3 | Kern-UI/UX & Accessibility | **TEILWEISE** | Release-Screens und Source-A11y-Verträge existieren; reale Usability-/TalkBack-/Large-Font-Evidence fehlt | physische Accessibility- und User-Research-Sessions |
 | G4 | Native Android Schutz | **TEILWEISE** | atomare Stops, Start-Handshake, durable Config-/Runtime-Generation, Usage-Grenze, durable Grants, Dispatch-/PendingIntent-Races und lifecycle-snapshot-gebundene Auto-Recovery sind source-seitig gehärtet | Android JUnit + Instrumentation + `assembleDebug` + APP-07..10 + RUNTIME-01..06 + LIFE-12..16 + DISPATCH-01..05 + Process-Kill real |
-| G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First, Privacy/Supply-Chain-Guards existieren; finaler Dependency/SBOM/Binary-Audit fehlt | echter Supply-Chain-/Dependency-/Binary-Audit + Threat Review |
-| G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` ist inklusive `check:checker-drift`, Start-/Config-/Runtime-/Lifecycle-/Device-Checks vorbereitet; auf dem aktuellen Draft-Head liegt noch kein vollständiger erfolgreicher Verify-Lauf vor | kompletter echter `npm run verify` auf exaktem Head |
+| G5 | Security / Privacy / Supply Chain | **TEILWEISE** | Threat Model, Offline-First, Privacy/Supply-Chain-Guards und fail-closed Subscription-Plan-Policy existieren; finaler Dependency/SBOM/Binary-/Billing-Backend-Audit fehlt | echter Supply-Chain-/Dependency-/Binary-Audit + Threat Review + Billing-Backend-Security-Evidence |
+| G6 | Automatisierte Verifikation | **BLOCKIERT** | `npm run verify` ist inklusive `check:checker-drift`, `check:subscription-safety`, Start-/Config-/Runtime-/Lifecycle-/Device-Checks vorbereitet; auf dem aktuellen Draft-Head liegt noch kein vollständiger erfolgreicher Verify-Lauf vor | kompletter echter `npm run verify` auf exaktem Head |
 | G7 | Android Instrumentation/E2E | **TEILWEISE** | Start-/Stop-/Process-Loss-/Config-/Runtime-/Usage-/Dispatch-/Notification-/Auto-Recovery-Verträge existieren; echte Android-Ausführung fehlt | `connectedDebugAndroidTest` + APP-07..10 + RUNTIME-01..06 + LIFE-12..16 + DISPATCH-01..05 + Pre-/Post-Confirmation-Kill real |
 | G8 | Performance & Batterie | **TEILWEISE** | UsageFlushCoordinator/Worker, Shutdown-Drain und Generation-Boundary sind source-guarded; reale JUnit-/Device-/12h-Evidence fehlt | Usage-JUnit + Instrumentation + `assembleDebug` + RUNTIME-04 real + 12h-Baseline |
 | G9 | Physical Device Matrix | **FEHLT** | Pflichtszenarien sind spezifiziert, inklusive LIFE-16; reale Geräte-Evidence fehlt | Pflichtgeräte mit Build-ID, Diagnose-JSON, Logcat und Screenrecord vollständig dokumentieren |
-| G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Candidate darf vor G6–G9 nicht final eingefroren werden | exakte Candidate-SHA + echte Referenzen |
-| G11 | Legal / Privacy / Support | **TEILWEISE** | Struktur/Dokumente existieren; finale reale Identität, Support-Mailbox und öffentliche Privacy-Domain fehlen | keine Platzhalter + überprüfbare öffentliche Angaben |
-| G12 | Store / Play Review | **TEILWEISE** | Submission Packet und Texte sind vorbereitet; finaler AAB-/Reviewer-Nachweis fehlt | Angaben gegen signierten AAB + Reviewer-Videos verifizieren |
+| G10 | Release Candidate Freeze & Evidence | **BLOCKIERT** | Candidate darf vor G6–G9 und vor sicherer finaler Monetarisierungsentscheidung nicht final eingefroren werden | exakte Candidate-SHA + echte Referenzen |
+| G11 | Legal / Privacy / Support | **TEILWEISE** | Struktur/Dokumente existieren; finale reale Identität, Support-Mailbox, öffentliche Privacy-Domain und spätere Billing-Datenschutzhinweise fehlen | keine Platzhalter + überprüfbare öffentliche Angaben + Billing-Metadaten geprüft |
+| G12 | Store / Play Review | **TEILWEISE** | Submission Packet und Texte sind vorbereitet; Billing/Paywall bleibt bewusst deaktiviert, bis sichere Play-/Backend-/Restore-Evidence existiert; finaler AAB-/Reviewer-Nachweis fehlt | Angaben gegen signierten AAB + ggf. Billing-Produkte/Preise + Reviewer-Videos verifizieren |
 | G13 | Signing / Binary / Internal & Closed Test | **BLOCKIERT** | Release-Gate blockiert bewusst; kein final freigegebener Kandidat | Gate PASS → AAB → Internal/Closed Test |
 | G14 | Production Rollout & Operations | **BLOCKIERT** | Rollout-/Incident-Prozess existiert; Produktion darf vor G13 nicht starten | Produktionsfreigabe + gestaffelter Rollout |
+
+## Subscription-/Monetarisierungs-Vertrag
+
+Aktuell existiert **keine freigegebene Kaufoberfläche**. Die Planarchitektur ist Source Contract:
+
+```text
+ScrollShield Free → 1 geschützte unterstützte Android-App
+ScrollShield Plus → bis zu 3 geschützte unterstützte Android-Apps
+ScrollShield Max  → keine Subscription-Anzahlgrenze für unterstützte Android-Apps
+```
+
+Die aktuelle Engine unterscheidet keine separaten Login-Accounts innerhalb derselben Android-App. Deshalb darf Store-/Paywall-Copy nicht von „3 Instagram-Accounts“ oder ähnlicher Account-Level-Erkennung sprechen.
+
+Verbindliche Sicherheitsregeln:
+
+```text
+unverifiziertes / unbekanntes Paid-Entitlement → Free
+PENDING purchase → kein Paid-Entitlement
+Safety / Recovery / Diagnostics / Export → nicht paywallbar
+Downgrade → keine Datenlöschung
+Downgrade über Kapazitätsgrenze → keine stille Auswahl der aktiv bleibenden Apps
+```
+
+Bevor Plus/Max kaufbar werden, sind mindestens erforderlich:
+
+```text
+Google Play Billing
+→ Purchase Token
+→ sichere Backend-Verifikation via Google Play Developer API
+→ RTDN / zuverlässiger Subscription-Lifecycle
+→ Restore
+→ bounded Offline-Grace
+→ Pending / Cancel / Expiry / Refund / Revocation
+→ Free↔Plus↔Max Upgrade-/Downgrade-Evidence
+```
+
+Die Produktions-UI darf bis dahin keine echten Preise, Trials, Kaufbuttons oder Plus-/Max-Aktiv-Behauptungen anzeigen.
 
 ## Aktueller Native-Lifecycle-Vertrag
 
@@ -64,7 +101,7 @@ werden getrennt behandelt. Ein frischer Pending-Start wird nicht durch einen App
 
 ### Single-Generation App-Open Recovery
 
-Für `stale-activation` gilt:
+Für `stale-activation`:
 
 ```text
 serviceStatus = NativeProtection.getStatus()
@@ -72,10 +109,6 @@ serviceStatus = NativeProtection.getStatus()
 → NativeProtection.startCommitted(configGeneration, serviceStatus)
 → Native entscheidet Config / Permissions / Target-App
 ```
-
-`unavailableAppIds` darf den stale-Recovery-Versuch im React-Layer nicht mehr blockieren. Nur der snapshotgebundene Native-Preflight darf `target_app_missing`, Permission-Stopps oder Startfehler erzeugen.
-
-Es gibt **keinen zweiten Config-Sync** im Start.
 
 Für bestätigten Process Loss:
 
@@ -98,33 +131,13 @@ expectedLastStartAt
 expectedLastStopAt
 ```
 
-Native prüft unter:
+Native prüft unter `ProtectionServiceDispatchGuard.LOCK → EVENT_LOCK → matchesLifecycleSnapshot(...)` vor Config-Validation, Prerequisite-Stopps, Startrequest und Service-Dispatch.
 
-```text
-ProtectionServiceDispatchGuard.LOCK
-→ EVENT_LOCK
-→ matchesLifecycleSnapshot(...)
-```
-
-**vor** Config-Validation, Prerequisite-Stopps, neuem Startrequest und Service-Dispatch.
-
-Hat der Nutzer oder die aktuelle Notification nach der Recovery-Entscheidung gestoppt, gilt:
-
-```text
-Snapshot mismatch
-→ no-op
-→ kein neuer Startrequest
-→ kein Auto-Reenable
-→ kein start_failed
-→ kein target_app_missing / Permission-Stop aus der veralteten Recovery
-→ winning stop evidence bleibt unverändert
-```
-
-Realer Pflichtfall: `LIFE-16` für `stale-activation` und `unclean-process-stop`.
+Snapshot-Mismatch ist No-op; neuerer manueller/Notification-Stop bleibt Gewinner. Realer Pflichtfall: `LIFE-16`.
 
 ## Config-/Runtime-Vertrag
 
-- Config-Sync liefert die UUID erst nach synchron bestätigtem Commit.
+- Config-Sync liefert UUID erst nach synchron bestätigtem Commit.
 - Candidate-Commit-Fehler rollt auf das vorige Tupel zurück.
 - Candidate + Rollback fehlgeschlagen → process-lokal `UNSICHER`; neue Starts/Recovery sind blockiert.
 - Laufender Dienst behält bei `UNSICHER` seine zuletzt veröffentlichte bestätigte Runtime-Generation.
@@ -138,6 +151,7 @@ Pflichtbestandteile der Verify-Kette umfassen insbesondere:
 
 ```text
 check:checker-drift
+check:subscription-safety
 check:android
 check:prerequisite-stop-codes
 check:process-loss
@@ -154,7 +168,7 @@ check:android-instrumentation
 check:migration
 ```
 
-`check:checker-drift` verhindert, dass alte Verträge wie direktes `enabled=true`, `stopSelf()`, generationloser Recovery-Start, React-owned Target-Preflight, Grant-vor-Event oder ein unspezifischer Migration-Sync wieder als erwartete Architektur auftauchen.
+`check:subscription-safety` ist außerdem im Readiness-Report `required=true`.
 
 ## Reale Pflicht-Evidence
 
@@ -172,15 +186,22 @@ LIFE-12 .. LIFE-16
 DISPATCH-01 .. DISPATCH-05
 ```
 
-`LIFE-16` verlangt explizit:
+### Subscription (vor Paid Release)
 
-1. automatische Recovery liest Snapshot;
-2. Config-Sync wird abgeschlossen;
-3. manueller oder aktueller Notification-Stop gewinnt vor Native-Start;
-4. verspätete Auto-Recovery liefert No-op;
-5. kein neuer Request-/Start-Zeitpunkt und kein `start_failed`;
-6. kein `target_app_missing`/Permission-Stop aus dem veralteten Recovery-Versuch;
-7. Stop-Zeitpunkt/-Code/-Nachricht bleiben Gewinner.
+```text
+Free launch ohne Billing
+Plus purchase
+Max purchase
+Plus↔Max plan change
+Paid→Free expiry
+pending purchase
+cancel / refund / revocation
+restore after reinstall
+tampered cache fails closed
+backend / Play outage
+offline grace
+non-destructive downgrade above capacity
+```
 
 ## Aktuelle Ausführungsgrenze
 
@@ -189,21 +210,18 @@ Source-Code, Checker und Testquellcode sind **keine Executed Evidence**. Mutable
 Nicht als bestanden belegt sind insbesondere:
 
 - `npm run verify`;
-- `check:checker-drift`;
-- `check:start-handshake`;
-- `check:process-loss`;
-- `check:protection-recovery`;
-- `check:config-durability`;
-- `check:device-matrix`;
+- `check:subscription-safety`;
+- Subscription-Plan-Policy-Vitest;
 - TypeScript / ESLint / Prettier / Vitest;
 - Android JUnit;
 - Android Instrumentation;
 - Gradle Debug Build / APK;
+- Google Play Billing-/Backend-/RTDN-/Restore-Evidence;
 - APP-07 bis APP-10;
 - RUNTIME-01 bis RUNTIME-06;
 - LIFE-12 bis LIFE-16;
 - DISPATCH-01 bis DISPATCH-05;
-- reale Auto-Recovery-vs.-Manual-Stop-Evidence.
+- reale Auto-Recovery-/Subscription-/Device-Evidence.
 
 ## Nächster erlaubter Abschlussweg
 
@@ -213,10 +231,11 @@ Nicht als bestanden belegt sind insbesondere:
 4. `connectedDebugAndroidTest`.
 5. APP-07..10 und RUNTIME-01..06 real ausführen.
 6. LIFE-12..16 und DISPATCH-01..05 real ausführen.
-7. Pre-/Post-Confirmation Process Kill und App-Open-Recovery-Races real prüfen.
-8. Physical Device Matrix + 12h/OEM/Batterie.
-9. Migration, Security-/Supply-Chain-/Binary-Audit, User Research und Accessibility abschließen.
-10. Erst danach Candidate Freeze und Release.
+7. Physical Device Matrix + 12h/OEM/Batterie.
+8. Migration, Security-/Supply-Chain-/Binary-Audit, User Research und Accessibility abschließen.
+9. Erst danach Billing-/Backend-Implementierung sicher integrieren und vollständige Free/Plus/Max-Lifecycle-Evidence erzeugen.
+10. Erst nach bestandener Subscription-Evidence Kaufoberfläche/Preise aktivieren.
+11. Erst danach Candidate Freeze und Release.
 
 ## Änderungsregel
 
