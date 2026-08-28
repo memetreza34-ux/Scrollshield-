@@ -61,7 +61,7 @@ Included safety/core value:
 - export/import;
 - privacy/support/reset functions.
 
-Free must remain genuinely useful and advertisement-free. It is the permanent fallback whenever paid entitlement cannot be securely verified.
+Free must remain genuinely useful and advertisement-free under the current product strategy. It is the permanent fallback whenever paid entitlement cannot be securely verified.
 
 ### ScrollShield Plus
 
