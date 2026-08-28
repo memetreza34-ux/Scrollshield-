@@ -13,11 +13,17 @@ describe('native protection recovery policy', () => {
     expect(getInstalledActiveProtectionIds(appsConfig, ['youtube'])).toEqual(['instagram']);
   });
 
-  it('restarts only a safe stale activation with an installed active target', () => {
+  it('attempts automatic restart only for stale activation and delegates target availability to native', () => {
     expect(
       shouldRecoverStaleProtection(
         { enabled: true, running: false, health: 'stale-activation' },
         ['instagram'],
+      ),
+    ).toBe(true);
+    expect(
+      shouldRecoverStaleProtection(
+        { enabled: true, running: false, health: 'stale-activation' },
+        [],
       ),
     ).toBe(true);
     expect(
@@ -48,12 +54,6 @@ describe('native protection recovery policy', () => {
       shouldRecoverStaleProtection(
         { enabled: true, running: true, health: 'active' },
         ['instagram'],
-      ),
-    ).toBe(false);
-    expect(
-      shouldRecoverStaleProtection(
-        { enabled: true, running: false, health: 'stale-activation' },
-        [],
       ),
     ).toBe(false);
   });
