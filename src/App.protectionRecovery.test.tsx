@@ -184,15 +184,28 @@ describe('App native protection recovery', () => {
     expect(recoverMock).not.toHaveBeenCalled();
   });
 
-  it('does not restart when every configured active target is unavailable', async () => {
+  it('delegates unavailable-target stale recovery to the native snapshot-bound preflight', async () => {
     syncCommittedMock.mockResolvedValue({
       unavailableAppIds: ['instagram'],
       configGeneration: CONFIG_GENERATION,
     });
     render(<App />);
 
-    await waitFor(() => expect(syncCommittedMock).toHaveBeenCalled());
-    expect(startCommittedMock).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(startCommittedMock).toHaveBeenCalledWith(
+        CONFIG_GENERATION,
+        expect.objectContaining({
+          enabled: true,
+          running: false,
+          lastStartRequestAt: 0,
+          lastStartAt: 1,
+          lastStopAt: 0,
+          health: 'stale-activation',
+        }),
+      ),
+    );
+    expect(syncCommittedMock).toHaveBeenCalledTimes(1);
+    expect(startCommittedMock).toHaveBeenCalledTimes(1);
     expect(startMock).not.toHaveBeenCalled();
     expect(recoverMock).not.toHaveBeenCalled();
   });
