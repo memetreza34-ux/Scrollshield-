@@ -2,7 +2,7 @@
 
 Status: **verbindlicher Source-Vertrag; noch nicht ausgeführt**
 
-Letzte Aktualisierung: **27. August 2026**
+Letzte Aktualisierung: **28. August 2026**
 
 ## Zweck
 
@@ -84,9 +84,11 @@ getStatus()
 ├─ start-interrupted    → kein Auto-Restart
 ├─ unclean-process-stop → recoverAfterProcessLoss(...)
 └─ stale-activation     → syncCommitted(...)
-                          → installed target prüfen
                           → startCommitted(generation, serviceStatus)
+                          → Native entscheidet Target/Permissions/Config
 ```
+
+Wichtig: `unavailableAppIds` darf im React-/Policy-Layer einen `stale-activation`-Recovery-Versuch nicht mehr unterdrücken. Selbst wenn der Sync alle aktiven Ziele als unavailable meldet, wird der snapshotgebundene Startversuch an Native weitergereicht. Nur dort darf aktuelle `target_app_missing`-/Permission-/Config-Evidence entstehen.
 
 ### Manual Stop gegen Auto-Recovery
 
@@ -258,6 +260,8 @@ Save, Native Recovery/Config-Sync und Native Drain bleiben bei blockierter Migra
 - `start-pending` / `start-interrupted` / `unclean-process-stop`;
 - Lifecycle-Snapshot für automatische `stale-activation`- und Process-Loss-Recovery;
 - Native Snapshot-No-op vor startkritischen/Fail-Closed-Writes;
+- stale Recovery darf Target-Verfügbarkeit nicht im React-Layer als Startverbot behandeln;
+- Native besitzt Config-/Permission-/Target-Preflight-Evidence;
 - `hasNewTerminalEvidenceSince(...)` im Process-Loss-Wrapper;
 - Verbot des alten TypeScript-owned `TARGET_APP_MISSING_STOP_REASON`-Recovery-Pfads;
 - Rückgabe frischer nativer terminaler Evidence;
