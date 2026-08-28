@@ -2,7 +2,7 @@
 
 Status: **lebende Projektsteuerung**
 
-Letzte Aktualisierung: **27. August 2026**
+Letzte Aktualisierung: **28. August 2026**
 
 Dieses Dokument beantwortet: **Wo steht ScrollShield jetzt, was ist belegt und was ist der nächste erlaubte Schritt?**
 
@@ -64,14 +64,16 @@ werden getrennt behandelt. Ein frischer Pending-Start wird nicht durch einen App
 
 ### Single-Generation App-Open Recovery
 
-Für sichere `stale-activation`-Recovery gilt:
+Für `stale-activation` gilt:
 
 ```text
 serviceStatus = NativeProtection.getStatus()
 → NativeProtection.syncCommitted(...)
-→ installed target prüfen
 → NativeProtection.startCommitted(configGeneration, serviceStatus)
+→ Native entscheidet Config / Permissions / Target-App
 ```
+
+`unavailableAppIds` darf den stale-Recovery-Versuch im React-Layer nicht mehr blockieren. Nur der snapshotgebundene Native-Preflight darf `target_app_missing`, Permission-Stopps oder Startfehler erzeugen.
 
 Es gibt **keinen zweiten Config-Sync** im Start.
 
@@ -114,6 +116,7 @@ Snapshot mismatch
 → kein neuer Startrequest
 → kein Auto-Reenable
 → kein start_failed
+→ kein target_app_missing / Permission-Stop aus der veralteten Recovery
 → winning stop evidence bleibt unverändert
 ```
 
@@ -151,7 +154,7 @@ check:android-instrumentation
 check:migration
 ```
 
-`check:checker-drift` verhindert, dass alte Verträge wie direktes `enabled=true`, `stopSelf()`, generationloser Recovery-Start, Grant-vor-Event oder ein unspezifischer Migration-Sync wieder als erwartete Architektur auftauchen.
+`check:checker-drift` verhindert, dass alte Verträge wie direktes `enabled=true`, `stopSelf()`, generationloser Recovery-Start, React-owned Target-Preflight, Grant-vor-Event oder ein unspezifischer Migration-Sync wieder als erwartete Architektur auftauchen.
 
 ## Reale Pflicht-Evidence
 
@@ -176,7 +179,8 @@ DISPATCH-01 .. DISPATCH-05
 3. manueller oder aktueller Notification-Stop gewinnt vor Native-Start;
 4. verspätete Auto-Recovery liefert No-op;
 5. kein neuer Request-/Start-Zeitpunkt und kein `start_failed`;
-6. Stop-Zeitpunkt/-Code/-Nachricht bleiben Gewinner.
+6. kein `target_app_missing`/Permission-Stop aus dem veralteten Recovery-Versuch;
+7. Stop-Zeitpunkt/-Code/-Nachricht bleiben Gewinner.
 
 ## Aktuelle Ausführungsgrenze
 
