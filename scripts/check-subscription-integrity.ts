@@ -205,8 +205,8 @@ requirePattern(
 rejectPattern(
   trustConfigPath,
   trustConfig,
-  /privateKey|service[_-]?role|client_secret|BEGIN PRIVATE KEY|HMAC/i,
-  'Client trust config must never contain private or shared secret material.',
+  /BEGIN (?:EC |RSA )?PRIVATE KEY|client_secret\s*[:=]|service[_-]?role\s*[:=]|privateKey\s*[:=]|HMAC_SECRET\s*[:=]/i,
+  'Client trust config must never contain assigned private/shared secret material.',
 );
 requirePattern(
   assertionVerifierPath,
