@@ -66,6 +66,7 @@
     "android:bundle": "npm run release:gate && tsx scripts/run-gradle.ts bundleRelease",
     "verify:android": "tsx scripts/run-gradle.ts testDebugUnitTest assembleDebug --no-daemon --stacktrace",
     "verify:full": "npm run verify && npm run verify:android",
+    "verify:local-evidence": "node scripts/run-local-verification.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "npm run typecheck && eslint .",
     "format": "prettier --write .",
