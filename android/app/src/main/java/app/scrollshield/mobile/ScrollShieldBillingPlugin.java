@@ -116,9 +116,7 @@ public class ScrollShieldBillingPlugin extends Plugin implements PurchasesUpdate
 
                         @Override
                         public void onBillingServiceDisconnected() {
-                            synchronized (billingLock) {
-                                connectionInFlight = false;
-                            }
+                            handleServiceDisconnected();
                         }
                     });
                 }
@@ -167,6 +165,19 @@ public class ScrollShieldBillingPlugin extends Plugin implements PurchasesUpdate
         }
     }
 
+    private void handleServiceDisconnected() {
+        List<PendingReadyAction> pending;
+        synchronized (billingLock) {
+            connectionInFlight = false;
+            pending = new ArrayList<>(pendingReadyActions);
+            pendingReadyActions.clear();
+        }
+
+        for (PendingReadyAction item : pending) {
+            item.call.reject("Google Play Billing service disconnected before setup completed");
+        }
+    }
+
     private JSONArray purchasesToJson(List<Purchase> purchases) {
         JSONArray result = new JSONArray();
         if (purchases == null) return result;
@@ -178,6 +189,7 @@ public class ScrollShieldBillingPlugin extends Plugin implements PurchasesUpdate
             item.put("purchaseState", purchaseStateName(purchase.getPurchaseState()));
             item.put("acknowledged", purchase.isAcknowledged());
             item.put("autoRenewing", purchase.isAutoRenewing());
+            item.put("suspended", purchase.isSuspended());
             item.put("purchaseTimeMs", purchase.getPurchaseTime());
             result.put(item);
         }
