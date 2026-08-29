@@ -12,6 +12,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ScrollShieldNotificationPlugin.class);
         registerPlugin(ScrollShieldBillingPlugin.class);
         registerPlugin(ScrollShieldIntegrityPlugin.class);
+        registerPlugin(ScrollShieldSubscriptionIdentityPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
