@@ -4,6 +4,8 @@ Status: **BLOCKED / architecture gate only**
 
 This document is an engineering release gate. It is not store copy and it does not mean a paid plan is currently available.
 
+Detailed entitlement/source architecture: `docs/SUBSCRIPTION_ENTITLEMENT_ARCHITECTURE.md`.
+
 ## Product principle
 
 ScrollShield monetization must never weaken the safety contract.
@@ -125,23 +127,71 @@ The quality of the Android start/stop/config durability engine is identical acro
 
 ## Entitlement fail-closed rule
 
-The plan policy intentionally defaults to Free unless a paid entitlement is verified:
+Plan capacity and paid authorization are deliberately separate.
+
+`src/lib/subscriptionPlanPolicy.ts` defines capacity only. Effective paid access is resolved exclusively by:
 
 ```text
-unverified / malformed / unknown entitlement
+src/lib/subscriptionEntitlementPolicy.ts
+```
+
+There is deliberately no boolean `purchaseVerified` shortcut in the plan policy.
+
+The effective entitlement rule is:
+
+```text
+missing / malformed / unverified / pending / expired / revoked / unknown
 → ScrollShield Free
 ```
 
-A user-editable local flag must never permanently unlock Plus or Max.
+Plus/Max requires an active/grace backend assertion whose cryptographic verification succeeded and whose validity window is acceptable.
 
-The source-level planning policy is covered by:
+Current bounded offline source policy:
+
+```text
+maximum assertion issue-to-validity window = 72 hours
+```
+
+A user-editable local flag, raw Play purchase state, query parameter, localStorage value or SharedPreferences value must never permanently unlock Plus or Max.
+
+The source-level policy is covered by:
 
 ```text
 src/lib/subscriptionPlanPolicy.test.ts
+src/lib/subscriptionEntitlementPolicy.test.ts
 scripts/check-subscription-safety.ts
 ```
 
-This policy is not proof that billing verification is implemented.
+This policy is not proof that backend signature verification is implemented or executed.
+
+## Current Google Play Billing source boundary
+
+The Android source currently includes Google Play Billing Library **9.1.0** and a deliberately read-only Capacitor bridge:
+
+```text
+ScrollShieldBillingPlugin.java
+src/lib/nativeBilling.ts
+```
+
+Current allowed behavior:
+
+```text
+connect to Google Play Billing
+query current SUBS purchases
+include suspended subscriptions
+preserve purchased / pending / suspended diagnostics
+return purchaseToken for secure backend verification
+```
+
+Current intentionally blocked behavior:
+
+```text
+no production launchBillingFlow()
+no client acknowledgePurchase()
+no local Plus/Max grant from Play purchase state
+```
+
+A `PURCHASED` Play record is still **not** an entitlement. Its purchase token must first cross the secure backend verification boundary.
 
 ## Billing implementation gate
 
@@ -151,7 +201,7 @@ Do not add a production purchase button, price, trial countdown, `Plus active` o
 
 - maintained Google Play Billing integration exists;
 - product/base-plan identifiers come from release configuration, not demo constants;
-- purchases are acknowledged correctly;
+- purchases are acknowledged correctly after secure processing;
 - `PENDING` never grants Plus/Max;
 - cancelled, expired, suspended, refunded and revoked states are represented explicitly;
 - plan upgrades/downgrades are handled deterministically.
@@ -165,8 +215,10 @@ Required architecture before paid release:
 ```text
 Google Play purchase token
 → secure backend verification with Google Play Developer API
-→ verified entitlement state
-→ app receives bounded/cacheable entitlement result
+→ server-side lifecycle/fraud checks
+→ cryptographically verifiable bounded entitlement assertion
+→ client-side signature verification
+→ effective entitlement state
 ```
 
 The backend must also support subscription lifecycle updates through Google Play Real-time Developer Notifications or an equivalently reliable server-side lifecycle mechanism.
@@ -175,8 +227,8 @@ Requirements:
 
 - verify purchase/subscription state server-side before granting durable paid entitlement;
 - never grant paid entitlement for `PENDING`;
-- acknowledge eligible new purchase tokens correctly;
-- handle cancellation, expiry, refund, revocation and chargeback;
+- acknowledge eligible new purchase tokens only after secure processing;
+- handle cancellation, expiry, suspension, refund, revocation and chargeback;
 - prevent replay/duplicate purchase-token misuse;
 - do not use `orderId` as the sole entitlement identity;
 - billing/backend outage fails safely without corrupting protection data.
@@ -185,21 +237,23 @@ Requirements:
 
 - one typed entitlement state is used by every premium gate;
 - `free | plus | max` is the only plan set;
-- local cache may support a bounded offline grace period, but cannot permanently manufacture paid access;
+- local cache may support the bounded offline window, but cannot permanently manufacture paid access;
 - malformed/unverified state resolves to Free;
 - expiry/downgrade never deletes user-owned rules, history, statistics, exports, migration archives or recovery data.
 
 ### 4. Restore and reinstall
 
 - `Restore purchases` works after reinstall and on another eligible device using the same Play account;
+- restore is based on current Play purchase query + backend verification, not a local paid flag;
 - restore is idempotent;
 - restore cannot duplicate local rules/data;
 - failed restore remains truthful and does not silently unlock paid access.
 
 ### 5. Offline and failure behavior
 
-- previously verified paid entitlement has a documented bounded offline grace policy;
-- temporary network/backend failure during that grace must not instantly destroy a user's configured protection state;
+- previously verified paid entitlement has the currently bounded 72-hour assertion window unless this policy is deliberately revised;
+- temporary network/backend failure during valid grace must not instantly destroy a user's configured protection state;
+- expired assertion falls back to Free unless a new valid assertion is obtained;
 - verified expiry/revocation must eventually downgrade deterministically;
 - Free safety, export, migration and recovery remain available even when billing/backend is unavailable;
 - protection service continues to use a valid local rule set instead of crashing because billing is unavailable.
@@ -214,6 +268,7 @@ Required principles:
 - preserve configuration data beyond the new limit as read-only/paused data until the user upgrades or chooses what remains active;
 - communicate which apps remain protected before any verified entitlement downgrade changes active capacity;
 - do not silently choose different protected apps in the background;
+- if active apps exceed the new limit and no valid explicit selection exists, leave the previous durable configuration untouched until replacement can be committed atomically;
 - a temporary verification outage is not the same as a verified subscription expiry;
 - verified refund/revocation may remove paid entitlement, but must not remove user-owned historical data.
 
@@ -224,6 +279,8 @@ The exact active-app selection UX must be implemented and device-tested before p
 At minimum:
 
 - Free launch with no billing account;
+- Billing 9.1.0 Android compilation;
+- Play Billing connection/disconnect/reconnect;
 - Plus purchase with license tester;
 - Max purchase with license tester;
 - Plus → Max upgrade;
@@ -231,15 +288,16 @@ At minimum:
 - Plus/Max → Free expiry;
 - pending purchase;
 - cancelled purchase;
-- suspended subscription where applicable;
+- suspended subscription query;
 - refund/revocation;
 - restore after reinstall;
 - restore on another eligible device;
-- replay/duplicate purchase callback;
+- replay/duplicate purchase callback/token;
 - backend unavailable;
 - Play unavailable;
 - airplane-mode launch with previously verified entitlement;
-- malformed/local-tampered cached plan → Free unless valid verified grace applies;
+- malformed/local-tampered cached plan → Free unless valid cryptographically verified grace applies;
+- 72-hour assertion expiry boundary;
 - downgrade with more configured apps than the lower plan permits, proving no data deletion and no silent unsafe app selection.
 
 ### 8. Store/legal readiness
@@ -268,4 +326,4 @@ These numbers are **not production prices**. Final prices must be decided only a
 
 Until the billing/backend gate above is complete, ScrollShield remains a non-subscription release candidate.
 
-The app may contain internal plan-policy code and tests, but production UI must not offer checkout, trials, paid-status claims or hard-coded prices yet.
+The app may contain internal plan-policy, entitlement-policy and read-only Billing query code, but production UI must not offer checkout, trials, paid-status claims or hard-coded prices yet.
