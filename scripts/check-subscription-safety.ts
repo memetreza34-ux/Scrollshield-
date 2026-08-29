@@ -17,6 +17,7 @@ const subscriptionPolicyPath = 'src/lib/subscriptionPlanPolicy.ts';
 const subscriptionPolicyTestPath = 'src/lib/subscriptionPlanPolicy.test.ts';
 const entitlementPolicyPath = 'src/lib/subscriptionEntitlementPolicy.ts';
 const entitlementPolicyTestPath = 'src/lib/subscriptionEntitlementPolicy.test.ts';
+const entitlementArchitecturePath = 'docs/SUBSCRIPTION_ENTITLEMENT_ARCHITECTURE.md';
 const subscriptionGatePath = 'docs/SUBSCRIPTION_RELEASE_GATE.md';
 const competitiveStrategyPath = 'docs/COMPETITIVE_PRODUCT_STRATEGY.md';
 
@@ -37,6 +38,7 @@ const [
   subscriptionPolicyTest,
   entitlementPolicy,
   entitlementPolicyTest,
+  entitlementArchitecture,
   subscriptionGate,
   competitiveStrategy,
 ] = await Promise.all([
@@ -56,6 +58,7 @@ const [
   readFile(subscriptionPolicyTestPath, 'utf8'),
   readFile(entitlementPolicyPath, 'utf8'),
   readFile(entitlementPolicyTestPath, 'utf8'),
+  readFile(entitlementArchitecturePath, 'utf8'),
   readFile(subscriptionGatePath, 'utf8'),
   readFile(competitiveStrategyPath, 'utf8'),
 ]);
@@ -97,8 +100,14 @@ requirePattern(
 requirePattern(
   subscriptionPolicyPath,
   subscriptionPolicy,
-  /resolveVerifiedSubscriptionPlan[\s\S]*if \(!purchaseVerified\) return 'free'[\s\S]*isSubscriptionPlanId\(candidate\) \? candidate : 'free'/,
-  'Unverified or malformed paid entitlement must fail closed to Free.',
+  /Effective paid access MUST be resolved through subscriptionEntitlementPolicy\.ts/,
+  'Plan-capacity policy must explicitly delegate effective paid access to the secure entitlement policy.',
+);
+rejectPattern(
+  subscriptionPolicyPath,
+  subscriptionPolicy,
+  /resolveVerifiedSubscriptionPlan|purchaseVerified\s*:/,
+  'Plan-capacity policy must not expose a boolean paid-entitlement shortcut.',
 );
 requirePattern(
   subscriptionPolicyPath,
@@ -109,8 +118,8 @@ requirePattern(
 requirePattern(
   subscriptionPolicyTestPath,
   subscriptionPolicyTest,
-  /three planned protection limits at 1, 3, and unlimited[\s\S]*fails closed to Free when paid entitlement is not verified[\s\S]*reserves advanced automation for higher tiers/,
-  'Vitest must lock plan limits, fail-closed entitlement, and safety boundaries.',
+  /three planned protection limits at 1, 3, and unlimited[\s\S]*recognizes only the three supported plan identifiers[\s\S]*reserves advanced automation for higher tiers/,
+  'Vitest must lock plan limits, exact plan IDs, and safety boundaries.',
 );
 
 requirePattern(
@@ -224,6 +233,19 @@ requirePattern(
 );
 
 requirePattern(
+  entitlementArchitecturePath,
+  entitlementArchitecture,
+  /Play purchase state is not entitlement state[\s\S]*MAX_OFFLINE_ENTITLEMENT_WINDOW_MS = 72 hours[\s\S]*no launchBillingFlow\(\)[\s\S]*no acknowledgePurchase\(\)/i,
+  'Entitlement architecture must document Play-vs-entitlement separation, bounded offline access, and the blocked purchase/ack paths.',
+);
+requirePattern(
+  entitlementArchitecturePath,
+  entitlementArchitecture,
+  /Google Play purchase[\s\S]*purchaseToken[\s\S]*secure ScrollShield backend[\s\S]*Google Play Developer API verification[\s\S]*cryptographically verifiable bounded entitlement assertion/i,
+  'Architecture must preserve the secure purchase-token-to-signed-entitlement trust chain.',
+);
+
+requirePattern(
   subscriptionGatePath,
   subscriptionGate,
   /Status: \*\*BLOCKED \/ architecture gate only\*\*[\s\S]*Google Play Billing[\s\S]*Secure backend entitlement verification[\s\S]*Restore purchases[\s\S]*pending purchase[\s\S]*refund\/revocation/i,
@@ -307,5 +329,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Subscription safety check passed. Free/Plus/Max, bounded verified entitlement, explicit downgrade selection, and the read-only Play Billing restore bridge are source-guarded; purchase UI and entitlement grant remain blocked pending secure backend evidence.',
+  'Subscription safety check passed. Free/Plus/Max, the single secure entitlement resolver, bounded verified entitlement, explicit downgrade selection, and the read-only Play Billing restore bridge are source-guarded; purchase UI and entitlement grant remain blocked pending secure backend evidence.',
 );
