@@ -56,6 +56,7 @@ Die übrigen Dokumente sind Detailquellen für einzelne Gates.
 - Explicit release approval manifest and strict candidate-bound evidence gate before release APK or AAB generation
 - CI prepared to run web verification, Android JUnit tests, debug APK compilation, and artifact upload
 - Dependency-free package manifest/lockfile preflight before `npm ci`
+- SHA-bound local verification runner for reproducible source/unit/debug-build evidence when hosted CI is unavailable
 - External GitHub Actions pinned to immutable commit SHAs
 - Android v1 manifest intentionally omits `android.permission.INTERNET`; the privacy build check blocks undocumented network APIs, tracker markers, and silent reintroduction of that permission
 
@@ -93,6 +94,7 @@ npm run build
 npm run verify
 npm run verify:android
 npm run verify:full
+npm run verify:local-evidence
 npm run check:device-matrix
 npm run check:lifecycle
 npm run check:migration
@@ -100,7 +102,9 @@ npm run check:release-approval
 npm run readiness
 ```
 
-`check:lock-sync` is dependency-free and also runs in CI before `npm ci`, so manifest/lock drift fails with a precise error before installation. `verify:android` executes Android JUnit tests and compiles the debug APK through the platform-correct Gradle wrapper. `verify:full` runs the complete web/source verification first and then Android unit tests plus `assembleDebug`. This is the preferred local fallback while GitHub-hosted runners cannot start.
+`check:lock-sync` is dependency-free and also runs in CI before `npm ci`, so manifest/lock drift fails with a precise error before installation. `verify:android` executes Android JUnit tests and compiles the debug APK through the platform-correct Gradle wrapper. `verify:full` runs the complete web/source verification first and then Android unit tests plus `assembleDebug`.
+
+`verify:local-evidence` is the preferred evidence-producing fallback while GitHub-hosted runners cannot start. It requires a clean tracked Git working tree, binds the run to the exact current commit SHA, performs lock validation and `npm ci`, checks the Android toolchain, runs the complete source verification, executes Android unit tests, compiles the debug APK, and writes per-step logs plus `verification-report.json` under the ignored `.scrollshield-verification/` directory. A successful local report proves only that executed source/unit/debug-build path; physical-device, battery, migration, store, signing, and production gates remain separate.
 
 ## Android
 
