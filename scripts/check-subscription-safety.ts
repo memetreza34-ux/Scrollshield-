@@ -2,6 +2,11 @@ import { readFile } from 'node:fs/promises';
 
 const packagePath = 'package.json';
 const androidBuildPath = 'android/app/build.gradle';
+const mainActivityPath = 'android/app/src/main/java/app/scrollshield/mobile/MainActivity.java';
+const nativeBillingPluginPath =
+  'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldBillingPlugin.java';
+const nativeBillingBridgePath = 'src/lib/nativeBilling.ts';
+const nativeBillingBridgeTestPath = 'src/lib/nativeBilling.test.ts';
 const appPath = 'src/App.tsx';
 const settingsPath = 'src/screens/SettingsScreen.tsx';
 const dashboardPath = 'src/screens/DashboardScreen.tsx';
@@ -18,6 +23,10 @@ const competitiveStrategyPath = 'docs/COMPETITIVE_PRODUCT_STRATEGY.md';
 const [
   packageJson,
   androidBuild,
+  mainActivity,
+  nativeBillingPlugin,
+  nativeBillingBridge,
+  nativeBillingBridgeTest,
   app,
   settings,
   dashboard,
@@ -33,6 +42,10 @@ const [
 ] = await Promise.all([
   readFile(packagePath, 'utf8'),
   readFile(androidBuildPath, 'utf8'),
+  readFile(mainActivityPath, 'utf8'),
+  readFile(nativeBillingPluginPath, 'utf8'),
+  readFile(nativeBillingBridgePath, 'utf8'),
+  readFile(nativeBillingBridgeTestPath, 'utf8'),
   readFile(appPath, 'utf8'),
   readFile(settingsPath, 'utf8'),
   readFile(dashboardPath, 'utf8'),
@@ -144,6 +157,73 @@ requirePattern(
 );
 
 requirePattern(
+  androidBuildPath,
+  androidBuild,
+  /billing_version = "9\.1\.0"[\s\S]*implementation "com\.android\.billingclient:billing:\$billing_version"/,
+  'Android must use the reviewed Google Play Billing 9.1.0 dependency for this source contract.',
+);
+requirePattern(
+  mainActivityPath,
+  mainActivity,
+  /registerPlugin\(ScrollShieldBillingPlugin\.class\)/,
+  'The native read-only billing bridge must be registered explicitly.',
+);
+requirePattern(
+  nativeBillingPluginPath,
+  nativeBillingPlugin,
+  /@CapacitorPlugin\(name = "ScrollShieldBilling"\)[\s\S]*querySubscriptionPurchases/,
+  'Native billing plugin must expose the controlled subscription-purchase query boundary.',
+);
+requirePattern(
+  nativeBillingPluginPath,
+  nativeBillingPlugin,
+  /enablePendingPurchases\(pendingPurchasesParams\)[\s\S]*enableAutoServiceReconnection\(\)/,
+  'Billing client must explicitly support pending purchases and automatic service reconnection.',
+);
+requirePattern(
+  nativeBillingPluginPath,
+  nativeBillingPlugin,
+  /setProductType\(BillingClient\.ProductType\.SUBS\)[\s\S]*includeSuspendedSubscriptions\(true\)/,
+  'Restore/status query must include subscription records and suspended subscriptions.',
+);
+requirePattern(
+  nativeBillingPluginPath,
+  nativeBillingPlugin,
+  /Returned purchase tokens are transport material for the secure backend[\s\S]*must not be persisted as a local paid-access flag/i,
+  'Native purchase tokens must be documented as backend-verification material, not entitlement.',
+);
+rejectPattern(
+  nativeBillingPluginPath,
+  nativeBillingPlugin,
+  /launchBillingFlow\s*\(/,
+  'Blocked release must not expose a native purchase launch method yet.',
+);
+rejectPattern(
+  nativeBillingPluginPath,
+  nativeBillingPlugin,
+  /acknowledgePurchase\s*\(/,
+  'Read-only client bridge must not acknowledge subscriptions before secure backend verification.',
+);
+requirePattern(
+  nativeBillingBridgePath,
+  nativeBillingBridge,
+  /These records are NOT entitlements[\s\S]*must send `purchaseToken` to the secure backend verifier[\s\S]*must never[\s\S]*local Plus\/Max authorization/i,
+  'TypeScript billing bridge must keep Play purchase records separate from entitlement.',
+);
+requirePattern(
+  nativeBillingBridgePath,
+  nativeBillingBridge,
+  /result\.responseCode !== 0[\s\S]*return \[\]/,
+  'Malformed/failed Play query results must fail closed to no usable purchase records.',
+);
+requirePattern(
+  nativeBillingBridgeTestPath,
+  nativeBillingBridgeTest,
+  /retains pending state[\s\S]*rejects malformed records[\s\S]*deduplicates product identifiers/,
+  'Vitest must lock pending and malformed purchase-record handling.',
+);
+
+requirePattern(
   subscriptionGatePath,
   subscriptionGate,
   /Status: \*\*BLOCKED \/ architecture gate only\*\*[\s\S]*Google Play Billing[\s\S]*Secure backend entitlement verification[\s\S]*Restore purchases[\s\S]*pending purchase[\s\S]*refund\/revocation/i,
@@ -227,7 +307,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  billingDependencyPresent
-    ? 'Subscription safety check passed. Free/Plus/Max and entitlement lifecycle are source-guarded; purchase UI remains blocked until the subscription release gate is explicitly cleared.'
-    : 'Subscription safety check passed. Free=1, Plus=3, Max=unlimited, cryptographic entitlement fail-closed behavior, bounded offline access, and non-destructive downgrade selection are source-guarded.',
+  'Subscription safety check passed. Free/Plus/Max, bounded verified entitlement, explicit downgrade selection, and the read-only Play Billing restore bridge are source-guarded; purchase UI and entitlement grant remain blocked pending secure backend evidence.',
 );
