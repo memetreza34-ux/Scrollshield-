@@ -30,6 +30,17 @@ export interface SubscriptionVerificationEnvelopeInput {
   [key: string]: unknown;
 }
 
+export interface NormalizedSubscriptionVerificationEnvelope {
+  schemaVersion: 1;
+  challengeId: string;
+  installationKeyId: string;
+  publicKeySpki: string;
+  installationAlgorithm: 'ES256';
+  installationSignature: string;
+  integrityToken: string;
+  purchaseToken: string;
+}
+
 export interface GoogleSubscriptionLineItemLike {
   productId?: unknown;
   expiryTime?: unknown;
@@ -91,7 +102,10 @@ const base64UrlEncode = (bytes: Uint8Array): string => {
 const base64UrlDecode = (value: string): Uint8Array | null => {
   if (!value || !BASE64URL_PATTERN.test(value)) return null;
   try {
-    const padded = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+    const padded = value
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .padEnd(Math.ceil(value.length / 4) * 4, '=');
     const binary = globalThis.atob(padded);
     return Uint8Array.from(binary, (char) => char.charCodeAt(0));
   } catch {
@@ -106,7 +120,10 @@ const randomBase64Url = (byteLength: number): string => {
 };
 
 const isBoundedBase64Url = (value: unknown, min: number, max: number): value is string =>
-  typeof value === 'string' && value.length >= min && value.length <= max && BASE64URL_PATTERN.test(value);
+  typeof value === 'string' &&
+  value.length >= min &&
+  value.length <= max &&
+  BASE64URL_PATTERN.test(value);
 
 export const sha256Base64Url = async (value: Uint8Array | string): Promise<string> => {
   const bytes = typeof value === 'string' ? textEncoder.encode(value) : value;
@@ -173,7 +190,7 @@ const FORBIDDEN_CLIENT_AUTHORITY_FIELDS = [
 
 export const normalizeSubscriptionVerificationEnvelope = (
   raw: SubscriptionVerificationEnvelopeInput,
-): Required<Omit<SubscriptionVerificationEnvelopeInput, keyof typeof Object.prototype>> | null => {
+): NormalizedSubscriptionVerificationEnvelope | null => {
   if (!raw || typeof raw !== 'object') return null;
   if (FORBIDDEN_CLIENT_AUTHORITY_FIELDS.some((field) => field in raw)) return null;
   if (raw.schemaVersion !== 1) return null;
@@ -182,14 +199,31 @@ export const normalizeSubscriptionVerificationEnvelope = (
   if (!isBoundedBase64Url(raw.publicKeySpki, 64, 2048)) return null;
   if (raw.installationAlgorithm !== 'ES256') return null;
   if (!isBoundedBase64Url(raw.installationSignature, 86, 86)) return null;
-  if (typeof raw.integrityToken !== 'string' || raw.integrityToken.length < 32 || raw.integrityToken.length > 16_384) {
+  if (
+    typeof raw.integrityToken !== 'string' ||
+    raw.integrityToken.length < 32 ||
+    raw.integrityToken.length > 16_384
+  ) {
     return null;
   }
-  if (typeof raw.purchaseToken !== 'string' || raw.purchaseToken.length < 16 || raw.purchaseToken.length > 4096) {
+  if (
+    typeof raw.purchaseToken !== 'string' ||
+    raw.purchaseToken.length < 16 ||
+    raw.purchaseToken.length > 4096
+  ) {
     return null;
   }
 
-  return raw as Required<Omit<SubscriptionVerificationEnvelopeInput, keyof typeof Object.prototype>>;
+  return {
+    schemaVersion: 1,
+    challengeId: raw.challengeId,
+    installationKeyId: raw.installationKeyId,
+    publicKeySpki: raw.publicKeySpki,
+    installationAlgorithm: 'ES256',
+    installationSignature: raw.installationSignature,
+    integrityToken: raw.integrityToken,
+    purchaseToken: raw.purchaseToken,
+  };
 };
 
 export const verifyInstallationChallengeSignature = async (
@@ -207,7 +241,9 @@ export const verifyInstallationChallengeSignature = async (
     normalized.publicKeySpki,
   );
   const signature = base64UrlDecode(normalized.installationSignature);
-  if (!publicKey || !signature || signature.byteLength !== ES256_P1363_SIGNATURE_BYTES) return false;
+  if (!publicKey || !signature || signature.byteLength !== ES256_P1363_SIGNATURE_BYTES) {
+    return false;
+  }
 
   const statement = buildSubscriptionChallengeStatement(challenge.challengeId, challenge.nonce);
   try {
@@ -241,12 +277,26 @@ export const deriveSubscriptionDecisionFromGoogle = (
   nowMs = Date.now(),
 ): ServerSubscriptionDecision => {
   if (!purchase || typeof purchase !== 'object' || typeof purchase.subscriptionState !== 'string') {
-    return { entitled: false, plan: null, lifecycleState: null, accessUntilMs: null, productId: null, reason: 'invalid-google-response' };
+    return {
+      entitled: false,
+      plan: null,
+      lifecycleState: null,
+      accessUntilMs: null,
+      productId: null,
+      reason: 'invalid-google-response',
+    };
   }
 
   const lineItems = getLineItems(purchase.lineItems);
   if (!lineItems) {
-    return { entitled: false, plan: null, lifecycleState: null, accessUntilMs: null, productId: null, reason: 'invalid-google-response' };
+    return {
+      entitled: false,
+      plan: null,
+      lifecycleState: null,
+      accessUntilMs: null,
+      productId: null,
+      reason: 'invalid-google-response',
+    };
   }
 
   const activeMapped = lineItems
@@ -259,7 +309,10 @@ export const deriveSubscriptionDecisionFromGoogle = (
         item.productId !== null && item.expiryMs !== null && item.expiryMs > nowMs,
     )
     .map((item) => ({ ...item, plan: productPlanMap[item.productId] ?? null }))
-    .filter((item): item is { productId: string; expiryMs: number; plan: ServerPaidPlan } => item.plan !== null);
+    .filter(
+      (item): item is { productId: string; expiryMs: number; plan: ServerPaidPlan } =>
+        item.plan !== null,
+    );
 
   if (activeMapped.length === 0) {
     const anyUnexpired = lineItems.some((item) => {
@@ -279,7 +332,14 @@ export const deriveSubscriptionDecisionFromGoogle = (
   const distinctPlans = new Set(activeMapped.map((item) => item.plan));
   const distinctProducts = new Set(activeMapped.map((item) => item.productId));
   if (distinctPlans.size !== 1 || distinctProducts.size !== 1) {
-    return { entitled: false, plan: null, lifecycleState: null, accessUntilMs: null, productId: null, reason: 'ambiguous-products' };
+    return {
+      entitled: false,
+      plan: null,
+      lifecycleState: null,
+      accessUntilMs: null,
+      productId: null,
+      reason: 'ambiguous-products',
+    };
   }
 
   const item = activeMapped.reduce((latest, current) =>
@@ -288,13 +348,41 @@ export const deriveSubscriptionDecisionFromGoogle = (
 
   switch (purchase.subscriptionState) {
     case 'SUBSCRIPTION_STATE_ACTIVE':
-      return { entitled: true, plan: item.plan, lifecycleState: 'active', accessUntilMs: item.expiryMs, productId: item.productId, reason: 'verified-active' };
+      return {
+        entitled: true,
+        plan: item.plan,
+        lifecycleState: 'active',
+        accessUntilMs: item.expiryMs,
+        productId: item.productId,
+        reason: 'verified-active',
+      };
     case 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD':
-      return { entitled: true, plan: item.plan, lifecycleState: 'grace', accessUntilMs: item.expiryMs, productId: item.productId, reason: 'verified-grace' };
+      return {
+        entitled: true,
+        plan: item.plan,
+        lifecycleState: 'grace',
+        accessUntilMs: item.expiryMs,
+        productId: item.productId,
+        reason: 'verified-grace',
+      };
     case 'SUBSCRIPTION_STATE_CANCELED':
-      return { entitled: true, plan: item.plan, lifecycleState: 'active', accessUntilMs: item.expiryMs, productId: item.productId, reason: 'verified-canceled-until-expiry' };
+      return {
+        entitled: true,
+        plan: item.plan,
+        lifecycleState: 'active',
+        accessUntilMs: item.expiryMs,
+        productId: item.productId,
+        reason: 'verified-canceled-until-expiry',
+      };
     default:
-      return { entitled: false, plan: null, lifecycleState: null, accessUntilMs: null, productId: null, reason: 'non-entitling-state' };
+      return {
+        entitled: false,
+        plan: null,
+        lifecycleState: null,
+        accessUntilMs: null,
+        productId: null,
+        reason: 'non-entitling-state',
+      };
   }
 };
 
