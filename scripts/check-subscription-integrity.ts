@@ -2,20 +2,43 @@ import { readFile } from 'node:fs/promises';
 
 const buildPath = 'android/app/build.gradle';
 const activityPath = 'android/app/src/main/java/app/scrollshield/mobile/MainActivity.java';
-const pluginPath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldIntegrityPlugin.java';
-const javaTestPath =
+const integrityPluginPath =
+  'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldIntegrityPlugin.java';
+const integrityJavaTestPath =
   'android/app/src/test/java/app/scrollshield/mobile/ScrollShieldIntegrityPluginTest.java';
-const bridgePath = 'src/lib/nativeIntegrity.ts';
-const bridgeTestPath = 'src/lib/nativeIntegrity.test.ts';
+const integrityBridgePath = 'src/lib/nativeIntegrity.ts';
+const integrityBridgeTestPath = 'src/lib/nativeIntegrity.test.ts';
+const identityPluginPath =
+  'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldSubscriptionIdentityPlugin.java';
+const identityJavaTestPath =
+  'android/app/src/test/java/app/scrollshield/mobile/ScrollShieldSubscriptionIdentityPluginTest.java';
+const identityBridgePath = 'src/lib/subscriptionInstallationIdentity.ts';
+const identityBridgeTestPath = 'src/lib/subscriptionInstallationIdentity.test.ts';
 const architecturePath = 'docs/SUBSCRIPTION_ENTITLEMENT_ARCHITECTURE.md';
 
-const [build, activity, plugin, javaTest, bridge, bridgeTest, architecture] = await Promise.all([
+const [
+  build,
+  activity,
+  integrityPlugin,
+  integrityJavaTest,
+  integrityBridge,
+  integrityBridgeTest,
+  identityPlugin,
+  identityJavaTest,
+  identityBridge,
+  identityBridgeTest,
+  architecture,
+] = await Promise.all([
   readFile(buildPath, 'utf8'),
   readFile(activityPath, 'utf8'),
-  readFile(pluginPath, 'utf8'),
-  readFile(javaTestPath, 'utf8'),
-  readFile(bridgePath, 'utf8'),
-  readFile(bridgeTestPath, 'utf8'),
+  readFile(integrityPluginPath, 'utf8'),
+  readFile(integrityJavaTestPath, 'utf8'),
+  readFile(integrityBridgePath, 'utf8'),
+  readFile(integrityBridgeTestPath, 'utf8'),
+  readFile(identityPluginPath, 'utf8'),
+  readFile(identityJavaTestPath, 'utf8'),
+  readFile(identityBridgePath, 'utf8'),
+  readFile(identityBridgeTestPath, 'utf8'),
   readFile(architecturePath, 'utf8'),
 ]);
 
@@ -38,77 +61,138 @@ requirePattern(
 requirePattern(
   activityPath,
   activity,
-  /registerPlugin\(ScrollShieldIntegrityPlugin\.class\)/,
-  'Integrity bridge must be explicitly registered.',
+  /registerPlugin\(ScrollShieldIntegrityPlugin\.class\)[\s\S]*registerPlugin\(ScrollShieldSubscriptionIdentityPlugin\.class\)/,
+  'Integrity and non-exportable installation identity bridges must both be registered.',
 );
+
 requirePattern(
-  pluginPath,
-  plugin,
+  integrityPluginPath,
+  integrityPlugin,
   /@CapacitorPlugin\(name = "ScrollShieldIntegrity"\)[\s\S]*requestIntegrityToken/,
   'Native Integrity plugin must expose only the controlled token request boundary.',
 );
 requirePattern(
-  pluginPath,
-  plugin,
+  integrityPluginPath,
+  integrityPlugin,
   /server-issued base64url nonce[\s\S]*never decodes or[\s\S]*backend/i,
-  'Native plugin must document server-owned nonce and verdict authority.',
+  'Native Integrity plugin must document server-owned nonce and verdict authority.',
 );
 requirePattern(
-  pluginPath,
-  plugin,
+  integrityPluginPath,
+  integrityPlugin,
   /MIN_NONCE_LENGTH = 22[\s\S]*MAX_NONCE_LENGTH = 500[\s\S]*isValidServerNonce/,
-  'Native challenge validation must remain bounded.',
+  'Native Integrity challenge validation must remain bounded.',
 );
 requirePattern(
-  pluginPath,
-  plugin,
+  integrityPluginPath,
+  integrityPlugin,
   /IntegrityTokenRequest\.builder\(\)[\s\S]*\.setNonce\(nonce\)[\s\S]*requestIntegrityToken\(request\)/,
   'Integrity request must bind the exact backend-issued nonce.',
 );
 rejectPattern(
-  pluginPath,
-  plugin,
+  integrityPluginPath,
+  integrityPlugin,
   /JSONObject|subscriptionPlan|paid\s*=|entitlement\s*=|PLAY_RECOGNIZED|MEETS_DEVICE_INTEGRITY|LICENSED/,
-  'Native client must not decode Integrity verdicts or decide entitlement locally.',
+  'Native Integrity client must not decode verdicts or decide entitlement locally.',
 );
-
 requirePattern(
-  bridgePath,
-  bridge,
+  integrityBridgePath,
+  integrityBridge,
   /SERVER_NONCE_PATTERN = \/\^\[A-Za-z0-9_-\]\{22,500\}\$\//,
   'TypeScript must enforce the same bounded base64url nonce contract.',
 );
 requirePattern(
-  bridgePath,
-  bridge,
+  integrityBridgePath,
+  integrityBridge,
   /returns the opaque Play Integrity token[\s\S]*never decodes verdicts[\s\S]*never turns integrity output into paid access/i,
-  'TypeScript bridge must keep Integrity output opaque and non-entitling.',
+  'TypeScript Integrity bridge must keep output opaque and non-entitling.',
 );
 requirePattern(
-  bridgePath,
-  bridge,
+  integrityBridgePath,
+  integrityBridge,
   /AndroidIntegrity\.requestIntegrityToken\(\{ nonce \}\)[\s\S]*normalizeOpaqueIntegrityToken/,
-  'TypeScript bridge must pass the exact challenge and validate only token transport shape.',
+  'TypeScript Integrity bridge must pass the exact challenge and validate only token transport shape.',
 );
 rejectPattern(
-  bridgePath,
-  bridge,
+  integrityBridgePath,
+  integrityBridge,
   /atob\(|JSON\.parse\([^)]*token|PLAY_RECOGNIZED|MEETS_DEVICE_INTEGRITY|LICENSED|plan\s*:/,
   'TypeScript must not decode or locally interpret Play Integrity verdicts.',
 );
-
 requirePattern(
-  javaTestPath,
-  javaTest,
+  integrityJavaTestPath,
+  integrityJavaTest,
   /acceptsOnlyBoundedUnpaddedBase64UrlServerNonces/,
-  'Android unit contract must lock challenge format.',
+  'Android unit contract must lock Integrity challenge format.',
 );
 requirePattern(
-  bridgeTestPath,
-  bridgeTest,
+  integrityBridgeTestPath,
+  integrityBridgeTest,
   /accepts only URL-safe unpadded server challenge nonces[\s\S]*opaque bounded transport token only/,
   'Vitest must lock nonce validation and opaque-token handling.',
 );
+
+requirePattern(
+  identityPluginPath,
+  identityPlugin,
+  /ANDROID_KEYSTORE = "AndroidKeyStore"[\s\S]*KEY_ALIAS = "scrollshield_subscription_identity_v1"/,
+  'Subscription identity private key must remain in Android Keystore under the versioned alias.',
+);
+requirePattern(
+  identityPluginPath,
+  identityPlugin,
+  /KEY_ALGORITHM_EC[\s\S]*secp256r1[\s\S]*DIGEST_SHA256/,
+  'Subscription identity must use the reviewed P-256/SHA-256 signing contract.',
+);
+requirePattern(
+  identityPluginPath,
+  identityPlugin,
+  /private key that never leaves[\s\S]*never grants Plus\/Max[\s\S]*Play Integrity[\s\S]*server-side Google Play subscription verification/i,
+  'Native identity plugin must document that key possession alone is not entitlement.',
+);
+requirePattern(
+  identityPluginPath,
+  identityPlugin,
+  /SHA256withECDSA[\s\S]*signer\.initSign\(pair\.getPrivate\(\)\)[\s\S]*signer\.update\(statement\.getBytes/,
+  'Challenge signing must use the non-exportable private key over the exact canonical statement.',
+);
+rejectPattern(
+  identityPluginPath,
+  identityPlugin,
+  /getEncoded\(\).*Private|Base64[^\n]*private|exportPrivate|paid\s*=|entitlement\s*=/,
+  'Subscription identity code must never export private key material or grant entitlement.',
+);
+requirePattern(
+  identityBridgePath,
+  identityBridge,
+  /CHALLENGE_PREFIX = 'scrollshield-subscription-v1:'/,
+  'Client challenge statement must use one versioned canonical prefix.',
+);
+requirePattern(
+  identityBridgePath,
+  identityBridge,
+  /buildSubscriptionChallengeStatement[\s\S]*challengeId[\s\S]*nonce[\s\S]*return `\$\{CHALLENGE_PREFIX\}\$\{challengeId\}:\$\{nonce\}`/,
+  'Client must sign exactly the backend challenge id and nonce in canonical order.',
+);
+requirePattern(
+  identityBridgePath,
+  identityBridge,
+  /algorithm: 'ES256'[\s\S]*signature/,
+  'Installation identity transport must remain ES256 and signature-based.',
+);
+requirePattern(
+  identityJavaTestPath,
+  identityJavaTest,
+  /acceptsOnlyCanonicalPrintableSubscriptionChallengeStatements/,
+  'Android unit test must lock canonical challenge statement validation.',
+);
+requirePattern(
+  identityBridgeTestPath,
+  identityBridgeTest,
+  /builds one canonical statement[\s\S]*rejects malformed challenge ids and nonces/,
+  'Vitest must lock canonical challenge construction.',
+);
+
 requirePattern(
   architecturePath,
   architecture,
@@ -123,5 +207,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Subscription Integrity source check passed. Play Integrity uses a backend-issued nonce, the Android/TypeScript clients treat the token as opaque transport, and entitlement verdicts remain server-owned.',
+  'Subscription Integrity source check passed. Play Integrity uses a backend-issued nonce, the Integrity token remains opaque, and an Android-Keystore ES256 installation identity signs the canonical challenge without granting entitlement locally.',
 );
