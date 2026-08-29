@@ -80,17 +80,10 @@ export const isSubscriptionPlanId = (value: unknown): value is SubscriptionPlanI
   value === 'free' || value === 'plus' || value === 'max';
 
 /**
- * Paid entitlement must never be inferred from an unverified local value.
- * Until a store/backend purchase is verified, the effective plan is Free.
+ * This module describes plan capacity only.
+ * Effective paid access MUST be resolved through subscriptionEntitlementPolicy.ts;
+ * there is deliberately no boolean `purchaseVerified` shortcut here.
  */
-export const resolveVerifiedSubscriptionPlan = (
-  candidate: unknown,
-  purchaseVerified: boolean,
-): SubscriptionPlanId => {
-  if (!purchaseVerified) return 'free';
-  return isSubscriptionPlanId(candidate) ? candidate : 'free';
-};
-
 export const canProtectAdditionalApp = (
   planId: SubscriptionPlanId,
   currentlyProtectedAppCount: number,
