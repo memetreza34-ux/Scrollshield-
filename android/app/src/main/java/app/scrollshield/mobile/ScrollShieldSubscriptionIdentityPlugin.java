@@ -156,14 +156,15 @@ public class ScrollShieldSubscriptionIdentityPlugin extends Plugin {
     }
 
     private static void copyPositiveDerInteger(byte[] value, byte[] output, int outputOffset) {
+        if (value.length == 0 || (value[0] & 0x80) != 0) {
+            throw new IllegalArgumentException("ECDSA DER integer must be positive");
+        }
+
         int offset = 0;
         while (value.length - offset > P256_COMPONENT_BYTES && value[offset] == 0) offset++;
         int length = value.length - offset;
         if (length <= 0 || length > P256_COMPONENT_BYTES) {
             throw new IllegalArgumentException("ECDSA component is outside P-256 range");
-        }
-        if ((value[offset] & 0x80) != 0) {
-            throw new IllegalArgumentException("ECDSA DER integer must be positive");
         }
         System.arraycopy(value, offset, output, outputOffset + P256_COMPONENT_BYTES - length, length);
     }
