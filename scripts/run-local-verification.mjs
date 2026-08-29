@@ -3,14 +3,19 @@ import { createWriteStream, existsSync, mkdirSync, writeFileSync } from 'node:fs
 import path from 'node:path';
 
 const repositoryRoot = process.cwd();
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const gitCommand = process.platform === 'win32' ? 'git.exe' : 'git';
+const isWindows = process.platform === 'win32';
+const npmCommand = isWindows ? 'npm.cmd' : 'npm';
+const gitCommand = isWindows ? 'git.exe' : 'git';
+
+function commandNeedsShell(command) {
+  return isWindows && /\.(?:cmd|bat)$/i.test(command);
+}
 
 function runText(command, args) {
   const result = spawnSync(command, args, {
     cwd: repositoryRoot,
     encoding: 'utf8',
-    shell: false,
+    shell: commandNeedsShell(command),
   });
   if (result.status !== 0) return undefined;
   return result.stdout.trim();
@@ -75,7 +80,7 @@ async function runStep(index, id, command, args) {
   const child = spawn(command, args, {
     cwd: repositoryRoot,
     env: { ...process.env, CI: 'true' },
-    shell: false,
+    shell: commandNeedsShell(command),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
