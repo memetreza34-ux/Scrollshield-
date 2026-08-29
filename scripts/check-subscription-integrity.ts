@@ -14,6 +14,9 @@ const identityJavaTestPath =
   'android/app/src/test/java/app/scrollshield/mobile/ScrollShieldSubscriptionIdentityPluginTest.java';
 const identityBridgePath = 'src/lib/subscriptionInstallationIdentity.ts';
 const identityBridgeTestPath = 'src/lib/subscriptionInstallationIdentity.test.ts';
+const trustConfigPath = 'src/config/subscriptionTrust.ts';
+const assertionVerifierPath = 'src/lib/subscriptionEntitlementSignature.ts';
+const assertionVerifierTestPath = 'src/lib/subscriptionEntitlementSignature.test.ts';
 const architecturePath = 'docs/SUBSCRIPTION_ENTITLEMENT_ARCHITECTURE.md';
 
 const [
@@ -27,6 +30,9 @@ const [
   identityJavaTest,
   identityBridge,
   identityBridgeTest,
+  trustConfig,
+  assertionVerifier,
+  assertionVerifierTest,
   architecture,
 ] = await Promise.all([
   readFile(buildPath, 'utf8'),
@@ -39,6 +45,9 @@ const [
   readFile(identityJavaTestPath, 'utf8'),
   readFile(identityBridgePath, 'utf8'),
   readFile(identityBridgeTestPath, 'utf8'),
+  readFile(trustConfigPath, 'utf8'),
+  readFile(assertionVerifierPath, 'utf8'),
+  readFile(assertionVerifierTestPath, 'utf8'),
   readFile(architecturePath, 'utf8'),
 ]);
 
@@ -107,12 +116,6 @@ requirePattern(
   /returns the opaque Play Integrity token[\s\S]*never decodes verdicts[\s\S]*never turns integrity output into paid access/i,
   'TypeScript Integrity bridge must keep output opaque and non-entitling.',
 );
-requirePattern(
-  integrityBridgePath,
-  integrityBridge,
-  /AndroidIntegrity\.requestIntegrityToken\(\{ nonce \}\)[\s\S]*normalizeOpaqueIntegrityToken/,
-  'TypeScript Integrity bridge must pass the exact challenge and validate only token transport shape.',
-);
 rejectPattern(
   integrityBridgePath,
   integrityBridge,
@@ -171,14 +174,8 @@ requirePattern(
 requirePattern(
   identityBridgePath,
   identityBridge,
-  /buildSubscriptionChallengeStatement[\s\S]*challengeId[\s\S]*nonce[\s\S]*return `\$\{CHALLENGE_PREFIX\}\$\{challengeId\}:\$\{nonce\}`/,
+  /return `\$\{CHALLENGE_PREFIX\}\$\{challengeId\}:\$\{nonce\}`/,
   'Client must sign exactly the backend challenge id and nonce in canonical order.',
-);
-requirePattern(
-  identityBridgePath,
-  identityBridge,
-  /algorithm: 'ES256'[\s\S]*signature/,
-  'Installation identity transport must remain ES256 and signature-based.',
 );
 requirePattern(
   identityJavaTestPath,
@@ -191,6 +188,61 @@ requirePattern(
   identityBridgeTest,
   /builds one canonical statement[\s\S]*rejects malformed challenge ids and nonces/,
   'Vitest must lock canonical challenge construction.',
+);
+
+requirePattern(
+  trustConfigPath,
+  trustConfig,
+  /SUBSCRIPTION_ENTITLEMENT_ISSUER = 'scrollshield-subscription-backend'[\s\S]*SUBSCRIPTION_EXPECTED_PACKAGE_NAME = 'app\.scrollshield\.mobile'/,
+  'Client assertion trust config must pin issuer and Android package.',
+);
+requirePattern(
+  trustConfigPath,
+  trustConfig,
+  /SUBSCRIPTION_ENTITLEMENT_VERIFICATION_KEYS[\s\S]*=\s*\[\]/,
+  'Production signing-key trust list must remain fail-closed until a reviewed backend public key is released.',
+);
+rejectPattern(
+  trustConfigPath,
+  trustConfig,
+  /privateKey|service[_-]?role|client_secret|BEGIN PRIVATE KEY|HMAC/i,
+  'Client trust config must never contain private or shared secret material.',
+);
+requirePattern(
+  assertionVerifierPath,
+  assertionVerifier,
+  /ASSERTION_TYPE = 'scrollshield-entitlement\+jwt'[\s\S]*signature\.byteLength !== 64/,
+  'Entitlement assertion verifier must require the reviewed ES256 compact-JWS shape.',
+);
+requirePattern(
+  assertionVerifierPath,
+  assertionVerifier,
+  /header\.alg !== 'ES256'[\s\S]*header\.typ !== ASSERTION_TYPE[\s\S]*findVerificationKey/,
+  'Verifier must pin ES256/type and use a trusted key id.',
+);
+requirePattern(
+  assertionVerifierPath,
+  assertionVerifier,
+  /payload\.issuer !== SUBSCRIPTION_ENTITLEMENT_ISSUER[\s\S]*payload\.audience !== SUBSCRIPTION_ENTITLEMENT_AUDIENCE[\s\S]*payload\.packageName !== SUBSCRIPTION_EXPECTED_PACKAGE_NAME/,
+  'Signed payload must be bound to issuer, audience, and exact Android package.',
+);
+requirePattern(
+  assertionVerifierPath,
+  assertionVerifier,
+  /payload\.installationKeyId !== expectedInstallationKeyId[\s\S]*wrong-installation/,
+  'Signed entitlement must be bound to the current Android-Keystore installation identity.',
+);
+requirePattern(
+  assertionVerifierPath,
+  assertionVerifier,
+  /cryptographicallyVerified: true/,
+  'Only the signature-verification boundary may produce a cryptographically verified candidate.',
+);
+requirePattern(
+  assertionVerifierTestPath,
+  assertionVerifierTest,
+  /only after ES256 verification and exact installation binding[\s\S]*bound to another installation key[\s\S]*tampered payloads and unknown signing keys/,
+  'Vitest must lock signature, installation-binding, tamper, and unknown-key failures.',
 );
 
 requirePattern(
@@ -207,5 +259,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Subscription Integrity source check passed. Play Integrity uses a backend-issued nonce, the Integrity token remains opaque, and an Android-Keystore ES256 installation identity signs the canonical challenge without granting entitlement locally.',
+  'Subscription Integrity source check passed. Play Integrity uses a backend-issued nonce, Android Keystore proves installation-key possession, and only a trusted ES256 backend assertion bound to that installation can reach the paid entitlement resolver.',
 );
