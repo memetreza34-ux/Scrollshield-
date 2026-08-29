@@ -8,6 +8,7 @@ export interface PlaySubscriptionPurchase {
   purchaseState: PlayPurchaseState;
   acknowledged: boolean;
   autoRenewing: boolean;
+  suspended: boolean;
   purchaseTimeMs: number;
 }
 
@@ -17,6 +18,7 @@ interface RawPlaySubscriptionPurchase {
   purchaseState?: unknown;
   acknowledged?: unknown;
   autoRenewing?: unknown;
+  suspended?: unknown;
   purchaseTimeMs?: unknown;
 }
 
@@ -43,6 +45,7 @@ export const normalizePlaySubscriptionPurchase = (
     !PURCHASE_STATES.has(raw.purchaseState as PlayPurchaseState) ||
     typeof raw.acknowledged !== 'boolean' ||
     typeof raw.autoRenewing !== 'boolean' ||
+    typeof raw.suspended !== 'boolean' ||
     typeof raw.purchaseTimeMs !== 'number' ||
     !Number.isFinite(raw.purchaseTimeMs) ||
     raw.purchaseTimeMs <= 0
@@ -56,6 +59,7 @@ export const normalizePlaySubscriptionPurchase = (
     purchaseState: raw.purchaseState as PlayPurchaseState,
     acknowledged: raw.acknowledged,
     autoRenewing: raw.autoRenewing,
+    suspended: raw.suspended,
     purchaseTimeMs: raw.purchaseTimeMs,
   };
 };
@@ -75,6 +79,7 @@ export const NativeBilling = {
    *
    * Callers must send `purchaseToken` to the secure backend verifier and must never
    * persist `purchaseState === "purchased"` as local Plus/Max authorization.
+   * `suspended` is diagnostic input only; backend lifecycle verification remains authoritative.
    */
   async querySubscriptionPurchases(): Promise<PlaySubscriptionPurchase[]> {
     if (!this.isAvailable()) return [];
