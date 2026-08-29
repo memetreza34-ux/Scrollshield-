@@ -3,13 +3,19 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
 type PackageJson = {
+  scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 };
 
+type PackageLockEntry = {
+  resolved?: string;
+  version?: string;
+};
+
 type PackageLock = {
   lockfileVersion?: number;
-  packages?: Record<string, { resolved?: string; version?: string }>;
+  packages?: Record<string, PackageLockEntry>;
 };
 
 type Finding = { file: string; text: string };
@@ -20,13 +26,21 @@ const requireFile = (file: string) => {
   if (!existsSync(file)) findings.push({ file, text: 'Required supply-chain file is missing.' });
 };
 
-for (const file of ['package.json', 'package-lock.json', 'android/gradle/wrapper/gradle-wrapper.properties']) {
+for (const file of [
+  'package.json',
+  'package-lock.json',
+  'scripts/check-package-lock-sync.mjs',
+  '.github/workflows/verify.yml',
+  'android/gradle/wrapper/gradle-wrapper.properties',
+]) {
   requireFile(file);
 }
 
 if (findings.length === 0) {
   const packageJson = JSON.parse(await readFile('package.json', 'utf8')) as PackageJson;
   const packageLock = JSON.parse(await readFile('package-lock.json', 'utf8')) as PackageLock;
+  const workflow = await readFile('.github/workflows/verify.yml', 'utf8');
+  const lockSyncScript = await readFile('scripts/check-package-lock-sync.mjs', 'utf8');
   const wrapper = await readFile('android/gradle/wrapper/gradle-wrapper.properties', 'utf8');
 
   const declaredDependencies = {
@@ -42,6 +56,36 @@ if (findings.length === 0) {
         text: `Dependency ${name} uses a non-registry or unbounded version specifier: ${version}`,
       });
     }
+  }
+
+  if (packageJson.scripts?.['check:lock-sync'] !== 'node scripts/check-package-lock-sync.mjs') {
+    findings.push({
+      file: 'package.json',
+      text: 'check:lock-sync must execute the dependency-free package-lock preflight script.',
+    });
+  }
+
+  if (!packageJson.scripts?.verify?.includes('npm run check:lock-sync')) {
+    findings.push({
+      file: 'package.json',
+      text: 'verify must include check:lock-sync so local verification detects package manifest/lock drift.',
+    });
+  }
+
+  if (!/packages\?\.\[''\][\s\S]*dependencies[\s\S]*devDependencies/.test(lockSyncScript)) {
+    findings.push({
+      file: 'scripts/check-package-lock-sync.mjs',
+      text: 'Lock preflight must compare package.json dependency sections with package-lock root metadata.',
+    });
+  }
+
+  const workflowLockCheckIndex = workflow.indexOf('node scripts/check-package-lock-sync.mjs');
+  const workflowNpmCiIndex = workflow.indexOf('run: npm ci');
+  if (workflowLockCheckIndex < 0 || workflowNpmCiIndex < 0 || workflowLockCheckIndex > workflowNpmCiIndex) {
+    findings.push({
+      file: '.github/workflows/verify.yml',
+      text: 'Dependency-free package-lock validation must execute before npm ci.',
+    });
   }
 
   if ((packageLock.lockfileVersion ?? 0) < 3) {
@@ -112,4 +156,6 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log('Supply-chain check passed. Lockfiles, Gradle checksum, dependency protocols, and dynamic versions are guarded.');
+console.log(
+  'Supply-chain check passed. Lockfile preflight, Gradle checksum, dependency protocols, and dynamic versions are guarded.',
+);
