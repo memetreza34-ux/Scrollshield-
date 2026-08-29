@@ -235,8 +235,14 @@ requirePattern(
 requirePattern(
   entitlementArchitecturePath,
   entitlementArchitecture,
-  /Play purchase state is not entitlement state[\s\S]*MAX_OFFLINE_ENTITLEMENT_WINDOW_MS = 72 hours[\s\S]*no launchBillingFlow\(\)[\s\S]*no acknowledgePurchase\(\)/i,
-  'Entitlement architecture must document Play-vs-entitlement separation, bounded offline access, and the blocked purchase/ack paths.',
+  /Play purchase state is not entitlement state[\s\S]*MAX_OFFLINE_ENTITLEMENT_WINDOW_MS = 72 hours/i,
+  'Entitlement architecture must document Play-vs-entitlement separation and bounded offline access.',
+);
+requirePattern(
+  entitlementArchitecturePath,
+  entitlementArchitecture,
+  /no launchBillingFlow\(\)[\s\S]*no acknowledgePurchase\(\)/i,
+  'Entitlement architecture must document the blocked purchase-launch and acknowledgement paths.',
 );
 requirePattern(
   entitlementArchitecturePath,
