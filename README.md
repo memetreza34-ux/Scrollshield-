@@ -86,12 +86,16 @@ npm run lint
 npm run test
 npm run build
 npm run verify
+npm run verify:android
+npm run verify:full
 npm run check:device-matrix
 npm run check:lifecycle
 npm run check:migration
 npm run check:release-approval
 npm run readiness
 ```
+
+`verify:android` executes Android JUnit tests and compiles the debug APK through the platform-correct Gradle wrapper. `verify:full` runs the complete web/source verification first and then Android unit tests plus `assembleDebug`. This is the preferred local fallback while GitHub-hosted runners cannot start.
 
 ## Android
 
