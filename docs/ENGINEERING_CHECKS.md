@@ -2,7 +2,7 @@
 
 Status: **verbindlicher technischer Verifikationsvertrag**
 
-Letzte Aktualisierung: **28. August 2026**
+Letzte Aktualisierung: **29. August 2026**
 
 ## Grundregel
 
@@ -36,9 +36,86 @@ Die Kette umfasst unter anderem:
 - `check:process-loss`;
 - `check:protection-recovery`;
 - `check:device-matrix`;
+- `check:subscription-safety`;
 - Migration, Release, Privacy, Store, Supply Chain, Security, PWA und Bundle Checks.
 
 Veraltete Erwartungen wie produktives `setProtectionEnabled(context, true)`, `stopForMissingPermission(...)`, generationlose Starts, React-/TypeScript-owned Recovery-Blocker oder Service-`stopSelf()` sind nicht zulässig.
+
+## Subscription / Entitlement Safety
+
+```bash
+npm run check:subscription-safety
+```
+
+Spezifikationen:
+
+- `docs/SUBSCRIPTION_RELEASE_GATE.md`;
+- `docs/SUBSCRIPTION_ENTITLEMENT_ARCHITECTURE.md`;
+- `docs/COMPETITIVE_PRODUCT_STRATEGY.md`.
+
+Verbindliche Source-Invarianten:
+
+```text
+Free = 1 geschützte unterstützte App
+Plus = bis zu 3 geschützte unterstützte Apps
+Max = keine Subscription-Anzahlgrenze für unterstützte Apps
+```
+
+`src/lib/subscriptionPlanPolicy.ts` beschreibt ausschließlich Plan-Kapazität und Feature-Grenzen. Es darf keinen einfachen Boolean-Shortcut wie `purchaseVerified=true → Plus/Max` geben.
+
+Effektiver Paid-Zugang gehört ausschließlich in `src/lib/subscriptionEntitlementPolicy.ts`:
+
+```text
+fehlend / malformed / unverified
+pending / expired / revoked / unknown
+→ Free
+```
+
+Nur ein kryptographisch verifizierter `active`-/`grace`-Backend-Assertion-State innerhalb des erlaubten Zeitfensters darf Plus/Max liefern.
+
+Aktueller Source-Vertrag für Offline-Assertions:
+
+```text
+MAX_OFFLINE_ENTITLEMENT_WINDOW_MS = 72 Stunden
+```
+
+Downgrade über das neue App-Limit hinaus:
+
+```text
+keine stille Gewinner-Auswahl
+keine Löschung
+keine implizite Config-Mutation
+→ explizite Nutzerauswahl erforderlich
+→ vorherige durable Config bleibt bis zum atomaren Ersatz unangetastet
+```
+
+Google-Play-Billing-Source-Grenze:
+
+```text
+Billing Library 9.1.0
+→ read-only SUBS query
+→ suspended subscriptions werden mit abgefragt
+→ purchaseToken ist nur Verifikationsmaterial
+→ raw Play PURCHASED ist kein Entitlement
+→ kein launchBillingFlow() solange Release-Gate blockiert
+→ kein client acknowledgePurchase() vor sicherer Backend-Transaktion
+```
+
+Zielarchitektur vor Paid Release:
+
+```text
+purchaseToken
+→ sicheres Backend
+→ Google Play Developer API / Lifecycle-Fraud-Prüfung
+→ RTDN + Reconciliation
+→ kryptographisch verifizierbarer bounded Entitlement-Assertion
+→ Client-Verifikation
+→ effektiver Free / Plus / Max State
+```
+
+Safety/Data-Ownership bleiben planunabhängig: sicherer Stop/Home-Weg, bounded Emergency Path, Permission-/Service-Diagnose, Migration/Recovery, Export/Import, Privacy und Reset/Uninstall Guidance dürfen nicht hinter die Paywall.
+
+Source-Verträge sind keine ausgeführte Billing-Evidence. Vor Paid Release sind mindestens reale Android-Kompilierung, Play-Lizenztester, Pending/Suspended/Restore, Backend-Verifikation, RTDN, Acknowledgement, Refund/Revocation, Offline-Expiry und Upgrade-/Downgrade-Evidence erforderlich.
 
 ## Checker Architecture Drift
 
@@ -424,6 +501,10 @@ Nicht als bestanden belegt sind ohne erfolgreichen exakten Lauf insbesondere:
 - `npm run verify`;
 - alle oben genannten Source-Checker;
 - TypeScript / ESLint / Prettier / Vitest;
+- Subscription Plan-/Entitlement-/Native-Billing-Tests;
+- Android Billing-Kompilierung;
+- Play Billing Verbindung/Query/Pending/Suspended/Restore;
+- Backend-Verifikation / RTDN / Acknowledgement;
 - App-Open-/Process-Loss-/Prepared-Start-Tests;
 - Android JUnit;
 - Android Instrumentation;
@@ -446,5 +527,7 @@ Nicht als bestanden belegt sind ohne erfolgreichen exakten Lauf insbesondere:
 8. `RUNTIME-01` bis `RUNTIME-06` real ausführen;
 9. `LIFE-12` bis `LIFE-15` und `DISPATCH-01` bis `DISPATCH-05` real ausführen;
 10. Physical Device Matrix, V0.7-Migration, 12h/OEM/Batterie;
-11. finaler Supply-Chain-/Binary-/Security-Audit;
-12. erst danach Candidate Freeze und Release.
+11. sichere Billing-Backend-Verifikation + signierte Assertion + RTDN + Acknowledgement implementieren;
+12. License-Tester Paid Lifecycle / Restore / Refund / Revocation / Offline-Expiry / Downgrade testen;
+13. finaler Supply-Chain-/Binary-/Security-Audit;
+14. erst danach Paywall, Candidate Freeze und Release.
