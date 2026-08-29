@@ -55,6 +55,7 @@ Die übrigen Dokumente sind Detailquellen für einzelne Gates.
 - Mandatory Android device matrix with manufacturer, Android-version, migration, lifecycle, battery, time-boundary, tablet, accessibility, commitment, and adaptive-friction coverage
 - Explicit release approval manifest and strict candidate-bound evidence gate before release APK or AAB generation
 - CI prepared to run web verification, Android JUnit tests, debug APK compilation, and artifact upload
+- Dependency-free package manifest/lockfile preflight before `npm ci`
 - External GitHub Actions pinned to immutable commit SHAs
 - Android v1 manifest intentionally omits `android.permission.INTERNET`; the privacy build check blocks undocumented network APIs, tracker markers, and silent reintroduction of that permission
 
@@ -72,7 +73,10 @@ The Android app id is currently `app.scrollshield.mobile`. Confirm this id befor
 
 Prerequisites: Node.js 22.12+ and npm 10+.
 
+Before installing dependencies, validate that `package.json` and the root metadata in `package-lock.json` agree:
+
 ```bash
+node scripts/check-package-lock-sync.mjs
 npm ci
 npm run dev
 ```
@@ -82,6 +86,7 @@ Open the local Vite URL shown in the terminal, usually `http://localhost:3000`.
 ## Quality Commands
 
 ```bash
+npm run check:lock-sync
 npm run lint
 npm run test
 npm run build
@@ -95,7 +100,7 @@ npm run check:release-approval
 npm run readiness
 ```
 
-`verify:android` executes Android JUnit tests and compiles the debug APK through the platform-correct Gradle wrapper. `verify:full` runs the complete web/source verification first and then Android unit tests plus `assembleDebug`. This is the preferred local fallback while GitHub-hosted runners cannot start.
+`check:lock-sync` is dependency-free and also runs in CI before `npm ci`, so manifest/lock drift fails with a precise error before installation. `verify:android` executes Android JUnit tests and compiles the debug APK through the platform-correct Gradle wrapper. `verify:full` runs the complete web/source verification first and then Android unit tests plus `assembleDebug`. This is the preferred local fallback while GitHub-hosted runners cannot start.
 
 ## Android
 
