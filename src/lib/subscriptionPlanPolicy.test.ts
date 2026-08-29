@@ -4,7 +4,7 @@ import {
   SUBSCRIPTION_PLAN_POLICY,
   canProtectAdditionalApp,
   hasSubscriptionCapability,
-  resolveVerifiedSubscriptionPlan,
+  isSubscriptionPlanId,
 } from './subscriptionPlanPolicy';
 
 describe('subscription plan policy', () => {
@@ -14,15 +14,13 @@ describe('subscription plan policy', () => {
     expect(SUBSCRIPTION_PLAN_POLICY.max.protectedAppLimit).toBeNull();
   });
 
-  it('fails closed to Free when paid entitlement is not verified', () => {
-    expect(resolveVerifiedSubscriptionPlan('max', false)).toBe('free');
-    expect(resolveVerifiedSubscriptionPlan('plus', false)).toBe('free');
-    expect(resolveVerifiedSubscriptionPlan('unknown', true)).toBe('free');
-  });
-
-  it('accepts a recognized paid plan only after verification', () => {
-    expect(resolveVerifiedSubscriptionPlan('plus', true)).toBe('plus');
-    expect(resolveVerifiedSubscriptionPlan('max', true)).toBe('max');
+  it('recognizes only the three supported plan identifiers', () => {
+    expect(isSubscriptionPlanId('free')).toBe(true);
+    expect(isSubscriptionPlanId('plus')).toBe(true);
+    expect(isSubscriptionPlanId('max')).toBe(true);
+    expect(isSubscriptionPlanId('pro')).toBe(false);
+    expect(isSubscriptionPlanId('premium')).toBe(false);
+    expect(isSubscriptionPlanId(undefined)).toBe(false);
   });
 
   it('enforces protected-app capacity without deleting existing data', () => {
