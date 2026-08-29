@@ -10,6 +10,7 @@ describe('native billing purchase boundary', () => {
         purchaseState: 'purchased',
         acknowledged: false,
         autoRenewing: true,
+        suspended: false,
         purchaseTimeMs: 2_000_000_000_000,
       }),
     ).toEqual({
@@ -18,6 +19,7 @@ describe('native billing purchase boundary', () => {
       purchaseState: 'purchased',
       acknowledged: false,
       autoRenewing: true,
+      suspended: false,
       purchaseTimeMs: 2_000_000_000_000,
     });
   });
@@ -29,10 +31,26 @@ describe('native billing purchase boundary', () => {
       purchaseState: 'pending',
       acknowledged: false,
       autoRenewing: false,
+      suspended: false,
       purchaseTimeMs: 2_000_000_000_000,
     });
 
     expect(result?.purchaseState).toBe('pending');
+  });
+
+  it('retains suspended state as diagnostic input without converting it into entitlement', () => {
+    const result = normalizePlaySubscriptionPurchase({
+      purchaseToken: 'suspended-token',
+      products: ['scrollshield_plus'],
+      purchaseState: 'purchased',
+      acknowledged: true,
+      autoRenewing: false,
+      suspended: true,
+      purchaseTimeMs: 2_000_000_000_000,
+    });
+
+    expect(result?.suspended).toBe(true);
+    expect(result?.purchaseState).toBe('purchased');
   });
 
   it('rejects malformed records instead of manufacturing a usable purchase token', () => {
@@ -43,6 +61,7 @@ describe('native billing purchase boundary', () => {
         purchaseState: 'purchased',
         acknowledged: false,
         autoRenewing: true,
+        suspended: false,
         purchaseTimeMs: 2_000_000_000_000,
       }),
     ).toBeNull();
@@ -54,6 +73,7 @@ describe('native billing purchase boundary', () => {
         purchaseState: 'active',
         acknowledged: false,
         autoRenewing: true,
+        suspended: false,
         purchaseTimeMs: Number.NaN,
       }),
     ).toBeNull();
@@ -67,6 +87,7 @@ describe('native billing purchase boundary', () => {
         purchaseState: 'purchased',
         acknowledged: true,
         autoRenewing: true,
+        suspended: false,
         purchaseTimeMs: 2_000_000_000_000,
       })?.products,
     ).toEqual(['scrollshield_plus']);
