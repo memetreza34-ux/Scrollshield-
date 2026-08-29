@@ -28,6 +28,7 @@ const AndroidSubscriptionIdentity = registerPlugin<ScrollShieldSubscriptionIdent
 
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
 const CHALLENGE_PREFIX = 'scrollshield-subscription-v1:';
+const ES256_P1363_BASE64URL_LENGTH = 86;
 
 const normalizeIdentity = (
   raw: RawSubscriptionInstallationIdentity,
@@ -92,11 +93,10 @@ export const NativeSubscriptionIdentity = {
     if (
       !identity ||
       typeof raw.signature !== 'string' ||
-      raw.signature.length < 64 ||
-      raw.signature.length > 512 ||
+      raw.signature.length !== ES256_P1363_BASE64URL_LENGTH ||
       !BASE64URL_PATTERN.test(raw.signature)
     ) {
-      throw new Error('Android returned an invalid subscription challenge signature');
+      throw new Error('Android returned an invalid ES256 P1363 subscription challenge signature');
     }
 
     return {
