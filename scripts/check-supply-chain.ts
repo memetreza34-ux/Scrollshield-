@@ -29,7 +29,9 @@ const requireFile = (file: string) => {
 for (const file of [
   'package.json',
   'package-lock.json',
+  '.gitignore',
   'scripts/check-package-lock-sync.mjs',
+  'scripts/run-local-verification.mjs',
   '.github/workflows/verify.yml',
   'android/gradle/wrapper/gradle-wrapper.properties',
 ]) {
@@ -39,8 +41,10 @@ for (const file of [
 if (findings.length === 0) {
   const packageJson = JSON.parse(await readFile('package.json', 'utf8')) as PackageJson;
   const packageLock = JSON.parse(await readFile('package-lock.json', 'utf8')) as PackageLock;
+  const gitignore = await readFile('.gitignore', 'utf8');
   const workflow = await readFile('.github/workflows/verify.yml', 'utf8');
   const lockSyncScript = await readFile('scripts/check-package-lock-sync.mjs', 'utf8');
+  const localVerificationScript = await readFile('scripts/run-local-verification.mjs', 'utf8');
   const wrapper = await readFile('android/gradle/wrapper/gradle-wrapper.properties', 'utf8');
 
   const declaredDependencies = {
@@ -65,6 +69,13 @@ if (findings.length === 0) {
     });
   }
 
+  if (packageJson.scripts?.['verify:local-evidence'] !== 'node scripts/run-local-verification.mjs') {
+    findings.push({
+      file: 'package.json',
+      text: 'verify:local-evidence must execute the SHA-bound dependency-free local verification runner.',
+    });
+  }
+
   if (!packageJson.scripts?.verify?.includes('npm run check:lock-sync')) {
     findings.push({
       file: 'package.json',
@@ -76,6 +87,32 @@ if (findings.length === 0) {
     findings.push({
       file: 'scripts/check-package-lock-sync.mjs',
       text: 'Lock preflight must compare package.json dependency sections with package-lock root metadata.',
+    });
+  }
+
+  const localEvidenceRequirements = [
+    ['git rev-parse HEAD', /rev-parse[\s\S]*HEAD/],
+    ['clean tracked working tree', /status[\s\S]*--porcelain[\s\S]*--untracked-files=no/],
+    ['ignored evidence directory', /\.scrollshield-verification/],
+    ['fresh dependency install', /\['npm-ci'[\s\S]*\['ci'\]/],
+    ['Android tooling check', /android-doctor[\s\S]*android:doctor/],
+    ['complete source verification', /source-verify[\s\S]*\['run', 'verify'\]/],
+    ['Android unit/debug build', /android-unit-debug-build[\s\S]*\['run', 'verify:android'\]/],
+    ['explicit physical-device evidence boundary', /physical-device[\s\S]*remain separate/i],
+  ] as const;
+
+  for (const [label, pattern] of localEvidenceRequirements) {
+    if (pattern.test(localVerificationScript)) continue;
+    findings.push({
+      file: 'scripts/run-local-verification.mjs',
+      text: `Local evidence runner lost required contract: ${label}.`,
+    });
+  }
+
+  if (!gitignore.split(/\r?\n/).includes('.scrollshield-verification/')) {
+    findings.push({
+      file: '.gitignore',
+      text: 'Local verification logs must remain ignored so generated evidence cannot dirty the candidate tree.',
     });
   }
 
@@ -157,5 +194,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Supply-chain check passed. Lockfile preflight, Gradle checksum, dependency protocols, and dynamic versions are guarded.',
+  'Supply-chain check passed. Lockfile preflight, SHA-bound local evidence, Gradle checksum, dependency protocols, and dynamic versions are guarded.',
 );
