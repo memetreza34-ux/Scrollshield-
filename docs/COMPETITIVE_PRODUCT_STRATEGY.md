@@ -1,40 +1,45 @@
 # ScrollShield Competitive Product Strategy
 
-Research snapshot: **2026-08-28**
+Research snapshot: 2026-08-29
 
-This document is a product-planning reference, not store copy and not evidence that an unimplemented feature exists. Pricing and competitor features change; recheck public/store pricing immediately before commercial launch.
+This document is a product-planning reference, not store copy and not evidence that an unimplemented feature exists. Pricing and competitor features can change and must be rechecked before any commercial launch.
 
-## Product goal
+## Product Goal
 
-ScrollShield should earn payment through **capacity, automation, commitment depth and richer local insight**, not by hiding basic safety, privacy or user-owned data behind a paywall.
+ScrollShield should earn paid plans by providing materially stronger capacity, automation and commitment depth, not by hiding basic safety, privacy or data ownership behind a paywall.
 
-The v1 protection promise remains whole-app protection on technically supported Android targets. The current engine does **not** reliably distinguish separate login accounts inside the same Android app, so plan limits must be described as protected apps, not social-media accounts.
+The product promise for version one remains whole-app protection on supported Android targets. Reels-/Shorts-only detection and multiple-login-account protection inside one Android package must not be marketed until exact technical behavior is implemented and validated.
 
-## Current competitor pattern
+## Current Competitor Pattern
 
 | Product | Free / entry value | Paid-value pattern | Strategic lesson for ScrollShield |
 | --- | --- | --- | --- |
-| one sec | Free targets one app. | Pro unlocks unlimited apps plus broader interventions, intentional switching, tracking and other advanced features. German FAQ currently lists €3.99 monthly, €14.99 annually and €99.99 lifetime, with regional variation. | The user's requested `1 app free → more apps paid` structure is proven and easy to understand. |
-| Jomo | Free includes one session, one action/limit, one screen-time budget and reports. | Current annual plan lists $29.99 and adds more sessions/actions, Strict Mode, multiple budgets and deeper controls. | Middle-tier value can be capacity + advanced controls rather than an all-or-nothing Pro wall. |
-| Freedom | Free includes app/site blocking, custom blocklists and core focus tools. | Premium adds recurring/advance scheduling, Locked Mode and longer sessions; current public annual price is $39.99. | Automation and commitment are clearer premium value than charging for basic blocking itself. |
-| ScreenZen | Core app/site blocking, delays, limits, schedules and lock behavior are free/donation-supported. | No normal software subscription for the core app; optional hardware/social extensions exist. | Basic delay/limits/schedules alone are not enough to justify a high subscription price. ScrollShield paid tiers need meaningful extra depth. |
-| AppBlock | Entry/free use is limited. | Premium centers on broader schedules/limits, stricter anti-bypass options, allowlists/backups and advanced statistics. | Advanced anti-bypass and automation can justify higher-tier value. |
-| Opal | Free/entry experience emphasizes focus/blocking and feedback. | Paid positioning emphasizes broader rule depth and stronger automation. | Premium polish matters, but ScrollShield should not charge premium-market pricing before equivalent reliability/device evidence exists. |
+| one sec | One-app breathing interruption | Unlimited apps plus additional intervention/automation features. | A permanent one-app Free tier is commercially credible when paid tiers add real capacity and depth. |
+| Jomo | Limited sessions/actions/budgets and reports | More sessions/actions, Strict Mode, additional budgets and advanced controls. | Paid value can scale control depth without making the free product useless. |
+| Freedom | Basic blocking | Scheduling, recurring/advance sessions, Locked Mode and longer sessions. | Automation and commitment are stronger premium value than merely raising a daily-minute cap. |
+| AppBlock | Limited Quick Block/schedules/Strict Mode/statistics | More/unlimited controls, anti-bypass depth and advanced statistics. | Stronger rule depth and anti-bypass workflows are subscription-grade value. |
+| ScreenZen | Broad free blocking/delay/limit/schedule functionality | Donation-supported core rather than a normal software subscription. | Basic delays/limits alone are not enough to justify ScrollShield Max. |
+| Opal | Focus rules/timers/progress feedback | More rules, advanced timers and stronger automation. | Polished automation and measurable progress increase paid value, but pricing should follow proven reliability. |
 
-## Sources revalidated for this snapshot
+## Sources Used for This Snapshot
 
 - https://one-sec.app/de/faq/
-- https://tutorials.one-sec.app/en/articles/3036418
+- https://web.one-sec.app/store
 - https://jomo.so/pricing
 - https://support.freedom.to/en/articles/13764747-what-s-included-in-free-and-premium-plans
 - https://freedom.to/premium
+- https://appblock.app/premium/
+- https://appblock.app/help/android/strict-mode/
 - https://screenzen.co/
-- https://appblock.app/
 - https://opal.so/
 
-## Strategic conclusion
+Revalidate all source pages and in-store prices immediately before pricing decisions or public comparisons.
 
-The strongest structure for ScrollShield is **three plans**, because it combines the simple one-sec-style app limit with a meaningful middle tier:
+## Approved Three-Tier Direction
+
+The current technical engine protects supported Android **apps/packages**, not separate login accounts inside one package.
+
+Therefore the approved source model is:
 
 ```text
 Free → 1 protected app
@@ -42,244 +47,194 @@ Plus → up to 3 protected apps
 Max  → unlimited supported protected apps
 ```
 
-The plan model is source-defined in:
+Additional planned capacity:
 
-```text
-src/lib/subscriptionPlanPolicy.ts
-```
+| Capability | Free | Plus | Max |
+| --- | ---: | ---: | ---: |
+| Profiles | 1 | 3 | Unlimited |
+| Recurring schedules | 1 | 5 | Unlimited |
+| Local insight window | 7 days | 30 days | 90 days |
+| Advanced schedules | — | Yes | Yes |
+| Advanced Anti-Binge | — | Yes | Yes |
+| Custom emergency friction | — | Yes | Yes |
+| Advanced Commitment Mode | — | — | Yes |
+| Adaptive Friction | — | — | Yes |
+| Profile automation | — | — | Yes |
 
-This is architecture only until verified billing exists.
+`Unlimited` means no subscription-count limit inside technically supported targets. It does not mean every app/platform/account is supported.
 
-## ScrollShield Free
+## ScrollShield Free Principles
 
-Free must remain genuinely useful.
+The following must remain available without a paid entitlement because they are core trust, safety, or data-ownership functions:
 
-Capacity target:
-
-```text
-1 protected app
-1 profile
-1 recurring schedule
-7-day local insights
-```
-
-Always included:
-
-- reliable whole-app protection for one supported app;
+- protection for one supported app;
 - basic intentional-opening delay;
-- basic session and daily limits;
-- safe return-home / stop action;
-- bounded emergency path;
-- permission transparency and truthful service-health diagnostics;
-- local migration/recovery;
-- export/import of user-owned data;
-- privacy/support/reset functions.
-
-Free should remain ad-free unless a future product decision explicitly reopens that question. Advertising inside an intervention product would conflict with the trust model and is not part of the current strategy.
-
-## ScrollShield Plus
-
-Plus is the practical paid tier for users with several distracting apps.
-
-Capacity target:
-
-```text
-up to 3 protected apps
-up to 3 profiles
-up to 5 recurring schedules
-30-day local insights
-```
-
-Paid-value target, only when implemented and verified:
-
-1. Advanced recurring schedule controls.
-2. Richer local 30-day insights.
-3. Advanced Anti-Binge controls.
-4. Configurable emergency friction such as optional countdown/reason behavior.
-5. Everything from Free, with the same safety/recovery quality.
-
-This tier is intentionally simpler and cheaper than Max.
-
-## ScrollShield Max
-
-Max is the power-user tier.
-
-Capacity target:
-
-```text
-unlimited supported protected apps
-unlimited profiles
-unlimited recurring schedules
-90-day local insight window
-```
-
-Paid-value target, only when implemented and verified:
-
-1. Everything in Plus.
-2. Advanced Commitment Mode / rule-edit lock workflows with a documented safe exit.
-3. Adaptive Friction based on repeated impulsive opens.
-4. Profile automation for contexts such as Work, Study and Sleep.
-5. Deepest local behavior insights available in the shipped version.
-6. Future trusted-person/accountability workflows only after explicit privacy/security review.
-7. Future cross-device protection only after genuine secure synchronization and conflict handling exist.
-
-`Unlimited` never means unsupported apps, unsupported websites or per-login-account detection. It means no subscription count cap among targets the release actually supports.
-
-## Safety must not be a paid feature
-
-The following remain available independently of paid entitlement because they are safety/trust/data-ownership functions:
-
-- protection for at least one supported app;
-- safe return-home action;
-- bounded emergency access;
-- permission transparency;
-- actual native service-health status and diagnostics;
-- migration/data rescue;
-- export/import;
-- reset/uninstall guidance;
-- privacy disclosures.
-
-The underlying Android protection engine must not deliberately become less reliable for Free users.
+- basic session/daily limits;
+- visible foreground-service notification and direct stop action;
+- permission transparency and actual service-health status;
+- a safe emergency path instead of trapping a user behind a block;
+- local-only privacy controls;
+- V0.7 migration and raw-data recovery;
+- export/import of user-owned data and legacy archive;
+- reset and uninstall guidance;
+- enough recent history to understand whether protection works.
 
 No subscription expiry may delete configurations, history, statistics, exports, migration archives or recovery data.
 
-## Secure entitlement strategy
+Free receives the same underlying reliability/safety engine. Paid plans buy capacity and advanced behavior, not fewer safety guarantees.
 
-Security is a release priority. A paid entitlement must not be trusted simply because a local variable says `plus` or `max`.
+## Plus Value Target
 
-Source-level fail-closed rule:
+Plus is the practical multi-app tier:
 
-```text
-unverified / malformed paid plan
-→ Free
-```
+1. Up to 3 protected apps.
+2. Up to 3 profiles.
+3. Up to 5 recurring schedules.
+4. 30-day local insights.
+5. Advanced recurring schedule controls.
+6. Advanced Anti-Binge controls.
+7. Configurable emergency friction while the basic emergency path remains Free.
 
-Before commercial release, the intended trust chain is:
+## Max Value Target
 
-```text
-Google Play purchase token
-→ secure backend verification through Google Play Developer API
-→ subscription lifecycle updates / RTDN
-→ verified Free / Plus / Max entitlement
-→ bounded local offline cache/grace
-```
+Max is the power-user commitment/automation tier:
 
-Important rules:
+1. Unlimited supported protected apps.
+2. Unlimited profiles and recurring schedules.
+3. 90-day local insights.
+4. Everything in Plus.
+5. Advanced Commitment Mode / rule-edit lock workflows with a documented safe exit.
+6. Adaptive Friction.
+7. Profile automation.
+8. Future accountability/cross-device features only after separate privacy/security design and real implementation.
 
-- `PENDING` never grants paid access;
-- new eligible purchases/tokens are acknowledged correctly;
-- refund/revocation/expiry must eventually remove paid entitlement;
-- replay/duplicate callbacks must not create duplicate access;
-- network/backend failure must not delete user data or break Free safety;
-- a temporary verification outage is different from a verified expiry;
-- user-editable local storage cannot permanently unlock Plus/Max.
+## Current Subscription Security Direction
 
-See `docs/SUBSCRIPTION_RELEASE_GATE.md` for the release gate.
+Paid authorization is deliberately separate from plan capacity.
 
-## Downgrade policy
-
-Plan enforcement must occur at controlled configuration boundaries, never through destructive data deletion.
-
-Example Max → Free:
+Current source contracts:
 
 ```text
-10 stored app configurations remain stored
-→ entitlement becomes verified Free
-→ user is clearly asked which 1 app remains actively protected
-→ excess configurations remain preserved/read-only or paused
-→ nothing is silently deleted
+src/lib/subscriptionPlanPolicy.ts
+→ capacity/features only
+→ no boolean paid-entitlement shortcut
+
+src/lib/subscriptionEntitlementPolicy.ts
+→ single effective entitlement resolver
+→ cryptographic verification required
+→ active/grace only
+→ pending/expired/revoked/unknown → Free
+→ bounded 72-hour offline assertion window
+
+ScrollShieldBillingPlugin.java + src/lib/nativeBilling.ts
+→ Google Play Billing 9.1.0 read-only purchase/status query
+→ includes suspended subscriptions
+→ raw Play purchase != entitlement
+→ no launchBillingFlow() while release gate is blocked
+→ no client acknowledgePurchase() before secure backend transaction exists
 ```
 
-A temporary billing outage must not be treated as an immediate verified downgrade.
+Detailed security contract: `docs/SUBSCRIPTION_ENTITLEMENT_ARCHITECTURE.md`.
 
-Exact downgrade UX and the transition of active protection must be device-tested before release because silently turning off protection for arbitrary apps would violate the safety principle.
+## Secure Downgrade Product Rule
 
-## Internal pricing hypothesis — not final
+Downgrade must not delete or silently rewrite user configuration.
 
-Based on the current competitive range and the fact that ScrollShield is Android-first without proven cross-device breadth yet, an initial test hypothesis is:
+If a new verified plan limit is below the currently active app count:
 
-| Plan | Monthly hypothesis | Annual hypothesis | Positioning |
-| --- | ---: | ---: | --- |
-| Free | €0 | €0 | permanent useful entry plan |
-| Plus | ~€2.99 | ~€19.99 | 3-app practical tier |
-| Max | ~€4.99 | ~€29.99 | unlimited + advanced commitment/automation |
+```text
+no silent winner selection
+no rule/profile/history deletion
+previous durable configuration stays untouched
+→ user explicitly chooses the allowed active set
+→ replacement configuration commits atomically
+→ other configs remain paused/read-only
+```
 
-These are **not store prices** and must not appear in production UI until Play Billing, backend verification, restore behavior, entitlement lifecycle and the actual feature set are complete.
+This UX is a release requirement, not merely a preference.
 
-A 7-day Max/annual trial can be tested later, but it is not an approved release promise yet.
+## Pricing Hypothesis — Not Final
 
-## Current differentiator being built
+Do not publish pricing until Play Billing, secure backend verification, restore behavior, entitlement signature verification, expiry behavior and a real paid feature set are implemented and tested.
 
-ScrollShield already combines or is hardening several mechanisms in one local Android flow:
+Current internal hypothesis:
 
-- intentional opening delay;
-- session limit;
-- daily limit;
-- recurring rule windows;
-- Anti-Binge open-count detection;
-- strict blocking;
-- limited emergency releases;
-- optional emergency countdown;
-- optional emergency reason stored in local history;
-- exact service stop diagnostics;
-- stale/process-loss recovery;
-- durable config generations;
-- generation-bound overlays/grants;
-- lossless migration and local recovery.
+| Plan | Monthly | Annual |
+| --- | ---: | ---: |
+| Free | €0 | €0 |
+| Plus | about €2.99 | about €19.99 |
+| Max | about €4.99 | about €29.99 |
 
-The strongest product advantage should be **reliable local enforcement + transparent privacy + meaningful commitment automation**, not simply a larger list of flashy features.
+This intentionally keeps entry pricing competitive while product reliability and paid depth are still being proven.
 
-## Subscription engineering requirements
+## Subscription Engineering Requirements
 
 No production paywall should ship until all of these exist:
 
-- Google Play Billing through a maintained integration;
-- secure server-side purchase/subscription verification;
-- purchase acknowledgement;
+- supported/current Google Play Billing integration;
+- product/base-plan IDs from release configuration;
+- secure backend purchase-token verification via Google Play Developer API;
+- RTDN/subscription lifecycle processing;
+- cryptographically verifiable bounded entitlement assertions;
+- one typed effective entitlement state;
+- purchase acknowledgement only after secure processing;
 - reliable restore flow;
-- RTDN or equivalently reliable lifecycle synchronization;
-- one typed verified entitlement state for `free | plus | max`;
-- bounded offline grace;
-- deterministic secure downgrade behavior;
-- no accidental paid unlock on billing/network errors;
-- no data loss on expiry/downgrade;
-- purchase, pending, renewal, cancellation, suspension, refund, revocation, restore and plan-change tests;
-- exact store pricing/trial disclosure;
-- privacy review for billing/backend metadata.
+- bounded offline behavior;
+- deterministic non-destructive downgrade behavior;
+- no accidental paid unlock when billing/network/backend calls fail;
+- purchase, pending, renewal, cancellation, suspension, refund, restore, replay and account-change test cases;
+- clear pricing/trial disclosure and subscription-management link;
+- privacy review for billing/account metadata.
 
-## Priority roadmap
+## Priority Roadmap
 
-### P0 — reliability before monetization
+### P0 — Reliability before monetization
 
-- get `npm run verify`, Android JUnit and `assembleDebug` truly running successfully;
-- pass required lifecycle/runtime/device cases;
-- validate V0.7 migration physically;
-- complete OEM/device reliability evidence.
+- get `npm run verify`, Android JUnit and `assembleDebug` running successfully;
+- complete real Android lifecycle/device evidence;
+- validate migration and recovery on physical upgrade paths;
+- remove or disable UI behavior that is not truly enforced.
 
-### P1 — lock the three-plan entitlement model
+### P1 — Subscription security foundation
 
-- keep `subscriptionPlanPolicy.ts` and tests as the single product-limit contract;
-- enforce protected-app limits only after verified entitlement infrastructure exists;
-- design non-destructive downgrade selection UX;
-- ensure Free safety paths never depend on billing availability.
+Source-side foundation now includes:
 
-### P2 — real billing/security infrastructure
+- three-plan capacity policy;
+- single fail-closed entitlement policy;
+- 72-hour bounded offline assertion rule;
+- explicit non-destructive downgrade planner;
+- Play Billing 9.1.0 read-only current-purchase query;
+- pending/suspended diagnostics;
+- subscription source guard.
 
-- integrate Google Play Billing;
-- implement secure backend verification and RTDN processing;
+Still required as real implementation/evidence:
+
+- backend purchase-token verification;
+- signed assertion verifier in the app;
+- RTDN lifecycle processing;
+- secure acknowledgement;
+- license-tester device evidence.
+
+### P2 — Paid lifecycle
+
+- configure Plus/Max products/base plans in Play Console;
+- implement secure purchase launch only after backend is ready;
 - purchase/restore/manage flows;
-- offline grace and tamper-safe entitlement cache;
-- Plus ↔ Max ↔ Free lifecycle tests;
-- only then expose the paywall.
+- upgrade/downgrade/replacement-token handling;
+- offline assertion refresh;
+- refund/revocation/suspension handling;
+- explicit downgrade-selection UX.
 
-### P3 — paid feature depth
+### P3 — High-value paid differentiators
 
-- Plus: advanced schedules, 30-day insights, advanced Anti-Binge, emergency-friction customization;
-- Max: commitment cooldown/locks, adaptive friction, unlimited profiles/schedules/apps, deeper insights and automation;
-- accountability/cross-device only after separate security/privacy designs.
+- commitment cooldown before weakening strict rules;
+- Adaptive Friction;
+- richer local progress insights;
+- optional trusted-person approval after privacy review;
+- cross-device only after privacy-preserving sync architecture exists.
 
-## Release rule
+## Release Rule
 
-A feature may appear in the paid comparison table only when it is implemented, tested on the exact candidate build, included in release documentation and not contradicted by platform limitations.
+A feature may appear in a paid comparison table only when it is implemented, tested on the exact candidate build, included in release documentation and not contradicted by platform limitations.
 
-A roadmap feature is never a store-listing feature.
+A roadmap/source-contract feature is never automatically a store-listing feature.
