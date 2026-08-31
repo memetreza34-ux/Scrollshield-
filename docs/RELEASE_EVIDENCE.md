@@ -50,6 +50,75 @@ If a flag is set to `true`:
 
 This prevents an accidental `true` from being treated as sufficient proof.
 
+## Two-stage signed candidate model
+
+The signed release artifact must exist **before** final binary inspection, reviewer evidence and final release approval can be completed. Therefore ScrollShield separates two different gates.
+
+### Stage 1 – source candidate readiness
+
+`npm run release:candidate-gate` is a pre-binary gate. It requires:
+
+- a frozen exact `candidateCommitSha`;
+- matching package version, Android `versionName` and `versionCode`;
+- real candidate-bound `webVerificationPassed` evidence;
+- real candidate-bound `androidUnitTestsPassed` evidence;
+- real candidate-bound `debugApkCompiled` evidence;
+- no release-affecting code/build drift after the source candidate was frozen;
+- a clean tracked Git working tree.
+
+It does **not** approve production and does not require the later physical-device, battery, legal, reviewer or signed-binary evidence.
+
+After the candidate gate and local signing preflight pass, create the signed candidate with:
+
+```bash
+npm run android:candidate:release
+npm run android:candidate:bundle
+```
+
+These commands build the signed release APK/AAB and then record the exact artifact identity under the ignored `.scrollshield-release-candidate/` directory.
+
+Recorded metadata includes:
+
+- source `candidateCommitSha`;
+- build HEAD SHA;
+- version name and version code;
+- exact artifact path;
+- SHA-256;
+- byte size;
+- recording timestamp.
+
+The metadata is local evidence support, not a committed approval and not a substitute for the actual artifact.
+
+### Stage 2 – final candidate evidence and approval
+
+All remaining evidence is collected against the retained signed candidate bytes. This includes physical/OEM testing, lifecycle, migration, battery, accessibility, Play/reviewer material and signed-binary inspection.
+
+For `signedBinaryInspected=true`, `evidence.signedBinary.reference` must identify the retained evidence **and contain the exact SHA-256 emitted by the candidate recorder**. This binds final binary evidence to the bytes that were actually inspected.
+
+After all required evidence is complete, set only genuinely passed flags to `true`, fill `approvedBy` and `approvedAt`, then run:
+
+```bash
+npm run release:gate
+npm run android:release
+npm run android:bundle
+```
+
+The final `android:release` and `android:bundle` commands do **not** rebuild the APK/AAB. They validate the retained candidate artifact against its recorded SHA-256, byte size, source candidate, version and version code after the strict release gate has passed.
+
+## Rebuilding invalidates binary evidence
+
+A rebuilt release APK/AAB is a new binary, even when the source appears unchanged. Do not collect signed-binary or reviewer evidence and then invoke Gradle again for the final upload.
+
+If the retained artifact is rebuilt, replaced, missing, changes hash/size, or no longer corresponds to the frozen source candidate:
+
+1. treat prior signed-binary evidence as invalid for the new bytes;
+2. build and record a new signed candidate;
+3. repeat all evidence that depends on the exact binary;
+4. update candidate-bound references honestly;
+5. rerun the final gate.
+
+The Google Play upload must use the exact retained AAB whose recorded hash is referenced by final binary evidence.
+
 ## Strict approval integrity
 
 `npm run release:gate` performs an additional Git comparison between the tested `candidateCommitSha` and the current `HEAD`.
@@ -66,16 +135,19 @@ A shallow/local checkout that cannot resolve the tested candidate also fails clo
 
 Recommended final sequence:
 
-1. freeze candidate commit;
-2. run `npm run verify`;
-3. run Android JUnit and build candidate APK/AAB;
-4. complete the exact-candidate physical/OEM matrix;
-5. complete migration, lifecycle, Commitment, adaptive-friction, battery and accessibility evidence;
-6. complete store/legal/reviewer/signed-binary evidence;
-7. write candidate-bound references into `config/release-approval.json` and set only actually passed flags to `true`;
-8. set `approvedBy` and `approvedAt`;
-9. run `npm run release:gate` with Git history containing the tested candidate;
-10. only if the gate passes may release/bundle commands proceed.
+1. execute `npm run verify` plus Android JUnit/debug compilation on the source intended for release;
+2. freeze that exact source commit as `candidateCommitSha`;
+3. retain real candidate-bound evidence for web verification, Android unit tests and debug APK compilation, then set only those three flags to `true`;
+4. run `npm run release:candidate-gate`;
+5. configure the ignored local release keystore/signing properties;
+6. run `npm run android:candidate:bundle` and optionally `npm run android:candidate:release`;
+7. retain the generated candidate artifact and its recorded SHA-256 metadata without rebuilding it;
+8. perform physical/OEM, migration, lifecycle, Commitment, adaptive-friction, battery, accessibility, Play/reviewer and binary-inspection evidence against that retained candidate;
+9. place the exact retained artifact SHA-256 in `evidence.signedBinary.reference`, and complete the remaining candidate-bound evidence records only when real;
+10. set `approvedBy` and `approvedAt`;
+11. run `npm run release:gate` with Git history containing the tested candidate;
+12. run `npm run android:bundle` or `npm run android:release` to validate the retained binary identity; these commands do not rebuild;
+13. upload/distribute that exact retained validated artifact.
 
 ## No evidence fabrication
 
