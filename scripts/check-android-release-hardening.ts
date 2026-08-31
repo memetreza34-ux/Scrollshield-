@@ -6,6 +6,7 @@ const files = {
   filePaths: 'android/app/src/main/res/xml/file_paths.xml',
   dataExtractionRules: 'android/app/src/main/res/xml/data_extraction_rules.xml',
   backupRules: 'android/app/src/main/res/xml/backup_rules.xml',
+  rootBuildGradle: 'android/build.gradle',
   buildGradle: 'android/app/build.gradle',
   packageJson: 'package.json',
   capacitor: 'capacitor.config.ts',
@@ -25,6 +26,7 @@ const [
   filePaths,
   dataExtractionRules,
   backupRules,
+  rootBuildGradle,
   buildGradle,
   packageRaw,
   capacitor,
@@ -35,6 +37,7 @@ const [
   readFile(files.filePaths, 'utf8'),
   readFile(files.dataExtractionRules, 'utf8'),
   readFile(files.backupRules, 'utf8'),
+  readFile(files.rootBuildGradle, 'utf8'),
   readFile(files.buildGradle, 'utf8'),
   readFile(files.packageJson, 'utf8'),
   readFile(files.capacitor, 'utf8'),
@@ -104,10 +107,9 @@ requirePattern(
 );
 
 for (const domain of ['root', 'file', 'database', 'sharedpref', 'external']) {
-  const escapedDomain = domain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const exclusion = new RegExp(`<exclude\\s+domain="${escapedDomain}"\\s+path="\\."\\s*\\/>`);
-  const count = [...dataExtractionRules.matchAll(new RegExp(exclusion.source, 'g'))].length;
-  if (count < 2) {
+  const exclusion = new RegExp(`<exclude\\s+domain="${domain}"\\s+path="\\."\\s*\\/>`);
+  const dataExtractionCount = [...dataExtractionRules.matchAll(new RegExp(exclusion.source, 'g'))].length;
+  if (dataExtractionCount < 2) {
     findings.push(
       `${files.dataExtractionRules}: domain=${domain} must be excluded from both cloud backup and device transfer.`,
     );
@@ -116,7 +118,7 @@ for (const domain of ['root', 'file', 'database', 'sharedpref', 'external']) {
     files.backupRules,
     backupRules,
     exclusion,
-    `Legacy Auto Backup must exclude domain=${domain} path=.",`,
+    `Legacy Auto Backup must exclude domain=${domain} path=.`,
   );
 }
 requirePattern(
@@ -126,14 +128,39 @@ requirePattern(
   'Android 12+ rules must explicitly cover both cloud backup and device transfer.',
 );
 
-requirePattern(files.buildGradle, buildGradle, /release\s*\{[\s\S]*minifyEnabled\s+true/, 'Release R8 minification must stay enabled.');
-requirePattern(files.buildGradle, buildGradle, /release\s*\{[\s\S]*shrinkResources\s+true/, 'Release resource shrinking must stay enabled.');
+requirePattern(
+  files.buildGradle,
+  buildGradle,
+  /buildTypes\s*\{[\s\S]*release\s*\{[\s\S]*minifyEnabled\s+true/,
+  'Release R8 minification must stay enabled.',
+);
+requirePattern(
+  files.buildGradle,
+  buildGradle,
+  /buildTypes\s*\{[\s\S]*release\s*\{[\s\S]*shrinkResources\s+true/,
+  'Release resource shrinking must stay enabled.',
+);
 requirePattern(
   files.buildGradle,
   buildGradle,
   /signingPropertiesFile\.exists\(\)[\s\S]*signingConfig\s+signingConfigs\.release/,
   'Release signing must continue to use ignored local signing.properties.',
 );
+rejectPattern(
+  files.rootBuildGradle,
+  rootBuildGradle,
+  /com\.google\.gms:google-services|com\.google\.gms\.google-services/,
+  'Offline Android v1 must not carry the Google Services Gradle plugin without a reviewed network/push architecture.',
+);
+rejectPattern(
+  files.buildGradle,
+  buildGradle,
+  /google-services\.json|com\.google\.gms\.google-services/,
+  'Offline Android v1 must not conditionally activate Google Services/Firebase from the app build.',
+);
+if (existsSync('android/app/google-services.json')) {
+  findings.push('android/app/google-services.json: offline Android v1 must not ship a Google Services runtime configuration.');
+}
 
 rejectPattern(
   files.capacitor,
@@ -201,5 +228,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android release hardening passed. Backup/D2D, FileProvider, packaged WebView origin, cleartext policy, R8, and release signing boundaries are guarded.',
+  'Android release hardening passed. Backup/D2D, FileProvider, packaged WebView origin, offline build surface, cleartext policy, R8, and release signing boundaries are guarded.',
 );
