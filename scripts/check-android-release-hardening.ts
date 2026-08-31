@@ -226,8 +226,14 @@ requirePattern(
 requirePattern(
   files.candidateReadiness,
   candidateReadiness,
-  /candidateCommitSha[\s\S]*git[\s\S]*diff[\s\S]*config\/release-approval\.json/,
-  'Signed candidate gate must bind the build to a frozen candidate and reject release-affecting drift.',
+  /candidateCommitSha[\s\S]*spawnSync\('git', \['diff'/,
+  'Signed candidate gate must compare the frozen source candidate against the build HEAD.',
+);
+requirePattern(
+  files.candidateReadiness,
+  candidateReadiness,
+  /changedPaths[\s\S]*value !== approvalPath/,
+  'Signed candidate gate must reject release-affecting drift while allowing approval-manifest updates only.',
 );
 
 const candidateCommands = [
@@ -264,8 +270,20 @@ for (const command of candidateCommands) {
 requirePattern(
   files.recordCandidate,
   recordCandidate,
-  /createHash\('sha256'\)[\s\S]*candidateCommitSha[\s\S]*\.scrollshield-release-candidate/,
-  'Candidate recording must bind the exact source SHA and SHA-256 to ignored local metadata.',
+  /createHash\('sha256'\)/,
+  'Candidate recording must compute a SHA-256 digest.',
+);
+requirePattern(
+  files.recordCandidate,
+  recordCandidate,
+  /candidateCommitSha/,
+  'Candidate recording must bind metadata to the frozen source candidate.',
+);
+requirePattern(
+  files.recordCandidate,
+  recordCandidate,
+  /\.scrollshield-release-candidate/,
+  'Candidate recording must use ignored local candidate metadata.',
 );
 requirePattern(
   files.recordCandidate,
