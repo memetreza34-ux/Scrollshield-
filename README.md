@@ -53,12 +53,16 @@ Die übrigen Dokumente sind Detailquellen für einzelne Gates.
 - Copyable diagnostic JSON for reproducible real-device reports
 - React and TypeScript tests for critical setup, permission-prompt, channel-routing, diagnostic, lifecycle, migration, export, commitment, and browser-fallback behavior
 - Mandatory Android device matrix with manufacturer, Android-version, migration, lifecycle, battery, time-boundary, tablet, accessibility, commitment, and adaptive-friction coverage
-- Explicit release approval manifest and strict candidate-bound evidence gate before release APK or AAB generation
+- Two-stage release gating: verified source/unit/debug evidence before a signed candidate build, then full candidate-bound evidence before final approval
+- Exact signed APK/AAB SHA-256 recording so final approval validates retained candidate bytes instead of rebuilding after binary inspection
+- Explicit Android cloud-backup and device-to-device exclusions across Android 7+ while user-controlled JSON export/import remains supported
+- FileProvider restricted to ScrollShield-owned internal/app-specific storage rather than broad public external storage
 - CI prepared to run web verification, Android JUnit tests, debug APK compilation, and artifact upload
 - Dependency-free package manifest/lockfile preflight before `npm ci`
 - SHA-bound local verification runner for reproducible source/unit/debug-build evidence when hosted CI is unavailable
 - External GitHub Actions pinned to immutable commit SHAs
 - Android v1 manifest intentionally omits `android.permission.INTERNET`; the privacy build check blocks undocumented network APIs, tracker markers, and silent reintroduction of that permission
+- Offline Android v1 build intentionally omits the Google Services/Firebase Gradle hook; Google Play Billing and Play Integrity remain separate reviewed dependencies
 
 The browser/PWA version cannot physically block other installed apps. Native whole-app protection is available only in the installed Android build and still requires successful compilation, real-device validation, battery testing, schedule edge-case testing, migration validation, legal completion, and Play Console review preparation before release.
 
@@ -116,12 +120,37 @@ npm run android:doctor
 npm run android:sync
 npm run android:open
 npm run android:build
+```
+
+`android:sync` rebuilds the web app and copies it into the Capacitor Android project. `android:build` creates the debug APK and does not require production approval.
+
+### Signed release candidate
+
+Do not use the final release gate to create the first signed candidate. First freeze the exact source candidate in `config/release-approval.json` and retain real passing evidence for web/source verification, Android JUnit and the debug APK. Then:
+
+```bash
+npm run release:candidate-gate
+npm run android:candidate:release
+npm run android:candidate:bundle
+```
+
+The candidate commands require the frozen source SHA, required pre-binary evidence, a clean tracked working tree and valid local release signing. They build the signed release APK/AAB and record the artifact SHA-256, size, source candidate SHA and build HEAD in the ignored `.scrollshield-release-candidate/` directory.
+
+The signed candidate is **not yet approved for production**. Use that exact retained APK/AAB for physical-device/OEM testing, migration, lifecycle, battery, accessibility, Play/reviewer work and binary inspection. `evidence.signedBinary.reference` must retain the exact SHA-256 produced by the candidate recorder.
+
+### Final approval – no rebuild
+
+After all real candidate-bound evidence is complete:
+
+```bash
 npm run release:gate
 npm run android:release
 npm run android:bundle
 ```
 
-`android:sync` rebuilds the web app and copies it into the Capacitor Android project. `android:build` creates the debug APK and does not require production approval. `android:release` and `android:bundle` first execute the strict release gate. They remain blocked while `config/release-approval.json` contains incomplete evidence.
+The final `android:release` and `android:bundle` commands do **not** invoke Gradle. They run the strict final approval gate and then verify that the already-inspected retained APK/AAB still has the exact recorded SHA-256, size, version, versionCode and candidate SHA. If the binary is rebuilt or its bytes change, the retained binary evidence is invalid and a new candidate must be recorded and inspected.
+
+For Google Play, upload the retained AAB that passed this final identity check; do not rebuild another bundle after review evidence was collected.
 
 ## Product and Release References
 
@@ -142,4 +171,4 @@ npm run android:bundle
 - `docs/INCIDENT_RESPONSE.md`
 - `config/release-approval.json`
 
-Before release, the exact candidate must pass the automatic verification chain, Android JUnit/compilation, critical instrumentation, the physical device matrix, V0.7 migration evidence, reliability/battery testing, final privacy/legal/store review, signed-binary inspection, candidate-bound evidence, and the strict release gate.
+Before release, the exact candidate must pass the automatic verification chain, Android JUnit/compilation, critical instrumentation, the physical device matrix, V0.7 migration evidence, reliability/battery testing, final privacy/legal/store review, signed-binary inspection, candidate-bound evidence, and the strict release gate. Final publication must use the exact retained signed artifact whose identity was inspected and approved.
