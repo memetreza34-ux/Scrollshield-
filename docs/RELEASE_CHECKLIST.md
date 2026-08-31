@@ -1,180 +1,224 @@
 # ScrollShield – verbindliche Release-Checkliste
 
-Diese Checkliste gilt für den ersten öffentlichen Android-Release. Ein Haken darf nur gesetzt werden, wenn Nachweise für exakt dieselbe Version und Build-Nummer vorliegen. Der technische Freigabestatus steht in `config/release-approval.json`.
+Diese Checkliste gilt für den ersten öffentlichen Android-Release. **Source-Code ist keine ausgeführte Evidence.** Ein realer Haken darf nur gesetzt werden, wenn der Nachweis zur exakt selben Source-Candidate-SHA, Version und Build-Nummer gehört.
 
-## 1. Kandidat und Freigabe-Gate
+Der maschinenlesbare Freigabestatus steht in `config/release-approval.json`. Der genaue Evidence-Vertrag steht in `docs/RELEASE_EVIDENCE.md`.
 
-- [x] `package.json`, Android `versionName` und Freigabemanifest verwenden dieselbe Version.
-- [x] Android `versionCode` und `candidateVersionCode` stimmen überein.
-- [x] `npm run check:release-approval` prüft Schema und Versionsgleichheit.
-- [x] `npm run android:release` und `npm run android:bundle` rufen zuerst `npm run release:gate` auf.
-- [ ] Alle Nachweise in `config/release-approval.json` sind für den aktuellen Kandidaten auf `true` gesetzt.
-- [ ] `terminalLifecycleValidationPassed` ist erst nach real bestandenen `LIFE-08`, `LIFE-09` und `LIFE-10` für exakt diesen Kandidaten auf `true` gesetzt.
-- [ ] `approvedBy` benennt die verantwortliche freigebende Person.
-- [ ] `approvedAt` enthält den tatsächlichen Freigabezeitpunkt.
+## 1. Source Candidate einfrieren
 
-Solange ein Punkt offen ist, dürfen weder Release-APK noch AAB als veröffentlichungsbereit behandelt werden.
+- [x] `package.json`, Android `versionName` und `candidateVersion` verwenden denselben Versionsvertrag.
+- [x] Android `versionCode` und `candidateVersionCode` werden gegeneinander geprüft.
+- [x] `check:release-approval` validiert Schema, Versionen und Candidate-Evidence-Bindung.
+- [ ] Exakte 40-stellige `candidateCommitSha` für den real zu testenden Kandidaten festlegen.
+- [ ] Ab diesem Freeze keine Produkt-, Android-, Build-, Store- oder Release-Dokumente mehr ändern; nur `config/release-approval.json` darf Evidence nachtragen.
 
-## 2. Automatische Verifikation und Android-Build
+Jede release-affektierende Änderung nach dem Freeze erzeugt einen **neuen Kandidaten** und erfordert passende neue Evidence.
 
-- [ ] `npm ci` läuft mit dem festgelegten Node- und npm-Bereich erfolgreich.
-- [ ] `npm run verify` läuft vollständig ohne Fehler.
-- [ ] TypeScript, ESLint und Prettier bestehen.
-- [ ] Alle Vitest- und Accessibility-Prüfungen bestehen.
-- [ ] `npm run check:lifecycle` besteht.
-- [ ] `npm run check:migration` besteht.
-- [ ] Alle Lifecycle-, Storage-, V0.7-, Export- und Import-Regressionstests bestehen.
-- [ ] Android `testDebugUnitTest` besteht, einschließlich `ProtectionStopReasonPolicyTest` und `ProtectionServiceLifecyclePolicyTest`.
-- [ ] Android `assembleDebug` erstellt eine installierbare Debug-APK.
-- [ ] APK und Android-Testbericht wurden als Workflow-Artefakte oder lokal archiviert.
-- [ ] Ein tatsächlicher Android-/Gradle-Build bestätigt die Kompilierbarkeit aller nativen Plugins, Lifecycle-Policies und des Schutzdienstes.
+## 2. Source-/Web-/Debug-Verifikation vor signiertem Kandidaten
 
-GitHub Actions ist derzeit durch die Kontoabrechnung beziehungsweise das Spending-Limit blockiert. Ein Workflow mit `steps: []` ist kein bestandener oder fehlgeschlagener Code-Test.
+- [x] Dependency-freier Lockfile-Preflight existiert und läuft in CI vor `npm ci`.
+- [x] `npm run verify` enthält TypeScript, ESLint, Prettier, Vitest, PWA, Privacy, Store, Supply-Chain, Android-Source- und Release-Checks.
+- [x] `npm run verify:android` ist für Android JUnit + `assembleDebug` vorbereitet.
+- [x] `npm run verify:local-evidence` erzeugt SHA-gebundene lokale Logs/Reports als Fallback für blockierte Hosted Runner.
+- [ ] `npm ci` für exakt den Kandidaten erfolgreich ausführen.
+- [ ] `npm run verify` für exakt den Kandidaten vollständig erfolgreich ausführen.
+- [ ] Android `testDebugUnitTest` erfolgreich ausführen.
+- [ ] `assembleDebug` erfolgreich ausführen und installierbare Debug-APK archivieren.
+- [ ] `webVerificationPassed`, `androidUnitTestsPassed` und `debugApkCompiled` nur mit echten Candidate-SHA-gebundenen Referenzen auf `true` setzen.
 
-## 3. Android-Projekt und Sicherheit
+GitHub Actions mit `steps: []`/`steps: null` ist **keine** ausgeführte Test-Evidence.
 
-- [x] Paket-ID und Namespace sind `app.scrollshield.mobile`.
-- [x] Cleartext-HTTP und Android-App-Backup sind deaktiviert.
-- [x] Release-Minifizierung und Resource-Shrinking sind aktiviert.
-- [x] Keystore, Signing-Dateien und Play-Zugangsdaten sind nicht eingecheckt.
-- [x] Externe GitHub Actions sind auf unveränderliche Commit-SHAs gepinnt.
-- [x] `QUERY_ALL_PACKAGES` wird nicht verwendet.
-- [x] Unterstützte Ziel-Apps werden über begrenzte `<queries>` und bekannte Paketnamen geprüft.
-- [ ] Die endgültige Paket-ID wurde vor dem ersten Play-Upload ausdrücklich bestätigt.
-- [ ] Der signierte Release-Build wurde auf unerwartete SDKs, Tracker, Netzwerkziele und Berechtigungen untersucht.
+## 3. Signierten Kandidaten erzeugen – noch keine Produktionsfreigabe
 
-## 4. Berechtigungen, Foreground Service und Lifecycle-Diagnose
+- [x] `release:candidate-gate` ist vom finalen Release-Gate getrennt.
+- [x] Candidate-Gate verlangt Source/Web-, Android-Unit- und Debug-APK-Evidence sowie einen sauberen Candidate-Stand.
+- [x] Release-Signing-Preflight verlangt lokale `signing.properties` und vorhandenen Keystore.
+- [x] Keystore, Signing-Passwörter und `signing.properties` bleiben aus Git ausgeschlossen.
+- [x] `android:candidate:release` baut einen signierten APK-Kandidaten und zeichnet seine Identität auf.
+- [x] `android:candidate:bundle` baut einen signierten AAB-Kandidaten und zeichnet seine Identität auf.
+- [x] Candidate-Recorder speichert Source-SHA, Build-HEAD, Version, VersionCode, Größe und SHA-256 unter `.scrollshield-release-candidate/`.
+- [ ] `npm run release:candidate-gate` auf dem eingefrorenen Kandidaten erfolgreich ausführen.
+- [ ] Signierten AAB-Kandidaten mit `npm run android:candidate:bundle` real bauen.
+- [ ] Optional signierten APK-Kandidaten mit `npm run android:candidate:release` real bauen.
+- [ ] Aufgezeichnete SHA-256 und Candidate-Metadaten zusammen mit dem Binärartefakt sicher aufbewahren.
 
-- [x] Usage Access wird nur zur Erkennung einer vom Nutzer ausgewählten Vordergrund-App verwendet.
-- [x] Overlay-Zugriff wird nur für die klar erkennbare ScrollShield-Unterbrechung verwendet.
-- [x] Android 13+ verwendet den nativen `POST_NOTIFICATIONS`-Systemdialog.
-- [x] Android 8+ kann direkt den Kanal `Aktiver App-Schutz` öffnen.
-- [x] Android 7 verwendet einen sicheren App-Details-Fallback.
-- [x] App-weite Benachrichtigungen und der einzelne Schutzkanal werden getrennt diagnostiziert.
-- [x] Schutz startet nicht ohne Usage Access, Overlay, sichtbare Benachrichtigung und installierte aktive Ziel-App.
-- [x] Die laufende Benachrichtigung zeigt den aktiven Schutz und enthält `Schutz stoppen`.
-- [x] Die direkte Stop-Aktion speichert `notification_action_stop`, bevor der Dienst beendet wird.
-- [x] Der Dienst beendet sich bei Entzug von Benachrichtigungen, Schutzkanal, Usage Access oder Overlay.
-- [x] Der Dienst beendet sich, wenn alle aktiven Regeln oder die letzte installierte Ziel-App verschwinden.
-- [x] Kontrollierte Stopppfade markieren den Dienst vor `stopSelf()`, damit ihr genauer Grund nicht überschrieben wird.
-- [x] `onDestroy()` speichert `unexpected_service_destroy` nur dann, wenn Schutz noch aktiviert war und kein kontrollierter Stopp angefordert wurde.
-- [x] Ein unerwarteter Dienstabbruch entfernt einen falschen Aktivstatus und schreibt zusätzlich einen lokalen Systemhinweis.
-- [x] Beim Dienstende werden Overlay, Aktivierungsstatus und Foreground-Benachrichtigung entfernt.
-- [x] Native Einstellungen speichern `lastProtectionStartAt`, `lastProtectionStopAt`, `lastProtectionStopCode` und `lastProtectionStopMessage`.
-- [x] Berechtigungs- und Konfigurationsabbrüche erhalten stabile Codes wie `notifications_missing`, `usage_access_missing`, `overlay_permission_missing`, `no_active_rules` und `target_app_missing`.
-- [x] Ein blockierter V0.7-Recovery-Start stoppt den Dienst mit `migration_recovery`.
-- [x] Fehlgeschlagene Boot-/App-Update-Wiederherstellung löscht den falschen Aktivstatus und speichert einen genauen `recovery_*`-Code.
-- [x] Start-/Stoppzeit, Code und Grund erscheinen im Debug-Bericht und im kopierbaren Diagnose-JSON.
-- [ ] Alle genannten Fälle wurden auf realen Geräten mit aktuellem Build nachgewiesen.
-- [ ] Die Lifecycle-Werte bleiben nach Schließen und erneutem Öffnen von ScrollShield erhalten.
+**Ab jetzt den geprüften Kandidaten nicht mehr neu bauen.** Ein Rebuild erzeugt andere Binärbytes und invalidiert binärgebundene Evidence.
 
-## 5. Schutzlogik
+## 4. Android-Projekt- und Privacy-Härtung
 
-- [x] Der laufende Dienst verwendet dieselbe `ProtectionRulePolicy`, die durch lokale JUnit-Tests abgedeckt ist.
-- [x] Standardverzögerung, Zurück-zum-Startbildschirm und bewusste temporäre Freigabe sind implementiert.
-- [x] Strikter Modus und begrenzte Notfallfreigabe sind implementiert.
-- [x] Tageslimit, Sitzungsdauer, Blockzeiten über Mitternacht und Fokusregeln sind implementiert.
-- [x] Wiederkehrende Morgen-, Arbeits-/Schul-, Abend-, Nacht- und Wochenendregeln sind implementiert.
-- [x] Anti-Binge-Warn- und Sperrschwellen sind implementiert.
-- [x] Gemessene native Nutzung und Schutzereignisse werden lokal in Verlauf und Tagesstatistik importiert.
-- [ ] Instrumentationstests decken Dienstlebenszyklus, Overlay, Countdown, Sitzungsende, Usage-Import und Boot-Recovery ab.
-- [ ] Alle Regeln wurden nach `docs/ANDROID_DEVICE_TEST_MATRIX.md` auf realen Geräten geprüft.
+- [x] Paket-ID/Namespace ist `app.scrollshield.mobile`.
+- [x] `INTERNET` ist im Android-v1-Manifest absichtlich nicht vorhanden.
+- [x] Cleartext-Traffic ist deaktiviert.
+- [x] `allowBackup=false` ist gesetzt.
+- [x] Android-12+-Cloud-Backup und Device-to-Device-Transfer werden durch `data_extraction_rules.xml` ausgeschlossen.
+- [x] Android-11−-Auto-Backup wird durch `backup_rules.xml` ausgeschlossen.
+- [x] FileProvider ist nicht exportiert und besitzt keine breite öffentliche `<external-path>`-Freigabe.
+- [x] FileProvider ist auf ScrollShield-eigene interne/app-spezifische Files/Cache-Pfade begrenzt.
+- [x] Capacitor lädt die gepackten `dist`-Assets und besitzt keine produktive Remote-Server-URL/`allowNavigation`-Freigabe.
+- [x] Release-Minifizierung (`minifyEnabled`) und Resource-Shrinking sind aktiviert.
+- [x] Unbenutzter Google-Services/Firebase-Gradle-Hook wurde aus dem offline v1 Build entfernt.
+- [x] Google Play Billing und Play Integrity bleiben als getrennte, bewusst verwendete Abhängigkeiten erhalten.
+- [x] `QUERY_ALL_PACKAGES` wird nicht verwendet; Sichtbarkeit bleibt auf bekannte unterstützte Packages begrenzt.
+- [ ] Finale Paket-ID vor erstem Play-Upload ausdrücklich bestätigen.
+- [ ] Signierten Kandidaten auf tatsächliche Manifest-Permissions, eingebettete SDKs, Tracker, URLs und Netzwerkziele untersuchen.
 
-## 6. Geräte-, Batterie-, Lifecycle- und Zeitmatrix
+## 5. Berechtigungen, FGS und Schutz-Lifecycle
 
-- [ ] Google Pixel oder ein anderes physisches Near-Stock-Gerät besteht.
-- [ ] Samsung Galaxy besteht.
-- [ ] Xiaomi/Redmi besteht.
-- [ ] OnePlus besteht.
-- [ ] Motorola besteht.
-- [ ] Mindestens ein Android-Tablet besteht in Hoch- und Querformat.
-- [ ] Android 7 / API 24 Legacy-Fallback besteht.
-- [ ] Android 8 / API 26 Kanal- und Foreground-Service-Verhalten besteht.
-- [ ] Android 13+ Runtime-Benachrichtigungsdialog besteht.
-- [ ] Reboot, App-Update, Prozessende, Force-Stop und Herstellersparmodi sind dokumentiert.
-- [ ] `LIFE-08` bestätigt manuelle, Migrations-, Berechtigungs-, Konfigurations-, Notification- und Recovery-Stoppgründe.
-- [ ] `LIFE-09` bestätigt `enabled/running`-Inkonsistenzen und die Anzeigen `NEUSTART NÖTIG` beziehungsweise `INKONSISTENT`.
-- [ ] `LIFE-10` bestätigt `notification_action_stop`, `unexpected_service_destroy` und dass kontrollierte Stopps ihren ursprünglichen Code behalten.
-- [ ] Ein mindestens zwölfstündiger Lauf zeigt keinen Benachrichtigungs-, Overlay-, Event- oder Batteriefehler.
-- [ ] Mitternacht, Zeitzonenwechsel, Sommerzeit und manuelle Uhränderung bestehen.
-- [ ] Für jeden Lauf liegen Version, Build, Diagnose-JSON, Ergebnis und Fehlernachweise vor.
+Source-Vertrag vorhanden:
 
-`terminalLifecycleValidationPassed` bleibt auf `false`, bis `LIFE-08`, `LIFE-09` und `LIFE-10` für denselben Kandidaten bestanden und dokumentiert sind.
+- [x] Usage Access wird für die gewählten Vordergrund-Apps verwendet.
+- [x] Overlay dient der sichtbaren ScrollShield-Unterbrechung.
+- [x] Android 13+ Runtime-Notification-Permission ist berücksichtigt.
+- [x] Schutz startet fail-closed ohne Usage Access, Overlay, sichtbare Notification, aktive Regel oder installierte Ziel-App.
+- [x] Foreground-Service-Notification enthält direkten Stop-Weg.
+- [x] Permission-/Notification-/Target-/Config-Verlust kann den Dienst kontrolliert stoppen.
+- [x] stabile Stop-Codes und Lifecycle-Zeitpunkte werden persistiert.
+- [x] Boot-/App-Update-Recovery ist an vorherige Aktivierung und Voraussetzungen gebunden.
 
-## 7. Installation und Datenmigration
+Reale Candidate-Evidence fehlt bis zur Ausführung:
 
-- [x] Lokale Daten bleiben offline und werden nicht an einen Entwickler-Server übertragen.
-- [x] Export, validierter Import und lokaler Komplettreset sind vorhanden.
-- [x] Aktuelle V3-Speicherung verwendet vollständig geprüfte `_pending`-Transaktionen.
-- [x] Ein vollständiger unterbrochener Speichervorgang wird beim nächsten Start wieder aufgenommen.
-- [x] Ein unvollständiger Pending-Satz ersetzt nicht den letzten vollständigen Zustand.
-- [x] `scrollshield_state_v2` und der unversionierte Schlüssel `scrollshield_state` werden erkannt.
-- [x] Die ehemaligen V0.7/PRO-Schlüssel für Brain State, Events, Regeln, Gamification, Installation und Backup werden erkannt.
-- [x] Konvertierbare V0.7-Ereignisse und gespeicherte Zeit werden in aktuellen Verlauf und Statistik übernommen.
-- [x] Alte generierte Regeln werden archiviert, aber nicht automatisch als heutige Schutzregeln aktiviert.
-- [x] Vor einer Löschung werden alle Legacy-Werte bytegenau in `scrollshield_legacy_v07_archive_v1` archiviert.
-- [x] Die normale JSON-Sicherung enthält das Legacy-Archiv und stellt es nach vollständiger Validierung wieder her.
-- [x] Beschädigte oder nicht schreibbare Legacy-Daten bleiben für Wiederholung oder manuelle Rettung erhalten.
-- [ ] Clean Install wurde mit dem aktuellen Kandidaten geprüft.
-- [ ] `npm run check:migration` und sämtliche Migrationstests wurden im vollständigen Projektlauf ausgeführt.
-- [ ] Repräsentative V0.7-WebView-Daten wurden auf einem physischen Android-Gerät aktualisiert.
-- [ ] Migrierte Ereignisse, Zeitersparnis und Statistiken wurden mit dem Ausgangsbestand verglichen.
-- [ ] Jedes archivierte Rohfeld wurde bytegenau mit seinem V0.7-Ausgangswert verglichen.
-- [ ] Export → Reset → Import stellt dasselbe Legacy-Archiv wieder her.
-- [ ] Ein simulierter Speicherfehler lässt die Legacy-Quelle unverändert bestehen.
-- [ ] Upgrade vom vorherigen Release-Kandidaten wurde geprüft.
-- [ ] App-Update bei aktivem Schutz wurde geprüft.
-- [ ] Deinstallation und anschließende Neuinstallation wurden geprüft.
+- [ ] APP-07..10 real nachweisen.
+- [ ] RUNTIME-01..06 real nachweisen.
+- [ ] DISPATCH-01..05 real nachweisen.
+- [ ] LIFE-08: alle manuellen/System-/Migration-/Permission-/Config-/Recovery-Stoppgründe real nachweisen.
+- [ ] LIFE-09: inkonsistente `enabled/running`-Zustände und Recovery-Anzeigen real nachweisen.
+- [ ] LIFE-10: Notification-Stop, unerwartete Service-Zerstörung und Erhalt kontrollierter Stop-Codes real nachweisen.
+- [ ] LIFE-12..16 inklusive generation-/snapshot-gebundener Recovery real nachweisen.
 
-Die genaue Spezifikation steht in `docs/DATA_MIGRATION.md`. `migrationValidationPassed` bleibt bis zum physischen Nachweis für denselben Kandidaten auf `false`.
+`terminalLifecycleValidationPassed` bleibt bis zu diesen realen Candidate-Nachweisen `false`.
 
-## 8. Datenschutz, Recht und Support
+## 6. Schutzlogik und Instrumentation
 
-- [x] Version 1 enthält keinen Account, keine Cloud-Synchronisierung, keine Werbung, keine Analyse und kein Tracking.
-- [x] Privacy- und Produktionsprüfungen suchen nach unerwarteten Netzwerk- und Tracker-Mustern.
-- [ ] Echter rechtlicher Name beziehungsweise Unternehmen ist eingetragen.
-- [ ] Vollständige ladungsfähige Adresse ist eingetragen.
-- [ ] Verantwortliche Person ist eingetragen.
-- [ ] `support@scrollshield.app` oder die endgültige Support-Adresse ist verifiziert und überwacht.
-- [ ] Die finale Datenschutzdomain ist erreichbar und enthält die veröffentlichte Datenschutzerklärung.
-- [ ] Alle Platzhalter in App, Store-Paket und Rechtstexten sind ersetzt.
-- [ ] Die endgültigen Aussagen wurden gegen den signierten AAB geprüft.
+- [x] Tageslimit, Sitzungsdauer, Zeitfenster über Mitternacht, wiederkehrende Regeln und Fokuslogik sind source-seitig implementiert.
+- [x] Anti-Binge, adaptive Friction, Emergency und Commitment sind source-seitig implementiert.
+- [x] Native Nutzungs-/Schutzereignisse können in lokale Statistik/History übernommen werden.
+- [ ] Instrumentation für Service-Lifecycle, Overlay, Countdown, Sitzungsende, Usage-Import und Boot-Recovery real ausführen.
+- [ ] Keine Source-Checker als Ersatz für Instrumentation oder physische Geräte-Evidence behandeln.
 
-## 9. Google Play Console
+## 7. Physische Android-Gerätematrix
 
-- [x] Vorbereitete Data-Safety-Antworten lauten für Entwicklererhebung und Weitergabe auf `Nein`, sofern der finale Build unverändert bleibt.
-- [x] Erklärungen für `PACKAGE_USAGE_STATS`, `SYSTEM_ALERT_WINDOW`, Paket-Sichtbarkeit und `FOREGROUND_SERVICE_SPECIAL_USE` sind vorbereitet.
-- [x] Version 1 verspricht nur zuverlässigen Whole-App-Schutz, keine garantierte Reels-/Shorts-Unterseiten-Erkennung.
-- [x] Medizinische beziehungsweise ADHS-Behandlungsversprechen wurden entfernt.
-- [ ] Data Safety wurde im Play Console Formular final bestätigt.
-- [ ] Usage-Access- und Overlay-Deklarationen wurden final eingereicht.
-- [ ] Foreground-Service-Special-Use-Deklaration wurde final eingereicht.
-- [ ] USK-/PEGI-Fragebogen wurde final ausgefüllt.
-- [ ] Reviewer-Video zeigt Runtime-Prompt, Schutzkanal, sichtbaren Dienst, direkte Stop-Aktion, Overlay und sicheren Entzug.
-- [ ] Reviewer-Video zeigt für die direkte Stop-Aktion `notification_action_stop` und für einen sicheren Systemabbruch den dazugehörigen Diagnosecode.
-- [ ] Reviewer-Video zeigt im Debug-Bericht und kopierten Diagnose-JSON den zum Entzug passenden Stoppcode.
-- [ ] Reviewer-Video verwendet exakt denselben Build wie der hochgeladene AAB.
-- [ ] Interner oder geschlossener Testtrack wurde vor Produktion erfolgreich abgeschlossen.
+Mindestens:
 
-## 10. iOS-Status
+- [ ] Pixel oder anderes physisches Near-Stock-Gerät.
+- [ ] Samsung Galaxy / One UI.
+- [ ] Xiaomi/Redmi / HyperOS bzw. MIUI.
+- [ ] OnePlus / OxygenOS.
+- [ ] Motorola oder weitere Near-Stock-Variante.
+- [ ] Android-Tablet in Hoch- und Querformat.
+- [ ] Android 7 / API 24 Legacy-Verhalten.
+- [ ] Android 8 / API 26 Foreground-Service-/Notification-Channel-Verhalten.
+- [ ] Android 13+ Runtime-Notification-Permission.
 
-- [ ] Family-Controls-Entitlement wurde genehmigt.
-- [ ] Native Family Controls und Managed Settings sind implementiert.
-- [ ] iOS-Berechtigung, Shielding und Wiederherstellung sind auf realen Geräten getestet.
-- [ ] Apple-Review-Unterlagen und Video stimmen mit dem tatsächlichen iOS-Build überein.
+Zusätzlich für denselben Kandidaten:
 
-Der aktuelle iOS-Stand ist nicht einreichbar. Eine Web-/PWA-Vorschau ersetzt keine native Screen-Time-Durchsetzung.
+- [ ] Reboot.
+- [ ] App-Update bei aktivem Schutz.
+- [ ] Prozessende.
+- [ ] Force-Stop.
+- [ ] OEM-Batteriespar-/Background-Restriktionen.
+- [ ] Mitternacht und Tageswechsel.
+- [ ] Zeitzonenwechsel.
+- [ ] Sommerzeit.
+- [ ] manuelle Uhränderung.
 
-## 11. Endgültige Freigabe
+Für jeden Testlauf Evidence mit Gerät, Hersteller, Modell, Android/OEM-Version, ScrollShield-Version/Build, Candidate-SHA, Diagnose-JSON und PASS/FAIL/BLOCKED sichern.
 
-- [ ] Keine offenen Blocker oder kritischen Defekte.
-- [ ] Alle Herstellerabweichungen sind behoben oder ausdrücklich aus dem Release ausgeschlossen.
-- [ ] Freigabemanifest ist vollständig und gehört zur exakten Version und Build-Nummer.
-- [ ] `terminalLifecycleValidationPassed` ist durch reale Gerätebelege nachvollziehbar.
-- [ ] Signierter AAB wurde installiert und erneut einem Smoke-Test unterzogen.
-- [ ] Store-Texte, Screenshots, Reviewer-Video und Binärdatei zeigen dieselbe Funktionalität.
-- [ ] Rollback-, Support- und Staged-Rollout-Verantwortung sind festgelegt.
+## 8. Batterie und Zuverlässigkeit
 
-Der Lifecycle-Block bleibt unverifiziert, bis `npm run verify`, Android JUnit, `assembleDebug` sowie `LIFE-08`, `LIFE-09` und `LIFE-10` für denselben Kandidaten bestanden sind.
+- [ ] Baseline ohne laufenden Schutz messen.
+- [ ] Schutz aktiv ohne typische geschützte Nutzung messen.
+- [ ] Schutz aktiv mit typischer Nutzung messen.
+- [ ] mindestens 12-Stunden-Lauf durchführen.
+- [ ] CPU, Batterie, Wakeups, Speicher, Service-Restarts, Overlay-Churn und UsageStats-Verhalten dokumentieren.
+- [ ] Kein kritischer Lifecycle-/Notification-/Overlay-/Usage-Fehler im Langlauf.
 
-Erst danach darf `npm run android:bundle` erfolgreich durch das Release-Gate laufen.
+`batteryReliabilityPassed` bleibt bis zur realen Candidate-Evidence `false`.
+
+## 9. Datenmigration und Recovery
+
+- [x] V3-Transaktionen, Pending-Recovery, ältere V2/unversionierte States und V0.7/PRO-Schlüssel sind source-seitig berücksichtigt.
+- [x] Legacy-Rohdaten werden vor Löschung archiviert; Export/Import kann das Archiv transportieren.
+- [ ] Clean Install mit aktuellem Kandidaten prüfen.
+- [ ] echte repräsentative V0.7-Daten auf physischem Android-Gerät migrieren.
+- [ ] archivierte Rohwerte bytegenau mit Ausgangsdaten vergleichen.
+- [ ] migrierte Events/Statistiken mit Ausgangsbestand vergleichen.
+- [ ] Export → Reset → Import prüfen.
+- [ ] simulierten Storage-Fehler und Wiederholbarkeit prüfen.
+- [ ] Upgrade vom vorherigen Release-Kandidaten prüfen.
+
+`migrationValidationPassed` bleibt bis zum realen Nachweis `false`.
+
+## 10. Accessibility und Usability
+
+- [ ] TalkBack auf realem Android-Gerät prüfen.
+- [ ] große Schrift/Display-Skalierung prüfen.
+- [ ] Tastatur-/Focus-Reihenfolge prüfen, soweit relevant.
+- [ ] Tablet-Layout real prüfen.
+- [ ] Onboarding und Permission-Flow mit neuen Nutzern testen.
+- [ ] mindestens mehrere reale Erstnutzer ohne Entwicklerhilfe durch Kernflow führen.
+
+## 11. Recht, Privacy und Support
+
+- [x] Android-v1 bleibt source-seitig ohne Account, Werbung und allgemeines Tracking.
+- [x] Privacy-Build-Checks suchen nach nicht erlaubten Netzwerk-/Tracker-Mustern.
+- [ ] rechtlichen Namen/Unternehmen final eintragen.
+- [ ] ladungsfähige Adresse final eintragen.
+- [ ] verantwortliche Person final eintragen.
+- [ ] endgültige Support-Adresse verifizieren und überwachen.
+- [ ] veröffentlichte Privacy-Domain/Datenschutzerklärung final erreichbar machen.
+- [ ] alle Platzhalter entfernen.
+- [ ] Aussagen gegen den **signierten retained AAB** prüfen.
+
+## 12. Google Play / Store Review
+
+- [x] Whole-App-Schutz wird nicht als Reels-/Shorts-Unterseiten-Erkennung überverkauft.
+- [x] medizinische/ADHS-Behandlungsversprechen gehören nicht zum v1-Claim.
+- [x] Usage Access, Overlay, Package Visibility und `FOREGROUND_SERVICE_SPECIAL_USE` sind als sensible Review-Flächen erkannt.
+- [ ] Data Safety im Play Console final gegen den realen Kandidaten bestätigen.
+- [ ] Usage-Access-/Overlay-Deklarationen final einreichen.
+- [ ] Special-Use-FGS-Deklaration final einreichen.
+- [ ] Content-Rating/USK-/PEGI-Fragen final ausfüllen.
+- [ ] Reviewer-Video mit exakt retained Candidate aufnehmen.
+- [ ] Reviewer-Video zeigt Onboarding, Permissions, App-Auswahl, Schutzintervention, Home/Stop, Permission-Entzug und passende Diagnosecodes.
+- [ ] internen/geschlossenen Track erfolgreich durchführen.
+
+## 13. Signed Binary Inspection
+
+Für den **bereits gebauten und aufgezeichneten** signierten Kandidaten:
+
+- [ ] SHA-256 aus `.scrollshield-release-candidate/bundle.json` sichern.
+- [ ] tatsächliche Permissions und Manifest prüfen.
+- [ ] unerwartete SDKs/Tracker/URLs prüfen.
+- [ ] Signing/Package/Version/VersionCode prüfen.
+- [ ] AAB/APK-Größe und Hash mit aufgezeichneter Candidate-Metadatei vergleichen.
+- [ ] `evidence.signedBinary.reference` enthält den exakten SHA-256 des geprüften retained Artefakts.
+- [ ] `signedBinaryInspected=true` erst danach setzen.
+
+**Kein Gradle-Rebuild nach dieser Inspection.**
+
+## 14. Finales Release-Gate und Artefaktidentität
+
+- [ ] Alle verpflichtenden Evidence-Flags für denselben `candidateCommitSha` real bestanden.
+- [ ] `approvedBy` gesetzt.
+- [ ] `approvedAt` gesetzt.
+- [ ] `npm run release:gate` besteht.
+- [ ] `npm run android:bundle` besteht und validiert den retained AAB gegen SHA-256/Größe/Version/Candidate-SHA.
+- [ ] Finales `android:bundle` baut **kein neues AAB**.
+- [ ] Exakt dieser validierte retained AAB wird in Play Console hochgeladen.
+- [ ] Nach Upload interner/geschlossener Smoke-Test weiterhin bestanden.
+
+## 15. Rollout und Betrieb
+
+- [ ] Keine offenen P0/P1-Releaseblocker.
+- [ ] Rollback-/Staged-Rollout-Plan final.
+- [ ] Support- und Incident-Verantwortung final.
+- [ ] Monitoring erfolgt ohne die v1-Privacy-Versprechen heimlich zu erweitern.
+- [ ] Produktion erst nach G14-Freigabe.
+
+## iOS
+
+Android-v1-Freigabe bedeutet **keine** iOS-Produktionsreife. Für iOS bleiben Family-Controls-Entitlement, Managed Settings, native Durchsetzung, reale Geräte-Evidence und Apple-Review-Unterlagen separat erforderlich.
+
+---
+
+**Grundregel:** Kein Source-Haken, kein boolesches Feld und kein vorbereiteter Test ersetzt eine tatsächlich ausgeführte, Candidate-gebundene Evidence. Fehlende Evidence bleibt `false`/offen.
