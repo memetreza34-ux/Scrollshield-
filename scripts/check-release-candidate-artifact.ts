@@ -58,6 +58,9 @@ const metadata = JSON.parse(metadataRaw) as {
 const packageJson = JSON.parse(packageRaw) as { version?: string };
 const androidVersionName = buildGradle.match(/versionName\s+"([^"]+)"/)?.[1];
 const androidVersionCode = Number(buildGradle.match(/versionCode\s+(\d+)/)?.[1]);
+const metadataSha256 = metadata.sha256 ?? '';
+const metadataCandidateSha = metadata.candidateCommitSha ?? '';
+const metadataBuildHeadSha = metadata.buildHeadSha ?? '';
 const findings: string[] = [];
 
 const requireCondition = (condition: boolean, message: string) => {
@@ -67,10 +70,10 @@ const requireCondition = (condition: boolean, message: string) => {
 requireCondition(metadata.schemaVersion === 1, 'Candidate artifact metadata schemaVersion must equal 1.');
 requireCondition(metadata.type === type, `Candidate artifact metadata type must equal ${type}.`);
 requireCondition(metadata.artifactPath === expectedArtifactPath, `Candidate artifact path must be ${expectedArtifactPath}.`);
-requireCondition(SHA_PATTERN.test(metadata.candidateCommitSha ?? ''), 'Candidate artifact metadata must contain a valid source SHA.');
-requireCondition(SHA_PATTERN.test(metadata.buildHeadSha ?? ''), 'Candidate artifact metadata must contain a valid build HEAD SHA.');
-requireCondition(HASH_PATTERN.test(metadata.sha256 ?? ''), 'Candidate artifact metadata must contain a SHA-256 hash.');
-requireCondition(metadata.candidateCommitSha === approval.candidateCommitSha, 'Retained artifact belongs to a different source candidate.');
+requireCondition(SHA_PATTERN.test(metadataCandidateSha), 'Candidate artifact metadata must contain a valid source SHA.');
+requireCondition(SHA_PATTERN.test(metadataBuildHeadSha), 'Candidate artifact metadata must contain a valid build HEAD SHA.');
+requireCondition(HASH_PATTERN.test(metadataSha256), 'Candidate artifact metadata must contain a SHA-256 hash.');
+requireCondition(metadataCandidateSha === approval.candidateCommitSha, 'Retained artifact belongs to a different source candidate.');
 requireCondition(
   metadata.versionName === approval.candidateVersion &&
     metadata.versionName === packageJson.version &&
@@ -88,7 +91,7 @@ requireCondition(
 );
 const signedBinaryReference = approval.evidence?.signedBinary?.reference?.toLowerCase() ?? '';
 requireCondition(
-  !!metadata.sha256 && signedBinaryReference.includes(metadata.sha256.toLowerCase()),
+  HASH_PATTERN.test(metadataSha256) && signedBinaryReference.includes(metadataSha256.toLowerCase()),
   'Signed-binary evidence reference must contain the exact retained artifact SHA-256.',
 );
 
@@ -108,17 +111,17 @@ async function sha256File(file: string): Promise<string> {
 
 if (existsSync(expectedArtifactPath)) {
   const [actualHash, artifactStat] = await Promise.all([sha256File(expectedArtifactPath), stat(expectedArtifactPath)]);
-  requireCondition(actualHash === metadata.sha256, 'Retained candidate artifact bytes changed after recording/inspection.');
+  requireCondition(actualHash === metadataSha256, 'Retained candidate artifact bytes changed after recording/inspection.');
   requireCondition(artifactStat.size === metadata.sizeBytes, 'Retained candidate artifact size changed after recording.');
 }
 
 if (SHA_PATTERN.test(approval.candidateCommitSha)) {
   for (const [label, targetSha] of [
-    ['recorded build HEAD', metadata.buildHeadSha],
+    ['recorded build HEAD', metadataBuildHeadSha],
     ['current HEAD', 'HEAD'],
   ] as const) {
-    if (targetSha !== 'HEAD' && !SHA_PATTERN.test(targetSha ?? '')) continue;
-    const diff = spawnSync('git', ['diff', '--name-only', approval.candidateCommitSha, targetSha ?? 'HEAD', '--'], {
+    if (targetSha !== 'HEAD' && !SHA_PATTERN.test(targetSha)) continue;
+    const diff = spawnSync('git', ['diff', '--name-only', approval.candidateCommitSha, targetSha, '--'], {
       encoding: 'utf8',
     });
     requireCondition(diff.status === 0, `Unable to compare candidate source with ${label}.`);
@@ -149,5 +152,5 @@ if (findings.length > 0) {
 
 console.log(`Final ${type} artifact identity passed for candidate ${approval.candidateCommitSha}.`);
 console.log(`Retained artifact: ${expectedArtifactPath}`);
-console.log(`SHA-256: ${metadata.sha256}`);
+console.log(`SHA-256: ${metadataSha256}`);
 console.log('Use this retained artifact; rebuilding would create a new binary that requires fresh binary evidence.');
