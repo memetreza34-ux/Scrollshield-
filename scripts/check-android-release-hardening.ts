@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 const files = {
   manifest: 'android/app/src/main/AndroidManifest.xml',
   filePaths: 'android/app/src/main/res/xml/file_paths.xml',
+  dataExtractionRules: 'android/app/src/main/res/xml/data_extraction_rules.xml',
+  backupRules: 'android/app/src/main/res/xml/backup_rules.xml',
   buildGradle: 'android/app/build.gradle',
   packageJson: 'package.json',
   capacitor: 'capacitor.config.ts',
@@ -18,9 +20,21 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-const [manifest, filePaths, buildGradle, packageRaw, capacitor, gitignore, signingCheck] = await Promise.all([
+const [
+  manifest,
+  filePaths,
+  dataExtractionRules,
+  backupRules,
+  buildGradle,
+  packageRaw,
+  capacitor,
+  gitignore,
+  signingCheck,
+] = await Promise.all([
   readFile(files.manifest, 'utf8'),
   readFile(files.filePaths, 'utf8'),
+  readFile(files.dataExtractionRules, 'utf8'),
+  readFile(files.backupRules, 'utf8'),
   readFile(files.buildGradle, 'utf8'),
   readFile(files.packageJson, 'utf8'),
   readFile(files.capacitor, 'utf8'),
@@ -39,6 +53,18 @@ const rejectPattern = (file: string, content: string, pattern: RegExp, message: 
 };
 
 requirePattern(files.manifest, manifest, /android:allowBackup="false"/, 'App backup must remain disabled.');
+requirePattern(
+  files.manifest,
+  manifest,
+  /android:dataExtractionRules="@xml\/data_extraction_rules"/,
+  'Android 12+ cloud/device-transfer rules must remain explicitly attached.',
+);
+requirePattern(
+  files.manifest,
+  manifest,
+  /android:fullBackupContent="@xml\/backup_rules"/,
+  'Android 11- Auto Backup exclusions must remain explicitly attached.',
+);
 requirePattern(
   files.manifest,
   manifest,
@@ -77,6 +103,29 @@ requirePattern(
   'FileProvider paths must be restricted to ScrollShield-owned internal/external app storage.',
 );
 
+for (const domain of ['root', 'file', 'database', 'sharedpref', 'external']) {
+  const escapedDomain = domain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const exclusion = new RegExp(`<exclude\\s+domain="${escapedDomain}"\\s+path="\\."\\s*\\/>`);
+  const count = [...dataExtractionRules.matchAll(new RegExp(exclusion.source, 'g'))].length;
+  if (count < 2) {
+    findings.push(
+      `${files.dataExtractionRules}: domain=${domain} must be excluded from both cloud backup and device transfer.`,
+    );
+  }
+  requirePattern(
+    files.backupRules,
+    backupRules,
+    exclusion,
+    `Legacy Auto Backup must exclude domain=${domain} path=.",`,
+  );
+}
+requirePattern(
+  files.dataExtractionRules,
+  dataExtractionRules,
+  /<cloud-backup>[\s\S]*<\/cloud-backup>[\s\S]*<device-transfer>[\s\S]*<\/device-transfer>/,
+  'Android 12+ rules must explicitly cover both cloud backup and device transfer.',
+);
+
 requirePattern(files.buildGradle, buildGradle, /release\s*\{[\s\S]*minifyEnabled\s+true/, 'Release R8 minification must stay enabled.');
 requirePattern(files.buildGradle, buildGradle, /release\s*\{[\s\S]*shrinkResources\s+true/, 'Release resource shrinking must stay enabled.');
 requirePattern(
@@ -105,6 +154,13 @@ rejectPattern(
   'Capacitor cleartext mode must never be enabled for production.',
 );
 requirePattern(files.capacitor, capacitor, /webDir:\s*['"]dist['"]/, 'Production WebView must use packaged dist assets.');
+
+if (packageJson.scripts?.['check:android-hardening'] !== 'tsx scripts/check-android-release-hardening.ts') {
+  findings.push(`${files.packageJson}: check:android-hardening must execute this release-hardening guard.`);
+}
+if (!packageJson.scripts?.verify?.includes('npm run check:android-hardening')) {
+  findings.push(`${files.packageJson}: verify must include check:android-hardening.`);
+}
 
 const signingCommand = 'npm run check:android-signing';
 if (packageJson.scripts?.['check:android-signing'] !== 'tsx scripts/check-android-release-signing.ts') {
@@ -145,5 +201,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android release hardening passed. FileProvider, packaged WebView origin, cleartext policy, R8, and release signing boundaries are guarded.',
+  'Android release hardening passed. Backup/D2D, FileProvider, packaged WebView origin, cleartext policy, R8, and release signing boundaries are guarded.',
 );
