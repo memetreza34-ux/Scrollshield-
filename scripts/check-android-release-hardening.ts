@@ -12,6 +12,9 @@ const files = {
   capacitor: 'capacitor.config.ts',
   gitignore: '.gitignore',
   signingCheck: 'scripts/check-android-release-signing.ts',
+  candidateReadiness: 'scripts/check-release-candidate-readiness.ts',
+  recordCandidate: 'scripts/record-release-candidate.ts',
+  candidateArtifactCheck: 'scripts/check-release-candidate-artifact.ts',
 };
 
 const missing = Object.values(files).filter((file) => !existsSync(file));
@@ -32,6 +35,9 @@ const [
   capacitor,
   gitignore,
   signingCheck,
+  candidateReadiness,
+  recordCandidate,
+  candidateArtifactCheck,
 ] = await Promise.all([
   readFile(files.manifest, 'utf8'),
   readFile(files.filePaths, 'utf8'),
@@ -43,6 +49,9 @@ const [
   readFile(files.capacitor, 'utf8'),
   readFile(files.gitignore, 'utf8'),
   readFile(files.signingCheck, 'utf8'),
+  readFile(files.candidateReadiness, 'utf8'),
+  readFile(files.recordCandidate, 'utf8'),
+  readFile(files.candidateArtifactCheck, 'utf8'),
 ]);
 
 const packageJson = JSON.parse(packageRaw) as { scripts?: Record<string, string> };
@@ -189,22 +198,9 @@ if (!packageJson.scripts?.verify?.includes('npm run check:android-hardening')) {
   findings.push(`${files.packageJson}: verify must include check:android-hardening.`);
 }
 
-const signingCommand = 'npm run check:android-signing';
 if (packageJson.scripts?.['check:android-signing'] !== 'tsx scripts/check-android-release-signing.ts') {
   findings.push(`${files.packageJson}: check:android-signing must execute the dedicated release signing preflight.`);
 }
-for (const scriptName of ['android:release', 'android:bundle']) {
-  const script = packageJson.scripts?.[scriptName] ?? '';
-  const gateIndex = script.indexOf('npm run release:gate');
-  const signingIndex = script.indexOf(signingCommand);
-  const gradleIndex = script.indexOf('tsx scripts/run-gradle.ts');
-  if (gateIndex < 0 || signingIndex < 0 || gradleIndex < 0 || !(gateIndex < signingIndex && signingIndex < gradleIndex)) {
-    findings.push(
-      `${files.packageJson}: ${scriptName} must run release:gate, then Android signing preflight, then the Gradle release task.`,
-    );
-  }
-}
-
 requirePattern(
   files.signingCheck,
   signingCheck,
@@ -217,6 +213,99 @@ requirePattern(
   /path\.isAbsolute\(storeFile\)[\s\S]*must not escape the android\/ directory/,
   'Signing preflight must prevent keystore paths from escaping android/.',
 );
+
+if (packageJson.scripts?.['release:candidate-gate'] !== 'tsx scripts/check-release-candidate-readiness.ts') {
+  findings.push(`${files.packageJson}: release:candidate-gate must use the dedicated pre-binary candidate gate.`);
+}
+requirePattern(
+  files.candidateReadiness,
+  candidateReadiness,
+  /webVerificationPassed[\s\S]*androidUnitTestsPassed[\s\S]*debugApkCompiled/,
+  'Signed candidate gate must require successful source verification, Android unit tests, and debug APK compilation.',
+);
+requirePattern(
+  files.candidateReadiness,
+  candidateReadiness,
+  /candidateCommitSha[\s\S]*git[\s\S]*diff[\s\S]*config\/release-approval\.json/,
+  'Signed candidate gate must bind the build to a frozen candidate and reject release-affecting drift.',
+);
+
+const candidateCommands = [
+  {
+    name: 'android:candidate:release',
+    gradleToken: 'assembleRelease',
+    recordToken: 'tsx scripts/record-release-candidate.ts apk',
+  },
+  {
+    name: 'android:candidate:bundle',
+    gradleToken: 'bundleRelease',
+    recordToken: 'tsx scripts/record-release-candidate.ts bundle',
+  },
+];
+for (const command of candidateCommands) {
+  const script = packageJson.scripts?.[command.name] ?? '';
+  const gateIndex = script.indexOf('npm run release:candidate-gate');
+  const signingIndex = script.indexOf('npm run check:android-signing');
+  const gradleIndex = script.indexOf(command.gradleToken);
+  const recordIndex = script.indexOf(command.recordToken);
+  if (
+    gateIndex < 0 ||
+    signingIndex < 0 ||
+    gradleIndex < 0 ||
+    recordIndex < 0 ||
+    !(gateIndex < signingIndex && signingIndex < gradleIndex && gradleIndex < recordIndex)
+  ) {
+    findings.push(
+      `${files.packageJson}: ${command.name} must run candidate gate -> signing preflight -> release Gradle task -> artifact recording.`,
+    );
+  }
+}
+
+requirePattern(
+  files.recordCandidate,
+  recordCandidate,
+  /createHash\('sha256'\)[\s\S]*candidateCommitSha[\s\S]*\.scrollshield-release-candidate/,
+  'Candidate recording must bind the exact source SHA and SHA-256 to ignored local metadata.',
+);
+requirePattern(
+  files.recordCandidate,
+  recordCandidate,
+  /app-release\.apk[\s\S]*app-release\.aab/,
+  'Candidate recorder must recognize the exact release APK and AAB output paths.',
+);
+
+const finalCommands = [
+  { name: 'android:release', artifactToken: 'tsx scripts/check-release-candidate-artifact.ts apk' },
+  { name: 'android:bundle', artifactToken: 'tsx scripts/check-release-candidate-artifact.ts bundle' },
+];
+for (const command of finalCommands) {
+  const script = packageJson.scripts?.[command.name] ?? '';
+  const gateIndex = script.indexOf('npm run release:gate');
+  const artifactIndex = script.indexOf(command.artifactToken);
+  if (gateIndex < 0 || artifactIndex < 0 || gateIndex > artifactIndex) {
+    findings.push(`${files.packageJson}: ${command.name} must run final release gate before retained-artifact validation.`);
+  }
+  if (/run-gradle|assembleRelease|bundleRelease/.test(script)) {
+    findings.push(
+      `${files.packageJson}: ${command.name} must not rebuild after binary inspection; it must validate the retained candidate bytes.`,
+    );
+  }
+}
+
+requirePattern(
+  files.candidateArtifactCheck,
+  candidateArtifactCheck,
+  /signedBinaryInspected[\s\S]*signedBinaryReference\.includes\(metadata\.sha256/,
+  'Final artifact check must bind signed-binary evidence to the exact retained SHA-256.',
+);
+requirePattern(
+  files.candidateArtifactCheck,
+  candidateArtifactCheck,
+  /actualHash === metadata\.sha256[\s\S]*artifactStat\.size === metadata\.sizeBytes/,
+  'Final artifact check must detect any byte or size change after inspection.',
+);
+
+requirePattern(files.gitignore, gitignore, /^\.scrollshield-release-candidate\/$/m, 'Local candidate metadata must stay ignored.');
 requirePattern(files.gitignore, gitignore, /^android\/signing\.properties$/m, 'Local signing.properties must stay ignored.');
 requirePattern(files.gitignore, gitignore, /^android\/\*\.jks$/m, 'Android JKS files must stay ignored.');
 requirePattern(files.gitignore, gitignore, /^android\/\*\.keystore$/m, 'Android keystore files must stay ignored.');
@@ -228,5 +317,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  'Android release hardening passed. Backup/D2D, FileProvider, packaged WebView origin, offline build surface, cleartext policy, R8, and release signing boundaries are guarded.',
+  'Android release hardening passed. Backup/D2D, FileProvider, packaged WebView origin, offline build surface, R8, signed candidate creation, and retained-binary final approval are guarded.',
 );
