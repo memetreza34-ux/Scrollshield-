@@ -232,7 +232,7 @@ requirePattern(
 requirePattern(
   files.candidateReadiness,
   candidateReadiness,
-  /changedPaths[\s\S]*value !== approvalPath/,
+  /changedPaths[\s\S]*path !== approvalPath|changedPaths[\s\S]*value !== approvalPath/,
   'Signed candidate gate must reject release-affecting drift while allowing approval-manifest updates only.',
 );
 
@@ -313,13 +313,13 @@ for (const command of finalCommands) {
 requirePattern(
   files.candidateArtifactCheck,
   candidateArtifactCheck,
-  /signedBinaryInspected[\s\S]*signedBinaryReference\.includes\(metadata\.sha256/,
+  /signedBinaryInspected[\s\S]*signedBinaryReference\.includes\(metadataSha256/,
   'Final artifact check must bind signed-binary evidence to the exact retained SHA-256.',
 );
 requirePattern(
   files.candidateArtifactCheck,
   candidateArtifactCheck,
-  /actualHash === metadata\.sha256[\s\S]*artifactStat\.size === metadata\.sizeBytes/,
+  /actualHash === metadataSha256[\s\S]*artifactStat\.size === metadata\.sizeBytes/,
   'Final artifact check must detect any byte or size change after inspection.',
 );
 
