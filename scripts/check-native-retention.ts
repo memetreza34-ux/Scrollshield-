@@ -46,8 +46,14 @@ requirePattern(
 requirePattern(
   storePath,
   store,
-  /cleanupConfirmedCounters[\s\S]*OPEN_EVENTS_PREFIX[\s\S]*EMERGENCY_COUNT_PREFIX[\s\S]*shouldDeleteEphemeralCounter/,
-  'Runtime cleanup must apply the pure ephemeral-counter policy.',
+  /cleanupConfirmedCounters[\s\S]*NativeCounterRetentionPolicy\.shouldDeleteEphemeralCounter\([\s\S]*OPEN_EVENTS_PREFIX[\s\S]*currentDay[\s\S]*previousDay/,
+  'Runtime cleanup must apply the pure ephemeral-counter policy to open-event counters.',
+);
+requirePattern(
+  storePath,
+  store,
+  /cleanupConfirmedCounters[\s\S]*NativeCounterRetentionPolicy\.shouldDeleteEphemeralCounter\([\s\S]*EMERGENCY_COUNT_PREFIX[\s\S]*currentDay[\s\S]*previousDay/,
+  'Runtime cleanup must apply the pure ephemeral-counter policy to emergency counters.',
 );
 requirePattern(
   storePath,
