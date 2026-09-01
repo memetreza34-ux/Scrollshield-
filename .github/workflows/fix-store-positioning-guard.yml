@@ -1,0 +1,46 @@
+name: Fix Store Positioning Guard
+
+on:
+  push:
+    branches:
+      - agent/release-foundation
+    paths:
+      - .github/workflows/fix-store-positioning-guard.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: agent/release-foundation
+          fetch-depth: 0
+
+      - name: Make self-control positioning guard whitespace-safe
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/check-store-assets.ts')
+          source = path.read_text()
+          old = "/Werkzeug zur Selbstkontrolle/i"
+          new = "/Werkzeug zur\\s+Selbstkontrolle/i"
+          if old not in source:
+              raise SystemExit('Expected store self-control regex was not found.')
+          path.write_text(source.replace(old, new, 1))
+          PY
+
+      - name: Format checker
+        run: npx prettier --write scripts/check-store-assets.ts
+
+      - name: Commit store guard repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/check-store-assets.ts
+          git commit -m "fix: make store positioning guard whitespace-safe"
+          git push origin HEAD:agent/release-foundation
