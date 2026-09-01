@@ -81,7 +81,7 @@ function rejectPattern(file: string, content: string, pattern: RegExp, message: 
 requirePattern(
   settingsPath,
   settings,
-  /Abo-Funktionen werden hier bewusst nicht als aktive Einstellungen angeboten/,
+  /Abo-Funktionen werden hier bewusst\s+nicht als aktive Einstellungen angeboten/,
   'Settings must explicitly state that unfinished subscription functionality is not active.',
 );
 
@@ -149,7 +149,7 @@ requirePattern(
 requirePattern(
   entitlementPolicyPath,
   entitlementPolicy,
-  /requiresUserChoice: true[\s\S]*selectedActiveAppIds: \[\][\s\S]*pausedAppIds: \[\][\s\S]*selection-required/,
+  /selectedActiveAppIds: \[\][\s\S]*pausedAppIds: \[\][\s\S]*requiresUserChoice: true[\s\S]*selection-required/,
   'Over-capacity downgrade must refuse silent app selection and must not mutate configuration implicitly.',
 );
 requirePattern(
@@ -247,7 +247,7 @@ requirePattern(
 requirePattern(
   entitlementArchitecturePath,
   entitlementArchitecture,
-  /Google Play purchase[\s\S]*purchaseToken[\s\S]*secure ScrollShield backend[\s\S]*Google Play Developer API verification[\s\S]*cryptographically verifiable bounded entitlement assertion/i,
+  /Google Play purchase token[\s\S]*secure ScrollShield backend[\s\S]*Google Play Developer API purchases\.subscriptionsv2\.get[\s\S]*signed ES256 bounded entitlement assertion/i,
   'Architecture must preserve the secure purchase-token-to-signed-entitlement trust chain.',
 );
 
