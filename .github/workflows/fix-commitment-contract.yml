@@ -1,0 +1,131 @@
+name: Fix Commitment Contract
+
+on:
+  push:
+    branches:
+      - agent/release-foundation
+    paths:
+      - .github/workflows/fix-commitment-contract.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: agent/release-foundation
+          fetch-depth: 0
+
+      - name: Repair commitment reset contract and formatting-safe guards
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const appFile = 'src/App.tsx';
+          let app = fs.readFileSync(appFile, 'utf8');
+          const appOld = `    if (NativeProtection.isAvailable()) {
+              try {
+                await NativeProtection.factoryReset();`;
+          const appNew = `    if (NativeProtection.isAvailable()) {
+              try {
+                await NativeProtection.stop({
+                  code: 'factory_reset',
+                  message: 'Der Android-Schutz wurde wegen eines vollständigen App-Resets gestoppt',
+                });
+                await NativeProtection.factoryReset();`;
+          if (!app.includes(appOld)) {
+            console.error('Expected App.tsx reset block was not found.');
+            process.exit(1);
+          }
+          app = app.replace(appOld, appNew);
+          fs.writeFileSync(appFile, app, 'utf8');
+
+          const testFile = 'src/App.commitmentActivation.test.tsx';
+          let test = fs.readFileSync(testFile, 'utf8');
+          const testTitleOld = `  it('clears native protection data before web state and commitment on full reset', async () => {`;
+          const testTitleNew = `  it('stops native protection with a deliberate factory-reset reason and clears commitment on full reset', async () => {`;
+          if (!test.includes(testTitleOld)) {
+            console.error('Expected commitment reset test title was not found.');
+            process.exit(1);
+          }
+          test = test.replace(testTitleOld, testTitleNew);
+          const assertionOld = `    expect(stopMock).not.toHaveBeenCalledWith(expect.objectContaining({ code: 'factory_reset' }));`;
+          const assertionNew = `    expect(stopMock).toHaveBeenCalledWith(
+              expect.objectContaining({
+                code: 'factory_reset',
+                message: expect.stringMatching(/vollständigen App-Resets/),
+              }),
+            );`;
+          if (!test.includes(assertionOld)) {
+            console.error('Expected old factory-reset stop assertion was not found.');
+            process.exit(1);
+          }
+          test = test.replace(assertionOld, assertionNew);
+          fs.writeFileSync(testFile, test, 'utf8');
+
+          const checkerFile = 'scripts/check-commitment-lock.ts';
+          let checker = fs.readFileSync(checkerFile, 'utf8');
+
+          for (const exactLine of [
+            `    'Android kann den Dienst weiterhin über seine Systemoberflächen beenden',\n`,
+            `    'Ziel-App wirklich installiert ist und der Android-Schutzdienst tatsächlich läuft',\n`,
+            `    'Berechtigungen und Schutzstatus können weiterhin repariert werden',\n`,
+            `    'Export, Datenlöschung und ein',\n`,
+            `    'not part of a normal long-term ScrollShield backup',\n`,
+          ]) {
+            if (!checker.includes(exactLine)) {
+              console.error(`Expected commitment checker line not found: ${exactLine.trim()}`);
+              process.exit(1);
+            }
+            checker = checker.replace(exactLine, '');
+          }
+
+          const statusAnchor = `mustContain(\n  'statusPanelTest',`;
+          const statusGuard = `mustMatch(\n  'statusPanel',\n  /Android\\s+kann den Dienst weiterhin über seine Systemoberflächen beenden/,\n  'Status panel must disclose that Android system controls remain outside Commitment.',\n);\n`;
+          if (!checker.includes(statusAnchor)) {
+            console.error('Status-panel checker anchor missing.');
+            process.exit(1);
+          }
+          checker = checker.replace(statusAnchor, statusGuard + statusAnchor);
+
+          const profilesAnchor = `mustNotMatch(\n  'profiles',`;
+          const profilesGuard = `mustMatch(\n  'profiles',\n  /Ziel-App wirklich installiert\\s+ist und der Android-Schutzdienst tatsächlich läuft/,\n  'Profiles commitment confirmation must disclose installed-target and live-service readiness.',\n);\nmustMatch(\n  'profiles',\n  /Berechtigungen\\s+und Schutzstatus können weiterhin repariert werden/,\n  'Profiles commitment UI must preserve permission and protection-status recovery.',\n);\n`;
+          if (!checker.includes(profilesAnchor)) {
+            console.error('Profiles checker anchor missing.');
+            process.exit(1);
+          }
+          checker = checker.replace(profilesAnchor, profilesGuard + profilesAnchor);
+
+          const privacyAnchor = `mustContain(\n  'privacyTest',`;
+          const privacyGuard = `mustMatch(\n  'privacy',\n  /Export, Datenlöschung und\\s+ein kompletter Reset bleiben verfügbar/,\n  'Privacy wrapper must preserve export, deletion, and full-reset exits during Commitment.',\n);\n`;
+          if (!checker.includes(privacyAnchor)) {
+            console.error('Privacy checker anchor missing.');
+            process.exit(1);
+          }
+          checker = checker.replace(privacyAnchor, privacyGuard + privacyAnchor);
+
+          const contractAnchor = `mustContain(\n  'matrix',`;
+          const contractGuard = `mustMatch(\n  'contract',\n  /\\*{0,2}not\\*{0,2} part of a normal long-term ScrollShield backup/,\n  'Commitment documentation must keep the temporary lock out of normal long-term backups.',\n);\n`;
+          if (!checker.includes(contractAnchor)) {
+            console.error('Commitment contract checker anchor missing.');
+            process.exit(1);
+          }
+          checker = checker.replace(contractAnchor, contractGuard + contractAnchor);
+          fs.writeFileSync(checkerFile, checker, 'utf8');
+          NODE
+
+      - name: Format changed files
+        run: npx prettier --write src/App.tsx src/App.commitmentActivation.test.tsx scripts/check-commitment-lock.ts
+
+      - name: Commit commitment repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/App.commitmentActivation.test.tsx scripts/check-commitment-lock.ts
+          git commit -m "fix: enforce deliberate factory-reset commitment exit"
+          git push origin HEAD:agent/release-foundation
