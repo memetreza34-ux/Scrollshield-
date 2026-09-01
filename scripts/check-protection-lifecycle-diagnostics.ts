@@ -237,8 +237,18 @@ requirePattern(
 );
 requirePattern(
   'bridge',
-  /CONFIG_GENERATION_PATTERN[\s\S]*syncCommittedConfig[\s\S]*expectedConfigGeneration: synced\.configGeneration/,
-  'Bridge must bind normal/recovery starts to durable config generation.',
+  /CONFIG_GENERATION_PATTERN[\s\S]*syncCommittedConfig[\s\S]*async startCommitted[\s\S]*expectedConfigGeneration: configGeneration/,
+  'Bridge must bind native start options to a normalized durable config generation.',
+);
+requirePattern(
+  'bridge',
+  /async start\([\s\S]*const synced = await this\.syncCommitted\(appsConfig, focusMode\)[\s\S]*startCommitted\(synced\.configGeneration\)/,
+  'Normal protection start must reuse the exact durable config generation returned by sync.',
+);
+requirePattern(
+  'bridge',
+  /recoverAfterProcessLoss\([\s\S]*const synced = await this\.syncCommitted\(appsConfig, focusMode\)[\s\S]*startCommitted\(synced\.configGeneration, before\)/,
+  'Process-loss recovery must reuse the exact durable config generation returned by sync.',
 );
 requirePattern(
   'bridgeTest',
