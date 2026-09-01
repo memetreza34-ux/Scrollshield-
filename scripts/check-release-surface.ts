@@ -194,7 +194,7 @@ requirePattern(
 );
 requirePattern(
   'appDetail',
-  /Einzelne\s+Reels-,\s+Shorts- oder\s+Feed-Bereiche werden nicht separat erkannt/,
+  /Einzelne\s+Reels-,\s+Shorts-\s+oder\s+Feed-Bereiche\s+werden\s+nicht\s+separat\s+erkannt/,
   'App detail must disclose unsupported sub-screen detection.',
 );
 requireText(
