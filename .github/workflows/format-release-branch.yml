@@ -1,11 +1,7 @@
 name: Format Release Branch
 
 on:
-  push:
-    branches:
-      - agent/release-foundation
-    paths:
-      - .github/workflows/format-release-branch.yml
+  workflow_dispatch:
 
 permissions:
   contents: write
