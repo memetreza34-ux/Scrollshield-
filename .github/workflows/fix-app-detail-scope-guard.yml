@@ -1,0 +1,45 @@
+name: Fix App Detail Scope Guard
+
+on:
+  push:
+    branches:
+      - agent/release-foundation
+    paths:
+      - .github/workflows/fix-app-detail-scope-guard.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: agent/release-foundation
+          fetch-depth: 0
+
+      - name: Make sub-screen disclosure guard fully whitespace-safe
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const file = 'scripts/check-release-surface.ts';
+          const source = fs.readFileSync(file, 'utf8');
+          const oldPattern = `/Einzelne\\s+Reels-,\\s+Shorts- oder\\s+Feed-Bereiche werden nicht separat erkannt/`;
+          const newPattern = `/Einzelne\\s+Reels-,\\s+Shorts-\\s+oder\\s+Feed-Bereiche\\s+werden\\s+nicht\\s+separat\\s+erkannt/`;
+          if (!source.includes(oldPattern)) {
+            console.error('Expected app-detail sub-screen disclosure regex was not found.');
+            process.exit(1);
+          }
+          fs.writeFileSync(file, source.replace(oldPattern, newPattern), 'utf8');
+          NODE
+
+      - name: Commit guard repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/check-release-surface.ts
+          git commit -m "fix: make app-detail scope guard whitespace-safe"
+          git push origin HEAD:agent/release-foundation
