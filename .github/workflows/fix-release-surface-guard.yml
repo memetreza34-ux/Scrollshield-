@@ -1,0 +1,131 @@
+name: Fix Release Surface Guard
+
+on:
+  push:
+    branches:
+      - agent/release-foundation
+    paths:
+      - .github/workflows/fix-release-surface-guard.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: agent/release-foundation
+          fetch-depth: 0
+
+      - name: Repair release-surface truthfulness guards
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const checkerFile = 'scripts/check-release-surface.ts';
+          let source = fs.readFileSync(checkerFile, 'utf8');
+
+          const onboardingOld = `requireText(
+            'onboarding',
+            [
+              'Ganze Apps bewusst öffnen',
+              'Version 1 schützt die gesamte ausgewählte App',
+              'einzelne Reels, Shorts oder Feed-Bereiche werden nicht separat erkannt',
+              'getReleaseProfileConfig',
+              'updatedAt',
+            ],
+            'Release onboarding is missing whole-app scope or safe preset application.',
+          );`;
+          const onboardingNew = `requireText(
+            'onboarding',
+            ['Ganze Apps bewusst öffnen', 'getReleaseProfileConfig', 'updatedAt'],
+            'Release onboarding is missing whole-app scope or safe preset application.',
+          );
+          requirePattern(
+            'onboarding',
+            /Version 1 schützt die gesamte ausgewählte App[\\s\\S]*einzelne\\s+Reels,\\s+Shorts oder\\s+Feed-Bereiche werden nicht separat erkannt/,
+            'Release onboarding must disclose whole-app scope and unsupported sub-screen detection.',
+          );`;
+
+          const wrapperOld = `requirePattern(
+            'releaseAppDetail',
+            /isLegacyUntouchedDefaultConfig[\\s\\S]*createReleaseDefaultAppConfig[\\s\\S]*updatedAt: Date\\.now\\(\\)/,
+            'App-detail release wrapper must normalize untouched defaults and mark deliberate edits.',
+          );`;
+          const wrapperNew = `requirePattern(
+            'releaseAppDetail',
+            /isLegacyUntouchedDefaultConfig[\\s\\S]*createReleaseDefaultAppConfig/,
+            'App-detail release wrapper must normalize untouched legacy defaults before rendering.',
+          );
+          requirePattern(
+            'releaseAppDetail',
+            /updateReleaseState[\\s\\S]*updatedAt: Date\\.now\\(\\)/,
+            'App-detail release wrapper must mark deliberate edits.',
+          );`;
+
+          const appDetailOld = `requirePattern(
+            'appDetail',
+            /Version 1 schützt die gesamte ausgewählte App[\\s\\S]*Einzelne Reels-, Shorts- oder Feed-Bereiche werden nicht separat erkannt/,
+            'App detail must disclose whole-app-only v1 enforcement.',
+          );`;
+          const appDetailNew = `requirePattern(
+            'appDetail',
+            /Version 1 schützt die gesamte ausgewählte App/,
+            'App detail must disclose whole-app v1 enforcement.',
+          );
+          requirePattern(
+            'appDetail',
+            /Einzelne\\s+Reels-,\\s+Shorts- oder\\s+Feed-Bereiche werden nicht separat erkannt/,
+            'App detail must disclose unsupported sub-screen detection.',
+          );`;
+
+          const historyOld = `requirePattern(
+            'history',
+            /Gemessene Freigabezeit[\\s\\S]*Geschätzt gespart[\\s\\S]*fünf Minuten pro Block-\\/Warnintervention als Produktschätzung/,
+            'History must distinguish measured time from estimated saved time.',
+          );`;
+          const historyNew = `requirePattern(
+            'history',
+            /Gemessene Freigabezeit[\\s\\S]*Geschätzt gespart[\\s\\S]*fünf Minuten pro Block-\\/Warnintervention als\\s+Produktschätzung/,
+            'History must distinguish measured time from estimated saved time.',
+          );`;
+
+          for (const [oldBlock, newBlock, label] of [
+            [onboardingOld, onboardingNew, 'onboarding'],
+            [wrapperOld, wrapperNew, 'release app detail wrapper'],
+            [appDetailOld, appDetailNew, 'app detail'],
+            [historyOld, historyNew, 'history'],
+          ]) {
+            if (!source.includes(oldBlock)) {
+              console.error(`Expected ${label} release-surface guard block was not found.`);
+              process.exit(1);
+            }
+            source = source.replace(oldBlock, newBlock);
+          }
+          fs.writeFileSync(checkerFile, source, 'utf8');
+
+          const strategyFile = 'docs/COMPETITIVE_PRODUCT_STRATEGY.md';
+          let strategy = fs.readFileSync(strategyFile, 'utf8');
+          const anchor = 'A roadmap/source-contract feature is never automatically a store-listing feature.';
+          const clarification = `${anchor}\n\nA roadmap feature is never a store-listing feature. Store claims require separate release evidence and approval.`;
+          if (!strategy.includes(anchor)) {
+            console.error('Expected competitive-strategy release-rule anchor was not found.');
+            process.exit(1);
+          }
+          strategy = strategy.replace(anchor, clarification);
+          fs.writeFileSync(strategyFile, strategy, 'utf8');
+          NODE
+
+      - name: Format patched files
+        run: npx prettier --write scripts/check-release-surface.ts docs/COMPETITIVE_PRODUCT_STRATEGY.md
+
+      - name: Commit release-surface repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/check-release-surface.ts docs/COMPETITIVE_PRODUCT_STRATEGY.md
+          git commit -m "fix: harden release-surface truthfulness guards"
+          git push origin HEAD:agent/release-foundation
