@@ -89,11 +89,59 @@ Recorded metadata includes:
 
 The metadata is local evidence support, not a committed approval and not a substitute for the actual artifact.
 
+## Mandatory signed-binary inspection
+
+A recorded hash alone is **not** binary inspection. The retained artifact must be inspected with the dedicated commands before `signedBinaryInspected=true` can be justified:
+
+```bash
+npm run android:inspect:candidate:release
+npm run android:inspect:candidate:bundle
+```
+
+### APK inspection
+
+The APK inspector requires Android SDK Command-line Tools and uses the real `apkanalyzer` binary to read the packaged manifest and resolved permissions from the retained APK.
+
+### AAB inspection
+
+The AAB inspector requires a reviewed local Bundletool JAR supplied explicitly through:
+
+```text
+BUNDLETOOL_JAR=/absolute/path/to/bundletool.jar
+```
+
+ScrollShield does **not** download Bundletool automatically during inspection. Tool provenance/version must be reviewed and retained separately as part of release evidence.
+
+### Fail-closed inspection rules
+
+The inspection recalculates the exact candidate SHA-256 and fails if the bytes no longer match candidate metadata. It also:
+
+- reads permissions from the actual APK/AAB manifest rather than trusting only source XML;
+- uses an explicit permission allowlist for the current Android-v1 contract;
+- fails on every unexpected binary permission until it is deliberately reviewed;
+- explicitly rejects `android.permission.INTERNET` for the current offline-v1 contract;
+- explicitly rejects advertising-ID permissions;
+- rejects a debuggable release manifest;
+- rejects cleartext-enabled release configuration;
+- checks the archive listing for known tracker/analytics/cloud markers;
+- records manifest, permission and archive outputs for review.
+
+A transitive Android library adding a permission is therefore visible as a release blocker instead of silently changing the Play/Data-Safety contract.
+
+The local inspection outputs are stored under the ignored `.scrollshield-release-candidate/` directory, including:
+
+- `<type>-inspection.json`;
+- `<type>-manifest.txt`;
+- `<type>-permissions.txt`;
+- `<type>-archive.txt`.
+
+A passed inspection report is still only one part of signed-binary evidence. A human must retain/review the report and the exact artifact before setting `signedBinaryInspected=true`.
+
 ### Stage 2 – final candidate evidence and approval
 
 All remaining evidence is collected against the retained signed candidate bytes. This includes physical/OEM testing, lifecycle, migration, battery, accessibility, Play/reviewer material and signed-binary inspection.
 
-For `signedBinaryInspected=true`, `evidence.signedBinary.reference` must identify the retained evidence **and contain the exact SHA-256 emitted by the candidate recorder**. This binds final binary evidence to the bytes that were actually inspected.
+For `signedBinaryInspected=true`, `evidence.signedBinary.reference` must identify the retained inspection evidence **and contain the exact SHA-256 emitted by the candidate recorder/inspector**. This binds final binary evidence to the bytes that were actually inspected.
 
 After all required evidence is complete, set only genuinely passed flags to `true`, fill `approvedBy` and `approvedAt`, then run:
 
@@ -103,7 +151,7 @@ npm run android:release
 npm run android:bundle
 ```
 
-The final `android:release` and `android:bundle` commands do **not** rebuild the APK/AAB. They validate the retained candidate artifact against its recorded SHA-256, byte size, source candidate, version and version code after the strict release gate has passed.
+The final `android:release` and `android:bundle` commands do **not** rebuild the APK/AAB. They require a local `status=passed` binary-inspection report and validate that report plus the retained candidate artifact against recorded SHA-256, byte size, source candidate, build HEAD, version and version code after the strict release gate has passed.
 
 ## Rebuilding invalidates binary evidence
 
@@ -113,9 +161,10 @@ If the retained artifact is rebuilt, replaced, missing, changes hash/size, or no
 
 1. treat prior signed-binary evidence as invalid for the new bytes;
 2. build and record a new signed candidate;
-3. repeat all evidence that depends on the exact binary;
-4. update candidate-bound references honestly;
-5. rerun the final gate.
+3. rerun binary inspection;
+4. repeat all other evidence that depends on the exact binary;
+5. update candidate-bound references honestly;
+6. rerun the final gate.
 
 The Google Play upload must use the exact retained AAB whose recorded hash is referenced by final binary evidence.
 
@@ -142,13 +191,15 @@ Recommended final sequence:
 5. configure the ignored local release keystore/signing properties;
 6. run `npm run android:candidate:bundle` and optionally `npm run android:candidate:release`;
 7. retain the generated candidate artifact and its recorded SHA-256 metadata without rebuilding it;
-8. perform physical/OEM, migration, lifecycle, Commitment, adaptive-friction, battery, accessibility, Play/reviewer and binary-inspection evidence against that retained candidate;
-9. place the exact retained artifact SHA-256 in `evidence.signedBinary.reference`, and complete the remaining candidate-bound evidence records only when real;
-10. set `approvedBy` and `approvedAt`;
-11. run `npm run release:gate` with Git history containing the tested candidate;
-12. run `npm run android:bundle` or `npm run android:release` to validate the retained binary identity; these commands do not rebuild;
-13. upload/distribute that exact retained validated artifact.
+8. configure/review Bundletool provenance and run `npm run android:inspect:candidate:bundle`; inspect the APK too when an APK candidate is retained;
+9. retain the passed inspection report, manifest, resolved permissions, archive listing and exact artifact hash;
+10. perform physical/OEM, migration, lifecycle, Commitment, adaptive-friction, battery, accessibility and Play/reviewer evidence against that same retained candidate;
+11. place the exact retained artifact SHA-256 in `evidence.signedBinary.reference`, identify the retained inspection evidence, and complete remaining candidate-bound records only when real;
+12. set `approvedBy` and `approvedAt`;
+13. run `npm run release:gate` with Git history containing the tested candidate;
+14. run `npm run android:bundle` or `npm run android:release` to validate the retained binary identity **and passed binary-inspection report**; these commands do not rebuild;
+15. upload/distribute that exact retained validated artifact.
 
 ## No evidence fabrication
 
-Do not place placeholder URLs, invented hashes, synthetic device results, or guessed CI run IDs into the approval manifest. A missing evidence item remains blank/false until it genuinely exists.
+Do not place placeholder URLs, invented hashes, synthetic device results, guessed CI run IDs or synthetic binary-inspection outputs into the approval manifest. A missing evidence item remains blank/false until it genuinely exists.
