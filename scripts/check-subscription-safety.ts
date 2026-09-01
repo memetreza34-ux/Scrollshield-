@@ -247,7 +247,7 @@ requirePattern(
 requirePattern(
   entitlementArchitecturePath,
   entitlementArchitecture,
-  /Google Play purchase token[\s\S]*secure ScrollShield backend[\s\S]*Google Play Developer API purchases\.subscriptionsv2\.get[\s\S]*signed ES256 bounded entitlement assertion/i,
+  /Google Play purchase token[\s\S]*secure ScrollShield backend[\s\S]*Google Play Developer API verification via purchases\.subscriptionsv2\.get[\s\S]*signed ES256 bounded entitlement assertion/i,
   'Architecture must preserve the secure purchase-token-to-signed-entitlement trust chain.',
 );
 
