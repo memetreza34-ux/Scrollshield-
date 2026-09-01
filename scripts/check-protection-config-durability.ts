@@ -40,12 +40,12 @@ requirePattern(
 forbidText('store', '.apply()', 'Start-critical config durability must never use SharedPreferences.apply().');
 requirePattern(
   'store',
-  /PreviousState[\s\S]*previousConfig[\s\S]*previousUnavailableApps[\s\S]*previousUnavailableActiveApps[\s\S]*previousGeneration[\s\S]*restorePreviousState/,
+  /PreferenceSnapshot[\s\S]*hadConfig[\s\S]*configJson[\s\S]*hadUnavailableApps[\s\S]*unavailableJson[\s\S]*hadUnavailableActiveApps[\s\S]*unavailableActiveJson[\s\S]*hadGeneration[\s\S]*generation[\s\S]*new PreferenceSnapshot\(preferences\)[\s\S]*restoreSnapshot/,
   'Candidate config write must snapshot the complete previous durable tuple for rollback.',
 );
 requirePattern(
   'store',
-  /if \(!persisted\)[\s\S]*restorePreviousState[\s\S]*rollbackPersisted[\s\S]*ProtectionConfigWriteCertaintyPolicy/,
+  /if \(persisted\)[\s\S]*boolean rollbackPersisted = restoreSnapshot\(preferences, previous\)[\s\S]*writeStateCertain = ProtectionConfigWriteCertaintyPolicy\.isCertainAfterWrite\([\s\S]*false,[\s\S]*rollbackPersisted/,
   'Failed candidate write must restore previous tuple and update certainty from rollback result.',
 );
 requirePattern(
