@@ -152,13 +152,13 @@ mustContain(
 
 mustContain(
   'statusPanel',
-  [
-    'stopLocked = false',
-    'stopActionLocked',
-    'Stop während Commitment gesperrt',
-    'Android kann den Dienst weiterhin über seine Systemoberflächen beenden',
-  ],
+  ['stopLocked = false', 'stopActionLocked', 'Stop während Commitment gesperrt'],
   'Native protection status panel must block only the in-app stop while disclosing Android system control.',
+);
+mustMatch(
+  'statusPanel',
+  /Android\s+kann den Dienst weiterhin über seine Systemoberflächen beenden/,
+  'Status panel must disclose that Android system controls remain outside Commitment.',
 );
 mustContain(
   'statusPanelTest',
@@ -198,15 +198,23 @@ mustContain(
     '24 Stunden',
     'Verbindlich starten',
     'Schutz wird geprüft…',
-    'Ziel-App wirklich installiert ist und der Android-Schutzdienst tatsächlich läuft',
     'nur mit dem nativen Android-Schutz verfügbar',
     'Aktiviere zuerst mindestens eine App',
     'Apps auswählen',
     'Apps prüfen',
     'Schutzstatus öffnen',
-    'Berechtigungen und Schutzstatus können weiterhin repariert werden',
   ],
   'Profiles commitment UI is missing readiness, recovery, or bounded activation behavior.',
+);
+mustMatch(
+  'profiles',
+  /Ziel-App wirklich installiert\s+ist und der Android-Schutzdienst tatsächlich läuft/,
+  'Profiles commitment confirmation must disclose installed-target and live-service readiness.',
+);
+mustMatch(
+  'profiles',
+  /Berechtigungen\s+und Schutzstatus können weiterhin repariert werden/,
+  'Profiles commitment UI must preserve permission and protection-status recovery.',
 );
 mustNotMatch(
   'profiles',
@@ -241,10 +249,14 @@ mustContain(
     'Backup-Import ist während Commitment gesperrt',
     'MutationObserver',
     'onChangeCapture={blockImportEvent}',
-    'Export, Datenlöschung und ein',
     'kompletter Reset bleiben verfügbar',
   ],
   'Privacy wrapper must block full import while preserving data ownership and reset exits.',
+);
+mustMatch(
+  'privacy',
+  /Export, Datenlöschung und\s+ein kompletter Reset bleiben verfügbar/,
+  'Privacy wrapper must preserve export, deletion, and full-reset exits during Commitment.',
 );
 mustContain(
   'privacyTest',
@@ -281,10 +293,14 @@ mustContain(
     'not tamper-proof',
     'export stays available',
     'import is temporarily disabled',
-    'not part of a normal long-term ScrollShield backup',
     'purchase, restore, refund/revocation, offline entitlement, and downgrade behavior',
   ],
   'Commitment documentation is missing activation, stop/recovery, reset, anti-bypass, backup, or subscription constraints.',
+);
+mustMatch(
+  'contract',
+  /\*{0,2}not\*{0,2} part of a normal long-term ScrollShield backup/,
+  'Commitment documentation must keep the temporary lock out of normal long-term backups.',
 );
 mustContain(
   'matrix',

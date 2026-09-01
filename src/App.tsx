@@ -373,6 +373,10 @@ export default function App() {
   const resetApp = async () => {
     if (NativeProtection.isAvailable()) {
       try {
+        await NativeProtection.stop({
+          code: 'factory_reset',
+          message: 'Der Android-Schutz wurde wegen eines vollständigen App-Resets gestoppt',
+        });
         await NativeProtection.factoryReset();
       } catch (error) {
         console.error('Failed to clear native protection data during app reset', error);

@@ -156,7 +156,7 @@ describe('App commitment activation', () => {
     expect(localStorage.getItem('scrollshield_commitment_lock_v1')).toBeNull();
   });
 
-  it('clears native protection data before web state and commitment on full reset', async () => {
+  it('stops native protection with a deliberate factory-reset reason and clears commitment on full reset', async () => {
     expect(saveCommitmentLock(createCommitmentLock(480, Date.now()))).toBe(true);
 
     render(<App />);
@@ -171,7 +171,12 @@ describe('App commitment activation', () => {
 
     await waitFor(() => expect(factoryResetMock).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole('heading', { name: 'ScrollShield' })).toBeInTheDocument();
-    expect(stopMock).not.toHaveBeenCalledWith(expect.objectContaining({ code: 'factory_reset' }));
+    expect(stopMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'factory_reset',
+        message: expect.stringMatching(/vollständigen App-Resets/),
+      }),
+    );
     expect(localStorage.getItem('scrollshield_commitment_lock_v1')).toBeNull();
     await waitFor(() => {
       expect(Object.keys(localStorage).filter((key) => key.startsWith('scrollshield_'))).toEqual([]);
