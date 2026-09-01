@@ -31,7 +31,7 @@ requireText(listingPath, listing, /## Keywords/i, 'Missing keyword section.');
 requireText(listingPath, listing, /## Screenshot-Texte/i, 'Missing screenshot text section.');
 requireText(listingPath, listing, /## Review Notes - Apple/i, 'Missing Apple review notes.');
 requireText(listingPath, listing, /## Review Notes - Google Play/i, 'Missing Google Play review notes.');
-requireText(listingPath, listing, /Werkzeug zur Selbstkontrolle/i, 'Missing self-control positioning.');
+requireText(listingPath, listing, /Werkzeug zur\s+Selbstkontrolle/i, 'Missing self-control positioning.');
 requireText(
   listingPath,
   listing,
