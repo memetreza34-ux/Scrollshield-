@@ -105,7 +105,7 @@ secure ScrollShield backend
 consume challenge exactly once
 verify installation public-key fingerprint + ES256 challenge signature
 server-side Play Integrity decode and verdict checks
-Google Play Developer API purchases.subscriptionsv2.get
+Google Play Developer API verification via purchases.subscriptionsv2.get
 server-side lifecycle / product / replay / replacement-token checks
         ↓
 signed ES256 bounded entitlement assertion

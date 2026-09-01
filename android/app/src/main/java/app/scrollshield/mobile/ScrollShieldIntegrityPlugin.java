@@ -23,7 +23,7 @@ public class ScrollShieldIntegrityPlugin extends Plugin {
     }
 
     /**
-     * Requests a Play Integrity token for a nonce issued by the secure ScrollShield backend.
+     * Requests a Play Integrity token for a server-issued base64url nonce from the secure ScrollShield backend.
      *
      * The client deliberately does not generate the challenge itself and never decodes or
      * interprets the returned token. The opaque token must be sent back to the backend, which
