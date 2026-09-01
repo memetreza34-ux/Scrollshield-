@@ -67,6 +67,8 @@
     "android:build": "tsx scripts/run-gradle.ts assembleDebug",
     "android:candidate:release": "npm run release:candidate-gate && npm run check:android-signing && tsx scripts/run-gradle.ts assembleRelease && tsx scripts/record-release-candidate.ts apk",
     "android:candidate:bundle": "npm run release:candidate-gate && npm run check:android-signing && tsx scripts/run-gradle.ts bundleRelease && tsx scripts/record-release-candidate.ts bundle",
+    "android:inspect:candidate:release": "tsx scripts/inspect-release-candidate.ts apk",
+    "android:inspect:candidate:bundle": "tsx scripts/inspect-release-candidate.ts bundle",
     "android:release": "npm run release:gate && tsx scripts/check-release-candidate-artifact.ts apk",
     "android:bundle": "npm run release:gate && tsx scripts/check-release-candidate-artifact.ts bundle",
     "verify:android": "tsx scripts/run-gradle.ts testDebugUnitTest assembleDebug --no-daemon --stacktrace",
