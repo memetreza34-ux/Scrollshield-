@@ -165,7 +165,7 @@ Erzwinge Candidate-Commit `false` und Rollback-Commit `false`. Diagnose muss `Co
 Erwartung:
 
 ```text
-Zeit vor generationBoundaryAt → ausschließlich Rule-ID A
+Zeit vor generationBoundaryAt → ausschließlich previousRule.id aus G1 (im Szenario Rule-ID A)
 Zeit nach generationBoundaryAt → ausschließlich G2-Regel/Rule-ID B, sofern unter G2 freigegeben
 keine Vor-G2-Zeit in einem ausschließlich G2 gehörenden Bucket
 keine doppelte Zählung über der Grenze
