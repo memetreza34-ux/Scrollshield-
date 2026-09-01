@@ -236,8 +236,14 @@ requireMatch(
 requireMatch(
   servicePath,
   service,
-  /ProtectionRulePolicy\.isAntiBingeBlocked[\s\S]*ProtectionRulePolicy\.isAntiBingeWarning/,
-  'Native Anti-Binge enforcement must execute the JUnit-tested rule policy.',
+  /ProtectionRulePolicy\.isAntiBingeBlocked/,
+  'Native Anti-Binge blocking must execute the JUnit-tested rule policy.',
+);
+requireMatch(
+  servicePath,
+  service,
+  /ProtectionRulePolicy\.isAntiBingeWarning/,
+  'Native Anti-Binge warning must execute the JUnit-tested rule policy.',
 );
 requireMatch(
   servicePath,
