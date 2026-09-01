@@ -1,0 +1,66 @@
+name: Fix Lifecycle Guard
+
+on:
+  push:
+    branches:
+      - agent/release-foundation
+    paths:
+      - .github/workflows/fix-lifecycle-guard.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: agent/release-foundation
+          fetch-depth: 0
+
+      - name: Repair durable-generation lifecycle guard
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const file = 'scripts/check-protection-lifecycle-diagnostics.ts';
+          const source = fs.readFileSync(file, 'utf8');
+          const oldBlock = `requirePattern(
+            'bridge',
+            /CONFIG_GENERATION_PATTERN[\\s\\S]*syncCommittedConfig[\\s\\S]*expectedConfigGeneration: synced\\.configGeneration/,
+            'Bridge must bind normal/recovery starts to durable config generation.',
+          );`;
+          const newBlock = `requirePattern(
+            'bridge',
+            /CONFIG_GENERATION_PATTERN[\\s\\S]*syncCommittedConfig[\\s\\S]*async startCommitted[\\s\\S]*expectedConfigGeneration: configGeneration/,
+            'Bridge must bind native start options to a normalized durable config generation.',
+          );
+          requirePattern(
+            'bridge',
+            /async start\\([\\s\\S]*const synced = await this\\.syncCommitted\\(appsConfig, focusMode\\)[\\s\\S]*startCommitted\\(synced\\.configGeneration\\)/,
+            'Normal protection start must reuse the exact durable config generation returned by sync.',
+          );
+          requirePattern(
+            'bridge',
+            /recoverAfterProcessLoss\\([\\s\\S]*const synced = await this\\.syncCommitted\\(appsConfig, focusMode\\)[\\s\\S]*startCommitted\\(synced\\.configGeneration, before\\)/,
+            'Process-loss recovery must reuse the exact durable config generation returned by sync.',
+          );`;
+          if (!source.includes(oldBlock)) {
+            console.error('Expected legacy durable-generation lifecycle guard block was not found.');
+            process.exit(1);
+          }
+          fs.writeFileSync(file, source.replace(oldBlock, newBlock), 'utf8');
+          NODE
+
+      - name: Format patched checker
+        run: npx prettier --write scripts/check-protection-lifecycle-diagnostics.ts
+
+      - name: Commit lifecycle guard repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/check-protection-lifecycle-diagnostics.ts
+          git commit -m "fix: align lifecycle guard with committed start API"
+          git push origin HEAD:agent/release-foundation
