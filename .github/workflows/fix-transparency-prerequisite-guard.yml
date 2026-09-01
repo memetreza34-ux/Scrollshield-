@@ -1,0 +1,46 @@
+name: Fix Transparency Prerequisite Guard
+
+on:
+  push:
+    branches:
+      - agent/release-foundation
+    paths:
+      - .github/workflows/fix-transparency-prerequisite-guard.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: agent/release-foundation
+          fetch-depth: 0
+
+      - name: Align transparency guard with centralized prerequisites
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/check-protection-transparency.ts')
+          source = path.read_text()
+          old = "/!nativeStatus\\?\\.usageAccess \\|\\| !nativeStatus\\.overlay \\|\\| !nativeStatus\\.notifications/"
+          new = "/getMissingAndroidProtectionPrerequisites\\(nativeStatus\\)[\\s\\S]*missingPrerequisites\\.length > 0[\\s\\S]*return;[\\s\\S]*NativeProtection\\.start/"
+          if old not in source:
+              raise SystemExit('Expected legacy inline prerequisite guard was not found.')
+          path.write_text(source.replace(old, new, 1))
+          PY
+
+      - name: Format checker
+        run: npx prettier --write scripts/check-protection-transparency.ts
+
+      - name: Commit transparency guard repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/check-protection-transparency.ts
+          git commit -m "fix: align transparency guard with prerequisite helper"
+          git push origin HEAD:agent/release-foundation
