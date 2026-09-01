@@ -35,7 +35,7 @@ requirePattern(
 );
 requirePattern(
   'bridge',
-  /lastStartRequestAt > latestConfirmedBoundary[\s\S]*return 'start-pending'[\s\S]*return 'start-interrupted'[\s\S]*lastStartAt > 0[\s\S]*lastStartAt > status\.lastStopAt[\s\S]*return 'unclean-process-stop'/,
+  /lastStartRequestAt > latestConfirmedBoundary[\s\S]*START_CONFIRMATION_GRACE_MS[\s\S]*'start-pending'[\s\S]*'start-interrupted'[\s\S]*lastStartAt > 0[\s\S]*lastStartAt > status\.lastStopAt[\s\S]*return 'unclean-process-stop'/,
   'Unconfirmed request classification must precede confirmed process-loss classification.',
 );
 requirePattern(
