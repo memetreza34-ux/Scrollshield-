@@ -238,3 +238,5 @@ Still required as real implementation/evidence:
 A feature may appear in a paid comparison table only when it is implemented, tested on the exact candidate build, included in release documentation and not contradicted by platform limitations.
 
 A roadmap/source-contract feature is never automatically a store-listing feature.
+
+A roadmap feature is never a store-listing feature. Store claims require separate release evidence and approval.

@@ -111,14 +111,13 @@ requirePattern(
 // Onboarding/store-facing first-run copy must be whole-app-only and explicit.
 requireText(
   'onboarding',
-  [
-    'Ganze Apps bewusst öffnen',
-    'Version 1 schützt die gesamte ausgewählte App',
-    'einzelne Reels, Shorts oder Feed-Bereiche werden nicht separat erkannt',
-    'getReleaseProfileConfig',
-    'updatedAt',
-  ],
+  ['Ganze Apps bewusst öffnen', 'getReleaseProfileConfig', 'updatedAt'],
   'Release onboarding is missing whole-app scope or safe preset application.',
+);
+requirePattern(
+  'onboarding',
+  /Version 1 schützt die gesamte ausgewählte App[\s\S]*einzelne\s+Reels,\s+Shorts oder\s+Feed-Bereiche werden nicht separat erkannt/,
+  'Release onboarding must disclose whole-app scope and unsupported sub-screen detection.',
 );
 rejectPattern(
   'onboarding',
@@ -173,8 +172,13 @@ requirePattern(
 );
 requirePattern(
   'releaseAppDetail',
-  /isLegacyUntouchedDefaultConfig[\s\S]*createReleaseDefaultAppConfig[\s\S]*updatedAt: Date\.now\(\)/,
-  'App-detail release wrapper must normalize untouched defaults and mark deliberate edits.',
+  /isLegacyUntouchedDefaultConfig[\s\S]*createReleaseDefaultAppConfig/,
+  'App-detail release wrapper must normalize untouched legacy defaults before rendering.',
+);
+requirePattern(
+  'releaseAppDetail',
+  /updateReleaseState[\s\S]*updatedAt: Date\.now\(\)/,
+  'App-detail release wrapper must mark deliberate edits.',
 );
 requirePattern(
   'releaseAppDetailTest',
@@ -185,8 +189,13 @@ requirePattern(
 // App detail itself must only expose Android-v1 controls.
 requirePattern(
   'appDetail',
-  /Version 1 schützt die gesamte ausgewählte App[\s\S]*Einzelne Reels-, Shorts- oder Feed-Bereiche werden nicht separat erkannt/,
-  'App detail must disclose whole-app-only v1 enforcement.',
+  /Version 1 schützt die gesamte ausgewählte App/,
+  'App detail must disclose whole-app v1 enforcement.',
+);
+requirePattern(
+  'appDetail',
+  /Einzelne\s+Reels-,\s+Shorts- oder\s+Feed-Bereiche werden nicht separat erkannt/,
+  'App detail must disclose unsupported sub-screen detection.',
 );
 requireText(
   'appDetail',
@@ -302,7 +311,7 @@ requirePattern(
 );
 requirePattern(
   'history',
-  /Gemessene Freigabezeit[\s\S]*Geschätzt gespart[\s\S]*fünf Minuten pro Block-\/Warnintervention als Produktschätzung/,
+  /Gemessene Freigabezeit[\s\S]*Geschätzt gespart[\s\S]*fünf Minuten pro Block-\/Warnintervention als\s+Produktschätzung/,
   'History must distinguish measured time from estimated saved time.',
 );
 requirePattern(
