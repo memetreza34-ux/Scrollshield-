@@ -61,7 +61,7 @@ for (const required of [
   'syncCommitted',
   'startCommitted',
   'hasNewTerminalEvidenceSince',
-  'native preflight owns fail-closed stop evidence',
+  'TARGET_APP_MISSING_STOP_REASON',
   'preserves a newer manual stop that wins while process-loss recovery is in flight',
   'returns fresh native target_app_missing evidence instead of writing a TypeScript stop',
   'rethrows a native start failure when no newer terminal evidence was persisted',
