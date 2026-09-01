@@ -171,7 +171,7 @@ if (startMethodStart < 0 || startHelperStart <= startMethodStart) {
     'Notifications are required so active protection and its stop action remain visible',
     'At least one installed active protected app is required',
   ]) {
-    if (new RegExp(`call\\.reject\\(\"${bareReject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\"`).test(startMethodBody)) {
+    if (new RegExp(`call\\.reject\\("${bareReject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`).test(startMethodBody)) {
       findings.push(
         `${pluginPath}: startProtectionService must not directly reject prerequisite '${bareReject}' without atomic persistence.`,
       );
