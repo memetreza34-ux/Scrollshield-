@@ -54,11 +54,7 @@ describe('DebugScreen native diagnostics', () => {
 
   it('renders build, config durability, notification, and protection lifecycle diagnostics', async () => {
     render(
-      <DebugScreen
-        state={{ ...DEFAULT_STATE, operatingSystem: 'android' }}
-        updateState={vi.fn()}
-        navigate={vi.fn()}
-      />,
+      <DebugScreen state={{ ...DEFAULT_STATE, operatingSystem: 'android' }} updateState={vi.fn()} navigate={vi.fn()} />,
     );
 
     await waitFor(() => expect(getSnapshotMock).toHaveBeenCalledTimes(1));

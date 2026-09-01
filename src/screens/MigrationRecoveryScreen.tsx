@@ -67,8 +67,8 @@ export function MigrationRecoveryScreen({ onRetry }: { onRetry: () => boolean })
             <div>
               <h2 className="font-bold">Jetzt nicht zurücksetzen oder deinstallieren</h2>
               <p className="mt-1 text-sm leading-5 text-zinc-400">
-                Erstelle zuerst die Rohdatensicherung. Sie enthält alle vorhandenen ScrollShield-Schlüssel einschließlich
-                alter Quellen, Archive und einer eventuell unterbrochenen Transaktion.
+                Erstelle zuerst die Rohdatensicherung. Sie enthält alle vorhandenen ScrollShield-Schlüssel
+                einschließlich alter Quellen, Archive und einer eventuell unterbrochenen Transaktion.
               </p>
             </div>
           </div>

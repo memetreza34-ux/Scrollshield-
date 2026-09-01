@@ -63,7 +63,10 @@ const fail = (
 
 const decodeBase64Url = (value: string): Uint8Array | null => {
   if (!value || !BASE64URL_PATTERN.test(value)) return null;
-  const padded = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+  const padded = value
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .padEnd(Math.ceil(value.length / 4) * 4, '=');
   try {
     const decoded = globalThis.atob(padded);
     return Uint8Array.from(decoded, (char) => char.charCodeAt(0));
@@ -129,8 +132,7 @@ export const verifySubscriptionEntitlementAssertion = async (
   compactJws: string | null | undefined,
   expectedInstallationKeyId: string,
   nowMs = Date.now(),
-  trustedKeys: readonly SubscriptionEntitlementVerificationKey[] =
-    SUBSCRIPTION_ENTITLEMENT_VERIFICATION_KEYS,
+  trustedKeys: readonly SubscriptionEntitlementVerificationKey[] = SUBSCRIPTION_ENTITLEMENT_VERIFICATION_KEYS,
 ): Promise<SubscriptionEntitlementVerificationResult> => {
   if (!compactJws) return fail('missing-assertion');
   if (!isBoundedIdentifier(expectedInstallationKeyId, 32, 128)) return fail('wrong-installation');
@@ -146,22 +148,14 @@ export const verifySubscriptionEntitlementAssertion = async (
   const signature = decodeBase64Url(encodedSignature);
   if (!header || !payload || !signature) return fail('malformed-jws');
 
-  if (
-    header.alg !== 'ES256' ||
-    header.typ !== ASSERTION_TYPE ||
-    !isBoundedIdentifier(header.kid, 16, 128)
-  ) {
+  if (header.alg !== 'ES256' || header.typ !== ASSERTION_TYPE || !isBoundedIdentifier(header.kid, 16, 128)) {
     return fail('unsupported-header');
   }
 
   const verificationKey = findVerificationKey(header.kid, trustedKeys);
   if (!verificationKey) return fail('unknown-key', header.kid);
 
-  const signatureValid = await verifyEs256(
-    `${encodedHeader}.${encodedPayload}`,
-    signature,
-    verificationKey,
-  );
+  const signatureValid = await verifyEs256(`${encodedHeader}.${encodedPayload}`, signature, verificationKey);
   if (!signatureValid) return fail('invalid-signature', header.kid);
 
   if (

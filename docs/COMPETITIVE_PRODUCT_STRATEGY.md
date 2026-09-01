@@ -12,14 +12,14 @@ The product promise for version one remains whole-app protection on supported An
 
 ## Current Competitor Pattern
 
-| Product | Free / entry value | Paid-value pattern | Strategic lesson for ScrollShield |
-| --- | --- | --- | --- |
-| one sec | One-app breathing interruption | Unlimited apps plus additional intervention/automation features. | A permanent one-app Free tier is commercially credible when paid tiers add real capacity and depth. |
-| Jomo | Limited sessions/actions/budgets and reports | More sessions/actions, Strict Mode, additional budgets and advanced controls. | Paid value can scale control depth without making the free product useless. |
-| Freedom | Basic blocking | Scheduling, recurring/advance sessions, Locked Mode and longer sessions. | Automation and commitment are stronger premium value than merely raising a daily-minute cap. |
-| AppBlock | Limited Quick Block/schedules/Strict Mode/statistics | More/unlimited controls, anti-bypass depth and advanced statistics. | Stronger rule depth and anti-bypass workflows are subscription-grade value. |
-| ScreenZen | Broad free blocking/delay/limit/schedule functionality | Donation-supported core rather than a normal software subscription. | Basic delays/limits alone are not enough to justify ScrollShield Max. |
-| Opal | Focus rules/timers/progress feedback | More rules, advanced timers and stronger automation. | Polished automation and measurable progress increase paid value, but pricing should follow proven reliability. |
+| Product   | Free / entry value                                     | Paid-value pattern                                                            | Strategic lesson for ScrollShield                                                                              |
+| --------- | ------------------------------------------------------ | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| one sec   | One-app breathing interruption                         | Unlimited apps plus additional intervention/automation features.              | A permanent one-app Free tier is commercially credible when paid tiers add real capacity and depth.            |
+| Jomo      | Limited sessions/actions/budgets and reports           | More sessions/actions, Strict Mode, additional budgets and advanced controls. | Paid value can scale control depth without making the free product useless.                                    |
+| Freedom   | Basic blocking                                         | Scheduling, recurring/advance sessions, Locked Mode and longer sessions.      | Automation and commitment are stronger premium value than merely raising a daily-minute cap.                   |
+| AppBlock  | Limited Quick Block/schedules/Strict Mode/statistics   | More/unlimited controls, anti-bypass depth and advanced statistics.           | Stronger rule depth and anti-bypass workflows are subscription-grade value.                                    |
+| ScreenZen | Broad free blocking/delay/limit/schedule functionality | Donation-supported core rather than a normal software subscription.           | Basic delays/limits alone are not enough to justify ScrollShield Max.                                          |
+| Opal      | Focus rules/timers/progress feedback                   | More rules, advanced timers and stronger automation.                          | Polished automation and measurable progress increase paid value, but pricing should follow proven reliability. |
 
 ## Sources Used for This Snapshot
 
@@ -49,17 +49,17 @@ Max  → unlimited supported protected apps
 
 Additional planned capacity:
 
-| Capability | Free | Plus | Max |
-| --- | ---: | ---: | ---: |
-| Profiles | 1 | 3 | Unlimited |
-| Recurring schedules | 1 | 5 | Unlimited |
-| Local insight window | 7 days | 30 days | 90 days |
-| Advanced schedules | — | Yes | Yes |
-| Advanced Anti-Binge | — | Yes | Yes |
-| Custom emergency friction | — | Yes | Yes |
-| Advanced Commitment Mode | — | — | Yes |
-| Adaptive Friction | — | — | Yes |
-| Profile automation | — | — | Yes |
+| Capability                |   Free |    Plus |       Max |
+| ------------------------- | -----: | ------: | --------: |
+| Profiles                  |      1 |       3 | Unlimited |
+| Recurring schedules       |      1 |       5 | Unlimited |
+| Local insight window      | 7 days | 30 days |   90 days |
+| Advanced schedules        |      — |     Yes |       Yes |
+| Advanced Anti-Binge       |      — |     Yes |       Yes |
+| Custom emergency friction |      — |     Yes |       Yes |
+| Advanced Commitment Mode  |      — |       — |       Yes |
+| Adaptive Friction         |      — |       — |       Yes |
+| Profile automation        |      — |       — |       Yes |
 
 `Unlimited` means no subscription-count limit inside technically supported targets. It does not mean every app/platform/account is supported.
 
@@ -159,11 +159,11 @@ Do not publish pricing until Play Billing, secure backend verification, restore 
 
 Current internal hypothesis:
 
-| Plan | Monthly | Annual |
-| --- | ---: | ---: |
-| Free | €0 | €0 |
+| Plan |     Monthly |       Annual |
+| ---- | ----------: | -----------: |
+| Free |          €0 |           €0 |
 | Plus | about €2.99 | about €19.99 |
-| Max | about €4.99 | about €29.99 |
+| Max  | about €4.99 | about €29.99 |
 
 This intentionally keeps entry pricing competitive while product reliability and paid depth are still being proven.
 

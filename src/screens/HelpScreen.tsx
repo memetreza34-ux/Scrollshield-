@@ -4,19 +4,14 @@ import type { ReactNode } from 'react';
 import { Header } from '../components/ui';
 import type { AppState, Screen } from '../types';
 
-function HelpCard({
-  icon: Icon,
-  title,
-  children,
-}: {
-  icon: typeof Shield;
-  title: string;
-  children: ReactNode;
-}) {
+function HelpCard({ icon: Icon, title, children }: { icon: typeof Shield; title: string; children: ReactNode }) {
   return (
     <section className="rounded-[1.5rem] border border-zinc-800/50 bg-zinc-900/70 p-5">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-zinc-400" aria-hidden="true">
+        <div
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-zinc-400"
+          aria-hidden="true"
+        >
           <Icon size={19} />
         </div>
         <div className="min-w-0">
@@ -104,9 +99,9 @@ export function HelpScreen({ state, navigate }: { state: AppState; navigate: (sc
         <section className="rounded-[1.5rem] border border-emerald-500/20 bg-emerald-500/5 p-5">
           <h2 className="font-semibold text-emerald-300">Datenschutz und Datenrettung</h2>
           <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-            Regeln, Schutzereignisse, Statistiken und Notfallbegründungen bleiben lokal. Alte V0.7-Daten werden vor einer
-            erfolgreichen Migration bytegenau archiviert. Export, Import und Recovery stehen unter „Datenschutz & lokale
-            Daten“ zur Verfügung.
+            Regeln, Schutzereignisse, Statistiken und Notfallbegründungen bleiben lokal. Alte V0.7-Daten werden vor
+            einer erfolgreichen Migration bytegenau archiviert. Export, Import und Recovery stehen unter „Datenschutz &
+            lokale Daten“ zur Verfügung.
           </p>
           <button
             type="button"

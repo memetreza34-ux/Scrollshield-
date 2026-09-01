@@ -35,10 +35,7 @@ const plugin = sources.get(pluginPath);
 if (!plugin) {
   findings.push(`${pluginPath}: Native protection plugin is missing.`);
 } else {
-  const directDisableCount = countMatches(
-    plugin,
-    /\bsetProtectionEnabled\s*\([^;]*?false\s*\)\s*;/g,
-  );
+  const directDisableCount = countMatches(plugin, /\bsetProtectionEnabled\s*\([^;]*?false\s*\)\s*;/g);
   if (directDisableCount !== 2) {
     findings.push(
       `${pluginPath}: Expected exactly two direct disable fallback writes inside the centralized system/terminal wrappers, found ${directDisableCount}.`,

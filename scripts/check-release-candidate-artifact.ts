@@ -22,12 +22,16 @@ const HASH_PATTERN = /^[0-9a-f]{64}$/;
 
 if (!existsSync(metadataPath)) {
   console.error(`Final release artifact check failed: candidate metadata missing at ${metadataPath}.`);
-  console.error(`Build and record the signed candidate first with android:candidate:${type === 'apk' ? 'release' : 'bundle'}.`);
+  console.error(
+    `Build and record the signed candidate first with android:candidate:${type === 'apk' ? 'release' : 'bundle'}.`,
+  );
   process.exit(1);
 }
 if (!existsSync(inspectionPath)) {
   console.error(`Final release artifact check failed: binary inspection report missing at ${inspectionPath}.`);
-  console.error(`Inspect the retained candidate first with android:inspect:candidate:${type === 'apk' ? 'release' : 'bundle'}.`);
+  console.error(
+    `Inspect the retained candidate first with android:inspect:candidate:${type === 'apk' ? 'release' : 'bundle'}.`,
+  );
   process.exit(1);
 }
 
@@ -87,11 +91,23 @@ const requireCondition = (condition: boolean, message: string) => {
 
 requireCondition(metadata.schemaVersion === 1, 'Candidate artifact metadata schemaVersion must equal 1.');
 requireCondition(metadata.type === type, `Candidate artifact metadata type must equal ${type}.`);
-requireCondition(metadata.artifactPath === expectedArtifactPath, `Candidate artifact path must be ${expectedArtifactPath}.`);
-requireCondition(SHA_PATTERN.test(metadataCandidateSha), 'Candidate artifact metadata must contain a valid source SHA.');
-requireCondition(SHA_PATTERN.test(metadataBuildHeadSha), 'Candidate artifact metadata must contain a valid build HEAD SHA.');
+requireCondition(
+  metadata.artifactPath === expectedArtifactPath,
+  `Candidate artifact path must be ${expectedArtifactPath}.`,
+);
+requireCondition(
+  SHA_PATTERN.test(metadataCandidateSha),
+  'Candidate artifact metadata must contain a valid source SHA.',
+);
+requireCondition(
+  SHA_PATTERN.test(metadataBuildHeadSha),
+  'Candidate artifact metadata must contain a valid build HEAD SHA.',
+);
 requireCondition(HASH_PATTERN.test(metadataSha256), 'Candidate artifact metadata must contain a SHA-256 hash.');
-requireCondition(metadataCandidateSha === approval.candidateCommitSha, 'Retained artifact belongs to a different source candidate.');
+requireCondition(
+  metadataCandidateSha === approval.candidateCommitSha,
+  'Retained artifact belongs to a different source candidate.',
+);
 requireCondition(
   metadata.versionName === approval.candidateVersion &&
     metadata.versionName === packageJson.version &&
@@ -106,12 +122,27 @@ requireCondition(
 requireCondition(inspection.schemaVersion === 1, 'Binary inspection report schemaVersion must equal 1.');
 requireCondition(inspection.status === 'passed', 'Binary inspection report must have status=passed.');
 requireCondition(inspection.type === type, `Binary inspection report type must equal ${type}.`);
-requireCondition(inspection.artifactPath === expectedArtifactPath, 'Binary inspection report points to a different artifact path.');
-requireCondition(inspection.candidateCommitSha === metadataCandidateSha, 'Binary inspection belongs to a different source candidate.');
-requireCondition(inspection.buildHeadSha === metadataBuildHeadSha, 'Binary inspection belongs to a different build HEAD.');
+requireCondition(
+  inspection.artifactPath === expectedArtifactPath,
+  'Binary inspection report points to a different artifact path.',
+);
+requireCondition(
+  inspection.candidateCommitSha === metadataCandidateSha,
+  'Binary inspection belongs to a different source candidate.',
+);
+requireCondition(
+  inspection.buildHeadSha === metadataBuildHeadSha,
+  'Binary inspection belongs to a different build HEAD.',
+);
 requireCondition(inspection.sha256 === metadataSha256, 'Binary inspection belongs to different artifact bytes.');
-requireCondition(Array.isArray(inspection.permissions), 'Binary inspection report must contain the resolved permission list.');
-requireCondition(Array.isArray(inspection.findings) && inspection.findings.length === 0, 'Passed binary inspection must contain zero findings.');
+requireCondition(
+  Array.isArray(inspection.permissions),
+  'Binary inspection report must contain the resolved permission list.',
+);
+requireCondition(
+  Array.isArray(inspection.findings) && inspection.findings.length === 0,
+  'Passed binary inspection must contain zero findings.',
+);
 
 requireCondition(approval.signedBinaryInspected === true, 'Final artifact use requires signedBinaryInspected=true.');
 requireCondition(
@@ -140,9 +171,18 @@ async function sha256File(file: string): Promise<string> {
 
 if (existsSync(expectedArtifactPath)) {
   const [actualHash, artifactStat] = await Promise.all([sha256File(expectedArtifactPath), stat(expectedArtifactPath)]);
-  requireCondition(actualHash === metadataSha256, 'Retained candidate artifact bytes changed after recording/inspection.');
-  requireCondition(actualHash === inspection.sha256, 'Retained candidate artifact bytes changed after binary inspection.');
-  requireCondition(artifactStat.size === metadata.sizeBytes, 'Retained candidate artifact size changed after recording.');
+  requireCondition(
+    actualHash === metadataSha256,
+    'Retained candidate artifact bytes changed after recording/inspection.',
+  );
+  requireCondition(
+    actualHash === inspection.sha256,
+    'Retained candidate artifact bytes changed after binary inspection.',
+  );
+  requireCondition(
+    artifactStat.size === metadata.sizeBytes,
+    'Retained candidate artifact size changed after recording.',
+  );
 }
 
 if (SHA_PATTERN.test(approval.candidateCommitSha)) {
@@ -171,7 +211,10 @@ if (SHA_PATTERN.test(approval.candidateCommitSha)) {
 const status = spawnSync('git', ['status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8' });
 requireCondition(status.status === 0, 'Unable to inspect current tracked working tree.');
 if (status.status === 0) {
-  requireCondition(status.stdout.trim().length === 0, 'Final artifact validation requires a clean tracked working tree.');
+  requireCondition(
+    status.stdout.trim().length === 0,
+    'Final artifact validation requires a clean tracked working tree.',
+  );
 }
 
 if (findings.length > 0) {
@@ -180,7 +223,9 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log(`Final ${type} artifact identity and binary inspection passed for candidate ${approval.candidateCommitSha}.`);
+console.log(
+  `Final ${type} artifact identity and binary inspection passed for candidate ${approval.candidateCommitSha}.`,
+);
 console.log(`Retained artifact: ${expectedArtifactPath}`);
 console.log(`SHA-256: ${metadataSha256}`);
 console.log(`Inspection report: ${inspectionPath}`);

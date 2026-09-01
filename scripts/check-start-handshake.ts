@@ -123,7 +123,11 @@ requirePattern(
   /isCurrentNotificationStopGeneration[\s\S]*actionStartRequestAt == serviceStartRequestAt[\s\S]*actionStartRequestAt == latestStartRequestAt/,
   'Stale notification stop actions must not stop a newer lifecycle generation.',
 );
-requirePattern('lifecyclePolicyTest', /notificationStopIsAcceptedOnlyForCurrentLifecycleGeneration/, 'Missing notification-generation JUnit.');
+requirePattern(
+  'lifecyclePolicyTest',
+  /notificationStopIsAcceptedOnlyForCurrentLifecycleGeneration/,
+  'Missing notification-generation JUnit.',
+);
 requirePattern('dispatchSpec', /DISPATCH-05/, 'Dispatch spec must retain stale-notification race evidence.');
 
 requirePattern(
@@ -157,24 +161,44 @@ requirePattern(
   'App integration test must lock exact stale-recovery snapshot forwarding.',
 );
 
-requirePattern('health', /case 'start-pending':[\s\S]*case 'start-interrupted':[\s\S]*case 'unclean-process-stop'/, 'User presentation must keep pending/interrupted/process-loss states distinct.');
-requirePattern('statusPanel', /startPending = status\?\.health === 'start-pending'[\s\S]*startRetry = status\?\.health === 'start-interrupted'/, 'Status panel must keep pending duplicate suppression separate from retry.');
+requirePattern(
+  'health',
+  /case 'start-pending':[\s\S]*case 'start-interrupted':[\s\S]*case 'unclean-process-stop'/,
+  'User presentation must keep pending/interrupted/process-loss states distinct.',
+);
+requirePattern(
+  'statusPanel',
+  /startPending = status\?\.health === 'start-pending'[\s\S]*startRetry = status\?\.health === 'start-interrupted'/,
+  'Status panel must keep pending duplicate suppression separate from retry.',
+);
 
 for (const method of [
   'startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence',
   'terminalStopWinsAgainstDelayedStartConfirmationWithoutOverwrite',
   'restartRequestAdvancesBeyondLatestStopBoundary',
 ]) {
-  requirePattern('instrumentation', new RegExp(`void\\s+${method}\\s*\\(`), `Android lifecycle instrumentation is missing ${method}.`);
+  requirePattern(
+    'instrumentation',
+    new RegExp(`void\\s+${method}\\s*\\(`),
+    `Android lifecycle instrumentation is missing ${method}.`,
+  );
 }
 for (const method of [
   'durableConfigGenerationBindsStartRequestAndConfirmation',
   'staleConfigGenerationCannotCreateStartRequest',
   'configChangeBeforeConfirmationFailsClosedWithoutConfirmingOldRequest',
 ]) {
-  requirePattern('configInstrumentation', new RegExp(`void\\s+${method}\\s*\\(`), `Config instrumentation is missing ${method}.`);
+  requirePattern(
+    'configInstrumentation',
+    new RegExp(`void\\s+${method}\\s*\\(`),
+    `Config instrumentation is missing ${method}.`,
+  );
 }
-requirePattern('startSpec', /lastStartRequestAt[\s\S]*lastStartAt[\s\S]*lastStopAt/, 'Start-handshake spec must document lifecycle evidence boundaries.');
+requirePattern(
+  'startSpec',
+  /lastStartRequestAt[\s\S]*lastStartAt[\s\S]*lastStopAt/,
+  'Start-handshake spec must document lifecycle evidence boundaries.',
+);
 
 if (findings.length > 0) {
   console.log('Start handshake check failed:\n');

@@ -4,16 +4,16 @@ import { motion } from 'motion/react';
 import { Header, Switch } from '../components/ui';
 import { NativeProtection } from '../lib/nativeProtection';
 import { isCommitmentLockActive, type CommitmentLock } from '../lib/commitmentLock';
-import {
-  createReleaseDefaultAppConfig,
-  isLegacyUntouchedDefaultConfig,
-} from '../lib/releaseProfiles';
+import { createReleaseDefaultAppConfig, isLegacyUntouchedDefaultConfig } from '../lib/releaseProfiles';
 import { SUPPORTED_APPS } from '../types';
 import type { AppConfig, AppState, Screen } from '../types';
 
 type WeeklyPresetId = 'off' | 'balanced' | 'work' | 'sleep' | 'strict';
 
-const WEEKLY_PRESETS: Record<WeeklyPresetId, { label: string; description: string; windows: AppConfig['timeWindows'] }> = {
+const WEEKLY_PRESETS: Record<
+  WeeklyPresetId,
+  { label: string; description: string; windows: AppConfig['timeWindows'] }
+> = {
   off: {
     label: 'Kein Wochenplan',
     description: 'Nur die normalen App-Regeln und Limits gelten.',
@@ -105,9 +105,9 @@ export function AppList({
     const allEqual = activeAppConfigs.every((config) => matchesWindows(config.timeWindows, firstWindows));
     if (!allEqual) return 'custom';
 
-    const match = (Object.entries(WEEKLY_PRESETS) as Array<[WeeklyPresetId, (typeof WEEKLY_PRESETS)[WeeklyPresetId]]>).find(
-      ([, preset]) => matchesWindows(firstWindows, preset.windows),
-    );
+    const match = (
+      Object.entries(WEEKLY_PRESETS) as Array<[WeeklyPresetId, (typeof WEEKLY_PRESETS)[WeeklyPresetId]]>
+    ).find(([, preset]) => matchesWindows(firstWindows, preset.windows));
     return match?.[0] ?? 'custom';
   }, [activeAppConfigs]);
 
@@ -218,17 +218,22 @@ export function AppList({
         }
       />
       <p className="text-zinc-400 text-sm mb-4 leading-relaxed">
-        Wähle die Apps aus, bei denen du impulsives Öffnen und lange Sitzungen einschränken möchtest. Neu aktivierte Apps starten neutral: ohne versteckten Wochenplan und mit Anti-Binge zunächst aus.
+        Wähle die Apps aus, bei denen du impulsives Öffnen und lange Sitzungen einschränken möchtest. Neu aktivierte
+        Apps starten neutral: ohne versteckten Wochenplan und mit Anti-Binge zunächst aus.
       </p>
 
       {configurationLocked && commitmentLock && (
-        <div role="status" className="mb-5 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-4 text-xs leading-relaxed text-indigo-100">
+        <div
+          role="status"
+          className="mb-5 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-4 text-xs leading-relaxed text-indigo-100"
+        >
           <div className="flex items-start gap-3">
             <LockKeyhole size={17} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
             <div>
               <strong className="block">Commitment aktiv – Regeln sind eingefroren</strong>
               <span className="mt-1 block text-indigo-200/75">
-                Änderungen bleiben bis {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} gesperrt. Statusprüfung und laufender Schutz funktionieren weiter.
+                Änderungen bleiben bis {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} gesperrt.
+                Statusprüfung und laufender Schutz funktionieren weiter.
               </span>
             </div>
           </div>
@@ -244,12 +249,18 @@ export function AppList({
       )}
 
       {availabilityError && (
-        <p role="alert" className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-300">
+        <p
+          role="alert"
+          className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-300"
+        >
           {availabilityError}
         </p>
       )}
 
-      <section className="mb-6 rounded-[1.75rem] border border-zinc-800 bg-zinc-900/70 p-5" aria-labelledby="weekly-plan-title">
+      <section
+        className="mb-6 rounded-[1.75rem] border border-zinc-800 bg-zinc-900/70 p-5"
+        aria-labelledby="weekly-plan-title"
+      >
         <div className="flex gap-3 items-start mb-4">
           <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-300 flex items-center justify-center flex-shrink-0">
             <CalendarDays size={20} />
@@ -259,8 +270,8 @@ export function AppList({
               Wiederkehrender Wochenplan
             </h2>
             <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-              Gilt für alle aktuell geschützten Apps: Morgen 06–09 Uhr, Arbeit/Schule 09–17 Uhr, Abend 17–22 Uhr,
-              Nacht 22–06 Uhr und Wochenende ganztägig.
+              Gilt für alle aktuell geschützten Apps: Morgen 06–09 Uhr, Arbeit/Schule 09–17 Uhr, Abend 17–22 Uhr, Nacht
+              22–06 Uhr und Wochenende ganztägig.
             </p>
           </div>
         </div>

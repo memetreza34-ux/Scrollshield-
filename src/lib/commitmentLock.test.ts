@@ -61,12 +61,16 @@ describe('commitment lock', () => {
       ok: false,
       code: 'android_required',
     });
-    expect(
-      assessCommitmentStartReadiness({ ...activeAndroidState, appsConfig: {} }, running),
-    ).toMatchObject({ ok: false, code: 'active_app_required', action: 'apps' });
-    expect(
-      assessCommitmentStartReadiness(activeAndroidState, { ...running, nativeAvailable: false }),
-    ).toMatchObject({ ok: false, code: 'native_unavailable', action: 'permissions' });
+    expect(assessCommitmentStartReadiness({ ...activeAndroidState, appsConfig: {} }, running)).toMatchObject({
+      ok: false,
+      code: 'active_app_required',
+      action: 'apps',
+    });
+    expect(assessCommitmentStartReadiness(activeAndroidState, { ...running, nativeAvailable: false })).toMatchObject({
+      ok: false,
+      code: 'native_unavailable',
+      action: 'permissions',
+    });
     expect(
       assessCommitmentStartReadiness(activeAndroidState, {
         ...running,
@@ -76,9 +80,11 @@ describe('commitment lock', () => {
     expect(
       assessCommitmentStartReadiness(activeAndroidState, { ...running, running: false, enabled: false }),
     ).toMatchObject({ ok: false, code: 'service_not_running', action: 'permissions' });
-    expect(
-      assessCommitmentStartReadiness(activeAndroidState, { ...running, enabled: false }),
-    ).toMatchObject({ ok: false, code: 'service_inconsistent', action: 'permissions' });
+    expect(assessCommitmentStartReadiness(activeAndroidState, { ...running, enabled: false })).toMatchObject({
+      ok: false,
+      code: 'service_inconsistent',
+      action: 'permissions',
+    });
     expect(assessCommitmentStartReadiness(activeAndroidState, running)).toEqual({ ok: true });
   });
 
@@ -171,12 +177,7 @@ describe('commitment lock', () => {
     const lock = createCommitmentLock(60, now);
     const replacement = { youtube: { id: 'youtube', ...DEFAULT_APP_CONFIG, active: true } };
 
-    const guarded = applyCommitmentGuard(
-      DEFAULT_STATE,
-      { appsConfig: replacement },
-      lock,
-      now + 60 * 60_000,
-    );
+    const guarded = applyCommitmentGuard(DEFAULT_STATE, { appsConfig: replacement }, lock, now + 60 * 60_000);
 
     expect(guarded.appsConfig).toBe(replacement);
   });

@@ -16,15 +16,15 @@ The product must stay honest about platform limits. Whole-app blocking is the st
 
 ## Competitor Lessons
 
-| Product | Strong pattern | ScrollShield adaptation |
-| --- | --- | --- |
-| one sec | Immediate, delayed, always-ask and repeated interventions | Opening pause, chosen session duration, optional repeated intervention |
-| Opal | Focus sessions, recurring schedules, deep focus, clear progress | Start-now focus, native recurring schedules, strict session mode, real local statistics |
-| Jomo | Multiple unlock challenges, app groups, templates, strict mode | Wait, reason, typed phrase, optional PIN/QR later; reusable protection profiles |
-| Freedom | Blocklists, recurring schedules, locked mode, session history | Installed-app groups, weekly schedule presets, active-session restrictions, annotations |
-| ScreenZen | Escalating delays and short use windows | Delay increases after repeated opens; session windows instead of only daily limits |
-| AppBlock | Conditions by time, usage and opening count | Deterministic rules using recurring time windows, usage, opens and focus state |
-| Forest | Visual focus progress without fake health claims | Optional garden based only on completed real focus minutes |
+| Product   | Strong pattern                                                  | ScrollShield adaptation                                                                 |
+| --------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| one sec   | Immediate, delayed, always-ask and repeated interventions       | Opening pause, chosen session duration, optional repeated intervention                  |
+| Opal      | Focus sessions, recurring schedules, deep focus, clear progress | Start-now focus, native recurring schedules, strict session mode, real local statistics |
+| Jomo      | Multiple unlock challenges, app groups, templates, strict mode  | Wait, reason, typed phrase, optional PIN/QR later; reusable protection profiles         |
+| Freedom   | Blocklists, recurring schedules, locked mode, session history   | Installed-app groups, weekly schedule presets, active-session restrictions, annotations |
+| ScreenZen | Escalating delays and short use windows                         | Delay increases after repeated opens; session windows instead of only daily limits      |
+| AppBlock  | Conditions by time, usage and opening count                     | Deterministic rules using recurring time windows, usage, opens and focus state          |
+| Forest    | Visual focus progress without fake health claims                | Optional garden based only on completed real focus minutes                              |
 
 ## Release Information Architecture
 

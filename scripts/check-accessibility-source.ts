@@ -39,7 +39,9 @@ if (unlabeledSwitches.length > 0) {
 }
 
 if (hiddenSemanticText.length > 0) {
-  throw new Error(`Semantic text or controls must not be hidden from assistive technology:\n${hiddenSemanticText.join('\n')}`);
+  throw new Error(
+    `Semantic text or controls must not be hidden from assistive technology:\n${hiddenSemanticText.join('\n')}`,
+  );
 }
 
 console.log(`Accessibility source checks passed for ${sourceFiles.length} component files.`);

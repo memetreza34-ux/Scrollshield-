@@ -30,7 +30,10 @@ function MenuRow({
       onClick={onClick}
       className="flex min-h-[68px] w-full items-center gap-4 border-b border-zinc-800/50 p-4 text-left transition-colors last:border-b-0 hover:bg-zinc-800/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
     >
-      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-zinc-400" aria-hidden="true">
+      <div
+        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-zinc-400"
+        aria-hidden="true"
+      >
         <Icon size={19} />
       </div>
       <div className="min-w-0 flex-1">
@@ -51,7 +54,10 @@ export function SettingsScreen({ state, navigate }: { state: AppState; navigate:
 
       <div className="space-y-6">
         <section aria-labelledby="settings-protection-title">
-          <h2 id="settings-protection-title" className="mb-3 px-2 text-xs font-bold uppercase tracking-widest text-zinc-500">
+          <h2
+            id="settings-protection-title"
+            className="mb-3 px-2 text-xs font-bold uppercase tracking-widest text-zinc-500"
+          >
             Schutz
           </h2>
           <div className="overflow-hidden rounded-[2rem] border border-zinc-800/50 bg-zinc-900/80">
@@ -113,7 +119,10 @@ export function SettingsScreen({ state, navigate }: { state: AppState; navigate:
         </section>
 
         <section aria-labelledby="settings-version-title">
-          <h2 id="settings-version-title" className="mb-3 px-2 text-xs font-bold uppercase tracking-widest text-zinc-500">
+          <h2
+            id="settings-version-title"
+            className="mb-3 px-2 text-xs font-bold uppercase tracking-widest text-zinc-500"
+          >
             App
           </h2>
           <div className="rounded-[2rem] border border-zinc-800/50 bg-zinc-900/80 p-5">
@@ -132,7 +141,8 @@ export function SettingsScreen({ state, navigate }: { state: AppState; navigate:
         </section>
 
         <p className="px-2 text-xs leading-relaxed text-zinc-600">
-          Noch nicht technisch freigegebene Reminder-, Cloud-, Reels-/Shorts- oder Abo-Funktionen werden hier bewusst nicht als aktive Einstellungen angeboten.
+          Noch nicht technisch freigegebene Reminder-, Cloud-, Reels-/Shorts- oder Abo-Funktionen werden hier bewusst
+          nicht als aktive Einstellungen angeboten.
         </p>
       </div>
     </motion.div>

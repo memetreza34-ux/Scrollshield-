@@ -230,7 +230,11 @@ requirePattern(
 );
 requireText(
   'permissions',
-  ['Setup später abschließen', 'behauptet bis dahin nicht, dass der Android-Schutz aktiv ist', 'iOS-Schutz noch nicht freigegeben'],
+  [
+    'Setup später abschließen',
+    'behauptet bis dahin nicht, dass der Android-Schutz aktiv ist',
+    'iOS-Schutz noch nicht freigegeben',
+  ],
   'Permission flow must remain truthful when protection is not ready or iOS is unreleased.',
 );
 rejectPattern(
@@ -265,7 +269,11 @@ requirePattern(
   /Fokusregeln aktiv[\s\S]*konfigurierte Fokusverhalten[\s\S]*Wiederkehrende Fokus-Zeitpläne werden erst angeboten/,
   'Focus must describe real per-app behavior and keep demo schedules unavailable.',
 );
-rejectPattern('focus', /setSchedules|Arbeit \/ Deep Work|Digital Detox \/ Schlaf/, 'Demo focus schedules must remain absent.');
+rejectPattern(
+  'focus',
+  /setSchedules|Arbeit \/ Deep Work|Digital Detox \/ Schlaf/,
+  'Demo focus schedules must remain absent.',
+);
 requirePattern(
   'focusTest',
   /persistent focus timer and no demo schedule tab[\s\S]*actual global focus state/,
@@ -278,7 +286,13 @@ rejectPattern(
 );
 requireText(
   'settings',
-  ['Schutzstatus & Berechtigungen', 'Geschützte Apps', 'Profile & Regeln', 'Statistiken & Verlauf', 'Datenschutz & lokale Daten'],
+  [
+    'Schutzstatus & Berechtigungen',
+    'Geschützte Apps',
+    'Profile & Regeln',
+    'Statistiken & Verlauf',
+    'Datenschutz & lokale Daten',
+  ],
   'Settings must route only to real release functions.',
 );
 requirePattern(

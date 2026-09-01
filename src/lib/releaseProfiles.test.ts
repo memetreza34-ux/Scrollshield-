@@ -97,6 +97,8 @@ describe('release profile helpers', () => {
     expect(text).not.toMatch(/Reels|Shorts|Endlos-Feed|Endlos-Swipe/i);
     expect(presentations.find((profile) => profile.name === 'Konsequent')).toBeDefined();
     expect(presentations.find((profile) => profile.name === 'Sanft')?.description).toMatch(/Kein Wochenplan/);
-    expect(presentations.find((profile) => profile.name === 'Balance')?.description).toMatch(/adaptive Anti-Binge-Reibung/);
+    expect(presentations.find((profile) => profile.name === 'Balance')?.description).toMatch(
+      /adaptive Anti-Binge-Reibung/,
+    );
   });
 });

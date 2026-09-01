@@ -235,8 +235,7 @@ const parseStringArray = (raw: string): string[] => {
 const normalizeTimestamp = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
 
-const normalizeDiagnosticText = (value: unknown): string =>
-  typeof value === 'string' ? value.trim() : '';
+const normalizeDiagnosticText = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
 const normalizeNativeBatchId = (value: unknown): string => {
   if (typeof value !== 'string') return '';
@@ -347,18 +346,14 @@ const hasNewTerminalEvidenceSince = (
   status: NativeProtectionStatus,
   before: NativeProtectionLifecycleSnapshot,
 ): boolean =>
-  status.lastStopAt > before.lastStopAt ||
-  (!status.enabled && status.lastStopAt > 0 && status.lastStopCode.length > 0);
+  status.lastStopAt > before.lastStopAt || (!status.enabled && status.lastStopAt > 0 && status.lastStopCode.length > 0);
 
 export const NativeProtection = {
   isAvailable(): boolean {
     return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
   },
 
-  async syncCommitted(
-    appsConfig: Record<string, AppConfig>,
-    focusMode: boolean,
-  ): Promise<DurableConfigSyncResult> {
+  async syncCommitted(appsConfig: Record<string, AppConfig>, focusMode: boolean): Promise<DurableConfigSyncResult> {
     if (!this.isAvailable()) return { unavailableAppIds: [], configGeneration: '' };
     return syncCommittedConfig(appsConfig, focusMode);
   },
@@ -386,9 +381,7 @@ export const NativeProtection = {
       }
       options.requireLifecycleSnapshot = true;
       options.expectedEnabled = true;
-      options.expectedLastStartRequestAt = normalizeLifecycleSnapshotTimestamp(
-        expectedLifecycle.lastStartRequestAt,
-      );
+      options.expectedLastStartRequestAt = normalizeLifecycleSnapshotTimestamp(expectedLifecycle.lastStartRequestAt);
       options.expectedLastStartAt = normalizeLifecycleSnapshotTimestamp(expectedLifecycle.lastStartAt);
       options.expectedLastStopAt = normalizeLifecycleSnapshotTimestamp(expectedLifecycle.lastStopAt);
     }

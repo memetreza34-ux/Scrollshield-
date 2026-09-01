@@ -315,10 +315,10 @@ Competitor research supports a useful Free tier and paid value in capacity/autom
 A reasonable internal starting hypothesis for testing is:
 
 | Plan | Monthly hypothesis | Annual hypothesis |
-| --- | ---: | ---: |
-| Free | €0 | €0 |
-| Plus | about €2.99 | about €19.99 |
-| Max | about €4.99 | about €29.99 |
+| ---- | -----------------: | ----------------: |
+| Free |                 €0 |                €0 |
+| Plus |        about €2.99 |      about €19.99 |
+| Max  |        about €4.99 |      about €29.99 |
 
 These numbers are **not production prices**. Final prices must be decided only after the paid feature set, billing costs, taxes/store fees, retention data and current competitor pricing are revalidated.
 

@@ -220,9 +220,7 @@ const archiveLegacyEntries = (source: string, rawEntries: Record<string, string>
   try {
     const existing = parseJson<LegacyStorageArchive>(localStorage.getItem(LEGACY_ARCHIVE_KEY));
     const archive: LegacyStorageArchive =
-      existing?.schemaVersion === 1 && Array.isArray(existing.sources)
-        ? existing
-        : { schemaVersion: 1, sources: [] };
+      existing?.schemaVersion === 1 && Array.isArray(existing.sources) ? existing : { schemaVersion: 1, sources: [] };
     const nextSource: LegacyArchiveSource = {
       source,
       capturedAt: new Date().toISOString(),

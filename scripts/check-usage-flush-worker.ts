@@ -1,15 +1,10 @@
 import { readFile } from 'node:fs/promises';
 
-const coordinatorPath =
-  'android/app/src/main/java/app/scrollshield/mobile/UsageFlushCoordinator.java';
-const coordinatorTestPath =
-  'android/app/src/test/java/app/scrollshield/mobile/UsageFlushCoordinatorTest.java';
-const workerPath =
-  'android/app/src/main/java/app/scrollshield/mobile/UsageFlushWorker.java';
-const workerTestPath =
-  'android/app/src/test/java/app/scrollshield/mobile/UsageFlushWorkerTest.java';
-const servicePath =
-  'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldProtectionService.java';
+const coordinatorPath = 'android/app/src/main/java/app/scrollshield/mobile/UsageFlushCoordinator.java';
+const coordinatorTestPath = 'android/app/src/test/java/app/scrollshield/mobile/UsageFlushCoordinatorTest.java';
+const workerPath = 'android/app/src/main/java/app/scrollshield/mobile/UsageFlushWorker.java';
+const workerTestPath = 'android/app/src/test/java/app/scrollshield/mobile/UsageFlushWorkerTest.java';
+const servicePath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldProtectionService.java';
 
 const [coordinator, coordinatorTests, worker, workerTests, service] = await Promise.all([
   readFile(coordinatorPath, 'utf8'),
@@ -178,19 +173,13 @@ requirePattern(
 );
 
 if (/editor\.commit\s*\(/.test(service)) {
-  findings.push(
-    `${servicePath}: SharedPreferences.commit() must not execute directly inside the protection service.`,
-  );
+  findings.push(`${servicePath}: SharedPreferences.commit() must not execute directly inside the protection service.`);
 }
 if (/private final Map<String, Long> pendingUsageMs/.test(service)) {
-  findings.push(
-    `${servicePath}: service-owned pending usage map must stay removed after coordinator integration.`,
-  );
+  findings.push(`${servicePath}: service-owned pending usage map must stay removed after coordinator integration.`);
 }
 if (/lastUsageFlushMs/.test(service)) {
-  findings.push(
-    `${servicePath}: flush timing must be owned by UsageFlushCoordinator, not duplicated in the service.`,
-  );
+  findings.push(`${servicePath}: flush timing must be owned by UsageFlushCoordinator, not duplicated in the service.`);
 }
 
 if (findings.length > 0) {

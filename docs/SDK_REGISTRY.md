@@ -15,13 +15,13 @@ This registry covers **direct production runtime dependencies** shipped by versi
 
 ## Direct Android Maven runtime
 
-| Dependency                                      | Purpose | User data collected / processed when invoked | Network / service use | Release note |
-| ----------------------------------------------- | ------- | --------------------------------------------- | --------------------- | ------------ |
-| `androidx.appcompat:appcompat`                  | Android UI compatibility | None | None | Platform support library |
-| `androidx.coordinatorlayout:coordinatorlayout`  | Android layout support | None | None | Platform support library |
-| `androidx.core:core-splashscreen`               | Native splash screen compatibility | None | None | Platform support library |
-| `com.android.billingclient:billing`             | Google Play subscription query / future purchase foundation | Google Play purchase state and purchase token material only when the Billing API is invoked | Google Play / Play Store service | Current production UI does not grant paid access from local Play state; backend verification remains mandatory |
-| `com.google.android.play:integrity`             | Future server-verified subscription integrity proof | App/device integrity request material and verdict processing only when the Integrity API is invoked | Google Play services | Client verdict alone never grants Plus/Max; backend verification remains mandatory |
+| Dependency                                     | Purpose                                                     | User data collected / processed when invoked                                                        | Network / service use            | Release note                                                                                                   |
+| ---------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `androidx.appcompat:appcompat`                 | Android UI compatibility                                    | None                                                                                                | None                             | Platform support library                                                                                       |
+| `androidx.coordinatorlayout:coordinatorlayout` | Android layout support                                      | None                                                                                                | None                             | Platform support library                                                                                       |
+| `androidx.core:core-splashscreen`              | Native splash screen compatibility                          | None                                                                                                | None                             | Platform support library                                                                                       |
+| `com.android.billingclient:billing`            | Google Play subscription query / future purchase foundation | Google Play purchase state and purchase token material only when the Billing API is invoked         | Google Play / Play Store service | Current production UI does not grant paid access from local Play state; backend verification remains mandatory |
+| `com.google.android.play:integrity`            | Future server-verified subscription integrity proof         | App/device integrity request material and verdict processing only when the Integrity API is invoked | Google Play services             | Client verdict alone never grants Plus/Max; backend verification remains mandatory                             |
 
 ## Important offline-v1 distinction
 

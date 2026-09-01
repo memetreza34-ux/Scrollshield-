@@ -88,7 +88,9 @@ describe('ProfilesScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: '1 Stunde' }));
     expect(onStartCommitment).not.toHaveBeenCalled();
     expect(screen.getByText(/1 Stunde verbindlich einfrieren/)).toBeInTheDocument();
-    expect(screen.getByText(/Ziel-App wirklich installiert ist und der Android-Schutzdienst tatsächlich läuft/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Ziel-App wirklich installiert ist und der Android-Schutzdienst tatsächlich läuft/),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Verbindlich starten' }));
     await waitFor(() => expect(onStartCommitment).toHaveBeenCalledWith(60));
@@ -104,11 +106,7 @@ describe('ProfilesScreen', () => {
   it('requires at least one active app before offering commitment', () => {
     const navigate = vi.fn();
     render(
-      <ProfilesScreen
-        state={{ ...makeAndroidState(), appsConfig: {} }}
-        updateState={vi.fn()}
-        navigate={navigate}
-      />,
+      <ProfilesScreen state={{ ...makeAndroidState(), appsConfig: {} }} updateState={vi.fn()} navigate={navigate} />,
     );
 
     expect(screen.getByText(/Aktiviere zuerst mindestens eine App/)).toBeInTheDocument();

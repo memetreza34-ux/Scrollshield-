@@ -50,9 +50,17 @@ function forbidText(key: keyof typeof paths, text: string, message: string) {
   if (source[key].includes(text)) findings.push(`${paths[key]}: ${message}`);
 }
 
-requirePattern('packageJson', /"check:lifecycle":\s*"tsx scripts\/check-protection-lifecycle-diagnostics\.ts"/, 'package.json must expose check:lifecycle.');
+requirePattern(
+  'packageJson',
+  /"check:lifecycle":\s*"tsx scripts\/check-protection-lifecycle-diagnostics\.ts"/,
+  'package.json must expose check:lifecycle.',
+);
 requirePattern('packageJson', /"verify":[^\n]*npm run check:lifecycle/, 'check:lifecycle must remain in verify.');
-requirePattern('readiness', /args: \['run', 'check:lifecycle'\], required: true/, 'readiness must require check:lifecycle.');
+requirePattern(
+  'readiness',
+  /args: \['run', 'check:lifecycle'\], required: true/,
+  'readiness must require check:lifecycle.',
+);
 
 requirePattern(
   'plugin',
@@ -76,7 +84,11 @@ requirePattern(
   'Lifecycle must be bound to synchronous durable config generations.',
 );
 forbidText('configStore', '.apply()', 'Start-critical config storage must not use apply().');
-requirePattern('configStoreTest', /generationNormalizationAcceptsOnlyCanonicalUuidValues[\s\S]*generationEqualityIsExactAfterNormalization/, 'Config-generation JUnit contract is incomplete.');
+requirePattern(
+  'configStoreTest',
+  /generationNormalizationAcceptsOnlyCanonicalUuidValues[\s\S]*generationEqualityIsExactAfterNormalization/,
+  'Config-generation JUnit contract is incomplete.',
+);
 requirePattern(
   'runtimePolicy',
   /canUsePublishedRuntimeState[\s\S]*shouldInvalidateRuntimeState/,
@@ -124,7 +136,11 @@ requirePattern(
   /stopProtectionService\(PluginCall call\)[\s\S]*synchronized \(ProtectionServiceDispatchGuard\.LOCK\)[\s\S]*persistProtectionTerminalStopWithFallback[\s\S]*dispatchControlledStop\(context\)/,
   'App stop evidence and Android stop dispatch must remain serialized.',
 );
-forbidText('plugin', 'context.stopService(new Intent(context, ScrollShieldProtectionService.class))', 'Plugin must not bypass shared dispatch guard.');
+forbidText(
+  'plugin',
+  'context.stopService(new Intent(context, ScrollShieldProtectionService.class))',
+  'Plugin must not bypass shared dispatch guard.',
+);
 forbidText('service', 'stopSelf()', 'Controlled service shutdown must not bypass shared dispatch guard.');
 
 requirePattern(
@@ -174,7 +190,11 @@ requirePattern(
   /isCurrentNotificationStopGeneration[\s\S]*actionStartRequestAt > 0L[\s\S]*actionStartRequestAt == serviceStartRequestAt[\s\S]*actionStartRequestAt == latestStartRequestAt/,
   'Notification stop must require exact current generation.',
 );
-requirePattern('lifecyclePolicyTest', /notificationStopIsAcceptedOnlyForCurrentLifecycleGeneration/, 'Missing notification generation JUnit.');
+requirePattern(
+  'lifecyclePolicyTest',
+  /notificationStopIsAcceptedOnlyForCurrentLifecycleGeneration/,
+  'Missing notification generation JUnit.',
+);
 requirePattern(
   'service',
   /ACTION_STOP\.equals\(intent\.getAction\(\)\)[\s\S]*isCurrentNotificationStopGeneration[\s\S]*return START_STICKY[\s\S]*NOTIFICATION_ACTION_STOP_CODE/,
@@ -220,10 +240,26 @@ requirePattern(
   /CONFIG_GENERATION_PATTERN[\s\S]*syncCommittedConfig[\s\S]*expectedConfigGeneration: synced\.configGeneration/,
   'Bridge must bind normal/recovery starts to durable config generation.',
 );
-requirePattern('bridgeTest', /starts only with the exact durable config generation returned by native sync[\s\S]*fails closed before start when native sync does not confirm a valid config generation/, 'Bridge tests must cover durable config generation start semantics.');
-requirePattern('bridgeTest', /detects a pending start request during the confirmation grace window[\s\S]*detects an interrupted start request after the confirmation grace window/, 'Bridge tests must retain pending/interrupted classification.');
-requirePattern('clockTest', /tolerates only a small future skew for a fresh pending request[\s\S]*fails out of pending when the wall clock moved materially backward/, 'Clock rollback contract is missing.');
-requirePattern('health', /case 'start-pending':[\s\S]*STARTET[\s\S]*case 'start-interrupted':[\s\S]*START ABGEBROCHEN[\s\S]*case 'unclean-process-stop':[\s\S]*PROZESS ABGEBROCHEN/, 'Health presentation must remain explicit.');
+requirePattern(
+  'bridgeTest',
+  /starts only with the exact durable config generation returned by native sync[\s\S]*fails closed before start when native sync does not confirm a valid config generation/,
+  'Bridge tests must cover durable config generation start semantics.',
+);
+requirePattern(
+  'bridgeTest',
+  /detects a pending start request during the confirmation grace window[\s\S]*detects an interrupted start request after the confirmation grace window/,
+  'Bridge tests must retain pending/interrupted classification.',
+);
+requirePattern(
+  'clockTest',
+  /tolerates only a small future skew for a fresh pending request[\s\S]*fails out of pending when the wall clock moved materially backward/,
+  'Clock rollback contract is missing.',
+);
+requirePattern(
+  'health',
+  /case 'start-pending':[\s\S]*STARTET[\s\S]*case 'start-interrupted':[\s\S]*START ABGEBROCHEN[\s\S]*case 'unclean-process-stop':[\s\S]*PROZESS ABGEBROCHEN/,
+  'Health presentation must remain explicit.',
+);
 
 requirePattern(
   'diagnostics',
@@ -235,16 +271,36 @@ requirePattern(
   /protectionConfigGeneration:\s*string[\s\S]*protectionConfigWriteStateCertain:\s*boolean[\s\S]*protectionRuntimeConfigGeneration:\s*string[\s\S]*startRequestConfigGeneration:\s*string[\s\S]*lastProtectionStartRequestAt:\s*number[\s\S]*lastProtectionStartAt:\s*number[\s\S]*lastProtectionStopAt:\s*number/,
   'TypeScript diagnostics must type persisted/runtime config and lifecycle evidence.',
 );
-requirePattern('debug', /Config-Schreibzustand[\s\S]*Config-Generation[\s\S]*Runtime-Config[\s\S]*Startrequest-Config[\s\S]*Letzte Startanforderung[\s\S]*Letzter Schutzstart[\s\S]*Letzter Stoppcode/, 'Debug UI must retain runtime config and lifecycle evidence rows.');
-requirePattern('debugTest', /protectionRuntimeConfigGeneration[\s\S]*Runtime-Config[\s\S]*notifications_missing/, 'Debug regression test must retain runtime config and exact stop diagnostics.');
-requirePattern('permissions', /NativeProtection\.getStatus\(\)[\s\S]*NativeProtectionStatusPanel/, 'Permissions screen must render native truth.');
+requirePattern(
+  'debug',
+  /Config-Schreibzustand[\s\S]*Config-Generation[\s\S]*Runtime-Config[\s\S]*Startrequest-Config[\s\S]*Letzte Startanforderung[\s\S]*Letzter Schutzstart[\s\S]*Letzter Stoppcode/,
+  'Debug UI must retain runtime config and lifecycle evidence rows.',
+);
+requirePattern(
+  'debugTest',
+  /protectionRuntimeConfigGeneration[\s\S]*Runtime-Config[\s\S]*notifications_missing/,
+  'Debug regression test must retain runtime config and exact stop diagnostics.',
+);
+requirePattern(
+  'permissions',
+  /NativeProtection\.getStatus\(\)[\s\S]*NativeProtectionStatusPanel/,
+  'Permissions screen must render native truth.',
+);
 requirePattern('permissionsTest', /Wiederherstellung[\s\S]*Schutz/, 'Permissions tests must retain recovery behavior.');
 
 for (const id of ['LIFE-12', 'LIFE-13', 'LIFE-14', 'LIFE-15', 'APP-07', 'APP-08', 'APP-09', 'APP-10']) {
   requirePattern('matrix', new RegExp(`\\| ${id} \\|`), `Device matrix is missing ${id}.`);
 }
-requirePattern('dispatchSpec', /DISPATCH-01[\s\S]*DISPATCH-02[\s\S]*DISPATCH-03[\s\S]*DISPATCH-04[\s\S]*DISPATCH-05/, 'Dispatch race specification is incomplete.');
-requirePattern('configSpec', /commit\(\)[\s\S]*writeStateCertain[\s\S]*temporary[\s\S]*overlay[\s\S]*APP-07[\s\S]*APP-08[\s\S]*APP-09[\s\S]*APP-10/i, 'Config durability lifecycle specification is incomplete.');
+requirePattern(
+  'dispatchSpec',
+  /DISPATCH-01[\s\S]*DISPATCH-02[\s\S]*DISPATCH-03[\s\S]*DISPATCH-04[\s\S]*DISPATCH-05/,
+  'Dispatch race specification is incomplete.',
+);
+requirePattern(
+  'configSpec',
+  /commit\(\)[\s\S]*writeStateCertain[\s\S]*temporary[\s\S]*overlay[\s\S]*APP-07[\s\S]*APP-08[\s\S]*APP-09[\s\S]*APP-10/i,
+  'Config durability lifecycle specification is incomplete.',
+);
 
 if (findings.length > 0) {
   console.log('Protection lifecycle diagnostics check failed:\n');

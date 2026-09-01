@@ -137,7 +137,11 @@ requirePattern(
   /Config-Schreibzustand[\s\S]*Config-Generation[\s\S]*Runtime-Config[\s\S]*Startrequest-Config/,
   'Debug UI must expose config certainty and generation evidence.',
 );
-requirePattern('debugTest', /protectionRuntimeConfigGeneration[\s\S]*Runtime-Config/, 'Debug test must cover runtime generation evidence.');
+requirePattern(
+  'debugTest',
+  /protectionRuntimeConfigGeneration[\s\S]*Runtime-Config/,
+  'Debug test must cover runtime generation evidence.',
+);
 
 for (const method of [
   'durableConfigGenerationBindsStartRequestAndConfirmation',
@@ -146,12 +150,20 @@ for (const method of [
   'configChangeBeforeConfirmationFailsClosedWithoutConfirmingOldRequest',
   'legacyDurableConfigReceivesGenerationBeforeBootStyleStartRequest',
 ]) {
-  requirePattern('instrumentation', new RegExp(`void\\s+${method}\\s*\\(`), `Missing config instrumentation ${method}.`);
+  requirePattern(
+    'instrumentation',
+    new RegExp(`void\\s+${method}\\s*\\(`),
+    `Missing config instrumentation ${method}.`,
+  );
 }
 for (const id of ['APP-07', 'APP-08', 'APP-09', 'APP-10']) {
   requirePattern('matrix', new RegExp(`\\| ${id} \\|`), `Device matrix is missing ${id}.`);
 }
-requirePattern('spec', /candidate[\s\S]*rollback[\s\S]*UNSICHER[\s\S]*Runtime/iu, 'Config durability spec must retain rollback/certainty/runtime semantics.');
+requirePattern(
+  'spec',
+  /candidate[\s\S]*rollback[\s\S]*UNSICHER[\s\S]*Runtime/iu,
+  'Config durability spec must retain rollback/certainty/runtime semantics.',
+);
 
 if (findings.length > 0) {
   console.log('Protection config durability check failed:\n');

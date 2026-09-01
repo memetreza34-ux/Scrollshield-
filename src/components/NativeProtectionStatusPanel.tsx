@@ -1,9 +1,6 @@
 import { AlertTriangle, LockKeyhole, Power } from 'lucide-react';
 import type { NativeProtectionStatus } from '../lib/nativeProtection';
-import {
-  describeNativeProtectionHealth,
-  formatNativeLifecycleTime,
-} from '../lib/nativeProtectionHealth';
+import { describeNativeProtectionHealth, formatNativeLifecycleTime } from '../lib/nativeProtectionHealth';
 
 export function NativeProtectionStatusPanel({
   status,
@@ -44,10 +41,7 @@ export function NativeProtectionStatusPanel({
         : 'text-zinc-500';
 
   return (
-    <section
-      aria-labelledby="protection-service-title"
-      className={`rounded-[1.75rem] border p-5 ${toneClasses}`}
-    >
+    <section aria-labelledby="protection-service-title" className={`rounded-[1.75rem] border p-5 ${toneClasses}`}>
       <div className="flex items-start gap-3">
         {presentation.tone === 'warning' ? (
           <AlertTriangle aria-hidden="true" size={20} className={iconClass} />

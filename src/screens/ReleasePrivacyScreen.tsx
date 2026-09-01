@@ -61,8 +61,8 @@ export function ReleasePrivacyScreen({
               <strong className="block">Backup-Import ist während Commitment gesperrt</strong>
               <span className="mt-1 block text-indigo-200/75">
                 Ein Vollimport könnte Schutzregeln ersetzen und bleibt deshalb bis{' '}
-                {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} deaktiviert. Export, Datenlöschung und ein
-                kompletter Reset bleiben verfügbar.
+                {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} deaktiviert. Export, Datenlöschung und
+                ein kompletter Reset bleiben verfügbar.
               </span>
             </div>
           </div>

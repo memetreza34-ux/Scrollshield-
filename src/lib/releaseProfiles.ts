@@ -18,19 +18,23 @@ const NORMAL_TIME_WINDOWS: AppConfig['timeWindows'] = {
 const DEFAULT_PRESENTATION: Record<string, ReleaseProfilePresentation> = {
   gentle: {
     name: 'Sanft',
-    description: '5 Sekunden bewusste Pause, 90 Minuten Tageslimit und 30 Minuten pro freigegebener Sitzung. Kein Wochenplan und Anti-Binge zunächst aus.',
+    description:
+      '5 Sekunden bewusste Pause, 90 Minuten Tageslimit und 30 Minuten pro freigegebener Sitzung. Kein Wochenplan und Anti-Binge zunächst aus.',
   },
   balance: {
     name: 'Balance',
-    description: '15 Sekunden Grundpause, 45 Minuten Tageslimit, 15-Minuten-Sitzungen und adaptive Anti-Binge-Reibung bei häufigem Wiederöffnen. Kein Wochenplan.',
+    description:
+      '15 Sekunden Grundpause, 45 Minuten Tageslimit, 15-Minuten-Sitzungen und adaptive Anti-Binge-Reibung bei häufigem Wiederöffnen. Kein Wochenplan.',
   },
   strict: {
     name: 'Streng',
-    description: 'Die geschützte App ist grundsätzlich strikt gesperrt. Das Preset enthält standardmäßig keinen Notfallzugang.',
+    description:
+      'Die geschützte App ist grundsätzlich strikt gesperrt. Das Preset enthält standardmäßig keinen Notfallzugang.',
   },
   noscroll: {
     name: 'Konsequent',
-    description: 'Strikte Ganz-App-Sperre mit begrenztem Notfallweg, Countdown und Begründung statt einer normalen Freigabe.',
+    description:
+      'Strikte Ganz-App-Sperre mit begrenztem Notfallweg, Countdown und Begründung statt einer normalen Freigabe.',
   },
 };
 

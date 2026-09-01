@@ -36,8 +36,10 @@ const describeEvent = (event: HistoryEvent): { title: string; icon: typeof Shiel
 
   if (event.type === 'block') return { title: `${appName} blockiert`, icon: Shield, tone: 'text-red-400' };
   if (event.type === 'warning') return { title: `Warnung · ${appName}`, icon: AlertTriangle, tone: 'text-amber-400' };
-  if (event.type === 'emergency') return { title: `Notfallfreigabe · ${appName}`, icon: TimerReset, tone: 'text-amber-300' };
-  if (event.type === 'open') return { title: `${appName} bewusst geöffnet`, icon: CheckCircle2, tone: 'text-emerald-400' };
+  if (event.type === 'emergency')
+    return { title: `Notfallfreigabe · ${appName}`, icon: TimerReset, tone: 'text-amber-300' };
+  if (event.type === 'open')
+    return { title: `${appName} bewusst geöffnet`, icon: CheckCircle2, tone: 'text-emerald-400' };
   return { title: event.desc || 'Schutzereignis', icon: Clock, tone: 'text-zinc-400' };
 };
 
@@ -113,22 +115,30 @@ export function HistoryScreen({ state, navigate }: { state: AppState; navigate: 
           <div className="rounded-[1.5rem] border border-zinc-800/50 bg-zinc-900/80 p-5">
             <Clock size={16} className="text-blue-400" aria-hidden="true" />
             <div className="mt-3 text-2xl font-mono font-bold text-zinc-100">{formatMinutes(measuredUsageMinutes)}</div>
-            <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Gemessene Freigabezeit</div>
+            <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+              Gemessene Freigabezeit
+            </div>
           </div>
           <div className="rounded-[1.5rem] border border-zinc-800/50 bg-zinc-900/80 p-5">
             <Clock size={16} className="text-zinc-500" aria-hidden="true" />
-            <div className="mt-3 text-2xl font-mono font-bold text-zinc-100">{formatMinutes(estimatedSavedMinutes)}</div>
+            <div className="mt-3 text-2xl font-mono font-bold text-zinc-100">
+              {formatMinutes(estimatedSavedMinutes)}
+            </div>
             <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Geschätzt gespart</div>
           </div>
         </section>
 
         <p className="px-2 text-xs leading-relaxed text-zinc-600">
-          „Gemessene Freigabezeit“ stammt aus lokal erfasster Nutzung während bewusster Freigaben. „Geschätzt gespart“ ist keine exakte Messung: ScrollShield rechnet derzeit fünf Minuten pro Block-/Warnintervention als Produktschätzung.
+          „Gemessene Freigabezeit“ stammt aus lokal erfasster Nutzung während bewusster Freigaben. „Geschätzt gespart“
+          ist keine exakte Messung: ScrollShield rechnet derzeit fünf Minuten pro Block-/Warnintervention als
+          Produktschätzung.
         </p>
 
         <section aria-labelledby="history-events-title">
           <div className="mb-3 flex items-center justify-between gap-3 px-2">
-            <h2 id="history-events-title" className="text-xs font-bold uppercase tracking-widest text-zinc-500">Ereignisse</h2>
+            <h2 id="history-events-title" className="text-xs font-bold uppercase tracking-widest text-zinc-500">
+              Ereignisse
+            </h2>
             <select
               aria-label="Ereignistyp filtern"
               value={filter}
@@ -147,7 +157,9 @@ export function HistoryScreen({ state, navigate }: { state: AppState; navigate: 
               <div className="p-8 text-center">
                 <Shield size={24} className="mx-auto text-zinc-700" aria-hidden="true" />
                 <div className="mt-3 text-sm font-semibold text-zinc-300">Keine passenden Ereignisse</div>
-                <p className="mt-1 text-xs text-zinc-600">Der lokale Verlauf füllt sich, sobald der Schutzdienst eingreift oder du bewusst freigibst.</p>
+                <p className="mt-1 text-xs text-zinc-600">
+                  Der lokale Verlauf füllt sich, sobald der Schutzdienst eingreift oder du bewusst freigibst.
+                </p>
               </div>
             ) : (
               <ul aria-label="Lokaler Schutzverlauf">
@@ -156,13 +168,19 @@ export function HistoryScreen({ state, navigate }: { state: AppState; navigate: 
                   const Icon = presentation.icon;
                   return (
                     <li key={event.id} className="flex gap-3 border-b border-zinc-800/50 p-4 last:border-b-0">
-                      <div className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-zinc-950 ${presentation.tone}`} aria-hidden="true">
+                      <div
+                        className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-zinc-950 ${presentation.tone}`}
+                        aria-hidden="true"
+                      >
                         <Icon size={16} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-semibold text-zinc-200">{presentation.title}</div>
                         <p className="mt-1 break-words text-xs leading-relaxed text-zinc-500">{event.desc}</p>
-                        <time className="mt-2 block text-[10px] font-mono text-zinc-600" dateTime={new Date(event.timestamp).toISOString()}>
+                        <time
+                          className="mt-2 block text-[10px] font-mono text-zinc-600"
+                          dateTime={new Date(event.timestamp).toISOString()}
+                        >
                           {new Date(event.timestamp).toLocaleString('de-DE')}
                         </time>
                       </div>
@@ -175,7 +193,8 @@ export function HistoryScreen({ state, navigate }: { state: AppState; navigate: 
         </section>
 
         <p className="px-2 text-xs leading-relaxed text-zinc-600">
-          Der Verlauf bleibt lokal auf diesem Gerät. Notfallbegründungen erscheinen hier nur, wenn du diese Option selbst aktiviert und einen Grund eingegeben hast.
+          Der Verlauf bleibt lokal auf diesem Gerät. Notfallbegründungen erscheinen hier nur, wenn du diese Option
+          selbst aktiviert und einen Grund eingegeben hast.
         </p>
       </div>
     </motion.div>

@@ -122,9 +122,9 @@ describe('data export', () => {
     expect(converted.appVersion).toBe('2040.1.0-PRO');
     expect(converted.state.stats.totalSavedTime).toBe(91);
     expect(converted.state.history.some((event) => event.id === 'legacy-file-old-1')).toBe(true);
-    expect(converted.state.history.some((event) => event.id === 'legacy-file-old-2' && event.type === 'emergency')).toBe(
-      true,
-    );
+    expect(
+      converted.state.history.some((event) => event.id === 'legacy-file-old-2' && event.type === 'emergency'),
+    ).toBe(true);
     expect(converted.state.history[0].desc).toContain('nicht automatisch aktiviert');
     expect(Object.values(converted.state.appsConfig).every((config) => !config.active)).toBe(true);
     expect(converted.legacyArchive?.sources[0].rawEntries.scrollshield_backup_v15_file).toBe(raw);

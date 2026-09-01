@@ -36,13 +36,19 @@ if (findings.length === 0) {
   }
 
   const requiredInspectorPatterns: Array<[RegExp, string]> = [
-    [/allowedPermissions[\s\S]*RECEIVE_BOOT_COMPLETED[\s\S]*PACKAGE_USAGE_STATS[\s\S]*SYSTEM_ALERT_WINDOW/, 'Inspector must keep an explicit permission allowlist.'],
+    [
+      /allowedPermissions[\s\S]*RECEIVE_BOOT_COMPLETED[\s\S]*PACKAGE_USAGE_STATS[\s\S]*SYSTEM_ALERT_WINDOW/,
+      'Inspector must keep an explicit permission allowlist.',
+    ],
     [/android\.permission\.INTERNET/, 'Inspector must explicitly detect INTERNET permission.'],
     [/AD_ID|ACCESS_ADSERVICES_AD_ID/, 'Inspector must explicitly detect advertising identifier permissions.'],
     [/BUNDLETOOL_JAR/, 'AAB inspection must require an explicitly supplied reviewed bundletool jar.'],
     [/apkanalyzer/, 'APK inspection must use Android SDK apkanalyzer.'],
     [/createHash\('sha256'\)/, 'Inspector must bind inspection to the exact artifact SHA-256.'],
-    [/status:\s*findings\.length === 0 \? 'passed' : 'failed'/, 'Inspector report must fail closed when findings exist.'],
+    [
+      /status:\s*findings\.length === 0 \? 'passed' : 'failed'/,
+      'Inspector report must fail closed when findings exist.',
+    ],
     [/suspiciousArchiveMarkers/, 'Inspector must retain suspicious archive marker results.'],
   ];
   for (const [pattern, message] of requiredInspectorPatterns) {
@@ -50,11 +56,20 @@ if (findings.length === 0) {
   }
 
   const requiredFinalPatterns: Array<[RegExp, string]> = [
-    [/inspectionPath[\s\S]*binary inspection report missing/i, 'Final artifact validation must require the local inspection report.'],
+    [
+      /inspectionPath[\s\S]*binary inspection report missing/i,
+      'Final artifact validation must require the local inspection report.',
+    ],
     [/inspection\.status === 'passed'/, 'Final artifact validation must require status=passed.'],
-    [/inspection\.sha256 === metadataSha256/, 'Final artifact validation must bind inspection to recorded artifact SHA-256.'],
+    [
+      /inspection\.sha256 === metadataSha256/,
+      'Final artifact validation must bind inspection to recorded artifact SHA-256.',
+    ],
     [/actualHash === inspection\.sha256/, 'Final artifact validation must re-hash retained bytes against inspection.'],
-    [/inspection\.candidateCommitSha === metadataCandidateSha/, 'Final artifact validation must bind inspection to source candidate SHA.'],
+    [
+      /inspection\.candidateCommitSha === metadataCandidateSha/,
+      'Final artifact validation must bind inspection to source candidate SHA.',
+    ],
   ];
   for (const [pattern, message] of requiredFinalPatterns) {
     if (!pattern.test(finalArtifactCheck)) findings.push(`${files.finalArtifactCheck}: ${message}`);
@@ -71,4 +86,6 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log('Binary inspection contract passed. APK/AAB manifest inspection, permission allowlisting, artifact hashing, and final report binding are guarded.');
+console.log(
+  'Binary inspection contract passed. APK/AAB manifest inspection, permission allowlisting, artifact hashing, and final report binding are guarded.',
+);

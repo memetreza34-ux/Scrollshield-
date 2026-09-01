@@ -12,26 +12,19 @@ const encoder = new TextEncoder();
 const base64Url = (bytes: Uint8Array): string => {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return globalThis
-    .btoa(binary)
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
+  return globalThis.btoa(binary).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 };
 
 const encodeJson = (value: unknown): string => base64Url(encoder.encode(JSON.stringify(value)));
 
 const createSigningFixture = async () => {
-  const pair = (await globalThis.crypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    true,
-    ['sign', 'verify'],
-  )) as CryptoKeyPair;
+  const pair = (await globalThis.crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
+    'sign',
+    'verify',
+  ])) as CryptoKeyPair;
   const publicJwk = await globalThis.crypto.subtle.exportKey('jwk', pair.publicKey);
   const kid = 'release_key_1234567890';
-  const trustedKeys: readonly SubscriptionEntitlementVerificationKey[] = [
-    { kid, algorithm: 'ES256', publicJwk },
-  ];
+  const trustedKeys: readonly SubscriptionEntitlementVerificationKey[] = [{ kid, algorithm: 'ES256', publicJwk }];
 
   const sign = async (payload: Record<string, unknown>) => {
     const header = encodeJson({ alg: 'ES256', typ: 'scrollshield-entitlement+jwt', kid });
@@ -86,9 +79,7 @@ describe('signed subscription entitlement assertion', () => {
   it('fails closed when the assertion is valid but bound to another installation key', async () => {
     const nowMs = 2_000_000_000_000;
     const fixture = await createSigningFixture();
-    const assertion = await fixture.sign(
-      validPayload(nowMs, 'installation_key_aaaaaaaaaaaaaaaa'),
-    );
+    const assertion = await fixture.sign(validPayload(nowMs, 'installation_key_aaaaaaaaaaaaaaaa'));
 
     const result = await verifySubscriptionEntitlementAssertion(
       assertion,

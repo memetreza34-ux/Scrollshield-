@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-const diagnosticsPluginPath =
-  'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldDiagnosticsPlugin.java';
+const diagnosticsPluginPath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldDiagnosticsPlugin.java';
 const diagnosticsBridgePath = 'src/lib/nativeDiagnostics.ts';
 const debugScreenPath = 'src/screens/DebugScreen.tsx';
 const debugTestPath = 'src/screens/DebugScreen.test.tsx';
@@ -56,7 +55,12 @@ requirePattern(
   /Version[\s\S]*Build[\s\S]*Config-Schreibzustand[\s\S]*Runtime-Config[\s\S]*Letzte Startanforderung[\s\S]*Letzter Schutzstart[\s\S]*Letzter Stoppcode/,
   'Debug screen must visibly expose build, config and lifecycle evidence.',
 );
-requirePattern(debugTestPath, debugTest, /protectionRuntimeConfigGeneration[\s\S]*Runtime-Config/, 'Debug component test must cover runtime generation.');
+requirePattern(
+  debugTestPath,
+  debugTest,
+  /protectionRuntimeConfigGeneration[\s\S]*Runtime-Config/,
+  'Debug component test must cover runtime generation.',
+);
 
 for (const requiredDevice of [
   'Google Pixel',
@@ -78,19 +82,68 @@ for (const requiredDevice of [
 }
 
 for (const requiredScenario of [
-  'INST-02', 'INST-06', 'INST-07', 'INST-08', 'INST-09',
-  'PERM-01', 'PERM-05', 'PERM-06', 'PERM-07',
-  'APP-04', 'APP-05', 'APP-07', 'APP-08', 'APP-09', 'APP-10',
-  'RUNTIME-01', 'RUNTIME-02', 'RUNTIME-03', 'RUNTIME-04', 'RUNTIME-05', 'RUNTIME-06',
-  'COMMIT-01', 'COMMIT-02', 'COMMIT-03', 'COMMIT-04', 'COMMIT-05', 'COMMIT-06',
-  'ADAPT-01', 'ADAPT-02', 'ADAPT-03', 'ADAPT-04', 'ADAPT-05',
-  'RULE-06', 'RULE-08', 'RULE-10', 'RULE-11', 'RULE-12',
-  'LIFE-04', 'LIFE-07', 'LIFE-08', 'LIFE-09', 'LIFE-10', 'LIFE-11',
-  'LIFE-12', 'LIFE-13', 'LIFE-14', 'LIFE-15', 'LIFE-16',
-  'TIME-01', 'TIME-02', 'TIME-03',
-  'UI-01', 'UI-03', 'UI-05', 'UI-06',
+  'INST-02',
+  'INST-06',
+  'INST-07',
+  'INST-08',
+  'INST-09',
+  'PERM-01',
+  'PERM-05',
+  'PERM-06',
+  'PERM-07',
+  'APP-04',
+  'APP-05',
+  'APP-07',
+  'APP-08',
+  'APP-09',
+  'APP-10',
+  'RUNTIME-01',
+  'RUNTIME-02',
+  'RUNTIME-03',
+  'RUNTIME-04',
+  'RUNTIME-05',
+  'RUNTIME-06',
+  'COMMIT-01',
+  'COMMIT-02',
+  'COMMIT-03',
+  'COMMIT-04',
+  'COMMIT-05',
+  'COMMIT-06',
+  'ADAPT-01',
+  'ADAPT-02',
+  'ADAPT-03',
+  'ADAPT-04',
+  'ADAPT-05',
+  'RULE-06',
+  'RULE-08',
+  'RULE-10',
+  'RULE-11',
+  'RULE-12',
+  'LIFE-04',
+  'LIFE-07',
+  'LIFE-08',
+  'LIFE-09',
+  'LIFE-10',
+  'LIFE-11',
+  'LIFE-12',
+  'LIFE-13',
+  'LIFE-14',
+  'LIFE-15',
+  'LIFE-16',
+  'TIME-01',
+  'TIME-02',
+  'TIME-03',
+  'UI-01',
+  'UI-03',
+  'UI-05',
+  'UI-06',
 ]) {
-  requirePattern(matrixPath, matrix, new RegExp(`\\b${requiredScenario}\\b`), `Mandatory Android test scenario is missing: ${requiredScenario}.`);
+  requirePattern(
+    matrixPath,
+    matrix,
+    new RegExp(`\\b${requiredScenario}\\b`),
+    `Mandatory Android test scenario is missing: ${requiredScenario}.`,
+  );
 }
 
 for (const evidenceField of [
@@ -137,7 +190,9 @@ for (const evidenceField of [
   'Manual stop wins against in-flight automatic app-open recovery',
   'no new `lastProtectionStartRequestAt`',
   'no `start_failed`',
-  'PASS', 'FAIL', 'BLOCKED',
+  'PASS',
+  'FAIL',
+  'BLOCKED',
 ]) {
   requirePattern(
     matrixPath,

@@ -255,11 +255,7 @@ mustContain(
   ],
   'Privacy commitment tests are incomplete.',
 );
-mustContain(
-  'health',
-  ['factory_reset'],
-  'Factory reset must be classified as a deliberate native protection stop.',
-);
+mustContain('health', ['factory_reset'], 'Factory reset must be classified as a deliberate native protection stop.');
 mustContain(
   'healthTest',
   ['treats a complete app factory reset as a deliberate stop'],

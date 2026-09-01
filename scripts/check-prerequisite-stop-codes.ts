@@ -1,13 +1,9 @@
 import { readFile } from 'node:fs/promises';
 
-const servicePath =
-  'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldProtectionService.java';
-const pluginPath =
-  'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldNativePlugin.java';
-const policyPath =
-  'android/app/src/main/java/app/scrollshield/mobile/ProtectionStopReasonPolicy.java';
-const policyTestPath =
-  'android/app/src/test/java/app/scrollshield/mobile/ProtectionStopReasonPolicyTest.java';
+const servicePath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldProtectionService.java';
+const pluginPath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldNativePlugin.java';
+const policyPath = 'android/app/src/main/java/app/scrollshield/mobile/ProtectionStopReasonPolicy.java';
+const policyTestPath = 'android/app/src/test/java/app/scrollshield/mobile/ProtectionStopReasonPolicyTest.java';
 const diagnosticsTestPath =
   'android/app/src/androidTest/java/app/scrollshield/mobile/ProtectionDiagnosticsInstrumentedTest.java';
 
@@ -88,12 +84,7 @@ if (helperStart < 0 || nextMethod <= helperStart) {
   findings.push(`${servicePath}: Could not isolate stopForProtectionPrerequisite helper.`);
 } else {
   const helperBody = service.slice(helperStart, nextMethod);
-  for (const forbidden of [
-    'appendProtectionEvent(',
-    'setProtectionEnabled(',
-    'recordProtectionStop(',
-    'stopSelf()',
-  ]) {
+  for (const forbidden of ['appendProtectionEvent(', 'setProtectionEnabled(', 'recordProtectionStop(', 'stopSelf()']) {
     if (helperBody.includes(forbidden)) {
       findings.push(
         `${servicePath}: Prerequisite helper must use the centralized atomic stop + controlled dispatch path instead of '${forbidden}'.`,
@@ -155,9 +146,9 @@ if (startMethodStart < 0 || startHelperStart <= startMethodStart) {
     'TARGET_APP_MISSING',
   ]) {
     if (
-      !new RegExp(
-        `rejectProtectionStartPrerequisite\\([\\s\\S]*?ProtectionStopReasonPolicy\\.${constant}`,
-      ).test(startMethodBody)
+      !new RegExp(`rejectProtectionStartPrerequisite\\([\\s\\S]*?ProtectionStopReasonPolicy\\.${constant}`).test(
+        startMethodBody,
+      )
     ) {
       findings.push(
         `${pluginPath}: startProtectionService must persist ${constant} through rejectProtectionStartPrerequisite before rejecting.`,

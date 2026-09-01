@@ -148,7 +148,9 @@ describe('DashboardScreen', () => {
       />,
     );
 
-    expect(await screen.findByRole('button', { name: /Commitment aktiv · Schutzstatus nicht prüfbar/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /Commitment aktiv · Schutzstatus nicht prüfbar/ }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Commitment aktiv · Regeln eingefroren/ })).not.toBeInTheDocument();
   });
 });

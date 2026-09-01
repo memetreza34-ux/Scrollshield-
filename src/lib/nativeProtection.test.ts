@@ -160,9 +160,7 @@ describe('NativeProtection lifecycle reasons', () => {
   it('fails closed before start when native sync does not confirm a valid config generation', async () => {
     syncProtectionConfigMock.mockResolvedValue({ unavailableAppIdsJson: '[]', configGeneration: 'invalid' });
 
-    await expect(NativeProtection.start({}, false)).rejects.toThrow(
-      'durable protection config generation',
-    );
+    await expect(NativeProtection.start({}, false)).rejects.toThrow('durable protection config generation');
     expect(startProtectionServiceMock).not.toHaveBeenCalled();
   });
 
@@ -248,18 +246,16 @@ describe('NativeProtection lifecycle reasons', () => {
   });
 
   it('recovers only from a confirmed unclean process stop and re-reads native truth', async () => {
-    getProtectionServiceStatusMock
-      .mockResolvedValueOnce(uncleanStatus)
-      .mockResolvedValueOnce({
-        running: true,
-        enabled: true,
-        unavailableAppIdsJson: '[]',
-        lastStartRequestAt: 250,
-        lastStartAt: 300,
-        lastStopAt: 100,
-        lastStopCode: 'notification_action_stop',
-        lastStopMessage: 'Ein älterer sauberer Stopp',
-      });
+    getProtectionServiceStatusMock.mockResolvedValueOnce(uncleanStatus).mockResolvedValueOnce({
+      running: true,
+      enabled: true,
+      unavailableAppIdsJson: '[]',
+      lastStartRequestAt: 250,
+      lastStartAt: 300,
+      lastStopAt: 100,
+      lastStopCode: 'notification_action_stop',
+      lastStopMessage: 'Ein älterer sauberer Stopp',
+    });
 
     const result = await NativeProtection.recoverAfterProcessLoss(
       {
@@ -279,18 +275,16 @@ describe('NativeProtection lifecycle reasons', () => {
   });
 
   it('preserves a newer manual stop that wins while process-loss recovery is in flight', async () => {
-    getProtectionServiceStatusMock
-      .mockResolvedValueOnce(uncleanStatus)
-      .mockResolvedValueOnce({
-        running: false,
-        enabled: false,
-        unavailableAppIdsJson: '[]',
-        lastStartRequestAt: 150,
-        lastStartAt: 200,
-        lastStopAt: 260,
-        lastStopCode: 'manual_app_stop',
-        lastStopMessage: 'Bewusst gestoppt',
-      });
+    getProtectionServiceStatusMock.mockResolvedValueOnce(uncleanStatus).mockResolvedValueOnce({
+      running: false,
+      enabled: false,
+      unavailableAppIdsJson: '[]',
+      lastStartRequestAt: 150,
+      lastStartAt: 200,
+      lastStopAt: 260,
+      lastStopCode: 'manual_app_stop',
+      lastStopMessage: 'Bewusst gestoppt',
+    });
 
     const result = await NativeProtection.recoverAfterProcessLoss({}, false);
 
@@ -308,19 +302,19 @@ describe('NativeProtection lifecycle reasons', () => {
   });
 
   it('returns fresh native target_app_missing evidence instead of writing a TypeScript stop', async () => {
-    startProtectionServiceMock.mockRejectedValueOnce(new Error('At least one installed active protected app is required'));
-    getProtectionServiceStatusMock
-      .mockResolvedValueOnce(uncleanStatus)
-      .mockResolvedValueOnce({
-        running: false,
-        enabled: false,
-        unavailableAppIdsJson: '["instagram"]',
-        lastStartRequestAt: 150,
-        lastStartAt: 200,
-        lastStopAt: 250,
-        lastStopCode: 'target_app_missing',
-        lastStopMessage: 'Keine aktive installierte Ziel-App ist mehr verfügbar',
-      });
+    startProtectionServiceMock.mockRejectedValueOnce(
+      new Error('At least one installed active protected app is required'),
+    );
+    getProtectionServiceStatusMock.mockResolvedValueOnce(uncleanStatus).mockResolvedValueOnce({
+      running: false,
+      enabled: false,
+      unavailableAppIdsJson: '["instagram"]',
+      lastStartRequestAt: 150,
+      lastStartAt: 200,
+      lastStopAt: 250,
+      lastStopCode: 'target_app_missing',
+      lastStopMessage: 'Keine aktive installierte Ziel-App ist mehr verfügbar',
+    });
     syncProtectionConfigMock.mockResolvedValue({
       unavailableAppIdsJson: '["instagram"]',
       configGeneration: CONFIG_GENERATION,
@@ -348,18 +342,16 @@ describe('NativeProtection lifecycle reasons', () => {
   });
 
   it('still recovers when one active target is unavailable but another remains installed', async () => {
-    getProtectionServiceStatusMock
-      .mockResolvedValueOnce(uncleanStatus)
-      .mockResolvedValueOnce({
-        running: true,
-        enabled: true,
-        unavailableAppIdsJson: '["instagram"]',
-        lastStartRequestAt: 250,
-        lastStartAt: 300,
-        lastStopAt: 100,
-        lastStopCode: 'notification_action_stop',
-        lastStopMessage: 'Ein älterer sauberer Stopp',
-      });
+    getProtectionServiceStatusMock.mockResolvedValueOnce(uncleanStatus).mockResolvedValueOnce({
+      running: true,
+      enabled: true,
+      unavailableAppIdsJson: '["instagram"]',
+      lastStartRequestAt: 250,
+      lastStartAt: 300,
+      lastStopAt: 100,
+      lastStopCode: 'notification_action_stop',
+      lastStopMessage: 'Ein älterer sauberer Stopp',
+    });
     syncProtectionConfigMock.mockResolvedValue({
       unavailableAppIdsJson: '["instagram"]',
       configGeneration: CONFIG_GENERATION,
@@ -393,9 +385,7 @@ describe('NativeProtection lifecycle reasons', () => {
 
   it('rethrows a native start failure when no newer terminal evidence was persisted', async () => {
     startProtectionServiceMock.mockRejectedValueOnce(new Error('transport failed'));
-    getProtectionServiceStatusMock
-      .mockResolvedValueOnce(uncleanStatus)
-      .mockResolvedValueOnce(uncleanStatus);
+    getProtectionServiceStatusMock.mockResolvedValueOnce(uncleanStatus).mockResolvedValueOnce(uncleanStatus);
 
     await expect(NativeProtection.recoverAfterProcessLoss({}, false)).rejects.toThrow('transport failed');
     expect(getProtectionServiceStatusMock).toHaveBeenCalledTimes(2);
@@ -435,9 +425,7 @@ describe('NativeProtection lifecycle reasons', () => {
       lastStopMessage: 'Bewusst gestoppt',
     });
 
-    await expect(NativeProtection.recoverAfterProcessLoss({}, false)).rejects.toThrow(
-      'unclean-process-stop',
-    );
+    await expect(NativeProtection.recoverAfterProcessLoss({}, false)).rejects.toThrow('unclean-process-stop');
     expect(syncProtectionConfigMock).not.toHaveBeenCalled();
     expect(startProtectionServiceMock).not.toHaveBeenCalled();
   });
@@ -477,9 +465,7 @@ describe('NativeProtection lifecycle reasons', () => {
     };
 
     expect(assessNativeProtectionHealth({ ...base, running: true, enabled: true })).toBe('active');
-    expect(assessNativeProtectionHealth({ ...base, running: true, enabled: false })).toBe(
-      'running-without-activation',
-    );
+    expect(assessNativeProtectionHealth({ ...base, running: true, enabled: false })).toBe('running-without-activation');
     expect(assessNativeProtectionHealth({ ...base, running: false, enabled: true })).toBe('stale-activation');
     expect(
       assessNativeProtectionHealth(
@@ -522,9 +508,9 @@ describe('NativeProtection lifecycle reasons', () => {
         lastStopCode: 'manual_app_stop',
       }),
     ).toBe('stopped-with-reason');
-    expect(
-      assessNativeProtectionHealth({ ...base, running: false, enabled: false, lastStartAt: 100 }),
-    ).toBe('stopped-without-reason');
+    expect(assessNativeProtectionHealth({ ...base, running: false, enabled: false, lastStartAt: 100 })).toBe(
+      'stopped-without-reason',
+    );
     expect(assessNativeProtectionHealth({ ...base, running: false, enabled: false })).toBe('never-started');
   });
 

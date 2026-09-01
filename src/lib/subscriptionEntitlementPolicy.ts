@@ -1,16 +1,6 @@
-import {
-  SUBSCRIPTION_PLAN_POLICY,
-  isSubscriptionPlanId,
-  type SubscriptionPlanId,
-} from './subscriptionPlanPolicy';
+import { SUBSCRIPTION_PLAN_POLICY, isSubscriptionPlanId, type SubscriptionPlanId } from './subscriptionPlanPolicy';
 
-export type SubscriptionLifecycleState =
-  | 'active'
-  | 'grace'
-  | 'pending'
-  | 'expired'
-  | 'revoked'
-  | 'unknown';
+export type SubscriptionLifecycleState = 'active' | 'grace' | 'pending' | 'expired' | 'revoked' | 'unknown';
 
 export interface BackendEntitlementCandidate {
   schemaVersion?: unknown;
@@ -62,13 +52,7 @@ const isFinitePositiveNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0;
 
 const normalizeLifecycleState = (value: unknown): SubscriptionLifecycleState => {
-  if (
-    value === 'active' ||
-    value === 'grace' ||
-    value === 'pending' ||
-    value === 'expired' ||
-    value === 'revoked'
-  ) {
+  if (value === 'active' || value === 'grace' || value === 'pending' || value === 'expired' || value === 'revoked') {
     return value;
   }
   return 'unknown';
@@ -142,8 +126,7 @@ export const resolveEffectiveSubscriptionEntitlement = (
   };
 };
 
-const uniqueIds = (ids: readonly string[]): string[] =>
-  Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
+const uniqueIds = (ids: readonly string[]): string[] => Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
 
 /**
  * Computes a downgrade/upgrade capacity transition without deleting configuration.

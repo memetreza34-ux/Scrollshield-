@@ -57,9 +57,7 @@ describe('NativeProtection drain ACK bridge', () => {
           desc: 'blocked',
         },
       ]),
-      usageJson: JSON.stringify([
-        { date: '2026-08-16', appId: 'instagram', durationMs: 60_000 },
-      ]),
+      usageJson: JSON.stringify([{ date: '2026-08-16', appId: 'instagram', durationMs: 60_000 }]),
     });
     acknowledgeProtectionEventsMock.mockResolvedValue({ acknowledged: true });
 
@@ -83,9 +81,7 @@ describe('NativeProtection drain ACK bridge', () => {
   it('fails closed when Android returns real data without a valid batch id', async () => {
     drainProtectionEventsMock.mockResolvedValue({
       batchId: 'invalid',
-      eventsJson: JSON.stringify([
-        { timestamp: 1, type: 'warning', appId: 'system', desc: 'warning' },
-      ]),
+      eventsJson: JSON.stringify([{ timestamp: 1, type: 'warning', appId: 'system', desc: 'warning' }]),
       usageJson: '[]',
     });
 
@@ -95,9 +91,7 @@ describe('NativeProtection drain ACK bridge', () => {
   });
 
   it('rejects malformed acknowledgements before calling Android', async () => {
-    await expect(NativeProtection.acknowledgeDrain('bad-id')).rejects.toThrow(
-      'Invalid native drain batch id',
-    );
+    await expect(NativeProtection.acknowledgeDrain('bad-id')).rejects.toThrow('Invalid native drain batch id');
     expect(acknowledgeProtectionEventsMock).not.toHaveBeenCalled();
   });
 

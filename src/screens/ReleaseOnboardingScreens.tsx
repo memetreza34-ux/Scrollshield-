@@ -19,7 +19,8 @@ export function ReleaseWelcome({ navigate }: { navigate: (screen: Screen) => voi
         </div>
         <h1 className="mb-4 text-4xl font-bold tracking-tight">ScrollShield</h1>
         <p className="max-w-sm text-lg font-medium leading-relaxed text-zinc-300">
-          Unterbrich impulsive App-Öffnungen, setze klare Limits und entscheide bewusster, bevor Zeit in geschützten Apps verschwindet.
+          Unterbrich impulsive App-Öffnungen, setze klare Limits und entscheide bewusster, bevor Zeit in geschützten
+          Apps verschwindet.
         </p>
 
         <div className="mt-7 w-full max-w-xs space-y-3 rounded-2xl border border-zinc-800/50 bg-zinc-950/60 p-5 text-left">
@@ -27,14 +28,18 @@ export function ReleaseWelcome({ navigate }: { navigate: (screen: Screen) => voi
             <Smartphone size={18} className="mt-0.5 flex-shrink-0 text-emerald-400" aria-hidden="true" />
             <div>
               <span className="block text-sm font-semibold text-emerald-100">Ganze Apps bewusst öffnen</span>
-              <span className="text-xs leading-relaxed text-zinc-500">Öffnungspause, Session-Länge, Tageslimit und Anti-Binge.</span>
+              <span className="text-xs leading-relaxed text-zinc-500">
+                Öffnungspause, Session-Länge, Tageslimit und Anti-Binge.
+              </span>
             </div>
           </div>
           <div className="flex items-start gap-3">
             <Lock size={18} className="mt-0.5 flex-shrink-0 text-blue-400" aria-hidden="true" />
             <div>
               <span className="block text-sm font-semibold text-blue-100">Strikt, wenn du es brauchst</span>
-              <span className="text-xs leading-relaxed text-zinc-500">Fokusregeln, Sperrfenster und begrenzter Notfallzugang.</span>
+              <span className="text-xs leading-relaxed text-zinc-500">
+                Fokusregeln, Sperrfenster und begrenzter Notfallzugang.
+              </span>
             </div>
           </div>
         </div>
@@ -117,7 +122,8 @@ export function ReleaseOnboarding({
             </div>
             <h1 className="text-center text-3xl font-bold tracking-tight">Apps auswählen</h1>
             <p className="mx-auto mb-8 mt-3 max-w-sm text-center text-sm leading-relaxed text-zinc-400">
-              Wähle mindestens eine App. Version 1 schützt die gesamte ausgewählte App; einzelne Reels, Shorts oder Feed-Bereiche werden nicht separat erkannt.
+              Wähle mindestens eine App. Version 1 schützt die gesamte ausgewählte App; einzelne Reels, Shorts oder
+              Feed-Bereiche werden nicht separat erkannt.
             </p>
 
             <div className="space-y-3">
@@ -136,12 +142,18 @@ export function ReleaseOnboarding({
                     className={`flex w-full items-center justify-between rounded-[1.5rem] border p-4 text-left ${selected ? 'border-zinc-700 bg-zinc-900/80' : 'border-zinc-800/50 bg-zinc-950/50'}`}
                   >
                     <div className="flex items-center gap-4">
-                      <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-xl ${app.color}`} aria-hidden="true">
+                      <div
+                        className={`flex h-12 w-12 items-center justify-center rounded-2xl text-xl ${app.color}`}
+                        aria-hidden="true"
+                      >
                         {app.icon}
                       </div>
                       <span className="font-semibold">{app.name}</span>
                     </div>
-                    <div className={`flex h-6 w-6 items-center justify-center rounded-full border ${selected ? 'border-zinc-100 bg-zinc-100 text-zinc-950' : 'border-zinc-700'}`} aria-hidden="true">
+                    <div
+                      className={`flex h-6 w-6 items-center justify-center rounded-full border ${selected ? 'border-zinc-100 bg-zinc-100 text-zinc-950' : 'border-zinc-700'}`}
+                      aria-hidden="true"
+                    >
                       {selected && <Check size={14} strokeWidth={3} />}
                     </div>
                   </button>
@@ -158,7 +170,8 @@ export function ReleaseOnboarding({
             </div>
             <h1 className="text-center text-3xl font-bold tracking-tight">Startprofil wählen</h1>
             <p className="mx-auto mb-7 mt-3 max-w-sm text-center text-sm leading-relaxed text-zinc-400">
-              Das Profil setzt nur unterstützte Ganz-App-Regeln als Startpunkt. Jede geschützte App kann danach einzeln angepasst werden.
+              Das Profil setzt nur unterstützte Ganz-App-Regeln als Startpunkt. Jede geschützte App kann danach einzeln
+              angepasst werden.
             </p>
 
             <div className="space-y-4">
@@ -192,10 +205,13 @@ export function ReleaseOnboarding({
             </div>
             <h1 className="text-3xl font-bold tracking-tight">Lokal und transparent</h1>
             <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-              Regeln, Schutzverlauf und Nutzungsstatistiken bleiben in Version 1 lokal. ScrollShield liest keine Chats, Passwörter oder Inhalte der geschützten Apps.
+              Regeln, Schutzverlauf und Nutzungsstatistiken bleiben in Version 1 lokal. ScrollShield liest keine Chats,
+              Passwörter oder Inhalte der geschützten Apps.
             </p>
             <div className="mt-6 rounded-[1.5rem] border border-zinc-800/50 bg-zinc-900/80 p-5 text-left text-sm leading-relaxed text-zinc-400">
-              <strong className="block text-zinc-200">{state.operatingSystem === 'android' ? 'Android v1' : 'iOS-Status'}</strong>
+              <strong className="block text-zinc-200">
+                {state.operatingSystem === 'android' ? 'Android v1' : 'iOS-Status'}
+              </strong>
               {state.operatingSystem === 'android'
                 ? 'Der reale Schutz nutzt Nutzungszugriff, ein sichtbares Overlay und eine dauerhaft sichtbare Schutzbenachrichtigung. Du siehst den Dienststatus vor und nach dem Start.'
                 : 'Die produktionsreife iOS-Bildschirmzeit-Integration ist noch nicht freigegeben. Die App wird dort keine fertige Systemschutz-Funktion vortäuschen.'}
@@ -207,7 +223,10 @@ export function ReleaseOnboarding({
       <div className="bg-zinc-950 pt-4">
         <div className="mb-6 flex justify-center gap-2" aria-label={`Schritt ${step} von 3`}>
           {[1, 2, 3].map((index) => (
-            <div key={index} className={`h-1.5 rounded-full ${index === step ? 'w-8 bg-zinc-100' : 'w-2 bg-zinc-800'}`} />
+            <div
+              key={index}
+              className={`h-1.5 rounded-full ${index === step ? 'w-8 bg-zinc-100' : 'w-2 bg-zinc-800'}`}
+            />
           ))}
         </div>
         <div className="flex gap-3">

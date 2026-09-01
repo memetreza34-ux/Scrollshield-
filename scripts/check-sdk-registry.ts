@@ -31,8 +31,13 @@ for (const dependency of registeredDependencies) {
   findings.push(`docs/SDK_REGISTRY.md lists ${dependency}, but it is not a direct production runtime dependency.`);
 }
 
-if (!registry.includes('com.android.billingclient:billing') || !registry.includes('com.google.android.play:integrity')) {
-  findings.push('SDK registry must explicitly disclose Google Play Billing and Play Integrity while they are shipped in the Android binary.');
+if (
+  !registry.includes('com.android.billingclient:billing') ||
+  !registry.includes('com.google.android.play:integrity')
+) {
+  findings.push(
+    'SDK registry must explicitly disclose Google Play Billing and Play Integrity while they are shipped in the Android binary.',
+  );
 }
 if (!/Billing and Play Integrity libraries are \*\*still embedded direct Android runtime SDKs\*\*/.test(registry)) {
   findings.push('SDK registry must distinguish no-INTERNET-permission from the presence of Google Play platform SDKs.');

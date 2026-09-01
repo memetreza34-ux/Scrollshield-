@@ -10,12 +10,7 @@ export interface NativeProtectionHealthPresentation {
   showLastStop: boolean;
 }
 
-const USER_STOP_CODES = new Set([
-  'manual_app_stop',
-  'notification_action_stop',
-  'migration_recovery',
-  'factory_reset',
-]);
+const USER_STOP_CODES = new Set(['manual_app_stop', 'notification_action_stop', 'migration_recovery', 'factory_reset']);
 
 export const describeNativeProtectionHealth = (
   status: NativeProtectionStatus | null,
@@ -124,7 +119,8 @@ export const describeNativeProtectionHealth = (
       return {
         badge: 'NOCH NICHT AKTIV',
         title: 'Android-Schutz wurde noch nicht gestartet',
-        message: 'Erteile die erforderlichen Zugriffe, wähle mindestens eine App und starte anschließend den Schutzdienst.',
+        message:
+          'Erteile die erforderlichen Zugriffe, wähle mindestens eine App und starte anschließend den Schutzdienst.',
         tone: 'neutral',
         showLastStop: false,
       };

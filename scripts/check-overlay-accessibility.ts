@@ -1,13 +1,9 @@
 import { readFile } from 'node:fs/promises';
 
-const servicePath =
-  'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldProtectionService.java';
+const servicePath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldProtectionService.java';
 const matrixPath = 'docs/ANDROID_DEVICE_TEST_MATRIX.md';
 
-const [service, matrix] = await Promise.all([
-  readFile(servicePath, 'utf8'),
-  readFile(matrixPath, 'utf8'),
-]);
+const [service, matrix] = await Promise.all([readFile(servicePath, 'utf8'), readFile(matrixPath, 'utf8')]);
 
 const findings: string[] = [];
 

@@ -50,7 +50,11 @@ for (const required of [
   'before',
   'autoRecoverySnapshotMatchesOnlyUnchangedLifecycleTruth',
 ]) {
-  requireText('startHandshake', required, `Start-handshake checker is missing auto-recovery snapshot marker: ${required}`);
+  requireText(
+    'startHandshake',
+    required,
+    `Start-handshake checker is missing auto-recovery snapshot marker: ${required}`,
+  );
 }
 
 for (const required of [
@@ -64,7 +68,11 @@ for (const required of [
   'start-pending',
   'start-interrupted',
 ]) {
-  requireText('processLoss', required, `Process-loss checker is missing native-owned snapshot/terminal marker: ${required}`);
+  requireText(
+    'processLoss',
+    required,
+    `Process-loss checker is missing native-owned snapshot/terminal marker: ${required}`,
+  );
 }
 
 for (const required of [
@@ -107,7 +115,11 @@ for (const required of [
   'unavailable targets do not suppress native stale-recovery preflight',
   'Native automatic restart must check snapshot first, then own config/permission/target fail-closed evidence before request persistence.',
 ]) {
-  requireText('recovery', required, `Protection recovery checker is missing native-owned stale-recovery marker: ${required}`);
+  requireText(
+    'recovery',
+    required,
+    `Protection recovery checker is missing native-owned stale-recovery marker: ${required}`,
+  );
 }
 
 for (const required of [
@@ -116,7 +128,11 @@ for (const required of [
   'inspect lifecycle truth first',
   'NativeProtection\\.syncCommitted\\(',
 ]) {
-  requireText('migrationRecovery', required, `Migration recovery checker is missing explicit durable-sync marker: ${required}`);
+  requireText(
+    'migrationRecovery',
+    required,
+    `Migration recovery checker is missing explicit durable-sync marker: ${required}`,
+  );
 }
 
 requireText(

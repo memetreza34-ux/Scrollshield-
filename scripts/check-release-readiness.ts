@@ -227,11 +227,7 @@ if (existsSync(path.join(repoRoot, packagePath))) {
   const verifyCommand = scripts.verify ?? '';
   for (const requiredCheck of ['check:device-matrix', 'check:release-approval', 'check:transparency']) {
     if (verifyCommand.includes(requiredCheck)) continue;
-    addFinding(
-      packagePath,
-      'Incomplete verification chain',
-      `npm run verify must include ${requiredCheck}.`,
-    );
+    addFinding(packagePath, 'Incomplete verification chain', `npm run verify must include ${requiredCheck}.`);
   }
 }
 

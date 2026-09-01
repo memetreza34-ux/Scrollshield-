@@ -16,16 +16,7 @@ if (!existsSync(androidDir)) {
 }
 
 const buildGradlePath = path.join(androidDir, 'app', 'build.gradle');
-const testRoot = path.join(
-  androidDir,
-  'app',
-  'src',
-  'androidTest',
-  'java',
-  'app',
-  'scrollshield',
-  'mobile',
-);
+const testRoot = path.join(androidDir, 'app', 'src', 'androidTest', 'java', 'app', 'scrollshield', 'mobile');
 const stateTestPath = path.join(testRoot, 'ProtectionStateInstrumentedTest.java');
 const manifestTestPath = path.join(testRoot, 'ManifestSecurityInstrumentedTest.java');
 const recoveryTestPath = path.join(testRoot, 'BootRecoveryInstrumentedTest.java');
@@ -143,18 +134,51 @@ if (findings.length === 0) {
   }
 
   for (const [method, description] of [
-    ['startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence', 'start-request versus confirmed-start persistence'],
-    ['terminalStopWinsAgainstDelayedStartConfirmationWithoutOverwrite', 'terminal stop winning a delayed start confirmation race'],
+    [
+      'startRequestAndConfirmedStartPersistAsDistinctLifecycleEvidence',
+      'start-request versus confirmed-start persistence',
+    ],
+    [
+      'terminalStopWinsAgainstDelayedStartConfirmationWithoutOverwrite',
+      'terminal stop winning a delayed start confirmation race',
+    ],
     ['restartRequestAdvancesBeyondLatestStopBoundary', 'strictly ordered immediate restart generation'],
-    ['atomicPrerequisiteStopPersistsDisabledStateEventAndExactCode', 'atomic disabled-state/event/diagnostic persistence'],
-    ['atomicPrerequisiteStopAlsoPersistsWhenProtectionWasAlreadyDisabled', 'first-start prerequisite persistence while activation is already false'],
-    ['atomicSystemStartFailurePersistsDisabledStateEventAndStableCode', 'technical START_FAILED system-stop persistence'],
-    ['atomicUnexpectedDestroyPersistsDisabledStateEventAndStableCode', 'unexpected service-destroy system-stop persistence'],
-    ['atomicTerminalStopsPersistExactCodesWithoutWarningEvents', 'manual/notification terminal-stop persistence without warning events'],
-    ['explicitPrerequisiteCodesPersistIndependentOfMessageLanguage', 'language-independent explicit prerequisite diagnostics'],
-    ['legacySystemPermissionWarningsStillPersistStableStopDiagnostics', 'legacy permission-warning diagnostic compatibility'],
-    ['legacySystemConfigurationWarningsStillPersistStableStopDiagnostics', 'legacy configuration-warning diagnostic compatibility'],
-    ['appSpecificWarningsDoNotOverwriteTerminalSystemStopDiagnostics', 'terminal diagnostic isolation from app warnings'],
+    [
+      'atomicPrerequisiteStopPersistsDisabledStateEventAndExactCode',
+      'atomic disabled-state/event/diagnostic persistence',
+    ],
+    [
+      'atomicPrerequisiteStopAlsoPersistsWhenProtectionWasAlreadyDisabled',
+      'first-start prerequisite persistence while activation is already false',
+    ],
+    [
+      'atomicSystemStartFailurePersistsDisabledStateEventAndStableCode',
+      'technical START_FAILED system-stop persistence',
+    ],
+    [
+      'atomicUnexpectedDestroyPersistsDisabledStateEventAndStableCode',
+      'unexpected service-destroy system-stop persistence',
+    ],
+    [
+      'atomicTerminalStopsPersistExactCodesWithoutWarningEvents',
+      'manual/notification terminal-stop persistence without warning events',
+    ],
+    [
+      'explicitPrerequisiteCodesPersistIndependentOfMessageLanguage',
+      'language-independent explicit prerequisite diagnostics',
+    ],
+    [
+      'legacySystemPermissionWarningsStillPersistStableStopDiagnostics',
+      'legacy permission-warning diagnostic compatibility',
+    ],
+    [
+      'legacySystemConfigurationWarningsStillPersistStableStopDiagnostics',
+      'legacy configuration-warning diagnostic compatibility',
+    ],
+    [
+      'appSpecificWarningsDoNotOverwriteTerminalSystemStopDiagnostics',
+      'terminal diagnostic isolation from app warnings',
+    ],
   ]) {
     requireMatch(
       diagnosticsTestPath,

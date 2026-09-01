@@ -2,8 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 const mainActivityPath = 'android/app/src/main/java/app/scrollshield/mobile/MainActivity.java';
 const pluginPath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldNativePlugin.java';
-const notificationPluginPath =
-  'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldNotificationPlugin.java';
+const notificationPluginPath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldNotificationPlugin.java';
 const bootReceiverPath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldBootReceiver.java';
 const servicePath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldProtectionService.java';
 const nativePermissionsPath = 'src/lib/nativePermissions.ts';

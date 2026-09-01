@@ -11,24 +11,34 @@ if (!root || typeof root !== 'object') {
 }
 
 if ((lockfile.lockfileVersion ?? 0) < 3) {
-  findings.push(`package-lock.json lockfileVersion must be at least 3; found ${lockfile.lockfileVersion ?? 'missing'}.`);
+  findings.push(
+    `package-lock.json lockfileVersion must be at least 3; found ${lockfile.lockfileVersion ?? 'missing'}.`,
+  );
 }
 
 if (lockfile.name !== manifest.name) {
-  findings.push(`package-lock.json name (${lockfile.name ?? 'missing'}) does not match package.json (${manifest.name ?? 'missing'}).`);
+  findings.push(
+    `package-lock.json name (${lockfile.name ?? 'missing'}) does not match package.json (${manifest.name ?? 'missing'}).`,
+  );
 }
 
 if (lockfile.version !== manifest.version) {
-  findings.push(`package-lock.json version (${lockfile.version ?? 'missing'}) does not match package.json (${manifest.version ?? 'missing'}).`);
+  findings.push(
+    `package-lock.json version (${lockfile.version ?? 'missing'}) does not match package.json (${manifest.version ?? 'missing'}).`,
+  );
 }
 
 if (root) {
   if (root.name !== manifest.name) {
-    findings.push(`package-lock root name (${root.name ?? 'missing'}) does not match package.json (${manifest.name ?? 'missing'}).`);
+    findings.push(
+      `package-lock root name (${root.name ?? 'missing'}) does not match package.json (${manifest.name ?? 'missing'}).`,
+    );
   }
 
   if (root.version !== manifest.version) {
-    findings.push(`package-lock root version (${root.version ?? 'missing'}) does not match package.json (${manifest.version ?? 'missing'}).`);
+    findings.push(
+      `package-lock root version (${root.version ?? 'missing'}) does not match package.json (${manifest.version ?? 'missing'}).`,
+    );
   }
 
   for (const section of ['dependencies', 'devDependencies']) {

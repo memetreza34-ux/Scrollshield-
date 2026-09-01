@@ -59,8 +59,14 @@ export function ProtectionInsightsPanel({ state, now = new Date() }: { state: Ap
           <p className="mt-3 text-2xl font-bold font-mono text-zinc-100">
             {formatMinutes(comparison.current.measuredUsageMinutes)}
           </p>
-          <p className={`mt-2 flex items-center gap-1 text-xs ${usageImproved ? 'text-emerald-400' : usageIncreased ? 'text-amber-400' : 'text-zinc-500'}`}>
-            {usageImproved ? <TrendingDown size={14} aria-hidden="true" /> : usageIncreased ? <TrendingUp size={14} aria-hidden="true" /> : null}
+          <p
+            className={`mt-2 flex items-center gap-1 text-xs ${usageImproved ? 'text-emerald-400' : usageIncreased ? 'text-amber-400' : 'text-zinc-500'}`}
+          >
+            {usageImproved ? (
+              <TrendingDown size={14} aria-hidden="true" />
+            ) : usageIncreased ? (
+              <TrendingUp size={14} aria-hidden="true" />
+            ) : null}
             {signedMinutes(comparison.measuredUsageChangeMinutes)} zum vorherigen Zeitraum
           </p>
           {comparison.measuredUsageChangePercent !== null && (
@@ -100,8 +106,12 @@ export function ProtectionInsightsPanel({ state, now = new Date() }: { state: Ap
             <TimerReset size={15} aria-hidden="true" />
             <span className="text-[10px] font-bold uppercase tracking-widest">Fokuszeit</span>
           </div>
-          <p className="mt-3 text-2xl font-bold font-mono text-zinc-100">{formatMinutes(comparison.current.focusMinutes)}</p>
-          <p className="mt-2 text-xs text-zinc-500">{signedMinutes(comparison.focusMinutesChange)} zum vorherigen Zeitraum</p>
+          <p className="mt-3 text-2xl font-bold font-mono text-zinc-100">
+            {formatMinutes(comparison.current.focusMinutes)}
+          </p>
+          <p className="mt-2 text-xs text-zinc-500">
+            {signedMinutes(comparison.focusMinutesChange)} zum vorherigen Zeitraum
+          </p>
         </article>
       </div>
 
@@ -123,7 +133,8 @@ export function ProtectionInsightsPanel({ state, now = new Date() }: { state: Ap
           </div>
         </div>
         <p className="mt-4 border-t border-zinc-800/70 pt-4 text-xs leading-relaxed text-zinc-500">
-          „Gemessene Nutzung“ basiert auf den lokal importierten Android-Freigabezeiten. „Geschätzt gespart“ bleibt eine separate Produktschätzung und wird hier nicht als Messwert ausgegeben.
+          „Gemessene Nutzung“ basiert auf den lokal importierten Android-Freigabezeiten. „Geschätzt gespart“ bleibt eine
+          separate Produktschätzung und wird hier nicht als Messwert ausgegeben.
         </p>
       </article>
     </section>

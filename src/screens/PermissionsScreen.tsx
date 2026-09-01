@@ -81,7 +81,9 @@ export function PermissionsScreen({
   updateStateRef.current = updateState;
   permissionsRef.current = permissions;
 
-  const applyNativePermissionStatus = (nativeStatus: Awaited<ReturnType<typeof NativePermissions.getAndroidStatus>>) => {
+  const applyNativePermissionStatus = (
+    nativeStatus: Awaited<ReturnType<typeof NativePermissions.getAndroidStatus>>,
+  ) => {
     if (!nativeStatus) return;
     updateStateRef.current({
       permissions: {
@@ -187,9 +189,7 @@ export function PermissionsScreen({
 
       const missingPrerequisites = getMissingAndroidProtectionPrerequisites(nativeStatus);
       if (missingPrerequisites.length > 0) {
-        setStatusMessage(
-          describeProtectionPrerequisiteBlock(missingPrerequisites, recoveringFromProcessLoss),
-        );
+        setStatusMessage(describeProtectionPrerequisiteBlock(missingPrerequisites, recoveringFromProcessLoss));
         return;
       }
 
@@ -200,10 +200,7 @@ export function PermissionsScreen({
       }
 
       if (recoveringFromProcessLoss) {
-        const nextStatus = await NativeProtection.recoverAfterProcessLoss(
-          state.appsConfig,
-          state.isFocusModeActive,
-        );
+        const nextStatus = await NativeProtection.recoverAfterProcessLoss(state.appsConfig, state.isFocusModeActive);
         setServiceStatus(nextStatus);
 
         if (nextStatus.running && nextStatus.enabled && nextStatus.health === 'active') {
@@ -253,9 +250,7 @@ export function PermissionsScreen({
             }
           }
 
-          const blockedPrerequisite = getAndroidProtectionPrerequisiteForStopCode(
-            latestServiceStatus.lastStopCode,
-          );
+          const blockedPrerequisite = getAndroidProtectionPrerequisiteForStopCode(latestServiceStatus.lastStopCode);
           if (blockedPrerequisite) {
             setStatusMessage(describeProtectionPrerequisiteBlock([blockedPrerequisite], true));
             return;
@@ -356,9 +351,7 @@ export function PermissionsScreen({
     },
   ];
 
-  const visibleCards = permissionCards.filter(
-    (card) => card.platform === 'both' || card.platform === operatingSystem,
-  );
+  const visibleCards = permissionCards.filter((card) => card.platform === 'both' || card.platform === operatingSystem);
 
   const getStatusText = (active: boolean, optional = false) => {
     if (active) return 'AKTIV';

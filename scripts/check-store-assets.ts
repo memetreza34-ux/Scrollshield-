@@ -55,7 +55,12 @@ requireText(packetPath, packet, /Data shared:\s+\*\*No\*\*/i, 'Missing Play Cons
 requireText(packetPath, packet, /Tracking:\s+\*\*No\*\*/i, 'Missing tracking answer.');
 requireText(packetPath, packet, /PACKAGE_USAGE_STATS/i, 'Missing Usage Access declaration draft.');
 requireText(packetPath, packet, /SYSTEM_ALERT_WINDOW/i, 'Missing overlay declaration draft.');
-requireText(packetPath, packet, /FOREGROUND_SERVICE_SPECIAL_USE/i, 'Missing special-use foreground-service declaration draft.');
+requireText(
+  packetPath,
+  packet,
+  /FOREGROUND_SERVICE_SPECIAL_USE/i,
+  'Missing special-use foreground-service declaration draft.',
+);
 requireText(packetPath, packet, /USK 0 \/ PEGI 3/i, 'Missing Google rating target.');
 requireText(packetPath, packet, /Target:\s+\*\*4\+\*\*/i, 'Missing Apple rating target.');
 

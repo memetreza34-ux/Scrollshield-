@@ -30,8 +30,7 @@ export const createLegacyRecoveryPackage = (exportedAt = new Date()): LegacyReco
   };
 };
 
-export const serializeLegacyRecoveryPackage = (data: LegacyRecoveryPackage): string =>
-  JSON.stringify(data, null, 2);
+export const serializeLegacyRecoveryPackage = (data: LegacyRecoveryPackage): string => JSON.stringify(data, null, 2);
 
 export const createLegacyRecoveryFilename = (date = new Date()): string =>
   `scrollshield-legacy-recovery-${date.toISOString().slice(0, 10)}.json`;

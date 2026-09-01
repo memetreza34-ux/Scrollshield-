@@ -3,8 +3,7 @@ import { readFile } from 'node:fs/promises';
 const packagePath = 'package.json';
 const androidBuildPath = 'android/app/build.gradle';
 const mainActivityPath = 'android/app/src/main/java/app/scrollshield/mobile/MainActivity.java';
-const nativeBillingPluginPath =
-  'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldBillingPlugin.java';
+const nativeBillingPluginPath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldBillingPlugin.java';
 const nativeBillingBridgePath = 'src/lib/nativeBilling.ts';
 const nativeBillingBridgeTestPath = 'src/lib/nativeBilling.test.ts';
 const appPath = 'src/App.tsx';
@@ -65,9 +64,10 @@ const [
 
 const findings: string[] = [];
 const productionSurface = [app, settings, dashboard, onboarding, permissions, profiles].join('\n');
-const billingDependencyPresent = /revenuecat|purchases-capacitor|play-billing|billingclient|storekit|com\.android\.billingclient/i.test(
-  `${packageJson}\n${androidBuild}`,
-);
+const billingDependencyPresent =
+  /revenuecat|purchases-capacitor|play-billing|billingclient|storekit|com\.android\.billingclient/i.test(
+    `${packageJson}\n${androidBuild}`,
+  );
 const subscriptionReleaseBlocked = /Status: \*\*BLOCKED \/ architecture gate only\*\*/.test(subscriptionGate);
 
 function requirePattern(file: string, content: string, pattern: RegExp, message: string) {

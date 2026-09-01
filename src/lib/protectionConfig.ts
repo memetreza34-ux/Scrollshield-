@@ -14,12 +14,8 @@ export const PROTECTION_BOUNDS = {
 const finiteInteger = (value: number, fallback: number): number =>
   Number.isFinite(value) ? Math.round(value) : fallback;
 
-export const clampInteger = (
-  value: number,
-  min: number,
-  max: number,
-  fallback: number,
-): number => Math.min(max, Math.max(min, finiteInteger(value, fallback)));
+export const clampInteger = (value: number, min: number, max: number, fallback: number): number =>
+  Math.min(max, Math.max(min, finiteInteger(value, fallback)));
 
 export const normalizeProtectionConfig = (config: AppConfig): AppConfig => {
   const warningThreshold = clampInteger(

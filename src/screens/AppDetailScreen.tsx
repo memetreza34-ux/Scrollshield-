@@ -31,9 +31,7 @@ export function AppDetailScreen({
 
   if (!appId || !appInfo) return null;
 
-  const config = normalizeProtectionConfig(
-    state.appsConfig[appId] ?? { id: appId, ...DEFAULT_APP_CONFIG },
-  );
+  const config = normalizeProtectionConfig(state.appsConfig[appId] ?? { id: appId, ...DEFAULT_APP_CONFIG });
   const parsedBlockRange = parseBlockRange(config.blockHours);
   const blockWindowEnabled = parsedBlockRange !== null;
   const blockStart = parsedBlockRange?.[0] ?? '22:00';
@@ -90,12 +88,16 @@ export function AppDetailScreen({
       <Header title={appInfo.name} onBack={() => navigate('apps')} />
 
       <div className="space-y-6 flex-1 overflow-y-auto scrollbar-hide">
-        <section className="rounded-[2rem] border border-zinc-800/50 bg-zinc-900/80 p-6 shadow-lg" aria-label="Schutz aktivieren">
+        <section
+          className="rounded-[2rem] border border-zinc-800/50 bg-zinc-900/80 p-6 shadow-lg"
+          aria-label="Schutz aktivieren"
+        >
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="font-semibold text-lg">Schutz aktivieren</h2>
               <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-                Version 1 schützt die gesamte ausgewählte App. Einzelne Reels-, Shorts- oder Feed-Bereiche werden nicht separat erkannt.
+                Version 1 schützt die gesamte ausgewählte App. Einzelne Reels-, Shorts- oder Feed-Bereiche werden nicht
+                separat erkannt.
               </p>
             </div>
             <Switch
@@ -111,7 +113,10 @@ export function AppDetailScreen({
           inert={!config.active}
         >
           <section aria-labelledby="app-detail-mode-title">
-            <h2 id="app-detail-mode-title" className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">
+            <h2
+              id="app-detail-mode-title"
+              className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500"
+            >
               Schutzmodus
             </h2>
             <div
@@ -137,12 +142,16 @@ export function AppDetailScreen({
               ))}
             </div>
             <p className="mt-2 px-2 text-xs leading-relaxed text-zinc-600">
-              „Bewusste Pause“ zeigt den konfigurierten Öffnungsdialog. „Strikt“ erlaubt normale Freigaben nicht und nutzt nur den begrenzten Notfallweg.
+              „Bewusste Pause“ zeigt den konfigurierten Öffnungsdialog. „Strikt“ erlaubt normale Freigaben nicht und
+              nutzt nur den begrenzten Notfallweg.
             </p>
           </section>
 
           <section aria-labelledby="app-detail-limits-title">
-            <h2 id="app-detail-limits-title" className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">
+            <h2
+              id="app-detail-limits-title"
+              className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500"
+            >
               Limits & bewusste Öffnung
             </h2>
             <div className="overflow-hidden rounded-[2rem] border border-zinc-800/50 bg-zinc-900/80">
@@ -151,7 +160,9 @@ export function AppDetailScreen({
                   <Clock size={18} className="mt-0.5 flex-shrink-0 text-zinc-500" aria-hidden="true" />
                   <div>
                     <div className="font-semibold">Tageslimit</div>
-                    <p className="mt-1 text-xs text-zinc-500">Nach Erreichen greift eine strikte Sperre bis zum nächsten lokalen Tag.</p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Nach Erreichen greift eine strikte Sperre bis zum nächsten lokalen Tag.
+                    </p>
                   </div>
                 </div>
                 <TimeSelector
@@ -166,7 +177,9 @@ export function AppDetailScreen({
               <div className="flex items-center justify-between gap-4 border-b border-zinc-800/50 p-6">
                 <div>
                   <div className="font-semibold">Session-Länge</div>
-                  <p className="mt-1 text-xs text-zinc-500">So lange bleibt eine bewusst freigegebene Öffnung maximal aktiv. Mindestens eine Minute.</p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    So lange bleibt eine bewusst freigegebene Öffnung maximal aktiv. Mindestens eine Minute.
+                  </p>
                 </div>
                 <TimeSelector
                   value={config.sessionLimit}
@@ -178,7 +191,9 @@ export function AppDetailScreen({
               <div className="flex items-center justify-between gap-4 p-6">
                 <div>
                   <div className="font-semibold">Öffnungsverzögerung</div>
-                  <p className="mt-1 text-xs text-zinc-500">Unterbricht den automatischen Griff zur App vor einer normalen Freigabe.</p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Unterbricht den automatischen Griff zur App vor einer normalen Freigabe.
+                  </p>
                 </div>
                 <TimeSelector
                   value={config.openDelay}
@@ -193,7 +208,10 @@ export function AppDetailScreen({
           </section>
 
           <section aria-labelledby="app-detail-schedule-title">
-            <h2 id="app-detail-schedule-title" className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">
+            <h2
+              id="app-detail-schedule-title"
+              className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500"
+            >
               Tägliches Sperrfenster
             </h2>
             <div className="overflow-hidden rounded-[2rem] border border-zinc-800/50 bg-zinc-900/80">
@@ -237,7 +255,8 @@ export function AppDetailScreen({
                     />
                   </label>
                   <p className="col-span-2 text-xs leading-relaxed text-zinc-500">
-                    Start ist inklusive, Ende exklusive. Identische Start- und Endzeit wird nicht gespeichert, damit kein versehentlicher 24-Stunden-Block entsteht.
+                    Start ist inklusive, Ende exklusive. Identische Start- und Endzeit wird nicht gespeichert, damit
+                    kein versehentlicher 24-Stunden-Block entsteht.
                   </p>
                 </div>
               )}
@@ -245,19 +264,26 @@ export function AppDetailScreen({
           </section>
 
           <section aria-labelledby="app-detail-focus-title">
-            <h2 id="app-detail-focus-title" className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">
+            <h2
+              id="app-detail-focus-title"
+              className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500"
+            >
               Fokus
             </h2>
             <div className="rounded-[2rem] border border-zinc-800/50 bg-zinc-900/80 p-6">
               <div className="flex items-center justify-between gap-4">
                 <div className="pr-4">
                   <h3 className="font-semibold">Bei aktiver Fokus-Sitzung</h3>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">Bestimmt, ob diese App normal bleibt, warnt oder strikt blockiert wird.</p>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                    Bestimmt, ob diese App normal bleibt, warnt oder strikt blockiert wird.
+                  </p>
                 </div>
                 <select
                   aria-label="Fokus-Modus Verhalten"
                   value={config.focusModeBehavior}
-                  onChange={(event) => updateConfig({ focusModeBehavior: event.target.value as AppConfig['focusModeBehavior'] })}
+                  onChange={(event) =>
+                    updateConfig({ focusModeBehavior: event.target.value as AppConfig['focusModeBehavior'] })
+                  }
                   className="rounded-xl border border-zinc-700 bg-zinc-800 p-2 text-sm text-zinc-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                 >
                   <option value="allow">Erlauben</option>
@@ -269,7 +295,10 @@ export function AppDetailScreen({
           </section>
 
           <section aria-labelledby="app-detail-emergency-title">
-            <h2 id="app-detail-emergency-title" className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">
+            <h2
+              id="app-detail-emergency-title"
+              className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500"
+            >
               Notfallfreigabe
             </h2>
             <div className="overflow-hidden rounded-[2rem] border border-zinc-800/50 bg-zinc-900/80">
@@ -280,7 +309,8 @@ export function AppDetailScreen({
                     <h3 className="font-semibold">Begrenzten Ausnahmezugang erlauben</h3>
                   </div>
                   <p className="mt-2 text-xs leading-relaxed text-zinc-400">
-                    Ein sicherer Ausnahmeweg bleibt bewusst begrenzt. „Zurück zum Startbildschirm“ bleibt im Blockbildschirm immer verfügbar.
+                    Ein sicherer Ausnahmeweg bleibt bewusst begrenzt. „Zurück zum Startbildschirm“ bleibt im
+                    Blockbildschirm immer verfügbar.
                   </p>
                 </div>
                 <Switch
@@ -315,7 +345,9 @@ export function AppDetailScreen({
                   <div className="flex items-center justify-between gap-4 border-b border-zinc-800/50 bg-zinc-900/50 p-6">
                     <div className="pr-4">
                       <h3 className="font-semibold text-sm">Zusätzlichen Countdown verlangen</h3>
-                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">Im strikten Block wird die Notfallfreigabe dadurch nicht impulsiv sofort verfügbar.</p>
+                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                        Im strikten Block wird die Notfallfreigabe dadurch nicht impulsiv sofort verfügbar.
+                      </p>
                     </div>
                     <Switch
                       checked={emergency.requireCountdown}
@@ -328,7 +360,8 @@ export function AppDetailScreen({
                     <div className="pr-4">
                       <h3 className="font-semibold text-sm">Begründung verlangen</h3>
                       <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-                        Mindestens drei Zeichen. Der Text ist auf 160 Zeichen begrenzt und wird nur im lokalen Verlauf gespeichert.
+                        Mindestens drei Zeichen. Der Text ist auf 160 Zeichen begrenzt und wird nur im lokalen Verlauf
+                        gespeichert.
                       </p>
                     </div>
                     <Switch
@@ -343,7 +376,10 @@ export function AppDetailScreen({
           </section>
 
           <section aria-labelledby="app-detail-antibinge-title">
-            <h2 id="app-detail-antibinge-title" className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">
+            <h2
+              id="app-detail-antibinge-title"
+              className="px-2 mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500"
+            >
               Adaptive Anti-Binge-Reibung
             </h2>
             <div className="overflow-hidden rounded-[2rem] border border-zinc-800/50 bg-zinc-900/80">
@@ -351,7 +387,8 @@ export function AppDetailScreen({
                 <div className="pr-4">
                   <h3 className="font-semibold">Wiederholtes Öffnen adaptiv bremsen</h3>
                   <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-                    Zählt nur erfolgreiche bewusste Freigaben lokal. Ab der Warnschwelle steigt die normale Pause pro weiterer Öffnung um 5 Sekunden; an der Sperrschwelle greift der strikte Anti-Binge-Block.
+                    Zählt nur erfolgreiche bewusste Freigaben lokal. Ab der Warnschwelle steigt die normale Pause pro
+                    weiterer Öffnung um 5 Sekunden; an der Sperrschwelle greift der strikte Anti-Binge-Block.
                   </p>
                 </div>
                 <Switch
@@ -365,7 +402,9 @@ export function AppDetailScreen({
                 <>
                   <div className="border-b border-zinc-800/50 bg-zinc-900/50 p-6">
                     <div className="mb-4 flex items-center justify-between gap-3">
-                      <label htmlFor="warning-threshold" className="font-semibold">Adaptive Warnung ab</label>
+                      <label htmlFor="warning-threshold" className="font-semibold">
+                        Adaptive Warnung ab
+                      </label>
                       <span className="rounded-lg bg-zinc-800/60 px-3 py-1 text-sm font-mono text-zinc-300">
                         {antiBinge.warningThreshold}x / {antiBinge.warningTimeframe}m
                       </span>
@@ -389,13 +428,17 @@ export function AppDetailScreen({
                       />
                     </div>
                     <p className="mt-3 text-xs leading-relaxed text-zinc-600">
-                      Die adaptive Pause wächst deterministisch in 5-Sekunden-Schritten und ist auf 60 Sekunden begrenzt. Eine bereits längere manuelle Öffnungsverzögerung wird nie verkürzt. Notfallfreigaben verwenden weiterhin ihren eigenen Countdown.
+                      Die adaptive Pause wächst deterministisch in 5-Sekunden-Schritten und ist auf 60 Sekunden
+                      begrenzt. Eine bereits längere manuelle Öffnungsverzögerung wird nie verkürzt. Notfallfreigaben
+                      verwenden weiterhin ihren eigenen Countdown.
                     </p>
                   </div>
 
                   <div className="bg-zinc-900/50 p-6">
                     <div className="mb-4 flex items-center justify-between gap-3">
-                      <label htmlFor="block-threshold" className="font-semibold text-red-400">Strikte Sperre nach</label>
+                      <label htmlFor="block-threshold" className="font-semibold text-red-400">
+                        Strikte Sperre nach
+                      </label>
                       <span className="rounded-lg bg-zinc-800/60 px-3 py-1 text-sm font-mono text-zinc-300">
                         {antiBinge.blockThreshold}x / {antiBinge.blockTimeframe}m
                       </span>
@@ -427,20 +470,29 @@ export function AppDetailScreen({
             </div>
           </section>
 
-          <section className="rounded-[1.5rem] border border-blue-500/20 bg-blue-500/5 p-4" aria-label="Technischer Umfang">
+          <section
+            className="rounded-[1.5rem] border border-blue-500/20 bg-blue-500/5 p-4"
+            aria-label="Technischer Umfang"
+          >
             <div className="flex items-start gap-3">
               <Info size={17} className="mt-0.5 flex-shrink-0 text-blue-400" aria-hidden="true" />
               <p className="text-xs leading-relaxed text-zinc-400">
-                Diese Seite zeigt nur Regeln, die der aktuelle Android-v1-Schutzdienst tatsächlich auswertet. Reels-/Shorts-, Swipe- und Einzelinhalt-Erkennung bleiben aus der Release-Oberfläche entfernt, bis sie technisch zuverlässig umgesetzt sind.
+                Diese Seite zeigt nur Regeln, die der aktuelle Android-v1-Schutzdienst tatsächlich auswertet.
+                Reels-/Shorts-, Swipe- und Einzelinhalt-Erkennung bleiben aus der Release-Oberfläche entfernt, bis sie
+                technisch zuverlässig umgesetzt sind.
               </p>
             </div>
           </section>
 
-          <section className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/60 p-4" aria-label="Lokale Verarbeitung">
+          <section
+            className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/60 p-4"
+            aria-label="Lokale Verarbeitung"
+          >
             <div className="flex items-start gap-3">
               <Shield size={17} className="mt-0.5 flex-shrink-0 text-emerald-400" aria-hidden="true" />
               <p className="text-xs leading-relaxed text-zinc-400">
-                Regeln, Öffnungszähler und Notfallbegründungen bleiben lokal. Änderungen werden an den laufenden Android-Schutzdienst synchronisiert, sobald der native Schutz verfügbar ist.
+                Regeln, Öffnungszähler und Notfallbegründungen bleiben lokal. Änderungen werden an den laufenden
+                Android-Schutzdienst synchronisiert, sobald der native Schutz verfügbar ist.
               </p>
             </div>
           </section>

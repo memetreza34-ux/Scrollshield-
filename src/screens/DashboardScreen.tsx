@@ -132,7 +132,8 @@ export function DashboardScreen({
           <div>
             <div className="text-sm font-bold text-amber-200">Commitment aktiv · Schutzstatus nicht prüfbar</div>
             <p className="mt-1 text-xs leading-relaxed text-amber-100/70">
-              Deine Regeln bleiben bis {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} eingefroren, aber der Android-Dienststatus konnte nicht gelesen werden. Tippe hier, um den Schutzstatus zu prüfen.
+              Deine Regeln bleiben bis {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} eingefroren, aber
+              der Android-Dienststatus konnte nicht gelesen werden. Tippe hier, um den Schutzstatus zu prüfen.
             </p>
           </div>
         </button>
@@ -148,7 +149,8 @@ export function DashboardScreen({
           <div>
             <div className="text-sm font-bold text-zinc-200">Commitment aktiv · Schutzstatus wird geprüft</div>
             <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-              Die Regeln sind eingefroren. ScrollShield bestätigt gerade separat, ob der native Android-Schutzdienst noch läuft.
+              Die Regeln sind eingefroren. ScrollShield bestätigt gerade separat, ob der native Android-Schutzdienst
+              noch läuft.
             </p>
           </div>
         </button>
@@ -164,10 +166,13 @@ export function DashboardScreen({
           <div>
             <div className="text-sm font-bold text-red-200">Commitment aktiv · Android-Schutz läuft nicht</div>
             <p className="mt-1 text-xs leading-relaxed text-red-100/70">
-              Die Regeln bleiben bis {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} eingefroren, aber der Schutzdienst ist aktuell nicht vollständig aktiv. Tippe hier zum Reparieren.
+              Die Regeln bleiben bis {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} eingefroren, aber
+              der Schutzdienst ist aktuell nicht vollständig aktiv. Tippe hier zum Reparieren.
             </p>
             {commitmentRuntimeStatus.lastStopCode && (
-              <p className="mt-2 font-mono text-[10px] text-red-200/70">Stoppcode: {commitmentRuntimeStatus.lastStopCode}</p>
+              <p className="mt-2 font-mono text-[10px] text-red-200/70">
+                Stoppcode: {commitmentRuntimeStatus.lastStopCode}
+              </p>
             )}
           </div>
         </button>
@@ -183,7 +188,8 @@ export function DashboardScreen({
           <div>
             <div className="text-sm font-bold text-indigo-100">Commitment aktiv · Regeln eingefroren</div>
             <p className="mt-1 text-xs leading-relaxed text-indigo-200/70">
-              Bis {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} bleiben Apps, Profile, Limits und Zeitpläne unverändert. Tippe für Details und Sicherheitsausgänge.
+              Bis {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} bleiben Apps, Profile, Limits und
+              Zeitpläne unverändert. Tippe für Details und Sicherheitsausgänge.
             </p>
           </div>
         </button>
@@ -199,7 +205,8 @@ export function DashboardScreen({
           <div>
             <div className="text-sm font-bold text-amber-300">Android-Schutz ist noch nicht vollständig bereit</div>
             <p className="mt-1 text-xs leading-relaxed text-amber-200/70">
-              Nutzungszugriff, Overlay und sichtbare Benachrichtigungen müssen aktiv sein. Tippe hier für den echten Gerätestatus.
+              Nutzungszugriff, Overlay und sichtbare Benachrichtigungen müssen aktiv sein. Tippe hier für den echten
+              Gerätestatus.
             </p>
           </div>
         </button>
@@ -209,18 +216,26 @@ export function DashboardScreen({
         <div className="flex gap-3 rounded-[1.5rem] border border-blue-500/25 bg-blue-500/5 p-4">
           <AlertTriangle size={19} className="mt-0.5 flex-shrink-0 text-blue-400" aria-hidden="true" />
           <p className="text-xs leading-relaxed text-zinc-400">
-            Der native iOS-Schutz ist noch nicht Bestandteil des Release-Kandidaten. Diese Ansicht ist dort nur Produktvorschau.
+            Der native iOS-Schutz ist noch nicht Bestandteil des Release-Kandidaten. Diese Ansicht ist dort nur
+            Produktvorschau.
           </p>
         </div>
       )}
 
       {state.isFocusModeActive && (
-        <section className="rounded-[2rem] border border-emerald-500/30 bg-emerald-500/10 p-6 text-center" aria-labelledby="active-focus-title">
+        <section
+          className="rounded-[2rem] border border-emerald-500/30 bg-emerald-500/10 p-6 text-center"
+          aria-labelledby="active-focus-title"
+        >
           <h2 id="active-focus-title" className="text-xs font-bold uppercase tracking-widest text-emerald-400">
             Fokus aktiv
           </h2>
-          <div className="mt-3 text-5xl font-mono font-bold tracking-tighter text-emerald-50" aria-label={`Noch ${state.focusTimeRemaining} Minuten`}>
-            {state.focusTimeRemaining}<span className="text-2xl text-emerald-400/80">m</span>
+          <div
+            className="mt-3 text-5xl font-mono font-bold tracking-tighter text-emerald-50"
+            aria-label={`Noch ${state.focusTimeRemaining} Minuten`}
+          >
+            {state.focusTimeRemaining}
+            <span className="text-2xl text-emerald-400/80">m</span>
           </div>
           <button
             type="button"
@@ -234,13 +249,17 @@ export function DashboardScreen({
 
       <section aria-labelledby="today-title">
         <div className="mb-3 flex items-center justify-between px-2">
-          <h2 id="today-title" className="text-xs font-bold uppercase tracking-widest text-zinc-500">Heute</h2>
+          <h2 id="today-title" className="text-xs font-bold uppercase tracking-widest text-zinc-500">
+            Heute
+          </h2>
           <span className="text-xs text-zinc-600">lokale Daten</span>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="min-h-[118px] rounded-[1.5rem] border border-zinc-800/50 bg-zinc-900/80 p-5">
             <Smartphone size={17} className="text-zinc-500" aria-hidden="true" />
-            <div className="mt-4 text-3xl font-mono font-bold tracking-tighter text-zinc-100">{protectedApps.length}</div>
+            <div className="mt-4 text-3xl font-mono font-bold tracking-tighter text-zinc-100">
+              {protectedApps.length}
+            </div>
             <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Geschützte Apps</div>
           </div>
           <div className="min-h-[118px] rounded-[1.5rem] border border-zinc-800/50 bg-zinc-900/80 p-5">
@@ -250,8 +269,12 @@ export function DashboardScreen({
           </div>
           <div className="min-h-[118px] rounded-[1.5rem] border border-zinc-800/50 bg-zinc-900/80 p-5">
             <Clock size={17} className="text-blue-400" aria-hidden="true" />
-            <div className="mt-4 text-3xl font-mono font-bold tracking-tighter text-zinc-100">{formatMinutes(trackedUsageMinutes)}</div>
-            <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Gemessene Freigabezeit</div>
+            <div className="mt-4 text-3xl font-mono font-bold tracking-tighter text-zinc-100">
+              {formatMinutes(trackedUsageMinutes)}
+            </div>
+            <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+              Gemessene Freigabezeit
+            </div>
           </div>
           <div className="min-h-[118px] rounded-[1.5rem] border border-zinc-800/50 bg-zinc-900/80 p-5">
             <AlertTriangle size={17} className="text-amber-400" aria-hidden="true" />
@@ -262,13 +285,16 @@ export function DashboardScreen({
 
         {estimatedSavedMinutes > 0 && (
           <p className="mt-3 px-2 text-xs leading-relaxed text-zinc-500">
-            Geschätzte gesparte Zeit heute: {formatMinutes(estimatedSavedMinutes)}. Dieser Wert ist eine Produktschätzung, keine exakte Messung.
+            Geschätzte gesparte Zeit heute: {formatMinutes(estimatedSavedMinutes)}. Dieser Wert ist eine
+            Produktschätzung, keine exakte Messung.
           </p>
         )}
       </section>
 
       <section aria-labelledby="current-profile-title">
-        <h2 id="current-profile-title" className="mb-3 px-2 text-xs font-bold uppercase tracking-widest text-zinc-500">Aktuelles Profil</h2>
+        <h2 id="current-profile-title" className="mb-3 px-2 text-xs font-bold uppercase tracking-widest text-zinc-500">
+          Aktuelles Profil
+        </h2>
         <button
           type="button"
           onClick={() => navigate('rules')}
@@ -283,7 +309,9 @@ export function DashboardScreen({
       </section>
 
       <section aria-labelledby="quick-actions-title">
-        <h2 id="quick-actions-title" className="mb-3 px-2 text-xs font-bold uppercase tracking-widest text-zinc-500">Direktzugriff</h2>
+        <h2 id="quick-actions-title" className="mb-3 px-2 text-xs font-bold uppercase tracking-widest text-zinc-500">
+          Direktzugriff
+        </h2>
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
@@ -325,7 +353,8 @@ export function DashboardScreen({
       </section>
 
       <p className="px-2 text-xs leading-relaxed text-zinc-600">
-        ScrollShield v1 wertet auf Android ganze ausgewählte Apps aus. Kurzvideo-Unterseiten oder einzelne Feed-Elemente werden nicht als eigene Schutzfunktion ausgewiesen.
+        ScrollShield v1 wertet auf Android ganze ausgewählte Apps aus. Kurzvideo-Unterseiten oder einzelne Feed-Elemente
+        werden nicht als eigene Schutzfunktion ausgewiesen.
       </p>
     </motion.div>
   );

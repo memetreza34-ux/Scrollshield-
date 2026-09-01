@@ -1,7 +1,4 @@
-import {
-  createReleaseDefaultAppConfig,
-  isLegacyUntouchedDefaultConfig,
-} from '../lib/releaseProfiles';
+import { createReleaseDefaultAppConfig, isLegacyUntouchedDefaultConfig } from '../lib/releaseProfiles';
 import type { AppState, Screen } from '../types';
 import { AppDetailScreen } from './AppDetailScreen';
 

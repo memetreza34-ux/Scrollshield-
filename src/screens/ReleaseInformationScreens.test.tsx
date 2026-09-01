@@ -19,15 +19,23 @@ describe('release information screens', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Schutzstatus & Berechtigungen/ }));
     expect(navigate).toHaveBeenCalledWith('permissions');
-    expect(screen.queryByRole('switch', { name: /Tageszusammenfassung|Wochenrückblick|Rückfall-Warnung/ })).not.toBeInTheDocument();
-    expect(screen.getByText(/Abo-Funktionen werden hier bewusst nicht als aktive Einstellungen angeboten/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('switch', { name: /Tageszusammenfassung|Wochenrückblick|Rückfall-Warnung/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Abo-Funktionen werden hier bewusst nicht als aktive Einstellungen angeboten/),
+    ).toBeInTheDocument();
   });
 
   it('help states whole-app Android scope and does not claim finished iOS enforcement', () => {
     render(<HelpScreen state={androidState} navigate={vi.fn()} />);
 
     expect(screen.getByText(/gesamte ausgewählte App/)).toBeInTheDocument();
-    expect(screen.getByText(/Reels-, Shorts-, Feed-Elemente oder Swipe-Bewegungen werden in Version 1 nicht separat erkannt/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Reels-, Shorts-, Feed-Elemente oder Swipe-Bewegungen werden in Version 1 nicht separat erkannt/,
+      ),
+    ).toBeInTheDocument();
 
     render(<HelpScreen state={{ ...androidState, operatingSystem: 'ios' }} navigate={vi.fn()} />);
     expect(screen.getByText(/iOS-Oberfläche ist derzeit nur Produktvorschau/)).toBeInTheDocument();

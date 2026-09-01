@@ -18,5 +18,4 @@ export const SUBSCRIPTION_EXPECTED_PACKAGE_NAME = 'app.scrollshield.mobile';
  * Never add a private key, service-account credential, Supabase secret/service-role key,
  * Google Play credential, or HMAC/shared secret to the client bundle.
  */
-export const SUBSCRIPTION_ENTITLEMENT_VERIFICATION_KEYS: readonly SubscriptionEntitlementVerificationKey[] =
-  [];
+export const SUBSCRIPTION_ENTITLEMENT_VERIFICATION_KEYS: readonly SubscriptionEntitlementVerificationKey[] = [];

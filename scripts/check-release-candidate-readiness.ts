@@ -41,7 +41,10 @@ const requireCondition = (condition: boolean, message: string) => {
   if (!condition) findings.push(message);
 };
 
-requireCondition(SHA_PATTERN.test(approval.candidateCommitSha), 'candidateCommitSha must be frozen before building a signed candidate.');
+requireCondition(
+  SHA_PATTERN.test(approval.candidateCommitSha),
+  'candidateCommitSha must be frozen before building a signed candidate.',
+);
 requireCondition(
   approval.candidateVersion === packageJson.version && approval.candidateVersion === versionName,
   'candidateVersion must match package.json and Android versionName.',
@@ -74,7 +77,10 @@ const prerequisites: Array<{
 ];
 
 for (const prerequisite of prerequisites) {
-  requireCondition(prerequisite.flag === true, `${prerequisite.label} must be true before building the signed release candidate.`);
+  requireCondition(
+    prerequisite.flag === true,
+    `${prerequisite.label} must be true before building the signed release candidate.`,
+  );
   requireCondition(
     prerequisite.evidence?.candidateCommitSha === approval.candidateCommitSha &&
       (prerequisite.evidence?.reference.trim().length ?? 0) >= 3,
@@ -86,7 +92,10 @@ if (SHA_PATTERN.test(approval.candidateCommitSha)) {
   const diff = spawnSync('git', ['diff', '--name-only', approval.candidateCommitSha, 'HEAD', '--'], {
     encoding: 'utf8',
   });
-  requireCondition(diff.status === 0, 'Unable to compare frozen candidateCommitSha with HEAD. Fetch the candidate history first.');
+  requireCondition(
+    diff.status === 0,
+    'Unable to compare frozen candidateCommitSha with HEAD. Fetch the candidate history first.',
+  );
   if (diff.status === 0) {
     const changedPaths = diff.stdout
       .split(/\r?\n/)

@@ -139,9 +139,7 @@ describe('App native drain persistence ordering', () => {
 
   it('does not acknowledge while the batch-bearing state cannot be persisted', async () => {
     saveStateMock.mockImplementation((state: AppState & { settings: Record<string, unknown> }) => {
-      const journal = state.settings.__scrollshieldNativeDrain as
-        | { lastProcessedBatchId?: string }
-        | undefined;
+      const journal = state.settings.__scrollshieldNativeDrain as { lastProcessedBatchId?: string } | undefined;
       return journal?.lastProcessedBatchId !== BATCH_ID;
     });
 
@@ -151,9 +149,7 @@ describe('App native drain persistence ordering', () => {
       expect(
         saveStateMock.mock.calls.some((call) => {
           const state = call[0] as AppState & { settings: Record<string, unknown> };
-          const journal = state.settings.__scrollshieldNativeDrain as
-            | { lastProcessedBatchId?: string }
-            | undefined;
+          const journal = state.settings.__scrollshieldNativeDrain as { lastProcessedBatchId?: string } | undefined;
           return journal?.lastProcessedBatchId === BATCH_ID;
         }),
       ).toBe(true);

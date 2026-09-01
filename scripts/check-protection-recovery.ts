@@ -10,8 +10,8 @@ const bootReceiverPath = 'android/app/src/main/java/app/scrollshield/mobile/Scro
 const bootRecoveryTestPath =
   'android/app/src/androidTest/java/app/scrollshield/mobile/BootRecoveryInstrumentedTest.java';
 
-const [app, policy, policyTest, appTest, preparedStartTest, plugin, bootReceiver, bootRecoveryTest] =
-  await Promise.all([
+const [app, policy, policyTest, appTest, preparedStartTest, plugin, bootReceiver, bootRecoveryTest] = await Promise.all(
+  [
     readFile(appPath, 'utf8'),
     readFile(policyPath, 'utf8'),
     readFile(policyTestPath, 'utf8'),
@@ -20,7 +20,8 @@ const [app, policy, policyTest, appTest, preparedStartTest, plugin, bootReceiver
     readFile(pluginPath, 'utf8'),
     readFile(bootReceiverPath, 'utf8'),
     readFile(bootRecoveryTestPath, 'utf8'),
-  ]);
+  ],
+);
 
 const findings: string[] = [];
 function requirePattern(file: string, content: string, pattern: RegExp, message: string) {

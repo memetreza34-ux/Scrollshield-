@@ -18,8 +18,7 @@ import { createEventId, getLocalDateKey } from '../lib/appUtils';
 import { NativeDiagnostics } from '../lib/nativeDiagnostics';
 import type { NativeDiagnosticsSnapshot } from '../lib/nativeDiagnostics';
 
-const formatLifecycleTime = (timestamp: number) =>
-  timestamp > 0 ? new Date(timestamp).toLocaleString() : 'NOCH NIE';
+const formatLifecycleTime = (timestamp: number) => (timestamp > 0 ? new Date(timestamp).toLocaleString() : 'NOCH NIE');
 
 export function DebugScreen({
   state,
@@ -123,9 +122,7 @@ export function DebugScreen({
               ? 'AKTIV'
               : 'DEAKTIVIERT'
             : 'NOCH NICHT ERSTELLT',
-          nativeSnapshot.protectionChannelCreated
-            ? nativeSnapshot.protectionChannelEnabled
-            : undefined,
+          nativeSnapshot.protectionChannelCreated ? nativeSnapshot.protectionChannelEnabled : undefined,
         ],
         [
           'Schutz-Benachrichtigung',
@@ -137,11 +134,7 @@ export function DebugScreen({
           nativeSnapshot.batteryOptimizationExempt ? 'AKTIV' : 'NICHT AKTIV',
           nativeSnapshot.batteryOptimizationExempt,
         ],
-        [
-          'Schutz aktiviert',
-          nativeSnapshot.protectionEnabled ? 'JA' : 'NEIN',
-          nativeSnapshot.protectionEnabled,
-        ],
+        ['Schutz aktiviert', nativeSnapshot.protectionEnabled ? 'JA' : 'NEIN', nativeSnapshot.protectionEnabled],
         ['Dienst läuft', nativeSnapshot.serviceRunning ? 'JA' : 'NEIN', nativeSnapshot.serviceRunning],
         [
           'Installierte Ziel-App',
@@ -212,9 +205,7 @@ export function DebugScreen({
             <div className="bg-zinc-900 border border-zinc-800 rounded-[1.5rem] p-4 space-y-3 font-mono text-xs">
               {diagnosticsError && <p className="text-red-400">{diagnosticsError}</p>}
               {!nativeSnapshot && !diagnosticsError && (
-                <p className="text-zinc-500">
-                  {diagnosticsBusy ? 'Diagnose wird gelesen…' : 'Noch kein Snapshot.'}
-                </p>
+                <p className="text-zinc-500">{diagnosticsBusy ? 'Diagnose wird gelesen…' : 'Noch kein Snapshot.'}</p>
               )}
               {diagnosticRows.map(([label, value, positive]) => (
                 <div

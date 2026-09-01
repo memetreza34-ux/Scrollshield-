@@ -10,8 +10,7 @@ vi.mock('./subscriptionInstallationIdentity', () => ({
 }));
 
 vi.mock('./nativeIntegrity', () => ({
-  isValidServerIntegrityNonce: (value: unknown) =>
-    typeof value === 'string' && /^[A-Za-z0-9_-]{22,500}$/.test(value),
+  isValidServerIntegrityNonce: (value: unknown) => typeof value === 'string' && /^[A-Za-z0-9_-]{22,500}$/.test(value),
   NativeIntegrity: { requestTokenForServerChallenge: requestIntegrityToken },
 }));
 
@@ -59,9 +58,7 @@ describe('subscription verification proof flow', () => {
         nowMs,
       ),
     ).toBe(false);
-    expect(validateSubscriptionVerificationChallenge({ ...challenge, expiresAtMs: nowMs }, nowMs)).toBe(
-      false,
-    );
+    expect(validateSubscriptionVerificationChallenge({ ...challenge, expiresAtMs: nowMs }, nowMs)).toBe(false);
   });
 
   it('builds a proof envelope with no client-authoritative plan or entitlement field', async () => {
@@ -86,11 +83,7 @@ describe('subscription verification proof flow', () => {
 
   it('never sends pending or suspended purchase tokens for paid verification', async () => {
     await expect(
-      prepareSubscriptionVerificationProof(
-        challenge,
-        { ...purchased, purchaseState: 'pending' },
-        nowMs,
-      ),
+      prepareSubscriptionVerificationProof(challenge, { ...purchased, purchaseState: 'pending' }, nowMs),
     ).rejects.toThrow();
 
     await expect(

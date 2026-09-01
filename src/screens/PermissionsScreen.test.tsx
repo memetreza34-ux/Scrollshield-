@@ -224,10 +224,7 @@ describe('PermissionsScreen', () => {
     fireEvent.click(recoveryButton);
 
     await waitFor(() => {
-      expect(recoverProtectionMock).toHaveBeenCalledWith(
-        androidState.appsConfig,
-        androidState.isFocusModeActive,
-      );
+      expect(recoverProtectionMock).toHaveBeenCalledWith(androidState.appsConfig, androidState.isFocusModeActive);
     });
     expect(startProtectionMock).not.toHaveBeenCalled();
     expect(await screen.findByText(/nach dem Prozessabbruch.*wiederhergestellt/)).toBeInTheDocument();
@@ -270,9 +267,7 @@ describe('PermissionsScreen', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Schutz wiederherstellen' }));
 
-    expect(
-      await screen.findByText(/Wiederherstellung blockiert: Hinweis über anderen Apps fehlt/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Wiederherstellung blockiert: Hinweis über anderen Apps fehlt/)).toBeInTheDocument();
     expect(recoverProtectionMock).toHaveBeenCalledTimes(1);
     expect(startProtectionMock).not.toHaveBeenCalled();
   });
@@ -297,9 +292,7 @@ describe('PermissionsScreen', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Schutz wiederherstellen' }));
 
-    expect(
-      await screen.findByText(/Wiederherstellung blockiert: Benachrichtigungsfreigabe fehlt/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Wiederherstellung blockiert: Benachrichtigungsfreigabe fehlt/)).toBeInTheDocument();
     expect(recoverProtectionMock).toHaveBeenCalledTimes(1);
   });
 
@@ -307,9 +300,7 @@ describe('PermissionsScreen', () => {
     isAndroidNativeMock.mockReturnValue(true);
     protectionAvailableMock.mockReturnValue(true);
     requestAndroidNotificationsMock.mockResolvedValue(true);
-    getAndroidStatusMock
-      .mockResolvedValueOnce(deniedAndroidStatus)
-      .mockResolvedValue(grantedAndroidStatus);
+    getAndroidStatusMock.mockResolvedValueOnce(deniedAndroidStatus).mockResolvedValue(grantedAndroidStatus);
 
     const updateState = vi.fn();
     render(<PermissionsScreen state={androidState} updateState={updateState} navigate={vi.fn()} />);

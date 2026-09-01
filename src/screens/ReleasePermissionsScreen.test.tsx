@@ -141,7 +141,9 @@ describe('ReleasePermissionsScreen', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Schutzdienst starten' }));
 
-    expect(await screen.findByText(/Keine ausgewählte aktive App ist auf diesem Android-Gerät verfügbar/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Keine ausgewählte aktive App ist auf diesem Android-Gerät verfügbar/),
+    ).toBeInTheDocument();
     expect(startProtectionMock).not.toHaveBeenCalled();
   });
 

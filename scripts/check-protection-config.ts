@@ -218,7 +218,12 @@ rejectPattern(
   'Adaptive friction must not positively market itself as AI, machine learning, diagnosis, or an addiction score.',
 );
 for (const scenario of ['ADAPT-01', 'ADAPT-02', 'ADAPT-03', 'ADAPT-04', 'ADAPT-05']) {
-  requirePattern(matrixPath, matrix, new RegExp(`\\b${scenario}\\b`), `Physical adaptive-friction evidence is missing: ${scenario}.`);
+  requirePattern(
+    matrixPath,
+    matrix,
+    new RegExp(`\\b${scenario}\\b`),
+    `Physical adaptive-friction evidence is missing: ${scenario}.`,
+  );
 }
 
 if (findings.length > 0) {

@@ -131,11 +131,7 @@ const parseLegacyTimestamp = (value: unknown, fallback: number): number => {
   return date.getTime();
 };
 
-const mapLegacyBackupEvent = (
-  event: LegacyV07ImpulseEvent,
-  index: number,
-  importedAt: number,
-): HistoryEvent => {
+const mapLegacyBackupEvent = (event: LegacyV07ImpulseEvent, index: number, importedAt: number): HistoryEvent => {
   const outcome = typeof event.outcome === 'string' ? event.outcome : 'unknown';
   const appName = typeof event.appName === 'string' ? event.appName : 'Legacy-App';
   const type: HistoryEvent['type'] =
@@ -193,9 +189,8 @@ const convertLegacyV07Backup = (backup: LegacyV07Backup, raw: string): ScrollShi
       [dateKey]: {
         date: dateKey,
         usageMinutes: {},
-        blockedOpens: events.filter(
-          (event) => event.outcome === 'blocked' || event.outcome === 'reflection_canceled',
-        ).length,
+        blockedOpens: events.filter((event) => event.outcome === 'blocked' || event.outcome === 'reflection_canceled')
+          .length,
         savedTimeMinutes: savedTime,
         emergencyUnlocks: events.filter((event) => event.outcome === 'emergency_unlocked').length,
         focusMinutes: 0,

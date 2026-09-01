@@ -5,14 +5,8 @@ import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
 import { reconcileFocusRuntime } from './lib/focus';
 import { NativeProtection } from './lib/nativeProtection';
-import {
-  getInstalledActiveProtectionIds,
-  shouldRecoverStaleProtection,
-} from './lib/protectionRecovery';
-import {
-  applyNativeDrainBatch,
-  getLastProcessedNativeDrainBatchId,
-} from './lib/nativeDrainJournal';
+import { getInstalledActiveProtectionIds, shouldRecoverStaleProtection } from './lib/protectionRecovery';
+import { applyNativeDrainBatch, getLastProcessedNativeDrainBatchId } from './lib/nativeDrainJournal';
 import { getRuntimeOperatingSystem } from './lib/runtimePlatform';
 import {
   applyCommitmentGuard,
@@ -196,12 +190,7 @@ export default function App() {
   }, [appState, isLoaded, migrationBlocked]);
 
   useEffect(() => {
-    if (
-      !isLoaded ||
-      migrationBlocked ||
-      !appState.hasCompletedOnboarding ||
-      !NativeProtection.isAvailable()
-    ) {
+    if (!isLoaded || migrationBlocked || !appState.hasCompletedOnboarding || !NativeProtection.isAvailable()) {
       return;
     }
 
@@ -219,23 +208,14 @@ export default function App() {
         }
 
         if (serviceStatus.health === 'unclean-process-stop') {
-          await NativeProtection.recoverAfterProcessLoss(
-            appState.appsConfig,
-            appState.isFocusModeActive,
-          );
+          await NativeProtection.recoverAfterProcessLoss(appState.appsConfig, appState.isFocusModeActive);
           return;
         }
 
-        const synced = await NativeProtection.syncCommitted(
-          appState.appsConfig,
-          appState.isFocusModeActive,
-        );
+        const synced = await NativeProtection.syncCommitted(appState.appsConfig, appState.isFocusModeActive);
         if (cancelled) return;
 
-        const installedActiveAppIds = getInstalledActiveProtectionIds(
-          appState.appsConfig,
-          synced.unavailableAppIds,
-        );
+        const installedActiveAppIds = getInstalledActiveProtectionIds(appState.appsConfig, synced.unavailableAppIds);
         if (!shouldRecoverStaleProtection(serviceStatus, installedActiveAppIds)) return;
 
         await NativeProtection.startCommitted(synced.configGeneration, serviceStatus);
@@ -251,21 +231,10 @@ export default function App() {
       window.clearTimeout(syncTimer);
       if (pendingRetryTimer !== null) window.clearTimeout(pendingRetryTimer);
     };
-  }, [
-    appState.appsConfig,
-    appState.isFocusModeActive,
-    appState.hasCompletedOnboarding,
-    isLoaded,
-    migrationBlocked,
-  ]);
+  }, [appState.appsConfig, appState.isFocusModeActive, appState.hasCompletedOnboarding, isLoaded, migrationBlocked]);
 
   useEffect(() => {
-    if (
-      !isLoaded ||
-      migrationBlocked ||
-      !appState.hasCompletedOnboarding ||
-      !NativeProtection.isAvailable()
-    ) {
+    if (!isLoaded || migrationBlocked || !appState.hasCompletedOnboarding || !NativeProtection.isAvailable()) {
       return;
     }
 
@@ -394,7 +363,8 @@ export default function App() {
       return {
         ok: false,
         code: 'runtime_check_failed',
-        message: 'Der aktuelle Android-Schutzstatus konnte nicht sicher geprüft werden. Commitment wurde nicht aktiviert.',
+        message:
+          'Der aktuelle Android-Schutzstatus konnte nicht sicher geprüft werden. Commitment wurde nicht aktiviert.',
         action: 'permissions',
       };
     }
@@ -439,12 +409,7 @@ export default function App() {
             <AnimatePresence mode="wait">
               {currentScreen === 'welcome' && <ReleaseWelcome key="welcome" navigate={navigate} />}
               {currentScreen === 'onboarding' && (
-                <ReleaseOnboarding
-                  key="onboarding"
-                  state={appState}
-                  updateState={updateState}
-                  navigate={navigate}
-                />
+                <ReleaseOnboarding key="onboarding" state={appState} updateState={updateState} navigate={navigate} />
               )}
               {currentScreen === 'permissions' && (
                 <ReleasePermissionsScreen
@@ -516,10 +481,9 @@ export default function App() {
             </AnimatePresence>
           </div>
 
-          {appState.hasCompletedOnboarding &&
-            !['welcome', 'onboarding', 'permissions'].includes(currentScreen) && (
-              <BottomNav currentScreen={currentScreen} navigate={navigate} />
-            )}
+          {appState.hasCompletedOnboarding && !['welcome', 'onboarding', 'permissions'].includes(currentScreen) && (
+            <BottomNav currentScreen={currentScreen} navigate={navigate} />
+          )}
         </div>
       </div>
     </ErrorBoundary>

@@ -129,9 +129,7 @@ export const compareProtectionInsightPeriods = (
     previous,
     measuredUsageChangeMinutes,
     measuredUsageChangePercent:
-      previous.measuredUsageMinutes > 0
-        ? (measuredUsageChangeMinutes / previous.measuredUsageMinutes) * 100
-        : null,
+      previous.measuredUsageMinutes > 0 ? (measuredUsageChangeMinutes / previous.measuredUsageMinutes) * 100 : null,
     interventionsChange: current.interventions - previous.interventions,
     emergencyUnlocksChange: current.emergencyUnlocks - previous.emergencyUnlocks,
     focusMinutesChange: current.focusMinutes - previous.focusMinutes,

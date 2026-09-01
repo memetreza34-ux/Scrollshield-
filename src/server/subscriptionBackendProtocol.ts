@@ -92,11 +92,7 @@ const textEncoder = new TextEncoder();
 const base64UrlEncode = (bytes: Uint8Array): string => {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return globalThis
-    .btoa(binary)
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
+  return globalThis.btoa(binary).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 };
 
 const base64UrlDecode = (value: string): Uint8Array | null => {
@@ -120,10 +116,7 @@ const randomBase64Url = (byteLength: number): string => {
 };
 
 const isBoundedBase64Url = (value: unknown, min: number, max: number): value is string =>
-  typeof value === 'string' &&
-  value.length >= min &&
-  value.length <= max &&
-  BASE64URL_PATTERN.test(value);
+  typeof value === 'string' && value.length >= min && value.length <= max && BASE64URL_PATTERN.test(value);
 
 export const sha256Base64Url = async (value: Uint8Array | string): Promise<string> => {
   const bytes = typeof value === 'string' ? textEncoder.encode(value) : value;
@@ -148,13 +141,9 @@ export const validateInstallationPublicIdentity = async (
   if (expectedKeyId !== installationKeyId) return null;
 
   try {
-    return await globalThis.crypto.subtle.importKey(
-      'spki',
-      spki,
-      { name: 'ECDSA', namedCurve: 'P-256' },
-      false,
-      ['verify'],
-    );
+    return await globalThis.crypto.subtle.importKey('spki', spki, { name: 'ECDSA', namedCurve: 'P-256' }, false, [
+      'verify',
+    ]);
   } catch {
     return null;
   }
@@ -199,18 +188,10 @@ export const normalizeSubscriptionVerificationEnvelope = (
   if (!isBoundedBase64Url(raw.publicKeySpki, 64, 2048)) return null;
   if (raw.installationAlgorithm !== 'ES256') return null;
   if (!isBoundedBase64Url(raw.installationSignature, 86, 86)) return null;
-  if (
-    typeof raw.integrityToken !== 'string' ||
-    raw.integrityToken.length < 32 ||
-    raw.integrityToken.length > 16_384
-  ) {
+  if (typeof raw.integrityToken !== 'string' || raw.integrityToken.length < 32 || raw.integrityToken.length > 16_384) {
     return null;
   }
-  if (
-    typeof raw.purchaseToken !== 'string' ||
-    raw.purchaseToken.length < 16 ||
-    raw.purchaseToken.length > 4096
-  ) {
+  if (typeof raw.purchaseToken !== 'string' || raw.purchaseToken.length < 16 || raw.purchaseToken.length > 4096) {
     return null;
   }
 
@@ -236,10 +217,7 @@ export const verifyInstallationChallengeSignature = async (
   if (normalized.installationKeyId !== challenge.installationKeyId) return false;
   if (normalized.publicKeySpki !== challenge.publicKeySpki) return false;
 
-  const publicKey = await validateInstallationPublicIdentity(
-    normalized.installationKeyId,
-    normalized.publicKeySpki,
-  );
+  const publicKey = await validateInstallationPublicIdentity(normalized.installationKeyId, normalized.publicKeySpki);
   const signature = base64UrlDecode(normalized.installationSignature);
   if (!publicKey || !signature || signature.byteLength !== ES256_P1363_SIGNATURE_BYTES) {
     return false;
@@ -266,9 +244,7 @@ const parseExpiryMs = (value: unknown): number | null => {
 
 const getLineItems = (raw: unknown): GoogleSubscriptionLineItemLike[] | null => {
   if (!Array.isArray(raw) || raw.length === 0) return null;
-  return raw.every((item) => item && typeof item === 'object')
-    ? (raw as GoogleSubscriptionLineItemLike[])
-    : null;
+  return raw.every((item) => item && typeof item === 'object') ? (raw as GoogleSubscriptionLineItemLike[]) : null;
 };
 
 export const deriveSubscriptionDecisionFromGoogle = (
@@ -309,10 +285,7 @@ export const deriveSubscriptionDecisionFromGoogle = (
         item.productId !== null && item.expiryMs !== null && item.expiryMs > nowMs,
     )
     .map((item) => ({ ...item, plan: productPlanMap[item.productId] ?? null }))
-    .filter(
-      (item): item is { productId: string; expiryMs: number; plan: ServerPaidPlan } =>
-        item.plan !== null,
-    );
+    .filter((item): item is { productId: string; expiryMs: number; plan: ServerPaidPlan } => item.plan !== null);
 
   if (activeMapped.length === 0) {
     const anyUnexpired = lineItems.some((item) => {
@@ -342,9 +315,7 @@ export const deriveSubscriptionDecisionFromGoogle = (
     };
   }
 
-  const item = activeMapped.reduce((latest, current) =>
-    current.expiryMs > latest.expiryMs ? current : latest,
-  );
+  const item = activeMapped.reduce((latest, current) => (current.expiryMs > latest.expiryMs ? current : latest));
 
   switch (purchase.subscriptionState) {
     case 'SUBSCRIPTION_STATE_ACTIVE':
@@ -402,10 +373,7 @@ export const buildSignedEntitlementPayload = (
     throw new Error('Invalid assertion id');
   }
 
-  const validUntilMs = Math.min(
-    decision.accessUntilMs,
-    nowMs + MAX_OFFLINE_ENTITLEMENT_WINDOW_MS,
-  );
+  const validUntilMs = Math.min(decision.accessUntilMs, nowMs + MAX_OFFLINE_ENTITLEMENT_WINDOW_MS);
   if (validUntilMs <= nowMs) throw new Error('Entitlement has no remaining access window');
 
   return {

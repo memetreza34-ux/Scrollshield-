@@ -30,9 +30,7 @@ const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
 const CHALLENGE_PREFIX = 'scrollshield-subscription-v1:';
 const ES256_P1363_BASE64URL_LENGTH = 86;
 
-const normalizeIdentity = (
-  raw: RawSubscriptionInstallationIdentity,
-): SubscriptionInstallationIdentity | null => {
+const normalizeIdentity = (raw: RawSubscriptionInstallationIdentity): SubscriptionInstallationIdentity | null => {
   if (
     typeof raw.keyId !== 'string' ||
     raw.keyId.length < 32 ||
@@ -54,10 +52,7 @@ const normalizeIdentity = (
   };
 };
 
-export const buildSubscriptionChallengeStatement = (
-  challengeId: string,
-  nonce: string,
-): string => {
+export const buildSubscriptionChallengeStatement = (challengeId: string, nonce: string): string => {
   if (!/^[A-Za-z0-9_-]{16,128}$/.test(challengeId)) {
     throw new Error('Invalid subscription challenge id');
   }

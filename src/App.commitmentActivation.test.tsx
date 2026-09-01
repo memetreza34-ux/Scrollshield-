@@ -115,7 +115,10 @@ describe('App commitment activation', () => {
       expect(rawLock).not.toBeNull();
       expect(JSON.parse(rawLock as string)).toMatchObject({ durationMinutes: 60 });
     });
-    expect(syncMock).toHaveBeenCalledWith(expect.objectContaining({ instagram: expect.objectContaining({ active: true }) }), false);
+    expect(syncMock).toHaveBeenCalledWith(
+      expect.objectContaining({ instagram: expect.objectContaining({ active: true }) }),
+      false,
+    );
     expect(await screen.findByText(/Deine aktuelle Schutzkonfiguration ist bis/)).toBeInTheDocument();
   });
 
@@ -147,7 +150,9 @@ describe('App commitment activation', () => {
     await openCommitmentConfirmation();
     fireEvent.click(screen.getByRole('button', { name: 'Verbindlich starten' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/Android-Schutzstatus konnte nicht sicher geprüft werden/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /Android-Schutzstatus konnte nicht sicher geprüft werden/,
+    );
     expect(localStorage.getItem('scrollshield_commitment_lock_v1')).toBeNull();
   });
 
@@ -185,9 +190,7 @@ describe('App commitment activation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ja, Reset' }));
 
     await waitFor(() => expect(factoryResetMock).toHaveBeenCalledTimes(1));
-    expect(alertSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/Reset wurde aus Sicherheitsgründen abgebrochen/),
-    );
+    expect(alertSpy).toHaveBeenCalledWith(expect.stringMatching(/Reset wurde aus Sicherheitsgründen abgebrochen/));
     expect(localStorage.getItem('scrollshield_commitment_lock_v1')).not.toBeNull();
     expect(screen.queryByRole('heading', { name: 'ScrollShield' })).not.toBeInTheDocument();
   });

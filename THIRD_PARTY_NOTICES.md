@@ -19,13 +19,13 @@ These direct npm runtime dependencies are checked automatically against the inst
 
 The Android release also ships direct Maven dependencies that are not represented by `package.json` and therefore require separate Android/legal review:
 
-| Dependency                                     | Notice / terms status |
-| ---------------------------------------------- | --------------------- |
+| Dependency                                     | Notice / terms status                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------ |
 | `androidx.appcompat:appcompat`                 | AndroidX / Apache-2.0 family; final bundled notice review required |
 | `androidx.coordinatorlayout:coordinatorlayout` | AndroidX / Apache-2.0 family; final bundled notice review required |
 | `androidx.core:core-splashscreen`              | AndroidX / Apache-2.0 family; final bundled notice review required |
-| `com.android.billingclient:billing`            | Google Play SDK terms; final release/legal terms review required |
-| `com.google.android.play:integrity`            | Google Play SDK terms; final release/legal terms review required |
+| `com.android.billingclient:billing`            | Google Play SDK terms; final release/legal terms review required   |
+| `com.google.android.play:integrity`            | Google Play SDK terms; final release/legal terms review required   |
 
 This table is deliberately transparent about review status. It does **not** claim that the final signed AAB notice/license audit has already been completed.
 

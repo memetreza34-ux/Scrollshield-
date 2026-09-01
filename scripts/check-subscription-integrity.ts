@@ -2,10 +2,8 @@ import { readFile } from 'node:fs/promises';
 
 const buildPath = 'android/app/build.gradle';
 const activityPath = 'android/app/src/main/java/app/scrollshield/mobile/MainActivity.java';
-const integrityPluginPath =
-  'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldIntegrityPlugin.java';
-const integrityJavaTestPath =
-  'android/app/src/test/java/app/scrollshield/mobile/ScrollShieldIntegrityPluginTest.java';
+const integrityPluginPath = 'android/app/src/main/java/app/scrollshield/mobile/ScrollShieldIntegrityPlugin.java';
+const integrityJavaTestPath = 'android/app/src/test/java/app/scrollshield/mobile/ScrollShieldIntegrityPluginTest.java';
 const integrityBridgePath = 'src/lib/nativeIntegrity.ts';
 const integrityBridgeTestPath = 'src/lib/nativeIntegrity.test.ts';
 const identityPluginPath =

@@ -22,19 +22,14 @@ describe('subscription entitlement policy', () => {
     expect(resolveEffectiveSubscriptionEntitlement(null, NOW).plan).toBe('free');
     expect(resolveEffectiveSubscriptionEntitlement({ schemaVersion: 2 }, NOW).plan).toBe('free');
     expect(
-      resolveEffectiveSubscriptionEntitlement(
-        verifiedCandidate({ cryptographicallyVerified: false, plan: 'max' }),
-        NOW,
-      ).plan,
+      resolveEffectiveSubscriptionEntitlement(verifiedCandidate({ cryptographicallyVerified: false, plan: 'max' }), NOW)
+        .plan,
     ).toBe('free');
   });
 
   it('never grants paid access for pending, expired, revoked, or unknown lifecycle states', () => {
     for (const lifecycleState of ['pending', 'expired', 'revoked', 'unknown']) {
-      const result = resolveEffectiveSubscriptionEntitlement(
-        verifiedCandidate({ lifecycleState, plan: 'max' }),
-        NOW,
-      );
+      const result = resolveEffectiveSubscriptionEntitlement(verifiedCandidate({ lifecycleState, plan: 'max' }), NOW);
       expect(result.plan).toBe('free');
       expect(result.reason).toBe('non-entitling-lifecycle');
     }
@@ -43,18 +38,12 @@ describe('subscription entitlement policy', () => {
   it('accepts active and grace access only inside a bounded verified time window', () => {
     expect(resolveEffectiveSubscriptionEntitlement(verifiedCandidate(), NOW).plan).toBe('plus');
     expect(
-      resolveEffectiveSubscriptionEntitlement(
-        verifiedCandidate({ plan: 'max', lifecycleState: 'grace' }),
-        NOW,
-      ).plan,
+      resolveEffectiveSubscriptionEntitlement(verifiedCandidate({ plan: 'max', lifecycleState: 'grace' }), NOW).plan,
     ).toBe('max');
 
-    expect(
-      resolveEffectiveSubscriptionEntitlement(
-        verifiedCandidate({ validUntilMs: NOW - 1 }),
-        NOW,
-      ).reason,
-    ).toBe('expired-cache');
+    expect(resolveEffectiveSubscriptionEntitlement(verifiedCandidate({ validUntilMs: NOW - 1 }), NOW).reason).toBe(
+      'expired-cache',
+    );
 
     expect(
       resolveEffectiveSubscriptionEntitlement(

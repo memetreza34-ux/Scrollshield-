@@ -24,17 +24,17 @@ Purpose: one-time server challenges for Play Integrity + Android-Keystore instal
 
 Required logical columns:
 
-| Field | Contract |
-| --- | --- |
-| `id` | UUID primary key / challenge ID |
-| `nonce_hash` | SHA-256 of server random nonce, unique |
-| `installation_key_id` | base64url SHA-256 fingerprint of SPKI |
-| `public_key_spki` | validated P-256 public SPKI; not secret |
-| `state` | `unused | verifying | consumed | failed` |
-| `issued_at` | server timestamp |
-| `expires_at` | server timestamp, <= issued + 5 minutes |
-| `verifying_at` | nullable |
-| `consumed_at` | nullable |
+| Field                 | Contract                                                |
+| --------------------- | ------------------------------------------------------- | --------- | -------- | ------- |
+| `id`                  | UUID primary key / challenge ID                         |
+| `nonce_hash`          | SHA-256 of server random nonce, unique                  |
+| `installation_key_id` | base64url SHA-256 fingerprint of SPKI                   |
+| `public_key_spki`     | validated P-256 public SPKI; not secret                 |
+| `state`               | `unused                                                 | verifying | consumed | failed` |
+| `issued_at`           | server timestamp                                        |
+| `expires_at`          | server timestamp, <= issued + 5 minutes                 |
+| `verifying_at`        | nullable                                                |
+| `consumed_at`         | nullable                                                |
 | `request_fingerprint` | optional keyed/rate-limit fingerprint, privacy-reviewed |
 
 Invariants:
@@ -56,14 +56,14 @@ Purpose: known installation public identities and controlled restore/rebind hist
 
 Required logical columns:
 
-| Field | Contract |
-| --- | --- |
-| `installation_key_id` | primary key |
-| `public_key_spki` | exact P-256 public key |
-| `first_seen_at` | server timestamp |
-| `last_verified_at` | nullable |
-| `status` | `active | blocked | retired` |
-| `rebind_count` | abuse/risk signal |
+| Field                 | Contract               |
+| --------------------- | ---------------------- | ------- | -------- |
+| `installation_key_id` | primary key            |
+| `public_key_spki`     | exact P-256 public key |
+| `first_seen_at`       | server timestamp       |
+| `last_verified_at`    | nullable               |
+| `status`              | `active                | blocked | retired` |
+| `rebind_count`        | abuse/risk signal      |
 
 Do not store Android private keys or any client-exportable secret.
 
@@ -73,19 +73,19 @@ Purpose: purchase-token replay/idempotency and installation binding.
 
 Required logical columns:
 
-| Field | Contract |
-| --- | --- |
-| `purchase_token_hash` | primary key; SHA-256 or keyed hash of Play token |
-| `installation_key_id` | FK/logical reference to installation |
-| `product_id` | verified Google product ID |
-| `plan` | derived `plus | max` only |
-| `google_subscription_state` | last authoritative subscriptionsv2 state |
-| `acknowledgement_state` | last authoritative state |
-| `access_expiry_at` | derived from authoritative line item(s) |
-| `linked_purchase_token_hash` | nullable replacement-chain pointer |
-| `first_verified_at` | server timestamp |
-| `last_verified_at` | server timestamp |
-| `revoked_at` | nullable |
+| Field                        | Contract                                         |
+| ---------------------------- | ------------------------------------------------ | --------- |
+| `purchase_token_hash`        | primary key; SHA-256 or keyed hash of Play token |
+| `installation_key_id`        | FK/logical reference to installation             |
+| `product_id`                 | verified Google product ID                       |
+| `plan`                       | derived `plus                                    | max` only |
+| `google_subscription_state`  | last authoritative subscriptionsv2 state         |
+| `acknowledgement_state`      | last authoritative state                         |
+| `access_expiry_at`           | derived from authoritative line item(s)          |
+| `linked_purchase_token_hash` | nullable replacement-chain pointer               |
+| `first_verified_at`          | server timestamp                                 |
+| `last_verified_at`           | server timestamp                                 |
+| `revoked_at`                 | nullable                                         |
 
 Rules:
 
@@ -101,15 +101,15 @@ Purpose: latest server truth used for assertion issuance/reconciliation.
 
 Required logical columns:
 
-| Field | Contract |
-| --- | --- |
-| `installation_key_id` | key / installation binding |
-| `plan` | `free | plus | max` |
-| `lifecycle_state` | normalized server lifecycle |
-| `source_purchase_token_hash` | nullable for Free |
-| `access_until` | authoritative max paid-access time |
-| `updated_at` | server timestamp |
-| `version` | monotonic concurrency/version field |
+| Field                        | Contract                            |
+| ---------------------------- | ----------------------------------- | ---- | ---- |
+| `installation_key_id`        | key / installation binding          |
+| `plan`                       | `free                               | plus | max` |
+| `lifecycle_state`            | normalized server lifecycle         |
+| `source_purchase_token_hash` | nullable for Free                   |
+| `access_until`               | authoritative max paid-access time  |
+| `updated_at`                 | server timestamp                    |
+| `version`                    | monotonic concurrency/version field |
 
 This table is server truth, but the client still requires a valid signed assertion before using Plus/Max offline.
 

@@ -84,16 +84,11 @@ export const isSubscriptionPlanId = (value: unknown): value is SubscriptionPlanI
  * Effective paid access MUST be resolved through subscriptionEntitlementPolicy.ts;
  * there is deliberately no boolean `purchaseVerified` shortcut here.
  */
-export const canProtectAdditionalApp = (
-  planId: SubscriptionPlanId,
-  currentlyProtectedAppCount: number,
-): boolean => {
+export const canProtectAdditionalApp = (planId: SubscriptionPlanId, currentlyProtectedAppCount: number): boolean => {
   const limit = SUBSCRIPTION_PLAN_POLICY[planId].protectedAppLimit;
   if (limit === null) return true;
   return Math.max(0, currentlyProtectedAppCount) < limit;
 };
 
-export const hasSubscriptionCapability = (
-  planId: SubscriptionPlanId,
-  capability: SubscriptionCapability,
-): boolean => SUBSCRIPTION_PLAN_POLICY[planId].capabilities.has(capability);
+export const hasSubscriptionCapability = (planId: SubscriptionPlanId, capability: SubscriptionCapability): boolean =>
+  SUBSCRIPTION_PLAN_POLICY[planId].capabilities.has(capability);

@@ -65,7 +65,9 @@ function run(command: string, args: string[], shell = false) {
 }
 
 function commandForPlatform(command: string) {
-  return process.platform === 'win32' && command.endsWith('.bat') ? { command, shell: true } : { command, shell: false };
+  return process.platform === 'win32' && command.endsWith('.bat')
+    ? { command, shell: true }
+    : { command, shell: false };
 }
 
 async function sha256File(file: string): Promise<string> {
@@ -82,7 +84,10 @@ async function findApkAnalyzer(): Promise<string | undefined> {
   const sdk = findAndroidSdk();
   if (!sdk) return undefined;
   const executable = process.platform === 'win32' ? 'apkanalyzer.bat' : 'apkanalyzer';
-  const candidates = [path.join(sdk, 'cmdline-tools', 'latest', 'bin', executable), path.join(sdk, 'tools', 'bin', executable)];
+  const candidates = [
+    path.join(sdk, 'cmdline-tools', 'latest', 'bin', executable),
+    path.join(sdk, 'tools', 'bin', executable),
+  ];
 
   const cmdlineTools = path.join(sdk, 'cmdline-tools');
   if (existsSync(cmdlineTools)) {
@@ -99,7 +104,9 @@ async function findApkAnalyzer(): Promise<string | undefined> {
 
 if (!existsSync(metadataPath)) {
   console.error(`Binary inspection failed: candidate metadata missing at ${metadataPath}.`);
-  console.error(`Build and record the candidate first with android:candidate:${type === 'apk' ? 'release' : 'bundle'}.`);
+  console.error(
+    `Build and record the candidate first with android:candidate:${type === 'apk' ? 'release' : 'bundle'}.`,
+  );
   process.exit(1);
 }
 if (!existsSync(expectedArtifactPath)) {
@@ -121,9 +128,12 @@ const actualHash = await sha256File(expectedArtifactPath);
 
 if (metadata.schemaVersion !== 1) findings.push('Candidate metadata schemaVersion must equal 1.');
 if (metadata.type !== type) findings.push(`Candidate metadata type must equal ${type}.`);
-if (metadata.artifactPath !== expectedArtifactPath) findings.push(`Candidate artifact path must equal ${expectedArtifactPath}.`);
-if (!SHA_PATTERN.test(metadata.candidateCommitSha ?? '')) findings.push('Candidate metadata must contain a valid source SHA.');
-if (!SHA_PATTERN.test(metadata.buildHeadSha ?? '')) findings.push('Candidate metadata must contain a valid build HEAD SHA.');
+if (metadata.artifactPath !== expectedArtifactPath)
+  findings.push(`Candidate artifact path must equal ${expectedArtifactPath}.`);
+if (!SHA_PATTERN.test(metadata.candidateCommitSha ?? ''))
+  findings.push('Candidate metadata must contain a valid source SHA.');
+if (!SHA_PATTERN.test(metadata.buildHeadSha ?? ''))
+  findings.push('Candidate metadata must contain a valid build HEAD SHA.');
 if (!HASH_PATTERN.test(metadata.sha256 ?? '')) findings.push('Candidate metadata must contain a valid SHA-256.');
 if (metadata.sha256 !== actualHash) findings.push('Candidate artifact bytes no longer match the recorded SHA-256.');
 
@@ -134,13 +144,19 @@ let manifestTool = '';
 if (type === 'apk') {
   const apkanalyzer = await findApkAnalyzer();
   if (!apkanalyzer) {
-    findings.push('Android SDK apkanalyzer was not found. Install Android SDK Command-line Tools before binary inspection.');
+    findings.push(
+      'Android SDK apkanalyzer was not found. Install Android SDK Command-line Tools before binary inspection.',
+    );
   } else {
     const analyzer = commandForPlatform(apkanalyzer);
     const manifest = run(analyzer.command, ['manifest', 'print', expectedArtifactPath], analyzer.shell);
     const permissions = run(analyzer.command, ['manifest', 'permissions', expectedArtifactPath], analyzer.shell);
-    if (!manifest.ok) findings.push(`apkanalyzer manifest print failed: ${manifest.stderr.trim() || `exit ${manifest.status}`}`);
-    if (!permissions.ok) findings.push(`apkanalyzer manifest permissions failed: ${permissions.stderr.trim() || `exit ${permissions.status}`}`);
+    if (!manifest.ok)
+      findings.push(`apkanalyzer manifest print failed: ${manifest.stderr.trim() || `exit ${manifest.status}`}`);
+    if (!permissions.ok)
+      findings.push(
+        `apkanalyzer manifest permissions failed: ${permissions.stderr.trim() || `exit ${permissions.status}`}`,
+      );
     manifestOutput = manifest.stdout;
     permissionOutput = permissions.stdout;
     manifestTool = apkanalyzer;
@@ -148,11 +164,21 @@ if (type === 'apk') {
 } else {
   const bundletoolJar = process.env.BUNDLETOOL_JAR?.trim();
   if (!bundletoolJar || !existsSync(bundletoolJar)) {
-    findings.push('AAB inspection requires BUNDLETOOL_JAR to point to a reviewed local bundletool .jar. No automatic download is performed.');
+    findings.push(
+      'AAB inspection requires BUNDLETOOL_JAR to point to a reviewed local bundletool .jar. No automatic download is performed.',
+    );
   } else {
     const java = process.platform === 'win32' ? 'java.exe' : 'java';
-    const manifest = run(java, ['-jar', bundletoolJar, 'dump', 'manifest', `--bundle=${expectedArtifactPath}`, '--module=base']);
-    if (!manifest.ok) findings.push(`bundletool dump manifest failed: ${manifest.stderr.trim() || `exit ${manifest.status}`}`);
+    const manifest = run(java, [
+      '-jar',
+      bundletoolJar,
+      'dump',
+      'manifest',
+      `--bundle=${expectedArtifactPath}`,
+      '--module=base',
+    ]);
+    if (!manifest.ok)
+      findings.push(`bundletool dump manifest failed: ${manifest.stderr.trim() || `exit ${manifest.status}`}`);
     manifestOutput = manifest.stdout;
     permissionOutput = [...manifestOutput.matchAll(/android:name="(android\.permission\.[A-Z0-9_]+)"/g)]
       .map((match) => match[1])
@@ -170,25 +196,34 @@ const permissionSet = new Set(
   [...permissionOutput.matchAll(/android\.permission\.[A-Z0-9_]+/g)].map((match) => match[0]),
 );
 for (const permission of permissionSet) {
-  if (!allowedPermissions.has(permission)) findings.push(`Unexpected binary permission requires explicit review: ${permission}`);
+  if (!allowedPermissions.has(permission))
+    findings.push(`Unexpected binary permission requires explicit review: ${permission}`);
 }
 for (const permission of allowedPermissions) {
-  if (!permissionSet.has(permission)) findings.push(`Expected ScrollShield permission missing from binary manifest: ${permission}`);
+  if (!permissionSet.has(permission))
+    findings.push(`Expected ScrollShield permission missing from binary manifest: ${permission}`);
 }
 
 if (/android\.permission\.INTERNET/.test(manifestOutput + permissionOutput)) {
   findings.push('Offline Android v1 binary unexpectedly contains android.permission.INTERNET.');
 }
-if (/com\.google\.android\.gms\.permission\.AD_ID|android\.permission\.ACCESS_ADSERVICES_AD_ID/.test(manifestOutput + permissionOutput)) {
+if (
+  /com\.google\.android\.gms\.permission\.AD_ID|android\.permission\.ACCESS_ADSERVICES_AD_ID/.test(
+    manifestOutput + permissionOutput,
+  )
+) {
   findings.push('Binary unexpectedly contains an advertising identifier permission.');
 }
 if (/android:debuggable="true"/.test(manifestOutput)) findings.push('Release binary is debuggable.');
-if (/android:usesCleartextTraffic="true"/.test(manifestOutput)) findings.push('Release binary permits cleartext traffic.');
-if (manifestOutput && !manifestOutput.includes('app.scrollshield.mobile')) findings.push('Binary manifest does not identify app.scrollshield.mobile.');
+if (/android:usesCleartextTraffic="true"/.test(manifestOutput))
+  findings.push('Release binary permits cleartext traffic.');
+if (manifestOutput && !manifestOutput.includes('app.scrollshield.mobile'))
+  findings.push('Binary manifest does not identify app.scrollshield.mobile.');
 
 const archiveLower = archiveOutput.toLowerCase();
 const suspiciousArchiveMarkers = forbiddenMarkers.filter((marker) => archiveLower.includes(marker.toLowerCase()));
-for (const marker of suspiciousArchiveMarkers) findings.push(`Unexpected tracker/network marker found in binary archive paths: ${marker}`);
+for (const marker of suspiciousArchiveMarkers)
+  findings.push(`Unexpected tracker/network marker found in binary archive paths: ${marker}`);
 
 mkdirSync(inspectionDir, { recursive: true });
 writeFileSync(manifestLogPath, manifestOutput || '<manifest unavailable>\n', 'utf8');
@@ -227,4 +262,6 @@ if (findings.length > 0) {
 console.log(`Signed ${type} candidate binary inspection passed for ${metadata.candidateCommitSha}.`);
 console.log(`SHA-256: ${actualHash}`);
 console.log(`Inspection report: ${inspectionPath}`);
-console.log('Do not set signedBinaryInspected=true unless this exact retained artifact and report are retained as evidence.');
+console.log(
+  'Do not set signedBinaryInspected=true unless this exact retained artifact and report are retained as evidence.',
+);

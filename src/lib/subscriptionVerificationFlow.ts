@@ -1,9 +1,6 @@
 import type { PlaySubscriptionPurchase } from './nativeBilling';
 import { NativeIntegrity, isValidServerIntegrityNonce } from './nativeIntegrity';
-import {
-  NativeSubscriptionIdentity,
-  buildSubscriptionChallengeStatement,
-} from './subscriptionInstallationIdentity';
+import { NativeSubscriptionIdentity, buildSubscriptionChallengeStatement } from './subscriptionInstallationIdentity';
 
 export interface SubscriptionVerificationChallenge {
   challengeId: string;

@@ -1,16 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  getPlatformMock,
-  isNativePlatformMock,
-  startProtectionServiceMock,
-  syncProtectionConfigMock,
-} = vi.hoisted(() => ({
-  getPlatformMock: vi.fn(),
-  isNativePlatformMock: vi.fn(),
-  startProtectionServiceMock: vi.fn(),
-  syncProtectionConfigMock: vi.fn(),
-}));
+const { getPlatformMock, isNativePlatformMock, startProtectionServiceMock, syncProtectionConfigMock } = vi.hoisted(
+  () => ({
+    getPlatformMock: vi.fn(),
+    isNativePlatformMock: vi.fn(),
+    startProtectionServiceMock: vi.fn(),
+    syncProtectionConfigMock: vi.fn(),
+  }),
+);
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: {

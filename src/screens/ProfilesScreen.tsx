@@ -257,7 +257,8 @@ export function ProfilesScreen({
               className="mt-2 min-h-24 w-full resize-none rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-zinc-100 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
             />
             <p className="mt-2 text-xs text-zinc-500">
-              Ein neues Profil übernimmt die aktuellen App-Regeln als sicheren Snapshot. Regeln änderst du anschließend bei den einzelnen Apps.
+              Ein neues Profil übernimmt die aktuellen App-Regeln als sicheren Snapshot. Regeln änderst du anschließend
+              bei den einzelnen Apps.
             </p>
           </section>
 
@@ -293,23 +294,38 @@ export function ProfilesScreen({
   }
 
   return (
-    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="p-6 pb-32">
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className="p-6 pb-32"
+    >
       <Header title="Schutzprofile" onBack={() => navigate('dashboard')} />
 
-      <section className={`mb-6 rounded-[1.5rem] border p-5 ${commitmentActive ? 'border-indigo-500/35 bg-indigo-500/10' : 'border-zinc-800 bg-zinc-900/70'}`} aria-labelledby="commitment-title">
+      <section
+        className={`mb-6 rounded-[1.5rem] border p-5 ${commitmentActive ? 'border-indigo-500/35 bg-indigo-500/10' : 'border-zinc-800 bg-zinc-900/70'}`}
+        aria-labelledby="commitment-title"
+      >
         <div className="flex items-start gap-3">
-          <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${commitmentActive ? 'bg-indigo-500/15 text-indigo-200' : 'bg-zinc-800 text-zinc-400'}`}>
+          <div
+            className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${commitmentActive ? 'bg-indigo-500/15 text-indigo-200' : 'bg-zinc-800 text-zinc-400'}`}
+          >
             {commitmentActive ? <LockKeyhole size={19} aria-hidden="true" /> : <Clock3 size={19} aria-hidden="true" />}
           </div>
           <div className="min-w-0 flex-1">
-            <h1 id="commitment-title" className="font-semibold text-zinc-100">Commitment-Modus</h1>
+            <h1 id="commitment-title" className="font-semibold text-zinc-100">
+              Commitment-Modus
+            </h1>
             {commitmentActive && commitmentLock ? (
               <>
                 <p className="mt-2 text-sm leading-relaxed text-indigo-100/80">
-                  Deine aktuelle Schutzkonfiguration ist bis {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} eingefroren. Apps, Profile, Limits und Zeitpläne können bis dahin nicht geändert werden.
+                  Deine aktuelle Schutzkonfiguration ist bis{' '}
+                  {new Date(commitmentLock.lockedUntil).toLocaleString('de-DE')} eingefroren. Apps, Profile, Limits und
+                  Zeitpläne können bis dahin nicht geändert werden.
                 </p>
                 <p className="mt-3 text-xs leading-relaxed text-zinc-400">
-                  Notfallfreigabe, Hilfe, Datenexport und ein vollständiger App-Reset bleiben verfügbar. Berechtigungen und Schutzstatus können weiterhin repariert werden. Der Reset löscht bewusst auch den Commitment-Lock.
+                  Notfallfreigabe, Hilfe, Datenexport und ein vollständiger App-Reset bleiben verfügbar. Berechtigungen
+                  und Schutzstatus können weiterhin repariert werden. Der Reset löscht bewusst auch den Commitment-Lock.
                 </p>
               </>
             ) : pendingCommitment ? (
@@ -318,7 +334,9 @@ export function ProfilesScreen({
                   {durationLabel(pendingCommitment)} verbindlich einfrieren?
                 </p>
                 <p className="mt-2 text-xs leading-relaxed text-zinc-400">
-                  Beim Start prüft ScrollShield zusätzlich, dass mindestens eine aktive Ziel-App wirklich installiert ist und der Android-Schutzdienst tatsächlich läuft. Während der Laufzeit kannst du Schutzregeln nicht abschwächen oder umkonfigurieren. Ein kompletter Reset bleibt als Sicherheitsausstieg möglich.
+                  Beim Start prüft ScrollShield zusätzlich, dass mindestens eine aktive Ziel-App wirklich installiert
+                  ist und der Android-Schutzdienst tatsächlich läuft. Während der Laufzeit kannst du Schutzregeln nicht
+                  abschwächen oder umkonfigurieren. Ein kompletter Reset bleibt als Sicherheitsausstieg möglich.
                 </p>
                 <div className="mt-4 flex gap-2">
                   <button
@@ -342,10 +360,14 @@ export function ProfilesScreen({
             ) : (
               <>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-                  Friere deine aktuelle Konfiguration bewusst für eine begrenzte Zeit ein. Das erschwert impulsives Deaktivieren, ohne den sicheren Notfallweg zu entfernen.
+                  Friere deine aktuelle Konfiguration bewusst für eine begrenzte Zeit ein. Das erschwert impulsives
+                  Deaktivieren, ohne den sicheren Notfallweg zu entfernen.
                 </p>
                 {commitmentConfigurationMessage ? (
-                  <div role="status" className="mt-4 rounded-xl border border-zinc-700/70 bg-zinc-950/60 p-3 text-xs leading-relaxed text-zinc-400">
+                  <div
+                    role="status"
+                    className="mt-4 rounded-xl border border-zinc-700/70 bg-zinc-950/60 p-3 text-xs leading-relaxed text-zinc-400"
+                  >
                     <p>{commitmentConfigurationMessage}</p>
                     {state.operatingSystem === 'android' && activeAppCount === 0 && (
                       <button
@@ -377,7 +399,10 @@ export function ProfilesScreen({
               </>
             )}
             {commitmentFailure && (
-              <div role="alert" className="mt-3 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-xs leading-relaxed text-red-200">
+              <div
+                role="alert"
+                className="mt-3 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-xs leading-relaxed text-red-200"
+              >
                 <p>{commitmentFailure.message}</p>
                 {commitmentFailure.action && (
                   <button
@@ -397,7 +422,8 @@ export function ProfilesScreen({
       <section className="mb-6 rounded-[1.5rem] border border-blue-500/25 bg-blue-500/5 p-5">
         <h2 className="font-semibold text-blue-100">Ein Profil wechselt die gesamte App-Konfiguration</h2>
         <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-          Beim Wechsel werden Tageslimits, Session-Längen, Öffnungspausen, Fokusregeln, Sperrfenster, Anti-Binge und Notfallregeln gemeinsam übernommen und danach mit Android synchronisiert.
+          Beim Wechsel werden Tageslimits, Session-Längen, Öffnungspausen, Fokusregeln, Sperrfenster, Anti-Binge und
+          Notfallregeln gemeinsam übernommen und danach mit Android synchronisiert.
         </p>
       </section>
 
@@ -420,7 +446,10 @@ export function ProfilesScreen({
           const configForSummary = active ? state.appsConfig : profile.appsConfig;
           const counts = countProfileRules(configForSummary);
           return (
-            <article key={profile.id} className={`rounded-[1.5rem] border ${active ? 'border-zinc-600 bg-zinc-900/90' : 'border-zinc-800/60 bg-zinc-950/60'}`}>
+            <article
+              key={profile.id}
+              className={`rounded-[1.5rem] border ${active ? 'border-zinc-600 bg-zinc-900/90' : 'border-zinc-800/60 bg-zinc-950/60'}`}
+            >
               <div className="flex items-stretch">
                 <button
                   type="button"
@@ -430,14 +459,21 @@ export function ProfilesScreen({
                   disabled={commitmentActive}
                   className="flex min-h-[92px] min-w-0 flex-1 items-center gap-4 p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-zinc-800 ${profile.color}`} aria-hidden="true">
+                  <div
+                    className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-zinc-800 ${profile.color}`}
+                    aria-hidden="true"
+                  >
                     <Shield size={21} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-zinc-100">{presentation.name}</h3>
                       {active && <Check size={15} className="text-emerald-400" aria-hidden="true" />}
-                      {profile.isCustom && <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[9px] font-bold uppercase text-zinc-400">Eigen</span>}
+                      {profile.isCustom && (
+                        <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[9px] font-bold uppercase text-zinc-400">
+                          Eigen
+                        </span>
+                      )}
                     </div>
                     <p className="mt-1 text-xs leading-relaxed text-zinc-400">{presentation.description}</p>
                     <p className="mt-2 text-[11px] text-zinc-500">

@@ -37,7 +37,9 @@ if (trackedChanges === undefined) {
 }
 
 if (trackedChanges.length > 0) {
-  console.error('Local verification requires a clean tracked working tree so evidence can be bound to one exact commit.');
+  console.error(
+    'Local verification requires a clean tracked working tree so evidence can be bound to one exact commit.',
+  );
   console.error(trackedChanges);
   process.exit(1);
 }
@@ -155,7 +157,9 @@ if (finalTrackedChanges === undefined || finalTrackedChanges.length > 0) {
   report.completedAt = new Date().toISOString();
   report.trackedChangesAfterRun = finalTrackedChanges ?? '<git status failed>';
   persistReport();
-  console.error('\nVerification commands changed tracked repository files; evidence is not cleanly bound to the starting commit.');
+  console.error(
+    '\nVerification commands changed tracked repository files; evidence is not cleanly bound to the starting commit.',
+  );
   process.exit(1);
 }
 
@@ -165,4 +169,6 @@ persistReport();
 
 console.log(`\nLocal verification PASSED for ${commitSha}.`);
 console.log(`Evidence directory: ${outputDir}`);
-console.log('This proves only the executed source/unit/debug-build path; physical-device and release gates remain separate.');
+console.log(
+  'This proves only the executed source/unit/debug-build path; physical-device and release gates remain separate.',
+);

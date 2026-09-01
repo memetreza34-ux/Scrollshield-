@@ -77,11 +77,7 @@ const savedState = {
 const status = (
   enabled: boolean,
   running: boolean,
-  health: NativeProtectionHealth = enabled && running
-    ? 'active'
-    : enabled
-      ? 'stale-activation'
-      : 'never-started',
+  health: NativeProtectionHealth = enabled && running ? 'active' : enabled ? 'stale-activation' : 'never-started',
 ) => ({
   enabled,
   running,

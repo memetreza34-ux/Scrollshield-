@@ -39,12 +39,18 @@ export function FocusScreen({
 
       {state.isFocusModeActive ? (
         <div className="space-y-6">
-          <section className="rounded-[2rem] border border-emerald-500/30 bg-emerald-500/10 p-7 text-center" aria-labelledby="focus-running-title">
+          <section
+            className="rounded-[2rem] border border-emerald-500/30 bg-emerald-500/10 p-7 text-center"
+            aria-labelledby="focus-running-title"
+          >
             <Shield size={30} className="mx-auto text-emerald-400" aria-hidden="true" />
             <h2 id="focus-running-title" className="mt-4 text-sm font-bold uppercase tracking-widest text-emerald-400">
               Fokusregeln aktiv
             </h2>
-            <div className="mt-4 text-6xl font-mono font-bold tracking-tighter text-zinc-50" aria-label={`Noch ${state.focusTimeRemaining} Minuten`}>
+            <div
+              className="mt-4 text-6xl font-mono font-bold tracking-tighter text-zinc-50"
+              aria-label={`Noch ${state.focusTimeRemaining} Minuten`}
+            >
               {state.focusTimeRemaining}
               <span className="text-2xl text-emerald-400/70">m</span>
             </div>
@@ -103,12 +109,16 @@ export function FocusScreen({
             <Shield size={30} className="mx-auto text-emerald-400" aria-hidden="true" />
             <h2 className="mt-4 text-2xl font-bold text-zinc-100">Fokus-Sitzung starten</h2>
             <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-zinc-400">
-              Der Fokusmodus ist ein zusätzlicher Zustand. Jede aktive App entscheidet über ihr eigenes Fokusverhalten: erlauben, warnen oder blockieren.
+              Der Fokusmodus ist ein zusätzlicher Zustand. Jede aktive App entscheidet über ihr eigenes Fokusverhalten:
+              erlauben, warnen oder blockieren.
             </p>
           </section>
 
           <section aria-labelledby="focus-duration-title">
-            <h2 id="focus-duration-title" className="mb-3 px-2 text-xs font-bold uppercase tracking-widest text-zinc-500">
+            <h2
+              id="focus-duration-title"
+              className="mb-3 px-2 text-xs font-bold uppercase tracking-widest text-zinc-500"
+            >
               Dauer
             </h2>
             <div className="grid grid-cols-3 gap-3">
@@ -137,7 +147,8 @@ export function FocusScreen({
               <div>
                 <h2 className="text-sm font-semibold text-zinc-200">Vor dem Start prüfen</h2>
                 <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-                  Aktuell reagieren {blockingApps} App{blockingApps === 1 ? '' : 's'} mit Blockieren und {warningApps} mit Warnen. Apps mit „Erlauben“ werden durch Fokus nicht zusätzlich eingeschränkt.
+                  Aktuell reagieren {blockingApps} App{blockingApps === 1 ? '' : 's'} mit Blockieren und {warningApps}{' '}
+                  mit Warnen. Apps mit „Erlauben“ werden durch Fokus nicht zusätzlich eingeschränkt.
                 </p>
                 <button
                   type="button"
@@ -159,7 +170,9 @@ export function FocusScreen({
           </button>
 
           <p className="px-2 text-xs leading-relaxed text-zinc-600">
-            Wiederkehrende Fokus-Zeitpläne werden erst angeboten, wenn sie persistent gespeichert und vom nativen Android-Schutzdienst zuverlässig ausgeführt werden. Die alten Demo-Zeitpläne sind aus dem Release-Pfad entfernt.
+            Wiederkehrende Fokus-Zeitpläne werden erst angeboten, wenn sie persistent gespeichert und vom nativen
+            Android-Schutzdienst zuverlässig ausgeführt werden. Die alten Demo-Zeitpläne sind aus dem Release-Pfad
+            entfernt.
           </p>
         </div>
       )}

@@ -46,10 +46,7 @@ export interface CommitmentRuntimeStatus {
 export const isCommitmentDuration = (minutes: number): minutes is CommitmentDurationMinutes =>
   (COMMITMENT_DURATION_MINUTES as readonly number[]).includes(minutes);
 
-export const createCommitmentLock = (
-  durationMinutes: CommitmentDurationMinutes,
-  now = Date.now(),
-): CommitmentLock => ({
+export const createCommitmentLock = (durationMinutes: CommitmentDurationMinutes, now = Date.now()): CommitmentLock => ({
   startedAt: now,
   lockedUntil: now + durationMinutes * 60_000,
   durationMinutes,
@@ -164,7 +161,8 @@ export const assessCommitmentStartReadiness = (
     return {
       ok: false,
       code: 'service_not_running',
-      message: 'Starte zuerst den Android-Schutzdienst. Commitment wird erst aktiviert, wenn der Schutz wirklich läuft.',
+      message:
+        'Starte zuerst den Android-Schutzdienst. Commitment wird erst aktiviert, wenn der Schutz wirklich läuft.',
       action: 'permissions',
     };
   }

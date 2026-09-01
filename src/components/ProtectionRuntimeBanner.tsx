@@ -3,13 +3,7 @@ import { AlertTriangle, CheckCircle2, RefreshCw, ShieldOff } from 'lucide-react'
 import { NativeProtection, type NativeProtectionStatus } from '../lib/nativeProtection';
 import type { AppState, Screen } from '../types';
 
-export function ProtectionRuntimeBanner({
-  state,
-  navigate,
-}: {
-  state: AppState;
-  navigate: (screen: Screen) => void;
-}) {
+export function ProtectionRuntimeBanner({ state, navigate }: { state: AppState; navigate: (screen: Screen) => void }) {
   const nativeAndroid = NativeProtection.isAvailable();
   const [status, setStatus] = useState<NativeProtectionStatus | null>(null);
   const [loading, setLoading] = useState(nativeAndroid);
@@ -46,7 +40,10 @@ export function ProtectionRuntimeBanner({
 
   if (!nativeAndroid) {
     return (
-      <section className="mb-5 rounded-[1.5rem] border border-blue-500/20 bg-blue-500/5 p-4" aria-label="Android Schutzstatus">
+      <section
+        className="mb-5 rounded-[1.5rem] border border-blue-500/20 bg-blue-500/5 p-4"
+        aria-label="Android Schutzstatus"
+      >
         <div className="flex items-start gap-3">
           <AlertTriangle size={18} className="mt-0.5 flex-shrink-0 text-blue-300" aria-hidden="true" />
           <div>
@@ -62,7 +59,10 @@ export function ProtectionRuntimeBanner({
 
   if (loading) {
     return (
-      <section className="mb-5 rounded-[1.5rem] border border-zinc-800 bg-zinc-900/70 p-4" aria-label="Android Schutzstatus wird geprüft">
+      <section
+        className="mb-5 rounded-[1.5rem] border border-zinc-800 bg-zinc-900/70 p-4"
+        aria-label="Android Schutzstatus wird geprüft"
+      >
         <div className="flex items-center gap-3 text-sm text-zinc-400">
           <RefreshCw size={17} className="animate-spin" aria-hidden="true" /> Android-Schutzstatus wird geprüft …
         </div>
@@ -72,13 +72,17 @@ export function ProtectionRuntimeBanner({
 
   if (status?.running && status.enabled) {
     return (
-      <section className="mb-5 rounded-[1.5rem] border border-emerald-500/25 bg-emerald-500/5 p-4" aria-label="Android Schutzstatus aktiv">
+      <section
+        className="mb-5 rounded-[1.5rem] border border-emerald-500/25 bg-emerald-500/5 p-4"
+        aria-label="Android Schutzstatus aktiv"
+      >
         <div className="flex items-start gap-3">
           <CheckCircle2 size={19} className="mt-0.5 flex-shrink-0 text-emerald-400" aria-hidden="true" />
           <div>
             <h2 className="text-sm font-semibold text-emerald-100">Android-Schutz läuft</h2>
             <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-              Dienst und gespeicherte Aktivierung sind aktiv. {activeConfiguredApps} App{activeConfiguredApps === 1 ? '' : 's'} konfiguriert.
+              Dienst und gespeicherte Aktivierung sind aktiv. {activeConfiguredApps} App
+              {activeConfiguredApps === 1 ? '' : 's'} konfiguriert.
             </p>
           </div>
         </div>

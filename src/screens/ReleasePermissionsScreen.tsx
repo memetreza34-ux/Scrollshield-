@@ -21,38 +21,38 @@ type PermissionCard = {
   optional?: boolean;
 };
 
-const REQUIRED_ANDROID_PERMISSIONS: RequiredAndroidPermission[] = [
-  'usageAccess',
-  'overlay',
-  'notifications',
-];
+const REQUIRED_ANDROID_PERMISSIONS: RequiredAndroidPermission[] = ['usageAccess', 'overlay', 'notifications'];
 
 const PERMISSION_CARDS: PermissionCard[] = [
   {
     key: 'usageAccess',
     title: 'App-Nutzungszugriff',
-    description: 'Erkennt lokal, welche unterstützte geschützte App im Vordergrund ist und wie lange eine freigegebene Sitzung genutzt wird.',
+    description:
+      'Erkennt lokal, welche unterstützte geschützte App im Vordergrund ist und wie lange eine freigegebene Sitzung genutzt wird.',
     missing: 'Ohne Nutzungszugriff kann ScrollShield geschützte App-Öffnungen nicht zuverlässig erkennen.',
     icon: Eye,
   },
   {
     key: 'overlay',
     title: 'Hinweis über anderen Apps',
-    description: 'Zeigt den ScrollShield-Unterbrechungsbildschirm, Countdown, Rückweg und eine begrenzte Notfallfreigabe über der geschützten App.',
+    description:
+      'Zeigt den ScrollShield-Unterbrechungsbildschirm, Countdown, Rückweg und eine begrenzte Notfallfreigabe über der geschützten App.',
     missing: 'Ohne Overlay-Zugriff kann der sichtbare Schutzbildschirm nicht eingeblendet werden.',
     icon: Layers,
   },
   {
     key: 'notifications',
     title: 'Benachrichtigungen',
-    description: 'Hält den laufenden Android-Schutzdienst sichtbar. Android behält seine Systemkontrolle über den laufenden Dienst.',
+    description:
+      'Hält den laufenden Android-Schutzdienst sichtbar. Android behält seine Systemkontrolle über den laufenden Dienst.',
     missing: 'Ohne sichtbare Benachrichtigung startet der Android-Schutzdienst nicht.',
     icon: Bell,
   },
   {
     key: 'backgroundActivity',
     title: 'Akku-Optimierung prüfen',
-    description: 'Öffnet die Android-Akkueinstellungen. Eine Ausnahme kann auf Geräten mit aggressiver Hintergrundbegrenzung die Zuverlässigkeit verbessern.',
+    description:
+      'Öffnet die Android-Akkueinstellungen. Eine Ausnahme kann auf Geräten mit aggressiver Hintergrundbegrenzung die Zuverlässigkeit verbessern.',
     missing: 'Dieser Zugriff ist optional. Ohne Ausnahme kann Android den Schutz auf manchen Geräten früher beenden.',
     icon: Activity,
     optional: true,
@@ -146,7 +146,9 @@ export function ReleasePermissionsScreen({
           return;
         }
         await NativePermissions.openAndroidSettings('notifications');
-        setStatusMessage('Aktiviere App-Benachrichtigungen und den Schutzkanal in Android und prüfe danach den Status erneut.');
+        setStatusMessage(
+          'Aktiviere App-Benachrichtigungen und den Schutzkanal in Android und prüfe danach den Status erneut.',
+        );
         return;
       }
 
@@ -214,7 +216,9 @@ export function ReleasePermissionsScreen({
     } catch (error) {
       console.error('Could not change Android protection service', error);
       setServiceStatus(await NativeProtection.getStatus().catch(() => null));
-      setStatusMessage('Der Android-Schutzdienst konnte nicht gestartet oder gestoppt werden. Prüfe Zugriffe und App-Auswahl.');
+      setStatusMessage(
+        'Der Android-Schutzdienst konnte nicht gestartet oder gestoppt werden. Prüfe Zugriffe und App-Auswahl.',
+      );
     } finally {
       setServiceBusy(false);
     }
@@ -228,16 +232,24 @@ export function ReleasePermissionsScreen({
   if (state.operatingSystem === 'ios') {
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6 pb-32">
-        <Header title={isOnboarding ? 'Setup' : 'Berechtigungen'} onBack={() => navigate(isOnboarding ? 'onboarding' : 'settings')} />
+        <Header
+          title={isOnboarding ? 'Setup' : 'Berechtigungen'}
+          onBack={() => navigate(isOnboarding ? 'onboarding' : 'settings')}
+        />
         <section className="rounded-[2rem] border border-amber-500/30 bg-amber-500/5 p-6">
           <Info size={22} className="text-amber-400" aria-hidden="true" />
           <h1 className="mt-4 text-xl font-bold text-zinc-100">iOS-Schutz noch nicht freigegeben</h1>
           <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-            Die aktuelle Release-Basis enthält noch keine produktionsreife iOS-Bildschirmzeit-Integration. Deshalb zeigt ScrollShield hier keine künstlichen Berechtigungsschalter an.
+            Die aktuelle Release-Basis enthält noch keine produktionsreife iOS-Bildschirmzeit-Integration. Deshalb zeigt
+            ScrollShield hier keine künstlichen Berechtigungsschalter an.
           </p>
         </section>
         {isOnboarding && (
-          <button type="button" onClick={finishOnboarding} className="mt-6 w-full rounded-[1.5rem] bg-zinc-100 py-4 font-bold text-zinc-950">
+          <button
+            type="button"
+            onClick={finishOnboarding}
+            className="mt-6 w-full rounded-[1.5rem] bg-zinc-100 py-4 font-bold text-zinc-950"
+          >
             Zur App
           </button>
         )}
@@ -247,7 +259,10 @@ export function ReleasePermissionsScreen({
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6 pb-32">
-      <Header title={isOnboarding ? 'Android-Setup' : 'Berechtigungen'} onBack={() => navigate(isOnboarding ? 'onboarding' : 'settings')} />
+      <Header
+        title={isOnboarding ? 'Android-Setup' : 'Berechtigungen'}
+        onBack={() => navigate(isOnboarding ? 'onboarding' : 'settings')}
+      />
 
       <div className="space-y-5">
         <section className="rounded-[1.75rem] border border-blue-500/25 bg-blue-500/5 p-5">
@@ -256,7 +271,8 @@ export function ReleasePermissionsScreen({
             <div>
               <h1 className="font-bold text-zinc-100">Android-Schutz einrichten</h1>
               <p className="mt-1 text-sm leading-relaxed text-zinc-400">
-                ScrollShield braucht Nutzungszugriff, Overlay und sichtbare Benachrichtigungen für den Android-v1-Schutz. Regeln und Nutzungsdaten bleiben lokal auf dem Gerät.
+                ScrollShield braucht Nutzungszugriff, Overlay und sichtbare Benachrichtigungen für den
+                Android-v1-Schutz. Regeln und Nutzungsdaten bleiben lokal auf dem Gerät.
               </p>
             </div>
           </div>
@@ -266,7 +282,8 @@ export function ReleasePermissionsScreen({
           <section className="rounded-[1.5rem] border border-amber-500/30 bg-amber-500/5 p-5">
             <h2 className="font-semibold text-amber-300">Android-Systemschutz hier nicht verfügbar</h2>
             <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-              Die Systemzugriffe und der Schutzdienst funktionieren nur in der installierten Android-App. Diese Web-/Vorschauansicht kann sie nicht simulieren.
+              Die Systemzugriffe und der Schutzdienst funktionieren nur in der installierten Android-App. Diese
+              Web-/Vorschauansicht kann sie nicht simulieren.
             </p>
           </section>
         )}
@@ -315,7 +332,9 @@ export function ReleasePermissionsScreen({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
                       <h2 className="font-semibold text-zinc-100">{card.title}</h2>
-                      <span className={`text-[10px] font-bold uppercase tracking-wide ${active ? 'text-emerald-400' : required ? 'text-amber-400' : 'text-zinc-500'}`}>
+                      <span
+                        className={`text-[10px] font-bold uppercase tracking-wide ${active ? 'text-emerald-400' : required ? 'text-amber-400' : 'text-zinc-500'}`}
+                      >
                         {active ? 'AKTIV' : required ? 'FEHLT' : 'OPTIONAL'}
                       </span>
                     </div>
@@ -344,7 +363,11 @@ export function ReleasePermissionsScreen({
 
         {isOnboarding && (
           <section className="pt-3">
-            <button type="button" onClick={finishOnboarding} className="w-full rounded-[1.5rem] bg-zinc-100 py-4 font-bold text-zinc-950">
+            <button
+              type="button"
+              onClick={finishOnboarding}
+              className="w-full rounded-[1.5rem] bg-zinc-100 py-4 font-bold text-zinc-950"
+            >
               {readyToAttemptStart ? 'Setup abschließen' : 'Setup später abschließen'}
             </button>
             <p className="mx-auto mt-3 max-w-xs text-center text-xs leading-relaxed text-zinc-500">

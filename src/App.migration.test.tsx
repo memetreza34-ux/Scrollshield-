@@ -3,21 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { DEFAULT_STATE } from './types';
 
-const {
-  loadStateMock,
-  hasPendingLegacyMigrationMock,
-  saveStateMock,
-  nativeSyncMock,
-  nativeDrainMock,
-  nativeStopMock,
-} = vi.hoisted(() => ({
-  loadStateMock: vi.fn(),
-  hasPendingLegacyMigrationMock: vi.fn(),
-  saveStateMock: vi.fn(),
-  nativeSyncMock: vi.fn(),
-  nativeDrainMock: vi.fn(),
-  nativeStopMock: vi.fn(),
-}));
+const { loadStateMock, hasPendingLegacyMigrationMock, saveStateMock, nativeSyncMock, nativeDrainMock, nativeStopMock } =
+  vi.hoisted(() => ({
+    loadStateMock: vi.fn(),
+    hasPendingLegacyMigrationMock: vi.fn(),
+    saveStateMock: vi.fn(),
+    nativeSyncMock: vi.fn(),
+    nativeDrainMock: vi.fn(),
+    nativeStopMock: vi.fn(),
+  }));
 
 vi.mock('./lib/storage', () => ({
   StorageService: {
@@ -72,9 +66,7 @@ describe('App legacy migration lifecycle', () => {
   });
 
   it('unlocks the normal app only after retry returns state and no legacy source remains', async () => {
-    loadStateMock
-      .mockReturnValueOnce(null)
-      .mockReturnValueOnce({ ...DEFAULT_STATE, hasCompletedOnboarding: true });
+    loadStateMock.mockReturnValueOnce(null).mockReturnValueOnce({ ...DEFAULT_STATE, hasCompletedOnboarding: true });
     hasPendingLegacyMigrationMock.mockReturnValueOnce(true).mockReturnValueOnce(false);
 
     render(<App />);

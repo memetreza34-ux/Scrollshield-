@@ -123,12 +123,7 @@ for (const domain of ['root', 'file', 'database', 'sharedpref', 'external']) {
       `${files.dataExtractionRules}: domain=${domain} must be excluded from both cloud backup and device transfer.`,
     );
   }
-  requirePattern(
-    files.backupRules,
-    backupRules,
-    exclusion,
-    `Legacy Auto Backup must exclude domain=${domain} path=.`,
-  );
+  requirePattern(files.backupRules, backupRules, exclusion, `Legacy Auto Backup must exclude domain=${domain} path=.`);
 }
 requirePattern(
   files.dataExtractionRules,
@@ -168,7 +163,9 @@ rejectPattern(
   'Offline Android v1 must not conditionally activate Google Services/Firebase from the app build.',
 );
 if (existsSync('android/app/google-services.json')) {
-  findings.push('android/app/google-services.json: offline Android v1 must not ship a Google Services runtime configuration.');
+  findings.push(
+    'android/app/google-services.json: offline Android v1 must not ship a Google Services runtime configuration.',
+  );
 }
 
 rejectPattern(
@@ -189,7 +186,12 @@ rejectPattern(
   /\bcleartext\s*:\s*true/,
   'Capacitor cleartext mode must never be enabled for production.',
 );
-requirePattern(files.capacitor, capacitor, /webDir:\s*['"]dist['"]/, 'Production WebView must use packaged dist assets.');
+requirePattern(
+  files.capacitor,
+  capacitor,
+  /webDir:\s*['"]dist['"]/,
+  'Production WebView must use packaged dist assets.',
+);
 
 if (packageJson.scripts?.['check:android-hardening'] !== 'tsx scripts/check-android-release-hardening.ts') {
   findings.push(`${files.packageJson}: check:android-hardening must execute this release-hardening guard.`);
@@ -301,7 +303,9 @@ for (const command of finalCommands) {
   const gateIndex = script.indexOf('npm run release:gate');
   const artifactIndex = script.indexOf(command.artifactToken);
   if (gateIndex < 0 || artifactIndex < 0 || gateIndex > artifactIndex) {
-    findings.push(`${files.packageJson}: ${command.name} must run final release gate before retained-artifact validation.`);
+    findings.push(
+      `${files.packageJson}: ${command.name} must run final release gate before retained-artifact validation.`,
+    );
   }
   if (/run-gradle|assembleRelease|bundleRelease/.test(script)) {
     findings.push(
@@ -323,8 +327,18 @@ requirePattern(
   'Final artifact check must detect any byte or size change after inspection.',
 );
 
-requirePattern(files.gitignore, gitignore, /^\.scrollshield-release-candidate\/$/m, 'Local candidate metadata must stay ignored.');
-requirePattern(files.gitignore, gitignore, /^android\/signing\.properties$/m, 'Local signing.properties must stay ignored.');
+requirePattern(
+  files.gitignore,
+  gitignore,
+  /^\.scrollshield-release-candidate\/$/m,
+  'Local candidate metadata must stay ignored.',
+);
+requirePattern(
+  files.gitignore,
+  gitignore,
+  /^android\/signing\.properties$/m,
+  'Local signing.properties must stay ignored.',
+);
 requirePattern(files.gitignore, gitignore, /^android\/\*\.jks$/m, 'Android JKS files must stay ignored.');
 requirePattern(files.gitignore, gitignore, /^android\/\*\.keystore$/m, 'Android keystore files must stay ignored.');
 
