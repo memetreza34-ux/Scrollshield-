@@ -177,7 +177,7 @@ requirePattern(
 requirePattern(
   permissionScreenPath,
   permissionScreen,
-  /!nativeStatus\?\.usageAccess \|\| !nativeStatus\.overlay \|\| !nativeStatus\.notifications/,
+  /getMissingAndroidProtectionPrerequisites\(nativeStatus\)[\s\S]*missingPrerequisites\.length > 0[\s\S]*return;[\s\S]*NativeProtection\.start/,
   'The Android start control must block before native startup when notifications are disabled.',
 );
 requirePattern(
