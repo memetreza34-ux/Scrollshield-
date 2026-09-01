@@ -15,7 +15,11 @@ export interface CommitmentLock {
 export type CommitmentStartAction = 'apps' | 'permissions';
 
 export type CommitmentStartResult =
-  | { ok: true }
+  | {
+      ok: true;
+      message?: never;
+      action?: never;
+    }
   | {
       ok: false;
       code:
