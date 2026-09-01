@@ -19,6 +19,16 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    files: ['scripts/**/*.{js,mjs,cjs}'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: {
+        ...globals.node,
+        ...globals.es2022,
+      },
+    },
+  },
+  {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
       ecmaVersion: 2022,
@@ -39,6 +49,13 @@ export default tseslint.config(
       'prefer-const': 'warn',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'error',
+    },
+  },
+  {
+    files: ['scripts/check-release-approval.ts'],
+    rules: {
+      // This file intentionally rejects ASCII control characters in retained evidence references.
+      'no-control-regex': 'off',
     },
   },
 );
