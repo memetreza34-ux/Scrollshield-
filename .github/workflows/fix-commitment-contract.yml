@@ -28,21 +28,18 @@ jobs:
 
           const appFile = 'src/App.tsx';
           let app = fs.readFileSync(appFile, 'utf8');
-          const appOld = `    if (NativeProtection.isAvailable()) {
-              try {
-                await NativeProtection.factoryReset();`;
-          const appNew = `    if (NativeProtection.isAvailable()) {
-              try {
-                await NativeProtection.stop({
-                  code: 'factory_reset',
-                  message: 'Der Android-Schutz wurde wegen eines vollständigen App-Resets gestoppt',
-                });
-                await NativeProtection.factoryReset();`;
-          if (!app.includes(appOld)) {
+          const resetStart = app.indexOf('const resetApp = async () => {');
+          const factoryResetCall = resetStart >= 0 ? app.indexOf('await NativeProtection.factoryReset();', resetStart) : -1;
+          if (resetStart < 0 || factoryResetCall < 0) {
             console.error('Expected App.tsx reset block was not found.');
             process.exit(1);
           }
-          app = app.replace(appOld, appNew);
+          const resetPrefix = `await NativeProtection.stop({
+          code: 'factory_reset',
+          message: 'Der Android-Schutz wurde wegen eines vollständigen App-Resets gestoppt',
+        });
+        `;
+          app = app.slice(0, factoryResetCall) + resetPrefix + app.slice(factoryResetCall);
           fs.writeFileSync(appFile, app, 'utf8');
 
           const testFile = 'src/App.commitmentActivation.test.tsx';
@@ -56,11 +53,11 @@ jobs:
           test = test.replace(testTitleOld, testTitleNew);
           const assertionOld = `    expect(stopMock).not.toHaveBeenCalledWith(expect.objectContaining({ code: 'factory_reset' }));`;
           const assertionNew = `    expect(stopMock).toHaveBeenCalledWith(
-              expect.objectContaining({
-                code: 'factory_reset',
-                message: expect.stringMatching(/vollständigen App-Resets/),
-              }),
-            );`;
+      expect.objectContaining({
+        code: 'factory_reset',
+        message: expect.stringMatching(/vollständigen App-Resets/),
+      }),
+    );`;
           if (!test.includes(assertionOld)) {
             console.error('Expected old factory-reset stop assertion was not found.');
             process.exit(1);
