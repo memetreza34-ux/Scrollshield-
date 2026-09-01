@@ -196,7 +196,7 @@ requirePattern(
 requirePattern(
   appDetailPath,
   appDetail,
-  /Adaptive Anti-Binge-Reibung[\s\S]*pro weiterer Öffnung um 5 Sekunden[\s\S]*auf 60 Sekunden begrenzt[\s\S]*Notfallfreigaben verwenden weiterhin ihren eigenen Countdown/,
+  /Adaptive Anti-Binge-Reibung[\s\S]*pro\s+weiterer Öffnung um 5 Sekunden[\s\S]*auf\s+60 Sekunden\s+begrenzt[\s\S]*Notfallfreigaben\s+verwenden weiterhin ihren eigenen Countdown/,
   'The release UI must explain the adaptive formula, cap, and emergency separation.',
 );
 requirePattern(
