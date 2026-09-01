@@ -43,8 +43,8 @@ jobs:
           docs_path.write_text(docs.replace(old_docs, new_docs, 1))
           PY
 
-      - name: Format changed files
-        run: npx prettier --write android/app/src/main/java/app/scrollshield/mobile/ScrollShieldIntegrityPlugin.java docs/SUBSCRIPTION_ENTITLEMENT_ARCHITECTURE.md
+      - name: Format Markdown contract
+        run: npx prettier --write docs/SUBSCRIPTION_ENTITLEMENT_ARCHITECTURE.md
 
       - name: Commit integrity documentation repair
         run: |
