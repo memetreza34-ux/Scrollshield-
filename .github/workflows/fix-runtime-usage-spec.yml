@@ -1,0 +1,54 @@
+name: Fix Runtime Usage Spec
+
+on:
+  push:
+    branches:
+      - agent/release-foundation
+    paths:
+      - .github/workflows/fix-runtime-usage-spec.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: agent/release-foundation
+          fetch-depth: 0
+
+      - name: Clarify RUNTIME-04 usage ownership
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const file = 'docs/PROTECTION_RUNTIME_CONFIG_STATE.md';
+          const source = fs.readFileSync(file, 'utf8');
+          const oldText = `Zeit vor generationBoundaryAt → ausschließlich Rule-ID A
+Zeit nach generationBoundaryAt → ausschließlich G2-Regel/Rule-ID B, sofern unter G2 freigegeben
+keine Vor-G2-Zeit in einem ausschließlich G2 gehörenden Bucket
+keine doppelte Zählung über der Grenze`;
+          const newText = `Zeit vor generationBoundaryAt → ausschließlich previousRule.id aus G1 (im Szenario Rule-ID A)
+Zeit nach generationBoundaryAt → ausschließlich G2-Regel/Rule-ID B, sofern unter G2 freigegeben
+keine Vor-G2-Zeit in einem ausschließlich G2 gehörenden Bucket
+keine doppelte Zählung über der Grenze`;
+          if (!source.includes(oldText)) {
+            console.error('Expected RUNTIME-04 expectation block was not found.');
+            process.exit(1);
+          }
+          fs.writeFileSync(file, source.replace(oldText, newText), 'utf8');
+          NODE
+
+      - name: Format specification
+        run: npx prettier --write docs/PROTECTION_RUNTIME_CONFIG_STATE.md
+
+      - name: Commit specification clarification
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/PROTECTION_RUNTIME_CONFIG_STATE.md
+          git commit -m "docs: bind RUNTIME-04 usage to previous rule id"
+          git push origin HEAD:agent/release-foundation
