@@ -25,23 +25,26 @@ export default function App() {
   const screenScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const saved = StorageService.loadState();
-    if (saved) {
-      try {
-        const normalizedState = normalizeAppState(saved);
-        const focusUpdate = reconcileFocusRuntime(normalizedState);
-        const restoredState = focusUpdate ? { ...normalizedState, ...focusUpdate } : normalizedState;
-        setAppState(restoredState);
-        if (saved.hasCompletedOnboarding) {
-          setCurrentScreen(restoredState.activeSession ? 'active_session' : 'dashboard');
-        } else {
-          setCurrentScreen('welcome');
+    const init = async () => {
+      const saved = await StorageService.loadState();
+      if (saved) {
+        try {
+          const normalizedState = normalizeAppState(saved);
+          const focusUpdate = reconcileFocusRuntime(normalizedState);
+          const restoredState = focusUpdate ? { ...normalizedState, ...focusUpdate } : normalizedState;
+          setAppState(restoredState);
+          if (saved.hasCompletedOnboarding) {
+            setCurrentScreen(restoredState.activeSession ? 'active_session' : 'dashboard');
+          } else {
+            setCurrentScreen('welcome');
+          }
+        } catch (e) {
+          console.error('Failed to parse saved state', e);
         }
-      } catch (e) {
-        console.error('Failed to parse saved state', e);
       }
-    }
-    setIsLoaded(true);
+      setIsLoaded(true);
+    };
+    void init();
   }, []);
 
   useEffect(() => {
@@ -87,7 +90,7 @@ export default function App() {
         skipNextSaveRef.current = false;
         return;
       }
-      StorageService.saveState(appState);
+      void StorageService.saveState(appState);
     }
   }, [appState, isLoaded]);
 
