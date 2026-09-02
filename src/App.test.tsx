@@ -5,9 +5,30 @@ import { expectNoA11yViolations } from './test/a11y';
 import { StorageService } from './lib/storage';
 import { DEFAULT_STATE } from './types';
 
+// ── Web Crypto stub (same as storage.test.ts) ─────────────────────────────────
+const cryptoSubtleStub = {
+  generateKey: vi.fn().mockResolvedValue({} as CryptoKey),
+  exportKey: vi.fn().mockResolvedValue(new Uint8Array(32).buffer),
+  importKey: vi.fn().mockResolvedValue({} as CryptoKey),
+  encrypt: vi.fn().mockImplementation(async (_a: unknown, _k: unknown, data: BufferSource) => {
+    const src = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array((data as ArrayBufferView).buffer, (data as ArrayBufferView).byteOffset, (data as ArrayBufferView).byteLength);
+    const out = new Uint8Array(12 + src.byteLength);
+    out.set(src, 12);
+    return out.buffer;
+  }),
+  decrypt: vi.fn().mockImplementation(async (_a: unknown, _k: unknown, data: BufferSource) => {
+    const src = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array((data as ArrayBufferView).buffer, (data as ArrayBufferView).byteOffset, (data as ArrayBufferView).byteLength);
+    return src.slice(12).buffer;
+  }),
+};
+
 describe('App', () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.stubGlobal('crypto', {
+      getRandomValues: (arr: Uint8Array) => arr.fill(0),
+      subtle: cryptoSubtleStub,
+    });
   });
 
   afterEach(() => {
@@ -42,7 +63,7 @@ describe('App', () => {
   it('restores a running focus session from its start timestamp', async () => {
     const now = new Date(2030, 0, 1, 12).getTime();
     vi.spyOn(Date, 'now').mockReturnValue(now);
-    StorageService.saveState({
+    await StorageService.saveState({
       ...DEFAULT_STATE,
       hasCompletedOnboarding: true,
       isFocusModeActive: true,
@@ -67,7 +88,7 @@ describe('App', () => {
   });
 
   it('clears persisted data and returns to onboarding after a confirmed reset', async () => {
-    StorageService.saveState({
+    await StorageService.saveState({
       ...DEFAULT_STATE,
       hasCompletedOnboarding: true,
       stats: { ...DEFAULT_STATE.stats, totalSavedTime: 120 },

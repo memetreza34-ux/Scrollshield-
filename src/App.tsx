@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { AppState, Screen, DEFAULT_STATE } from './types';
+import { AppState, Screen, DEFAULT_STATE, SUPPORTED_APPS } from './types';
 import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
 import { reconcileFocusRuntime } from './lib/focus';
+import { syncNativeBlockList } from './lib/nativeBridge';
 import { BottomNav } from './components/ui';
 import { Welcome, Onboarding } from './screens/OnboardingScreens';
 import { Dashboard, History } from './screens/MainScreens';
@@ -93,6 +94,12 @@ export default function App() {
       void StorageService.saveState(appState);
     }
   }, [appState, isLoaded]);
+
+  // Sync blocked-app list to native layer whenever appsConfig changes
+  useEffect(() => {
+    if (!isLoaded) return;
+    void syncNativeBlockList(appState.appsConfig, SUPPORTED_APPS);
+  }, [appState.appsConfig, isLoaded]);
 
   if (!isLoaded)
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">Laden...</div>;
