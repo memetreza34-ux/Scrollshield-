@@ -47,8 +47,16 @@ export const normalizeAppConfig = (appId: string, config?: AppConfigPatch): AppC
 export const normalizeAppsConfig = (appsConfig: Partial<AppState['appsConfig']> = {}) => {
   const normalized: Record<string, AppConfig> = {};
 
+  // 1. Initialize all registered platforms
   SUPPORTED_APPS.forEach((app) => {
     normalized[app.id] = normalizeAppConfig(app.id, appsConfig[app.id]);
+  });
+
+  // 2. Preserve any user-created custom app configurations stored previously
+  Object.keys(appsConfig).forEach((appId) => {
+    if (!normalized[appId] && appsConfig[appId]) {
+      normalized[appId] = normalizeAppConfig(appId, appsConfig[appId]);
+    }
   });
 
   return normalized;

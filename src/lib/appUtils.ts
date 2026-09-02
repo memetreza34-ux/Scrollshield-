@@ -1,6 +1,7 @@
+import { SUPPORTED_APPS } from '../types';
 import type { AppState } from '../types';
 
-export const REELS_PLATFORM_IDS = ['instagram', 'youtube', 'tiktok', 'facebook', 'snapchat'] as const;
+export const REELS_PLATFORM_IDS = SUPPORTED_APPS.filter((p) => p.hasShortVideoFeed).map((p) => p.id);
 
 export const getActiveReelsCount = (appsConfig: AppState['appsConfig']) =>
   REELS_PLATFORM_IDS.filter((appId) => appsConfig[appId]?.reelsProtection?.enabled).length;
