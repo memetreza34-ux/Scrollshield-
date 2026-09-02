@@ -4,4 +4,5 @@
     <string name="title_activity_main">ScrollShield</string>
     <string name="package_name">app.scrollshield.mobile</string>
     <string name="custom_url_scheme">app.scrollshield.mobile</string>
+    <string name="accessibility_service_description">ScrollShield benötigt diesen Dienst, um gefährliche oder von dir blockierte Inhalte auf dem Bildschirm (z.B. toxische Keywords) zu erkennen und sofort zu blockieren, bevor du sie siehst.</string>
 </resources>
