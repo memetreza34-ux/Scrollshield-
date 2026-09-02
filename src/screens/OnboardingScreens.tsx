@@ -9,7 +9,7 @@ export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="relative flex h-full flex-col items-center justify-center overflow-hidden p-7 text-center"
+      className="relative flex min-h-full flex-col items-center justify-start pt-16 pb-7 px-7 text-center"
     >
       <div className="pointer-events-none absolute inset-x-8 top-12 h-56 rounded-full bg-emerald-500/10 blur-3xl" />
       <div className="pointer-events-none absolute -right-20 top-40 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl" />
