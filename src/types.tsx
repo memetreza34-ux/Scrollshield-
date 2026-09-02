@@ -43,6 +43,9 @@ export interface AppPermissions {
 
 export interface AppConfig {
   id: string;
+  // 0. System-Integration
+  connected?: boolean; // whether the app's native accessibility hook is established
+  
   // 1. Allgemeiner App-Schutz
   active: boolean;
   mode: 'soft' | 'standard' | 'strict';
@@ -372,6 +375,7 @@ export const SUPPORTED_APPS = BUILTIN_PLATFORMS;
 
 
 export const DEFAULT_APP_CONFIG: Omit<AppConfig, 'id'> = {
+  connected: false,
   active: false,
   mode: 'standard',
   openDelay: 5,
