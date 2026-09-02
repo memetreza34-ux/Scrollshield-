@@ -26,13 +26,9 @@ export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
           <div className="scanline absolute left-7 right-7 top-1/2 z-20 h-10 rounded-full border-y border-emerald-300/20 bg-emerald-300/10 blur-[1px]" />
         </div>
 
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-200">
-          <Sparkles size={14} aria-hidden="true" />
-          Private Webapp, kein Login-Stress
-        </div>
         <h1 className="mb-3 text-4xl font-black leading-none text-zinc-50">ScrollShield</h1>
         <p className="mb-5 max-w-sm text-base font-medium leading-relaxed text-zinc-300">
-          Ein ruhiger Schutzschirm gegen Autopilot-Scrolling. Erst Webapp, spaeter echte native App.
+          Ein ruhiger Schutzschirm gegen Autopilot-Scrolling und Endlos-Feeds.
         </p>
 
         <div className="w-full max-w-xs space-y-2.5 rounded-2xl border border-zinc-800/50 bg-zinc-950/60 p-4 text-left shadow-inner">
@@ -210,24 +206,23 @@ export function Onboarding({
             </div>
             <h2 className="mb-5 text-3xl font-bold tracking-tight">Privatsphaere & Schutz</h2>
             <p className="mb-6 text-sm leading-relaxed text-zinc-400">
-              Du musst dich nicht mit Instagram, TikTok, YouTube oder einem ScrollShield-Konto verbinden. Version 1
-              startet bewusst lokal und ohne Login.
+              Du musst dich nicht mit deinen Social-Media-Konten verbinden. ScrollShield funktioniert komplett lokal und ohne Account-Zwang.
             </p>
             <div className="mb-4 w-full rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 p-5 text-left text-sm text-emerald-100 shadow-inner">
               <div className="mb-2 flex items-center gap-2 font-bold text-emerald-300">
                 <CloudOff size={16} aria-hidden="true" />
-                Offline-First in Version 1.0
+                100% Offline-First
               </div>
-              Regeln, Verlauf und Statistiken bleiben auf deinem Geraet. ScrollShield liest keine Chats oder Passwoerter
-              und uebertraegt keine Nutzungsdaten an Entwickler-Server.
+              Regeln, Verlauf und Statistiken bleiben verschluesselt auf deinem Geraet. ScrollShield liest keine privaten Chats 
+              und uebertraegt niemals Nutzungsdaten an externe Server.
             </div>
             <div className="w-full rounded-[1.5rem] border border-blue-500/30 bg-blue-500/10 p-5 text-left text-sm text-blue-200 shadow-inner">
               <div className="mb-2 flex items-center gap-2 font-bold text-blue-300">
                 <ScanLine size={16} aria-hidden="true" />
-                Webapp-Grenze ist ehrlich
+                Volle Kontrolle
               </div>
-              Die Webversion kann andere Apps nicht direkt sperren. Sie hilft dir mit bewussten Pausen, Regeln,
-              Fokuszeiten und klaren Unterbrechungen. Echte System-Sperren kommen spaeter in der nativen App.
+              Die App hilft dir mit bewussten Pausen, strengen Regeln,
+              Fokuszeiten und klaren Unterbrechungen, deine digitale Balance zurueckzugewinnen.
             </div>
           </div>
         )}
