@@ -9,36 +9,36 @@ export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="relative flex min-h-full flex-col items-center justify-start pt-16 pb-7 px-7 text-center"
+      className="relative flex min-h-full flex-col items-center justify-start pt-6 pb-7 px-7 text-center"
     >
       <div className="pointer-events-none absolute inset-x-8 top-12 h-56 rounded-full bg-emerald-500/10 blur-3xl" />
       <div className="pointer-events-none absolute -right-20 top-40 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl" />
 
-      <div className="flex flex-1 flex-col items-center justify-center pt-8">
-        <div className="relative mb-8 h-36 w-36" aria-hidden="true">
+      <div className="flex flex-1 flex-col items-center justify-center pt-2">
+        <div className="relative mb-6 h-28 w-28" aria-hidden="true">
           <div className="signal-ring absolute inset-0 rounded-[2.2rem] border border-emerald-400/20" />
           <div className="signal-ring absolute inset-2 rounded-[2rem] border border-blue-400/20" />
           <div className="signal-ring absolute inset-4 rounded-[1.8rem] border border-rose-400/20" />
           <div className="shield-aura absolute inset-5 rounded-[2.2rem] shadow-2xl shadow-emerald-950/60" />
           <div className="absolute inset-5 z-10 flex items-center justify-center">
-            <Shield size={58} className="text-zinc-50 drop-shadow-lg" />
+            <Shield size={48} className="text-zinc-50 drop-shadow-lg" />
           </div>
-          <div className="scanline absolute left-7 right-7 top-1/2 z-20 h-10 rounded-full border-y border-emerald-300/20 bg-emerald-300/10 blur-[1px]" />
+          <div className="scanline absolute left-6 right-6 top-1/2 z-20 h-8 rounded-full border-y border-emerald-300/20 bg-emerald-300/10 blur-[1px]" />
         </div>
 
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-200">
+        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-200">
           <Sparkles size={14} aria-hidden="true" />
           Private Webapp, kein Login-Stress
         </div>
-        <h1 className="mb-4 text-5xl font-black leading-none text-zinc-50">ScrollShield</h1>
-        <p className="mb-6 max-w-sm text-lg font-medium leading-relaxed text-zinc-300">
+        <h1 className="mb-3 text-4xl font-black leading-none text-zinc-50">ScrollShield</h1>
+        <p className="mb-5 max-w-sm text-base font-medium leading-relaxed text-zinc-300">
           Ein ruhiger Schutzschirm gegen Autopilot-Scrolling. Erst Webapp, spaeter echte native App.
         </p>
 
-        <div className="w-full max-w-xs space-y-3 rounded-2xl border border-zinc-800/50 bg-zinc-950/60 p-5 text-left shadow-inner">
-          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">So startest du:</p>
+        <div className="w-full max-w-xs space-y-2.5 rounded-2xl border border-zinc-800/50 bg-zinc-950/60 p-4 text-left shadow-inner">
+          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-1">So startest du:</p>
           <div className="flex items-start gap-3">
-            <UserRound size={18} className="mt-0.5 text-emerald-400" aria-hidden="true" />
+            <UserRound size={16} className="mt-0.5 text-emerald-400" aria-hidden="true" />
             <div>
               <span className="block text-sm font-semibold text-emerald-100">Kein Konto verbinden</span>
               <span className="text-xs text-zinc-500">Alles bleibt lokal in dieser Webapp</span>
@@ -61,16 +61,16 @@ export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
         </div>
       </div>
 
-      <div className="mt-8 w-full space-y-4 pb-8">
+      <div className="mt-5 w-full space-y-3 pb-2">
         <button
           onClick={() => navigate('onboarding')}
-          className="w-full rounded-[1.5rem] bg-zinc-100 py-4 font-bold text-zinc-950 shadow-lg shadow-zinc-100/10 transition-transform active:scale-[0.98]"
+          className="w-full rounded-[1.5rem] bg-zinc-100 py-3.5 font-bold text-zinc-950 shadow-lg shadow-zinc-100/10 transition-transform active:scale-[0.98]"
         >
           Loslegen
         </button>
         <button
           onClick={() => navigate('help')}
-          className="w-full rounded-[1.5rem] border border-zinc-800/50 bg-zinc-900/80 py-4 font-semibold text-zinc-300 backdrop-blur-md transition-transform active:scale-[0.98]"
+          className="w-full rounded-[1.5rem] border border-zinc-800/50 bg-zinc-900/80 py-3.5 font-semibold text-zinc-300 backdrop-blur-md transition-transform active:scale-[0.98]"
         >
           Mehr erfahren
         </button>
