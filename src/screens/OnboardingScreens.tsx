@@ -15,15 +15,15 @@ export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
       <div className="pointer-events-none absolute -right-20 top-40 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl" />
 
       <div className="flex flex-1 flex-col items-center justify-center pt-2">
-        <div className="relative mb-6 h-28 w-28" aria-hidden="true">
+        <div className="relative mb-4 h-36 w-36" aria-hidden="true">
           <div className="signal-ring absolute inset-0 rounded-[2.2rem] border border-emerald-400/20" />
           <div className="signal-ring absolute inset-2 rounded-[2rem] border border-blue-400/20" />
           <div className="signal-ring absolute inset-4 rounded-[1.8rem] border border-rose-400/20" />
           <div className="shield-aura absolute inset-5 rounded-[2.2rem] shadow-2xl shadow-emerald-950/60" />
           <div className="absolute inset-5 z-10 flex items-center justify-center">
-            <Shield size={48} className="text-zinc-50 drop-shadow-lg" />
+            <Shield size={58} className="text-zinc-50 drop-shadow-lg" />
           </div>
-          <div className="scanline absolute left-6 right-6 top-1/2 z-20 h-8 rounded-full border-y border-emerald-300/20 bg-emerald-300/10 blur-[1px]" />
+          <div className="scanline absolute left-7 right-7 top-1/2 z-20 h-10 rounded-full border-y border-emerald-300/20 bg-emerald-300/10 blur-[1px]" />
         </div>
 
         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-200">
