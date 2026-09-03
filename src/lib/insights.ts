@@ -107,6 +107,42 @@ export function getStopRate(history: HistoryEvent[], now = Date.now(), windowDay
   return interruptions / total;
 }
 
+/**
+ * The most frequent reason people give before opening an app. Only reported
+ * once the same reason appeared repeatedly — a single "kurz was nachschauen"
+ * is not a pattern.
+ */
+export function findFrequentIntent(
+  history: HistoryEvent[],
+  now = Date.now(),
+  windowDays = 14,
+): { reason: string; count: number; total: number } | null {
+  const since = now - windowDays * 24 * 60 * 60_000;
+  const reasons = history
+    .filter((event) => event.timestamp >= since)
+    .map((event) => event.metadata?.intentReason)
+    .filter((reason): reason is string => typeof reason === 'string' && reason.trim().length > 0)
+    .map((reason) => reason.trim());
+
+  if (reasons.length < MIN_REASONS_FOR_PATTERN) return null;
+
+  const counts = new Map<string, { display: string; count: number }>();
+  for (const reason of reasons) {
+    const key = reason.toLowerCase();
+    const entry = counts.get(key);
+    if (entry) entry.count++;
+    else counts.set(key, { display: reason, count: 1 });
+  }
+
+  const top = [...counts.values()].sort((a, b) => b.count - a.count)[0];
+  if (top.count < 2) return null;
+
+  return { reason: top.display, count: top.count, total: reasons.length };
+}
+
+/** A reason needs to be given a few times before it says anything. */
+export const MIN_REASONS_FOR_PATTERN = 3;
+
 export function deriveInsights(state: AppState, now: Date = new Date()): Insight[] {
   const insights: Insight[] = [];
 
@@ -132,6 +168,16 @@ export function deriveInsights(state: AppState, now: Date = new Date()): Insight
         detail: `Diese Woche ${weeks.currentMinutes} Minuten, davor ${weeks.previousMinutes}.`,
       });
     }
+  }
+
+  const intent = findFrequentIntent(state.history, now.getTime());
+  if (intent) {
+    insights.push({
+      id: 'frequent-intent',
+      tone: 'neutral',
+      title: `Meistens: „${intent.reason}“`,
+      detail: `${intent.count} von ${intent.total} Mal hast du das als Grund angegeben. Wenn du das oft brauchst, lohnt sich vielleicht eine eigene Regel dafür.`,
+    });
   }
 
   const stopRate = getStopRate(state.history, now.getTime());

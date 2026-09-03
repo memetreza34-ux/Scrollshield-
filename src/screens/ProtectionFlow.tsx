@@ -28,7 +28,7 @@ export function ProtectionFlow({
   const [sessionLimitOverrideMinutes, setSessionLimitOverrideMinutes] = useState<number | undefined>();
 
   const logEvent = useCallback(
-    (type: HistoryEvent['type'], desc: string) => {
+    (type: HistoryEvent['type'], desc: string, metadata?: HistoryEvent['metadata']) => {
       if (!appId) return;
 
       const newEvent: HistoryEvent = {
@@ -37,6 +37,7 @@ export function ProtectionFlow({
         type,
         appId,
         desc,
+        ...(metadata ? { metadata } : {}),
       };
       updateState({
         history: [newEvent, ...state.history],
@@ -47,9 +48,18 @@ export function ProtectionFlow({
   );
 
   const openApp = useCallback(
-    (durationOverride?: number) => {
+    (durationOverride?: number, reason?: string) => {
       setSessionLimitOverrideMinutes(durationOverride);
-      logEvent('open', 'App geöffnet');
+
+      // The stated intention used to be discarded the moment the app opened.
+      // Keeping it is what makes the question more than a formality: it turns
+      // up in the history and feeds the "why do you open this" insight.
+      const trimmedReason = reason?.trim();
+      logEvent(
+        'open',
+        trimmedReason ? `App geöffnet: ${trimmedReason}` : 'App geöffnet',
+        trimmedReason ? { intentReason: trimmedReason, intentDurationMinutes: durationOverride } : undefined,
+      );
       setStep('app_opened');
     },
     [logEvent],
@@ -186,7 +196,7 @@ export function ProtectionFlow({
               Abbrechen
             </button>
             <button
-              onClick={() => openApp(intentDuration)}
+              onClick={() => openApp(intentDuration, intentReason)}
               className="flex-1 py-4 rounded-[1.5rem] font-bold bg-zinc-100 text-zinc-950 shadow-lg shadow-zinc-100/10 active:scale-[0.98] transition-transform"
             >
               Weiter

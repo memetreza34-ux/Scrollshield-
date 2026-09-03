@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareWeeks, deriveInsights, findWeakestHour, getStopRate } from './insights';
+import { compareWeeks, deriveInsights, findFrequentIntent, findWeakestHour, getStopRate } from './insights';
 import { AppState, DEFAULT_STATE, HistoryEvent } from '../types';
 import { getLocalDateKey } from './appUtils';
 
@@ -114,6 +114,74 @@ describe('getStopRate', () => {
     const history = Array.from({ length: 10 }, (_, i) => eventAt(`2026-08-01T1${i % 10}:00`));
 
     expect(getStopRate(history, now)).toBeNull();
+  });
+});
+
+describe('findFrequentIntent', () => {
+  const now = new Date('2026-09-02T20:00').getTime();
+
+  const openWithReason = (reason: string, offsetMinutes: number): HistoryEvent => ({
+    id: `open-${reason}-${offsetMinutes}`,
+    timestamp: now - offsetMinutes * 60_000,
+    type: 'open',
+    appId: 'instagram',
+    desc: `App geöffnet: ${reason}`,
+    metadata: { intentReason: reason },
+  });
+
+  it('stays silent below the evidence threshold', () => {
+    const history = [openWithReason('Nachricht checken', 10), openWithReason('Nachricht checken', 20)];
+
+    expect(findFrequentIntent(history, now)).toBeNull();
+  });
+
+  it('reports the most frequent reason', () => {
+    const history = [
+      openWithReason('Nachricht checken', 10),
+      openWithReason('Nachricht checken', 60),
+      openWithReason('Nachricht checken', 120),
+      openWithReason('Kurz was posten', 200),
+    ];
+
+    expect(findFrequentIntent(history, now)).toEqual({
+      reason: 'Nachricht checken',
+      count: 3,
+      total: 4,
+    });
+  });
+
+  it('groups reasons case-insensitively but keeps the original wording', () => {
+    const history = [
+      openWithReason('Nachricht checken', 10),
+      openWithReason('nachricht checken', 60),
+      openWithReason('NACHRICHT CHECKEN', 120),
+    ];
+
+    const result = findFrequentIntent(history, now);
+    expect(result?.count).toBe(3);
+    expect(result?.reason).toBe('Nachricht checken');
+  });
+
+  it('needs a reason to actually repeat', () => {
+    const history = [openWithReason('Grund A', 10), openWithReason('Grund B', 60), openWithReason('Grund C', 120)];
+
+    expect(findFrequentIntent(history, now)).toBeNull();
+  });
+
+  it('ignores events without a stated reason', () => {
+    const history: HistoryEvent[] = Array.from({ length: 6 }, (_, i) => eventAt('2026-09-02T12:00', 'open'));
+
+    expect(findFrequentIntent(history, now)).toBeNull();
+  });
+
+  it('ignores reasons outside the window', () => {
+    const history = [
+      openWithReason('Alt', 30 * 24 * 60),
+      openWithReason('Alt', 31 * 24 * 60),
+      openWithReason('Alt', 32 * 24 * 60),
+    ];
+
+    expect(findFrequentIntent(history, now)).toBeNull();
   });
 });
 
