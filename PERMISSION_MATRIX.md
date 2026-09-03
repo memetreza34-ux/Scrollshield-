@@ -61,11 +61,15 @@ Diese Matrix definiert die strikte Berechtigungsstrategie für ScrollShield. Das
 
 ## 6. Bedienungshilfen (Accessibility Service) – _Sonderfall_
 
-- **Plattform:** Android
-- **Wofür gebraucht:** Könnte genutzt werden, um das Scrollen physisch zu unterbinden oder extrem schnell auf App-Öffnungen zu reagieren.
-- **Status:** **VERZICHTEN (für MVP)**
-- **Warum verzichten:** Google Play lehnt Apps extrem schnell ab, die Accessibility Services nutzen, ohne primär für Menschen mit Behinderungen gedacht zu sein. Es erfordert komplexe Video-Beweise beim App-Review.
-- **Strategie:** Für Version 1.0 ist kein Accessibility Service vorgesehen. Eine spätere Einführung ist nicht geplant und würde eine neue Richtlinien-, Datenschutz- und Store-Prüfung erfordern.
+- **Plattform:** Android (auf iOS technisch unmöglich)
+- **Wofür gebraucht:** Erkennung, ob ein Kurzvideo-Feed (Reels, Shorts, TikTok) auf dem Bildschirm ist, und Zählung der Wischbewegungen darin. Ohne diesen Dienst sind alle Feed-bezogenen Regeln wirkungslos: `PACKAGE_USAGE_STATS` liefert nur Paketnamen, nie die Oberfläche innerhalb einer App.
+- **Status:** **Erforderlich für Kurzvideo-Regeln, strikt optional für alles andere**
+- **Was ohne funktioniert:** App-Verzögerung, App-Sperre, Tageslimits auf App-Ebene, Fokus-Modus, Verlauf und Statistiken. Es entfallen ausschließlich: Reels-Tageslimit, Feed-Sitzungslimit und „Stopp nach X Wischern".
+- **Nutzer-Erklärung:** _„ScrollShield erkennt damit, ob gerade ein Kurzvideo-Feed offen ist, und zählt deine Wischbewegungen. Der Dienst liest nur technische Kennungen der Oberfläche – keine Texte, Nachrichten oder Eingaben."_
+- **Datenschutz-Grenze (im Code durchgesetzt):** Der Dienst liest ausschließlich `viewIdResourceName` und Fenster-Klassennamen. `getText()` und `getContentDescription()` kommen im Quelltext nicht vor. `canPerformGestures` wird nicht angefordert. Keine Netzwerkzugriffe.
+- **Store-Risiko:** Erhöht. Google verlangt `IsAccessibilityTool=false`, eine Deklaration, eine Prominent Disclosure vor der Aktivierung und in der Regel ein Demo-Video. Vergleichbare Apps (AppBlock, StayFree, ScreenZen) werden auf diesem Weg zugelassen; eine Ablehnung im ersten Anlauf ist trotzdem einzuplanen.
+- **Fallback-Logik:** Der Dienst ist standardmäßig aus. Die App fordert ihn erst an, wenn der Nutzer eine Feed-Regel aktiviert, und bleibt ohne ihn voll funktionsfähig. Deaktivierung jederzeit in den Android-Einstellungen.
+- **Details:** `docs/SHORT_VIDEO_DETECTION.md`
 
 ---
 

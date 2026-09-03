@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppState, Screen, SUPPORTED_APPS, HistoryEvent } from '../types';
 import { X, Clock, AlertTriangle, Pause, Play, Shield } from 'lucide-react';
@@ -10,6 +10,7 @@ import {
   recordSessionUsage,
 } from '../lib/session';
 import { getReelsUsageMinutesForAppDate, getShortVideoUsageKey } from '../lib/stats';
+import { applyWheel, beginGesture, createSwipeCounterState, endGesture, shouldInterrupt } from '../lib/swipeCounter';
 
 export function ActiveSessionScreen({
   state,
@@ -29,6 +30,7 @@ export function ActiveSessionScreen({
   const [showWarning, setShowWarning] = useState(false);
   const [isSwipingReels, setIsSwipingReels] = useState(false);
   const [reelsSwipeCount, setReelsSwipeCount] = useState(0);
+  const swipeStateRef = useRef(createSwipeCounterState());
   const [showReelsInterrupt, setShowReelsInterrupt] = useState(false);
   const [showReelsLimitBlock, setShowReelsLimitBlock] = useState(false);
 
@@ -57,28 +59,13 @@ export function ActiveSessionScreen({
           }
           return next;
         });
-
-        if (isSwipingReels && config?.reelsProtection?.enabled) {
-          setReelsSwipeCount((prev) => {
-            const next = prev + 1;
-            if (
-              config.reelsProtection.stopAfterSwipes &&
-              next > 0 &&
-              next % config.reelsProtection.stopAfterSwipes === 0
-            ) {
-              setShowReelsInterrupt(true);
-              setIsSwipingReels(false); // pause swiping
-            }
-            return next;
-          });
-        }
       }, 1000);
     }
 
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [session, appInfo, currentLimitSeconds, hasSessionLimit, showWarning, navigate, isSwipingReels, config]);
+  }, [session, appInfo, currentLimitSeconds, hasSessionLimit, showWarning, navigate]);
 
   if (!session || !appInfo) return null;
 
@@ -86,6 +73,46 @@ export function ActiveSessionScreen({
     const m = Math.floor(totalSeconds / 60);
     const s = totalSeconds % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // ── Swipe counting ──────────────────────────────────────────────────────────
+  // A swipe is a real gesture, not a tick of the clock. The counter used to be
+  // driven by a one-second interval, which made "stop after 10 swipes" mean
+  // "stop after 10 seconds" even with the phone lying still.
+
+  const registerSwipe = () => {
+    const next = swipeStateRef.current.count;
+    setReelsSwipeCount(next);
+    if (shouldInterrupt(next, config?.reelsProtection?.stopAfterSwipes)) {
+      setShowReelsInterrupt(true);
+      setIsSwipingReels(false);
+    }
+  };
+
+  const handleFeedPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    swipeStateRef.current = beginGesture(swipeStateRef.current, event.clientY);
+  };
+
+  const handleFeedPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const result = endGesture(swipeStateRef.current, event.clientY, Date.now());
+    swipeStateRef.current = result.state;
+    if (result.counted) registerSwipe();
+  };
+
+  const handleFeedWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    const result = applyWheel(swipeStateRef.current, event.deltaY, Date.now());
+    swipeStateRef.current = result.state;
+    if (result.counted) registerSwipe();
+  };
+
+  const openFeed = () => {
+    swipeStateRef.current = createSwipeCounterState();
+    setReelsSwipeCount(0);
+    setIsSwipingReels(true);
+  };
+
+  const closeFeed = () => {
+    setIsSwipingReels(false);
   };
 
   const closeApp = () => {
@@ -224,19 +251,41 @@ export function ActiveSessionScreen({
                       setShowReelsLimitBlock(true);
                       return;
                     }
-                    setIsSwipingReels(!isSwipingReels);
+                    if (isSwipingReels) {
+                      closeFeed();
+                    } else {
+                      openFeed();
+                    }
                   }}
                   className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${isReelsFeedBlocked ? 'bg-zinc-900/70 border-2 border-zinc-800 text-zinc-500' : isSwipingReels ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 'bg-transparent border-2 border-amber-500/50 text-amber-500 hover:bg-amber-500/10'}`}
                 >
-                  <Play size={18} className={isSwipingReels ? 'animate-pulse' : ''} />
+                  <Play size={18} />
                   {isReelsFeedBlocked
                     ? 'Kurzvideo-Limit erreicht'
                     : isSwipingReels
-                      ? 'Swipen simulieren...'
+                      ? 'Feed schliessen'
                       : 'Kurzvideo Feed oeffnen'}
                 </button>
+
                 {isSwipingReels && (
-                  <p className="text-zinc-400 text-center text-xs mt-3 animate-pulse">Endlos-Scrollen detektiert...</p>
+                  <div
+                    data-testid="reels-swipe-surface"
+                    role="group"
+                    aria-label="Kurzvideo-Feed: wische hier, um zu blaettern"
+                    onPointerDown={handleFeedPointerDown}
+                    onPointerUp={handleFeedPointerUp}
+                    onPointerCancel={closeFeed}
+                    onWheel={handleFeedWheel}
+                    className="mt-3 h-40 rounded-xl border-2 border-amber-500/30 bg-zinc-900/60 flex flex-col items-center justify-center gap-2 touch-none select-none"
+                  >
+                    <span className="text-4xl font-bold text-amber-400 tabular-nums">{reelsSwipeCount}</span>
+                    <span className="text-zinc-400 text-xs text-center px-4">
+                      {reelsSwipeCount === 1 ? 'Wischbewegung' : 'Wischbewegungen'} in diesem Feed
+                    </span>
+                    <span className="text-zinc-600 text-[11px] text-center px-4">
+                      Wische hoch oder runter. Auf Android zaehlt ScrollShield die echten Wischer im Feed der App.
+                    </span>
+                  </div>
                 )}
               </div>
             )}

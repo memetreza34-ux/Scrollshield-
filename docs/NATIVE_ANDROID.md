@@ -44,17 +44,29 @@ Rules are synced from `src/lib/nativeBridge.ts` (`buildNativeProtectionRules`), 
 while a focus session is running. Choosing "continue" grants a five-minute grace period so the overlay does not
 immediately reappear.
 
+## Short-Video Detection
+
+`ShortVideoWatchService` (accessibility) recognises whether a protected app's short-video feed is on screen, counts
+scroll events in it, and triggers the overlay when a feed rule is hit. It reads view ids and class names only — never
+text. Detection signatures live in `src/lib/shortVideoSignatures.ts` and are synced down with the rules, so a renamed
+view id is a TypeScript fix rather than a Kotlin one.
+
+Full mechanism, privacy boundary, calibration procedure and Play Console requirements: `docs/SHORT_VIDEO_DETECTION.md`.
+
 ## Known Limits
 
-- **Daily limits, anti-binge windows, session limits and emergency unlocks are evaluated in the web layer only.** The
-  native service receives the resulting mode and delay, nothing else. An app whose daily limit is exhausted is not
-  blocked natively until the web layer marks it `strict`.
+- **Anti-binge windows and emergency unlocks are evaluated in the web layer only.** The native service receives the
+  resulting mode, delay and feed rule, nothing else.
+- Feed detection is heuristic and breaks silently when a host app renames its view ids. Re-verify per platform before
+  each release.
 - Detection lags an app switch by up to one poll interval (1.5 s).
 - The overlay does not prevent the user from leaving through system gestures. It reappears on the next foreground
   transition of the protected app.
 - Background reliability under Doze and OEM battery managers (Xiaomi, Samsung, Huawei) is **untested**.
 - `EncryptedSharedPreferences` comes from Jetpack Security, which is in maintenance mode. Revisit before extending its
   use.
+- **iOS cannot do feed-level rules at all.** Screen Time blocks whole apps or categories; no API exposes a surface
+  inside another app. The UI must not offer Reels rules on iOS.
 
 ## Still Open Before a Store Release
 

@@ -36,25 +36,21 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
-        <!--
-            ScrollShield Content Filter Service
-            ═══════════════════════════════════
-            STATUS: DISABLED FOR PRODUCTION / PLAY STORE RELEASE
+        <!-- ── ShortVideoWatchService (Accessibility) ────────────────────────
+             Detects whether a protected app's short-video surface is on screen
+             and counts scroll events in it. Reads view ids and class names
+             only, never text.
 
-            Reason: Google Play Policy (Nov 2023) requires a video demonstration
-            proving exclusive accessibility use for users with disabilities.
-            This service is reserved for a future "Accessibility-reviewed" release
-            track and must NOT be present in the initial Play Store submission.
-
-            To re-enable during local development / sideloading:
-              1. Uncomment the <service> block below.
-              2. Set VITE_ENABLE_ACCESSIBILITY_SERVICE=true in .env.local
-              3. DO NOT push with the block uncommented to the release branch.
+             Play Console: this needs the accessibility-use declaration plus a
+             prominent in-app disclosure before the user can enable it. See
+             docs/SHORT_VIDEO_DETECTION.md and docs/STORE_SUBMISSION_PACKET.md.
+             The service does nothing until the user turns it on in Android
+             settings; every other feature works without it.
         -->
-        <!--
         <service
-            android:name=".ScrollShieldContentFilterService"
-            android:exported="true"
+            android:name=".ShortVideoWatchService"
+            android:exported="false"
+            android:label="@string/accessibility_service_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -63,7 +59,7 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
-        -->
+
         <!-- ── AppMonitorService ─────────────────────────────────────────────
              Foreground service that reads UsageStatsManager foreground events
              and shows a SYSTEM_ALERT_WINDOW interruption screen when a

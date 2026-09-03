@@ -1,8 +1,20 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShieldCheck, Eye, Layers, Bell, Activity, CheckCircle2, Settings, AlertTriangle, Info } from 'lucide-react';
+import {
+  ShieldCheck,
+  Eye,
+  Layers,
+  Bell,
+  Activity,
+  CheckCircle2,
+  Settings,
+  AlertTriangle,
+  Info,
+  Film,
+} from 'lucide-react';
 import { AppState, Screen, AppPermissions } from '../types';
 import { Header } from '../components/ui';
+import { ScrollShieldBridge } from '../lib/nativeBridge';
 
 export function PermissionsScreen({
   state,
@@ -17,6 +29,7 @@ export function PermissionsScreen({
 }) {
   const { permissions, operatingSystem } = state;
   const [expandedInfo, setExpandedInfo] = useState<keyof AppPermissions | null>(null);
+  const [isNative, setIsNative] = useState(false);
 
   const togglePermission = (key: keyof AppPermissions, forceState?: boolean) => {
     updateState({
@@ -25,6 +38,68 @@ export function PermissionsScreen({
         [key]: forceState !== undefined ? forceState : !permissions[key],
       },
     });
+  };
+
+  /**
+   * Reads the permissions the operating system actually granted. Without this
+   * the screen only ever showed what the user tapped in ScrollShield, which
+   * could claim "AKTIV" while Android had granted nothing.
+   */
+  const refreshNativeStatus = useCallback(async () => {
+    try {
+      const status = await ScrollShieldBridge.getPermissionStatus();
+      // The web fallback reports everything as false; only trust a real device.
+      const nativeAvailable = status.usageStats || status.overlay || status.accessibility;
+      setIsNative((previous) => previous || nativeAvailable);
+
+      updateState({
+        permissions: {
+          ...permissions,
+          usageAccess: status.usageStats,
+          overlay: status.overlay,
+          notifications: status.notifications,
+          accessibility: status.accessibility,
+        },
+      });
+    } catch {
+      // Running on web – keep the locally stored switches.
+    }
+    // updateState/permissions change on every render; re-creating the callback
+    // for them would restart the visibility listener in a loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    void refreshNativeStatus();
+  }, [refreshNativeStatus]);
+
+  // Android sends the user to a system settings screen; pick the result up when
+  // they come back.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void refreshNativeStatus();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [refreshNativeStatus]);
+
+  /**
+   * Opens the matching system settings screen. Android grants none of these
+   * programmatically. When no native screen is available (web demo) the local
+   * switch is toggled instead.
+   */
+  const requestPermission = async (key: keyof AppPermissions) => {
+    try {
+      let result = { opened: false };
+      if (key === 'usageAccess') result = await ScrollShieldBridge.requestUsageStatsPermission();
+      else if (key === 'overlay') result = await ScrollShieldBridge.requestOverlayPermission();
+      else if (key === 'accessibility') result = await ScrollShieldBridge.openAccessibilitySettings();
+
+      if (result.opened) return;
+    } catch {
+      // Fall through to the local switch.
+    }
+    togglePermission(key);
   };
 
   const getStatusText = (isActive: boolean, isOptional: boolean = false) => {
@@ -124,11 +199,11 @@ export function PermissionsScreen({
 
         <div className="p-4 bg-zinc-900/50 flex flex-wrap gap-2 sm:gap-3">
           <button
-            onClick={() => togglePermission(key)}
-            aria-label={`${isActive ? 'Deaktivieren' : 'Aktivieren'}: ${title}`}
+            onClick={() => void requestPermission(key)}
+            aria-label={`${isActive ? 'In Systemeinstellungen verwalten' : 'Aktivieren'}: ${title}`}
             className={`flex-1 py-3 px-4 rounded-[1.25rem] text-sm font-bold transition-all ${isActive ? 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700' : 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.2)]'}`}
           >
-            {isActive ? 'Deaktivieren' : 'Aktivieren'}
+            {isActive ? (isNative ? 'In Einstellungen verwalten' : 'Deaktivieren') : 'Aktivieren'}
           </button>
 
           {!isActive && (
@@ -229,6 +304,22 @@ export function PermissionsScreen({
             false,
             false,
             true,
+          )}
+
+          {renderPermissionCard(
+            'accessibility',
+            <Film size={24} />,
+            'Kurzvideo-Erkennung (Bedienungshilfe)',
+            [
+              'Erkennen, ob gerade Reels, Shorts oder der TikTok-Feed offen ist',
+              'Deine Wischbewegungen im Feed zählen',
+              'Feed-Limits und Wisch-Unterbrechungen ermöglichen',
+            ],
+            'App-Limits und Verzögerungen funktionieren weiter. Regeln, die sich nur auf den Kurzvideo-Feed beziehen (Tageslimit für Reels, Stopp nach X Wischern), bleiben wirkungslos.',
+            true,
+            false,
+            true,
+            'Was der Dienst liest:\nNur technische Kennungen der angezeigten Oberfläche (Bezeichner von Bildschirmelementen). Daran erkennt ScrollShield, ob ein Kurzvideo-Feed offen ist.\n\nWas der Dienst NICHT liest:\nKeine Texte, keine Nachrichten, keine Passwörter, keine Sucheingaben, keine Bildschirminhalte. Diese Funktionen sind im Code nicht vorhanden.\n\nWohin die Daten gehen:\nNirgendwohin. Zähler und Zeiten bleiben verschlüsselt auf deinem Gerät. ScrollShield hat keinen Server.\n\nDu kannst den Dienst jederzeit in den Android-Einstellungen wieder abschalten.',
           )}
 
           {renderPermissionCard(

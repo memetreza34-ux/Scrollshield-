@@ -75,12 +75,24 @@ class AppMonitorService : Service() {
         /** How long an app stays unblocked after the user chose to continue. */
         const val GRACE_PERIOD_MS = 5 * 60_000L
 
+        /** Sent by ShortVideoWatchService when a feed limit is reached. */
+        const val ACTION_SHORT_VIDEO_INTERRUPT = "app.scrollshield.ACTION_SHORT_VIDEO_INTERRUPT"
+        const val EXTRA_PACKAGE_NAME = "packageName"
+        const val EXTRA_SURFACE_ID = "surfaceId"
+        const val EXTRA_REASON = "reason"
+        const val EXTRA_HARD_INTERRUPT = "hardInterrupt"
+        const val EXTRA_SWIPES = "swipes"
+
         /** True while the service is running – read by the plugin to expose state to JS. */
         @Volatile
         var isRunning = false
             private set
 
-        /** Asks a running instance to reload its rules. */
+        /**
+         * Asks the running services to reload their rules: the monitor through a
+         * start intent, the accessibility service through a broadcast it
+         * registered for at runtime.
+         */
         fun notifyConfigUpdate(context: Context) {
             val intent = Intent(context, AppMonitorService::class.java).setAction(ACTION_CONFIG_UPDATE)
             try {
@@ -92,6 +104,14 @@ class AppMonitorService : Service() {
             } catch (_: Exception) {
                 // Service not running or start not allowed from background – rules
                 // are loaded again the next time monitoring starts.
+            }
+
+            try {
+                context.sendBroadcast(
+                    Intent(ACTION_CONFIG_UPDATE).setPackage(context.packageName)
+                )
+            } catch (_: Exception) {
+                // Accessibility service not enabled.
             }
         }
     }
@@ -165,9 +185,23 @@ class AppMonitorService : Service() {
         // A restart by the system delivers a null intent; make sure the
         // notification is up before anything else happens.
         startInForeground()
-        if (intent?.action == ACTION_CONFIG_UPDATE) {
-            loadRules()
+
+        when (intent?.action) {
+            ACTION_CONFIG_UPDATE -> loadRules()
+
+            ACTION_SHORT_VIDEO_INTERRUPT -> {
+                val packageName = intent.getStringExtra(EXTRA_PACKAGE_NAME)
+                if (packageName != null) {
+                    showShortVideoOverlay(
+                        packageName = packageName,
+                        reason = intent.getStringExtra(EXTRA_REASON) ?: "SWIPES",
+                        hardInterrupt = intent.getBooleanExtra(EXTRA_HARD_INTERRUPT, false),
+                        swipes = intent.getIntExtra(EXTRA_SWIPES, 0),
+                    )
+                }
+            }
         }
+
         return START_STICKY
     }
 
@@ -286,6 +320,68 @@ class AppMonitorService : Service() {
     // ── Overlay ───────────────────────────────────────────────────────────────
 
     private fun showInterruptionOverlay(blockedPackage: String, rule: BlockRule) {
+        val appName = getAppName(blockedPackage)
+        presentOverlay(
+            blockedPackage = blockedPackage,
+            bodyText = getString(R.string.overlay_body, appName),
+            showContinue = rule.mode != "strict",
+            onContinue = {
+                allowedUntil[blockedPackage] = System.currentTimeMillis() + GRACE_PERIOD_MS
+                dismissOverlay()
+            },
+        ) { statusView, continueButton ->
+            startCountdown(statusView, continueButton, rule)
+        }
+    }
+
+    /**
+     * Interruption raised by ShortVideoWatchService when a feed limit is hit.
+     * A hard interrupt offers no way back into the feed; a soft one lets the
+     * user continue after acknowledging the number.
+     */
+    private fun showShortVideoOverlay(
+        packageName: String,
+        reason: String,
+        hardInterrupt: Boolean,
+        swipes: Int,
+    ) {
+        val appName = getAppName(packageName)
+        val body = when (reason) {
+            "DAILY_LIMIT" -> getString(R.string.overlay_feed_daily_limit, appName)
+            "SESSION_LIMIT" -> getString(R.string.overlay_feed_session_limit, appName)
+            "BLOCKED" -> getString(R.string.overlay_feed_blocked, appName)
+            else -> resources.getQuantityString(R.plurals.overlay_feed_swipes, swipes, swipes, appName)
+        }
+
+        presentOverlay(
+            blockedPackage = packageName,
+            bodyText = body,
+            showContinue = !hardInterrupt,
+            onContinue = {
+                // The feed itself stays protected; this only dismisses the screen.
+                dismissOverlay()
+            },
+        ) { statusView, continueButton ->
+            statusView.text = if (hardInterrupt) {
+                getString(R.string.overlay_feed_hard_hint)
+            } else {
+                getString(R.string.overlay_feed_soft_hint)
+            }
+            continueButton.isEnabled = true
+        }
+    }
+
+    /**
+     * Shared overlay scaffold. `configure` receives the status line and the
+     * continue button so each caller can drive its own countdown or hint.
+     */
+    private fun presentOverlay(
+        blockedPackage: String,
+        bodyText: String,
+        showContinue: Boolean,
+        onContinue: () -> Unit,
+        configure: (TextView, Button) -> Unit,
+    ) {
         if (!Settings.canDrawOverlays(this)) return
 
         mainHandler.post {
@@ -306,7 +402,6 @@ class AppMonitorService : Service() {
                 gravity = Gravity.CENTER
             }
 
-            val appName = getAppName(blockedPackage)
             val statusView = TextView(this).apply {
                 textSize = 16f
                 gravity = Gravity.CENTER
@@ -317,11 +412,8 @@ class AppMonitorService : Service() {
             val continueButton = Button(this).apply {
                 text = getString(R.string.overlay_continue)
                 isEnabled = false
-                visibility = if (rule.mode == "strict") View.GONE else View.VISIBLE
-                setOnClickListener {
-                    allowedUntil[blockedPackage] = System.currentTimeMillis() + GRACE_PERIOD_MS
-                    dismissOverlay()
-                }
+                visibility = if (showContinue) View.VISIBLE else View.GONE
+                setOnClickListener { onContinue() }
             }
 
             val homeButton = Button(this).apply {
@@ -343,7 +435,7 @@ class AppMonitorService : Service() {
                     setTextColor(Color.WHITE)
                 })
                 addView(TextView(context).apply {
-                    text = getString(R.string.overlay_body, appName)
+                    text = bodyText
                     textSize = 18f
                     gravity = Gravity.CENTER
                     setTextColor(Color.parseColor("#E4E4E7"))
@@ -368,7 +460,7 @@ class AppMonitorService : Service() {
                 overlayView = root
                 overlayPackage = blockedPackage
                 root.requestFocus()
-                startCountdown(statusView, continueButton, rule)
+                configure(statusView, continueButton)
             } catch (_: Exception) {
                 overlayView = null
                 overlayPackage = null
@@ -377,17 +469,12 @@ class AppMonitorService : Service() {
     }
 
     private fun startCountdown(statusView: TextView, continueButton: Button, rule: BlockRule) {
-        val totalSeconds = when (rule.mode) {
-            "soft" -> 0
-            "strict" -> 0
-            else -> rule.delaySeconds.coerceAtLeast(0)
-        }
-
         if (rule.mode == "strict") {
             statusView.text = getString(R.string.overlay_strict_hint)
             return
         }
 
+        val totalSeconds = if (rule.mode == "soft") 0 else rule.delaySeconds.coerceAtLeast(0)
         var remaining = totalSeconds
         val tick = object : Runnable {
             override fun run() {

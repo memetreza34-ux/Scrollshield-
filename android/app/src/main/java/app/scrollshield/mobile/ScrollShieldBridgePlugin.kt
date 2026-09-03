@@ -9,8 +9,10 @@ import android.net.Uri
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
+import android.text.TextUtils
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -92,6 +94,29 @@ class ScrollShieldBridgePlugin : Plugin() {
     private fun hasOverlayPermission(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)
 
+    /**
+     * True when the user enabled ScrollShield's accessibility service.
+     * `isRunning` is authoritative while the process lives; the settings string
+     * covers the window right after boot before the service connected.
+     */
+    private fun hasAccessibilityService(): Boolean {
+        if (ShortVideoWatchService.isRunning) return true
+
+        return try {
+            val enabled = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: return false
+
+            val target = "${context.packageName}/${ShortVideoWatchService::class.java.name}"
+            val splitter = TextUtils.SimpleStringSplitter(':')
+            splitter.setString(enabled)
+            splitter.any { it.equals(target, ignoreCase = true) }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     private fun hasNotificationPermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
@@ -115,6 +140,7 @@ class ScrollShieldBridgePlugin : Plugin() {
         result.put("overlay", hasOverlayPermission())
         result.put("notifications", hasNotificationPermission())
         result.put("monitoringActive", AppMonitorService.isRunning)
+        result.put("accessibility", hasAccessibilityService())
         call.resolve(result)
     }
 
@@ -258,6 +284,114 @@ class ScrollShieldBridgePlugin : Plugin() {
         encryptedPrefs.edit().putBoolean(KEY_MONITORING_ENABLED, false).apply()
         context.stopService(Intent(context, AppMonitorService::class.java))
         call.resolve(JSObject().put("stopped", true))
+    }
+
+    /**
+     * Opens the system accessibility settings so the user can enable the
+     * short-video detection service. Android offers no way to grant this
+     * programmatically, by design.
+     */
+    @PluginMethod
+    fun openAccessibilitySettings(call: PluginCall) {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            .apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+        call.resolve(JSObject().put("opened", startSettingsActivity(intent)))
+    }
+
+    /**
+     * Returns the short-video usage the accessibility service recorded today.
+     * `available` is false when the service is off, so the UI can distinguish
+     * "no usage" from "cannot measure".
+     */
+    @PluginMethod
+    fun getShortVideoUsage(call: PluginCall) {
+        val result = JSObject()
+        val entries = JSArray()
+
+        if (!hasAccessibilityService()) {
+            result.put("available", false)
+            result.put("entries", entries)
+            call.resolve(result)
+            return
+        }
+
+        try {
+            val raw = encryptedPrefs.getString(ShortVideoWatchService.KEY_SHORT_VIDEO_USAGE, null)
+            val stored = if (raw != null) JSONObject(raw) else JSONObject()
+            val packages = stored.optJSONObject("packages")
+            val updatedAt = stored.optLong("updatedAt", 0L)
+
+            if (packages != null) {
+                val keys = packages.keys()
+                while (keys.hasNext()) {
+                    val packageName = keys.next()
+                    val millis = packages.optLong(packageName, 0L)
+                    entries.put(
+                        JSObject()
+                            .put("packageName", packageName)
+                            .put("surfaceId", surfaceIdFor(packageName))
+                            .put("minutesToday", (millis / 60_000L).toInt())
+                            .put("swipesInSession", 0)
+                            .put("lastSeenAt", updatedAt)
+                    )
+                }
+            }
+        } catch (_: Exception) {
+            // Fall through with whatever was collected.
+        }
+
+        result.put("available", true)
+        result.put("entries", entries)
+        call.resolve(result)
+    }
+
+    /**
+     * Returns the last view-id/class-name samples the accessibility service
+     * observed. Used by the in-app calibration screen to check whether a
+     * detection signature still matches the installed version of a host app.
+     */
+    @PluginMethod
+    fun getCalibrationSamples(call: PluginCall) {
+        val result = JSObject()
+        val samples = JSArray()
+
+        if (!hasAccessibilityService()) {
+            result.put("available", false)
+            result.put("samples", samples)
+            call.resolve(result)
+            return
+        }
+
+        try {
+            val raw = encryptedPrefs.getString(ShortVideoWatchService.KEY_CALIBRATION_SAMPLES, "[]") ?: "[]"
+            val stored = JSONArray(raw)
+            for (index in 0 until stored.length()) {
+                stored.optJSONObject(index)?.let { samples.put(it) }
+            }
+        } catch (_: Exception) {
+            // Diagnostics are best effort.
+        }
+
+        result.put("available", true)
+        result.put("samples", samples)
+        call.resolve(result)
+    }
+
+    /** Looks the configured surface id for a package up in the stored rules. */
+    private fun surfaceIdFor(packageName: String): String {
+        return try {
+            val raw = encryptedPrefs.getString(KEY_BLOCKED_RULES, "[]") ?: "[]"
+            val rules = JSONArray(raw)
+            for (index in 0 until rules.length()) {
+                val entry = rules.optJSONObject(index) ?: continue
+                if (entry.optString("packageName") == packageName) {
+                    return entry.optJSONObject("shortVideo")?.optString("surfaceId") ?: "short_video"
+                }
+            }
+            "short_video"
+        } catch (_: Exception) {
+            "short_video"
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

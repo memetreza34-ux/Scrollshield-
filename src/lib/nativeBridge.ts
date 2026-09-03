@@ -18,6 +18,7 @@
  */
 
 import { registerPlugin } from '@capacitor/core';
+import { getShortVideoSignature } from './shortVideoSignatures';
 
 // ── Type definitions ──────────────────────────────────────────────────────────
 
@@ -32,6 +33,8 @@ export interface PermissionStatus {
   notifications: boolean;
   /** Whether the AppMonitorService is currently running */
   monitoringActive: boolean;
+  /** Whether the user enabled ScrollShield's accessibility service */
+  accessibility: boolean;
 }
 
 export interface ForegroundAppResult {
@@ -41,6 +44,28 @@ export interface ForegroundAppResult {
   hasPermission: boolean;
 }
 
+export type ShortVideoMode = 'allow' | 'warn' | 'limit' | 'block';
+
+export interface NativeShortVideoRule {
+  /** Surface id from the platform definition, e.g. "reels" */
+  surfaceId: string;
+  mode: ShortVideoMode;
+  /** Minutes of short-video time allowed per day (0 = no limit) */
+  dailyLimitMinutes: number;
+  /** Minutes allowed in one uninterrupted feed session (0 = no limit) */
+  sessionLimitMinutes: number;
+  /** Interrupt after this many swipes (0 = never) */
+  stopAfterSwipes: number;
+  /** Whether the interruption blocks or only warns */
+  hardInterrupt: boolean;
+  /** View-id fragments that identify the short-video surface */
+  viewIdHints: string[];
+  /** Class-name fragments that identify the short-video surface */
+  classNameHints: string[];
+  /** True when the whole app is a short-video feed (TikTok) */
+  alwaysShortVideo: boolean;
+}
+
 export interface NativeProtectionRule {
   /** Android package name to watch */
   packageName: string;
@@ -48,6 +73,38 @@ export interface NativeProtectionRule {
   mode: NativeProtectionMode;
   /** Countdown length before the app may be opened (standard mode) */
   delaySeconds: number;
+  /** Short-video surface rule; absent when the app has no protected feed */
+  shortVideo?: NativeShortVideoRule;
+}
+
+export interface ShortVideoUsageEntry {
+  packageName: string;
+  surfaceId: string;
+  /** Minutes spent in the short-video surface today */
+  minutesToday: number;
+  /** Scroll events counted in the current feed session */
+  swipesInSession: number;
+  /** Timestamp of the last observed short-video activity */
+  lastSeenAt: number;
+}
+
+export interface ShortVideoUsageResult {
+  entries: ShortVideoUsageEntry[];
+  /** False when the accessibility service is not running */
+  available: boolean;
+}
+
+export interface CalibrationSample {
+  packageName: string;
+  viewIds: string[];
+  classNames: string[];
+  matchedPlatformId: string | null;
+  observedAt: number;
+}
+
+export interface CalibrationResult {
+  samples: CalibrationSample[];
+  available: boolean;
 }
 
 export interface SyncBlockedAppsOptions {
@@ -86,6 +143,9 @@ export interface ScrollShieldBridgePlugin {
   syncBlockedApps(options: SyncBlockedAppsOptions): Promise<SyncResult>;
   startMonitoring(): Promise<StartedResult>;
   stopMonitoring(): Promise<StoppedResult>;
+  openAccessibilitySettings(): Promise<OpenedResult>;
+  getShortVideoUsage(): Promise<ShortVideoUsageResult>;
+  getCalibrationSamples(): Promise<CalibrationResult>;
 }
 
 // ── Capacitor plugin registration ─────────────────────────────────────────────
@@ -98,6 +158,7 @@ const ScrollShieldBridgeNative = registerPlugin<ScrollShieldBridgePlugin>('Scrol
       overlay: false,
       notifications: typeof Notification !== 'undefined' && Notification.permission === 'granted',
       monitoringActive: false,
+      accessibility: false,
     }),
     requestUsageStatsPermission: async () => ({ opened: false }),
     requestOverlayPermission: async () => ({ opened: false }),
@@ -108,6 +169,9 @@ const ScrollShieldBridgeNative = registerPlugin<ScrollShieldBridgePlugin>('Scrol
     }),
     startMonitoring: async () => ({ started: false, overlayGranted: false }),
     stopMonitoring: async () => ({ stopped: false }),
+    openAccessibilitySettings: async () => ({ opened: false }),
+    getShortVideoUsage: async () => ({ entries: [], available: false }),
+    getCalibrationSamples: async () => ({ samples: [], available: false }),
   },
 });
 
@@ -117,13 +181,16 @@ const ScrollShieldBridgeNative = registerPlugin<ScrollShieldBridgePlugin>('Scrol
  * Checks which permissions are still missing for full native protection.
  * Returns an array of human-readable permission names that need to be granted.
  */
-export async function getMissingPermissions(): Promise<string[]> {
+export async function getMissingPermissions(options: { needsShortVideoProtection?: boolean } = {}): Promise<string[]> {
   const missing: string[] = [];
   try {
     const status = await ScrollShieldBridgeNative.getPermissionStatus();
     if (!status.usageStats) missing.push('Nutzungsdaten-Zugriff');
     if (!status.overlay) missing.push('Über anderen Apps einblenden');
     if (!status.notifications) missing.push('Benachrichtigungen');
+    if (options.needsShortVideoProtection && !status.accessibility) {
+      missing.push('Bedienungshilfe (Kurzvideo-Erkennung)');
+    }
   } catch {
     // Running on web – all "missing"
     missing.push('Nutzungsdaten-Zugriff', 'Über anderen Apps einblenden');
@@ -131,14 +198,70 @@ export async function getMissingPermissions(): Promise<string[]> {
   return missing;
 }
 
+type ShortVideoConfigSlice = {
+  enabled: boolean;
+  mode: ShortVideoMode;
+  dailyLimitMinutes?: number;
+  sessionLimitMinutes?: number;
+  stopAfterSwipes?: number;
+  hardInterrupt?: boolean;
+};
+
 type AppConfigSlice = {
   active: boolean;
   mode: NativeProtectionMode;
   openDelay: number;
   focusModeBehavior?: 'allow' | 'warn' | 'block';
+  reelsProtection?: ShortVideoConfigSlice;
 };
 
-type PlatformSlice = { id: string; androidPackages: string[] };
+type PlatformSlice = {
+  id: string;
+  androidPackages: string[];
+  shortVideoSurface?: { id: string };
+};
+
+const nonNegativeInt = (value: number | undefined) => Math.max(0, Math.round(value ?? 0));
+
+/**
+ * Builds the short-video half of a rule. Returns undefined when the platform
+ * has no protected feed, when the user disabled the feed protection, or when
+ * the mode is `allow` — in all three cases the accessibility service has
+ * nothing to do for this package and should not waste cycles on it.
+ */
+function buildShortVideoRule(
+  platform: PlatformSlice,
+  config: AppConfigSlice,
+  options: { isFocusModeActive?: boolean },
+): NativeShortVideoRule | undefined {
+  const surface = platform.shortVideoSurface;
+  const feed = config.reelsProtection;
+  if (!surface || !feed?.enabled) return undefined;
+
+  const signature = getShortVideoSignature(platform.id);
+  const alwaysShortVideo = signature?.alwaysShortVideo ?? false;
+
+  // Without a signature there is no way to recognise the surface, unless the
+  // whole app already is one.
+  if (!signature) return undefined;
+
+  // A focus session that blocks the app blocks its feed too.
+  const mode: ShortVideoMode = options.isFocusModeActive && config.focusModeBehavior === 'block' ? 'block' : feed.mode;
+
+  if (mode === 'allow') return undefined;
+
+  return {
+    surfaceId: surface.id,
+    mode,
+    dailyLimitMinutes: nonNegativeInt(feed.dailyLimitMinutes),
+    sessionLimitMinutes: nonNegativeInt(feed.sessionLimitMinutes),
+    stopAfterSwipes: nonNegativeInt(feed.stopAfterSwipes),
+    hardInterrupt: feed.hardInterrupt ?? false,
+    viewIdHints: signature.viewIdHints,
+    classNameHints: signature.classNameHints,
+    alwaysShortVideo,
+  };
+}
 
 /**
  * Translates the web-side app configuration into the flat rule list the
@@ -146,7 +269,8 @@ type PlatformSlice = { id: string; androidPackages: string[] };
  * package names (lite/go builds) are covered too.
  *
  * Focus mode is folded in here: an app configured to be blocked during focus
- * sessions is handed down as `strict` while a session is running.
+ * sessions is handed down as `strict` (and its feed as `block`) while a
+ * session is running.
  */
 export function buildNativeProtectionRules(
   appsConfig: Record<string, AppConfigSlice | undefined>,
@@ -162,6 +286,7 @@ export function buildNativeProtectionRules(
 
     const mode: NativeProtectionMode =
       options.isFocusModeActive && config.focusModeBehavior === 'block' ? 'strict' : config.mode;
+    const shortVideo = buildShortVideoRule(platform, config, options);
 
     for (const packageName of platform.androidPackages) {
       if (seen.has(packageName)) continue;
@@ -169,12 +294,18 @@ export function buildNativeProtectionRules(
       rules.push({
         packageName,
         mode,
-        delaySeconds: Math.max(0, Math.round(config.openDelay ?? 0)),
+        delaySeconds: nonNegativeInt(config.openDelay),
+        ...(shortVideo ? { shortVideo } : {}),
       });
     }
   }
 
   return rules;
+}
+
+/** True when at least one rule needs the accessibility service to work. */
+export function requiresAccessibilityService(rules: NativeProtectionRule[]): boolean {
+  return rules.some((rule) => rule.shortVideo !== undefined);
 }
 
 /**
@@ -198,6 +329,19 @@ export async function syncNativeBlockList(
     }
   } catch {
     // Graceful no-op on web and whenever a permission is still missing.
+  }
+}
+
+/**
+ * Reads the short-video usage the accessibility service recorded on the device.
+ * Returns `available: false` on web and whenever the service is not enabled, so
+ * callers can distinguish "no usage" from "cannot measure".
+ */
+export async function readShortVideoUsage(): Promise<ShortVideoUsageResult> {
+  try {
+    return await ScrollShieldBridgeNative.getShortVideoUsage();
+  } catch {
+    return { entries: [], available: false };
   }
 }
 

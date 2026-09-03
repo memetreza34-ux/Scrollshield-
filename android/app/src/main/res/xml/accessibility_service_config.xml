@@ -1,9 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    ScrollShield short-video detection.
+
+    flagReportViewIds is required: without it viewIdResourceName is null and the
+    service cannot tell a Reels player from a normal feed.
+
+    canPerformGestures is deliberately NOT requested. The service only uses
+    GLOBAL_ACTION_BACK, which needs no gesture capability, and never simulates
+    taps or swipes inside another app.
+-->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeWindowContentChanged|typeWindowStateChanged|typeViewTextSelectionChanged"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewScrolled"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
+    android:accessibilityFlags="flagDefault|flagReportViewIds"
     android:canRetrieveWindowContent="true"
-    android:canPerformGestures="true"
     android:description="@string/accessibility_service_description"
-    android:notificationTimeout="100" />
+    android:notificationTimeout="200"
+    android:settingsActivity="app.scrollshield.mobile.MainActivity" />

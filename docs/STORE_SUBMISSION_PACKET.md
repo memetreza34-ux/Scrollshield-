@@ -103,6 +103,29 @@ The following sections are not required for the first web/PWA launch. Use them w
 Play Console requires this declaration to be reviewed manually. Submit it together with the permission videos below;
 without an approved declaration the upload is rejected.
 
+### Accessibility API Declaration (`ShortVideoWatchService`)
+
+`IsAccessibilityTool`: **false**. ScrollShield is not an accessibility tool; it uses the API for a purpose the user
+explicitly enables, which requires the declaration below plus the in-app prominent disclosure.
+
+> ScrollShield uses the accessibility API for one purpose the user explicitly enables: recognising whether a
+> short-video feed (Instagram Reels, YouTube Shorts, TikTok, Facebook Reels …) is currently on screen inside an app the
+> user selected for protection, and counting the scroll events within it. This is what makes the user's own feed rules
+> possible — "15 minutes of Reels per day", "pause after 10 swipes" — which cannot be implemented with Usage Access,
+> since that reports package names only and not the surface inside an app.
+>
+> The service reads only technical identifiers of the displayed interface (`viewIdResourceName`) and window class
+> names. It never reads text, content descriptions, messages, credentials or search input; those API calls are absent
+> from the source. It does not request `canPerformGestures` and cannot tap or swipe inside another app. The single
+> global action used is BACK, to leave the feed when the user configured a hard interruption.
+>
+> All counters remain in encrypted on-device storage. ScrollShield has no backend and performs no network requests.
+> The service is inactive until the user enables it in Android settings after reading the in-app disclosure, and every
+> other feature of the app works without it.
+
+**Prominent disclosure:** shown on the "Kurzvideo-Erkennung" permission card in `PermissionsScreen.tsx` before the user
+is sent to the system settings. It names what is read, what is not read, and that nothing leaves the device.
+
 ### Permission Video Shot List
 
 1. Show onboarding before any permission request.
@@ -110,7 +133,9 @@ without an approved declaration the upload is rejected.
 3. Grant Usage Access from Android settings and return to ScrollShield.
 4. Grant display-over-apps permission and return.
 5. Select a protected app and trigger the branded interruption.
-6. Disable each permission and show that ScrollShield remains usable with a warning.
+6. Show the accessibility disclosure, enable the service, open a protected app's short-video feed, and show the
+   swipe-based interruption.
+7. Disable each permission and show that ScrollShield remains usable with a warning.
 
 ### Rating Target
 

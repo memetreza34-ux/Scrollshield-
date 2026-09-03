@@ -19,11 +19,17 @@ The generated Android app id is currently `app.scrollshield.mobile`. Confirm thi
 
 ## Native Android Alpha
 
-The repository also contains a native interruption layer (`ScrollShieldBridgePlugin.kt`, `AppMonitorService.kt`) that
-detects protected apps through Usage Access and shows an overlay. It is **not part of the v1.0 web/PWA release**: it has
-not been compiled in CI, not been run on a device, and its Play Console permission declarations are still open. Daily
-limits and anti-binge rules remain web-only — the native layer receives just the resulting mode and delay. See
-`docs/NATIVE_ANDROID.md` for the exact state and limits.
+The repository also contains a native protection layer that is **not part of the v1.0 web/PWA release**:
+
+- `AppMonitorService.kt` detects protected apps through Usage Access and shows the interruption overlay.
+- `ShortVideoWatchService.kt` (accessibility) recognises short-video feeds inside those apps and counts swipes, which
+  is what makes Reels/Shorts rules possible at all.
+
+It has not been compiled in CI and not been run on a device, and the Play Console declarations are still open. Feed
+detection relies on host-app view ids and degrades silently when those change — see `docs/SHORT_VIDEO_DETECTION.md` for
+the mechanism, the privacy boundary and the calibration procedure, and `docs/NATIVE_ANDROID.md` for the overall state.
+
+On iOS none of this is possible: the Screen Time API restricts whole apps, never a surface inside one.
 
 ## Run Locally
 
