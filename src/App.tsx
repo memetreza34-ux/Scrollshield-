@@ -14,6 +14,7 @@ import { Focus } from './screens/FocusScreens';
 import { ProtectionFlow } from './screens/ProtectionFlow';
 import { PermissionsScreen } from './screens/PermissionsScreen';
 import { DebugScreen } from './screens/DebugScreen';
+import { DiagnosticsScreen } from './screens/DiagnosticsScreen';
 import { ActiveSessionScreen } from './screens/ActiveSessionScreen';
 import { SupportScreen, ImprintScreen } from './screens/SupportScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -198,6 +199,7 @@ export default function App() {
                   navigate={navigate}
                 />
               )}
+              {currentScreen === 'diagnostics' && <DiagnosticsScreen key="diagnostics" navigate={navigate} />}
               {currentScreen === 'support' && <SupportScreen key="support" navigate={navigate} />}
               {currentScreen === 'imprint' && <ImprintScreen key="imprint" navigate={navigate} />}
               {currentScreen === 'debug' && !import.meta.env.PROD && (

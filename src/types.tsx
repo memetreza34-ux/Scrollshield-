@@ -14,6 +14,7 @@ export type Screen =
   | 'protection_flow'
   | 'permissions'
   | 'debug'
+  | 'diagnostics'
   | 'active_session'
   | 'privacy'
   | 'support'

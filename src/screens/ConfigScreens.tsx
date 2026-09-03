@@ -32,6 +32,7 @@ import {
   Download,
   Upload,
   type LucideIcon,
+  Film,
 } from 'lucide-react';
 import { AppState, Screen, SUPPORTED_APPS, AppConfig, DEFAULT_APP_CONFIG } from '../types';
 import { Header, Switch, TimeSelector } from '../components/ui';
@@ -1170,6 +1171,12 @@ export function Settings({
           <SectionHeader id="settings-help" title="Hilfe & Info" />
           <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[2rem] overflow-hidden shadow-lg">
             <SettingRow icon={Shield} label="Berechtigungsstatus" onClick={() => navigate('permissions')} />
+            <SettingRow
+              icon={Film}
+              label="Erkennung pruefen"
+              onClick={() => navigate('diagnostics')}
+              description="Zeigt, ob Kurzvideo-Feeds erkannt werden"
+            />
             <SettingRow
               icon={HelpCircle}
               label="Support & Kontakt"

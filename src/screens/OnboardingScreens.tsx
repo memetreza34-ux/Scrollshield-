@@ -212,10 +212,10 @@ export function Onboarding({
             <div className="mb-4 w-full rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 p-5 text-left text-sm text-emerald-100 shadow-inner">
               <div className="mb-2 flex items-center gap-2 font-bold text-emerald-300">
                 <CloudOff size={16} aria-hidden="true" />
-                100% Offline-First
+                Offline-First
               </div>
-              Regeln, Verlauf und Statistiken bleiben verschluesselt auf deinem Geraet. ScrollShield liest keine
-              privaten Chats und uebertraegt niemals Nutzungsdaten an externe Server.
+              Regeln, Verlauf und Statistiken bleiben auf deinem Geraet. ScrollShield hat keinen Server und kein Konto,
+              liest keine privaten Chats und uebertraegt keine Nutzungsdaten.
             </div>
             <div className="w-full rounded-[1.5rem] border border-blue-500/30 bg-blue-500/10 p-5 text-left text-sm text-blue-200 shadow-inner">
               <div className="mb-2 flex items-center gap-2 font-bold text-blue-300">
