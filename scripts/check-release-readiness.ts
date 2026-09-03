@@ -36,11 +36,9 @@ const checks = [
       /100%\s*(?:unumgehbar|offline)|unumgehbar|unüberwind|kompromisslos|komplett\s+blockier|blockiert\s+alles|garantiert\s+block|sofort\s+(?:und\s+)?(?:strikt\s+)?block|ohne\s+Ausnahme\s+block|nichts\s+wird\s+je|social media addiction/i,
     files: [...releaseScreenFiles, 'src/types.tsx', 'docs/STORE_LISTING_COPY.md', 'metadata.json', 'README.md'],
   },
-  {
-    label: 'Release UI references Accessibility API',
-    pattern: /Bedienungshilfen|Accessibility Services|Accessibility API/i,
-    files: ['src/screens/PermissionsScreen.tsx', 'src/screens/ConfigScreens.tsx'],
-  },
+  // Note: the accessibility API used to be forbidden in the release UI. It is
+  // now a shipped feature, so the inverse is checked further down: when the
+  // service is in the manifest, the UI must carry the prominent disclosure.
   {
     label: 'Obsolete EU ODR platform link',
     pattern: /ec\.europa\.eu\/consumers\/odr|Online-Streitbeilegung/i,
@@ -137,13 +135,76 @@ if (existsSync(androidManifestPath)) {
     'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
   ];
 
+  // The accessibility service is intentional (short-video detection), but it is
+  // the single most likely reason for a Play rejection. Verify the boundaries
+  // that make it declarable rather than banning it outright.
   if (/BIND_ACCESSIBILITY_SERVICE/i.test(androidManifest)) {
-    findings.push({
-      file: 'android/app/src/main/AndroidManifest.xml',
-      line: 1,
-      label: 'Forbidden Android accessibility service',
-      text: 'Remove BIND_ACCESSIBILITY_SERVICE before release.',
-    });
+    const accessibilityConfigPath = path.join(
+      repoRoot,
+      'android/app/src/main/res/xml/accessibility_service_config.xml',
+    );
+    const accessibilityConfig = existsSync(accessibilityConfigPath)
+      ? readFileSync(accessibilityConfigPath, 'utf-8')
+      : '';
+
+    if (/canPerformGestures="true"/i.test(accessibilityConfig)) {
+      findings.push({
+        file: 'android/app/src/main/res/xml/accessibility_service_config.xml',
+        line: 1,
+        label: 'Accessibility service must not request gesture control',
+        text: 'canPerformGestures makes the service a Play policy violation; ScrollShield only needs GLOBAL_ACTION_BACK.',
+      });
+    }
+
+    // The privacy promise in the store declaration is that no text is read.
+    // Verify it against the sources instead of trusting the documentation.
+    const accessibilitySources = ['android/app/src/main/java/app/scrollshield/mobile/ShortVideoWatchService.kt'];
+    for (const relativePath of accessibilitySources) {
+      const sourcePath = path.join(repoRoot, relativePath);
+      if (!existsSync(sourcePath)) continue;
+      const source = readFileSync(sourcePath, 'utf-8');
+      if (/\.(?:getText|getContentDescription)\(\)|\btext\s*=\s*node\./.test(source)) {
+        findings.push({
+          file: relativePath,
+          line: 1,
+          label: 'Accessibility service must not read screen text',
+          text: 'getText()/getContentDescription() contradict the store declaration and the in-app disclosure.',
+        });
+      }
+    }
+
+    const storePacketPath = path.join(repoRoot, 'docs/STORE_SUBMISSION_PACKET.md');
+    const storePacket = existsSync(storePacketPath) ? readFileSync(storePacketPath, 'utf-8') : '';
+
+    if (!/Accessibility API Declaration/i.test(storePacket)) {
+      findings.push({
+        file: 'docs/STORE_SUBMISSION_PACKET.md',
+        line: 1,
+        label: 'Accessibility declaration missing',
+        text: 'Play requires a declaration plus prominent disclosure before the accessibility service may ship.',
+      });
+    }
+
+    // Google requires the disclosure in the app itself, before the user is sent
+    // to the system settings — not only in the store listing.
+    const permissionsScreenPath = path.join(repoRoot, 'src/screens/PermissionsScreen.tsx');
+    const permissionsScreen = existsSync(permissionsScreenPath) ? readFileSync(permissionsScreenPath, 'utf-8') : '';
+
+    const disclosureSignals = [
+      { label: 'what is read', pattern: /Was der Dienst liest/i },
+      { label: 'what is not read', pattern: /NICHT liest/i },
+      { label: 'where the data goes', pattern: /Wohin die Daten gehen/i },
+    ];
+
+    for (const signal of disclosureSignals) {
+      if (signal.pattern.test(permissionsScreen)) continue;
+      findings.push({
+        file: 'src/screens/PermissionsScreen.tsx',
+        line: 1,
+        label: 'Prominent disclosure incomplete',
+        text: `The accessibility disclosure must state: ${signal.label}.`,
+      });
+    }
   }
 
   if (!/android:allowBackup="false"/i.test(androidManifest)) {
