@@ -263,15 +263,15 @@ export function ActiveSessionScreen({
                   {isReelsFeedBlocked
                     ? 'Kurzvideo-Limit erreicht'
                     : isSwipingReels
-                      ? 'Feed schliessen'
-                      : 'Kurzvideo Feed oeffnen'}
+                      ? 'Feed schließen'
+                      : 'Kurzvideo Feed öffnen'}
                 </button>
 
                 {isSwipingReels && (
                   <div
                     data-testid="reels-swipe-surface"
                     role="group"
-                    aria-label="Kurzvideo-Feed: wische hier, um zu blaettern"
+                    aria-label="Kurzvideo-Feed: wische hier, um zu blättern"
                     onPointerDown={handleFeedPointerDown}
                     onPointerUp={handleFeedPointerUp}
                     onPointerCancel={closeFeed}
@@ -283,7 +283,7 @@ export function ActiveSessionScreen({
                       {reelsSwipeCount === 1 ? 'Wischbewegung' : 'Wischbewegungen'} in diesem Feed
                     </span>
                     <span className="text-zinc-600 text-[11px] text-center px-4">
-                      Wische hoch oder runter. Auf Android zaehlt ScrollShield die echten Wischer im Feed der App.
+                      Wische hoch oder runter. Auf Android zählt ScrollShield die echten Wischer im Feed der App.
                     </span>
                   </div>
                 )}
@@ -366,7 +366,7 @@ export function ActiveSessionScreen({
                 onClick={closeApp}
                 className="w-full py-4 rounded-[1.5rem] font-bold bg-zinc-100 text-zinc-950 shadow-lg shadow-zinc-100/10 active:scale-[0.98] transition-transform"
               >
-                App schliessen
+                App schließen
               </button>
               <button
                 onClick={() => setShowReelsLimitBlock(false)}

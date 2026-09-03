@@ -185,6 +185,18 @@ if (existsSync(androidManifestPath)) {
       });
     }
 
+    // The accessibility service was shipped once without the privacy policy
+    // mentioning it at all. Keep the document in sync with the manifest.
+    const privacyPolicy = existsSync(privacyPolicyPath) ? readFileSync(privacyPolicyPath, 'utf-8') : '';
+    if (!/Bedienungshilfe/i.test(privacyPolicy)) {
+      findings.push({
+        file: 'public/privacy.html',
+        line: 1,
+        label: 'Privacy policy does not cover the accessibility service',
+        text: 'The manifest ships an accessibility service; the policy must describe what it reads and what it does not.',
+      });
+    }
+
     // Google requires the disclosure in the app itself, before the user is sent
     // to the system settings — not only in the store listing.
     const permissionsScreenPath = path.join(repoRoot, 'src/screens/PermissionsScreen.tsx');

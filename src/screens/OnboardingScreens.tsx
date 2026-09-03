@@ -120,9 +120,9 @@ export function Onboarding({
             <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-[1.5rem] border border-rose-400/30 bg-rose-500/10 shadow-lg shadow-rose-950/30">
               <Target size={32} className="text-rose-300" aria-hidden="true" />
             </div>
-            <h2 className="mb-3 text-center text-3xl font-bold tracking-tight">Ziele auswaehlen</h2>
+            <h2 className="mb-3 text-center text-3xl font-bold tracking-tight">Ziele auswählen</h2>
             <p className="mb-8 text-center text-base text-zinc-400">
-              Welche Apps ziehen dich am haeufigsten in Endlos-Feeds oder rauben dir Zeit?
+              Welche Apps ziehen dich am häufigsten in Endlos-Feeds oder rauben dir Zeit?
             </p>
             <div className="space-y-3">
               {SUPPORTED_APPS.map((app) => {
@@ -130,6 +130,10 @@ export function Onboarding({
                 return (
                   <button
                     key={app.id}
+                    type="button"
+                    // The checkmark is aria-hidden, so without this a screen
+                    // reader cannot tell which apps are selected.
+                    aria-pressed={selected}
                     onClick={() =>
                       setSelectedApps((prev) => (selected ? prev.filter((id) => id !== app.id) : [...prev, app.id]))
                     }
@@ -170,16 +174,21 @@ export function Onboarding({
             <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-[1.5rem] border border-emerald-400/30 bg-emerald-500/10 shadow-lg shadow-emerald-950/30">
               <Shield size={32} className="text-emerald-300" aria-hidden="true" />
             </div>
-            <h2 className="mb-3 text-center text-3xl font-bold tracking-tight">Start-Profil waehlen</h2>
+            <h2 className="mb-3 text-center text-3xl font-bold tracking-tight">Start-Profil wählen</h2>
             <p className="mb-6 text-center text-sm text-zinc-400">
-              Das ist nur dein Startpunkt. Du kannst spaeter jede App und jeden Feed einzeln anpassen.
+              Das ist nur dein Startpunkt. Du kannst später jede App und jeden Feed einzeln anpassen.
             </p>
-            <div className="space-y-4">
+            <div className="space-y-4" role="radiogroup" aria-label="Start-Profil">
               {state.profiles?.map((profile) => {
                 const selected = selectedProfileId === profile.id;
                 return (
                   <button
                     key={profile.id}
+                    type="button"
+                    // Single choice, so radio semantics – matching the profile
+                    // list in ConfigScreens.
+                    role="radio"
+                    aria-checked={selected}
                     onClick={() => setSelectedProfileId(profile.id)}
                     className={`w-full rounded-[1.5rem] border p-5 text-left transition-all ${
                       selected
@@ -204,7 +213,7 @@ export function Onboarding({
             <div className="mb-8 flex h-24 w-24 items-center justify-center rounded-[2rem] border border-zinc-800/50 bg-zinc-900/80 shadow-lg backdrop-blur-md">
               <Lock size={40} className="text-zinc-100" aria-hidden="true" />
             </div>
-            <h2 className="mb-5 text-3xl font-bold tracking-tight">Privatsphaere & Schutz</h2>
+            <h2 className="mb-5 text-3xl font-bold tracking-tight">Privatsphäre & Schutz</h2>
             <p className="mb-6 text-sm leading-relaxed text-zinc-400">
               Du musst dich nicht mit deinen Social-Media-Konten verbinden. ScrollShield funktioniert komplett lokal und
               ohne Account-Zwang.
@@ -214,8 +223,8 @@ export function Onboarding({
                 <CloudOff size={16} aria-hidden="true" />
                 Offline-First
               </div>
-              Regeln, Verlauf und Statistiken bleiben auf deinem Geraet. ScrollShield hat keinen Server und kein Konto,
-              liest keine privaten Chats und uebertraegt keine Nutzungsdaten.
+              Regeln, Verlauf und Statistiken bleiben auf deinem Gerät. ScrollShield hat keinen Server und kein Konto,
+              liest keine privaten Chats und überträgt keine Nutzungsdaten.
             </div>
             <div className="w-full rounded-[1.5rem] border border-blue-500/30 bg-blue-500/10 p-5 text-left text-sm text-blue-200 shadow-inner">
               <div className="mb-2 flex items-center gap-2 font-bold text-blue-300">
@@ -223,7 +232,7 @@ export function Onboarding({
                 Volle Kontrolle
               </div>
               Die App hilft dir mit bewussten Pausen, strengen Regeln, Fokuszeiten und klaren Unterbrechungen, deine
-              digitale Balance zurueckzugewinnen.
+              digitale Balance zurückzugewinnen.
             </div>
           </div>
         )}
@@ -242,7 +251,7 @@ export function Onboarding({
           <button
             onClick={() => (step > 1 ? setStep(step - 1) : navigate('welcome'))}
             className="flex w-16 items-center justify-center rounded-[1.5rem] border border-zinc-800 bg-zinc-900 py-4 text-zinc-400 shadow-lg transition-transform active:scale-[0.98]"
-            aria-label="Zurueck"
+            aria-label="Zurück"
           >
             <svg
               viewBox="0 0 24 24"
@@ -261,7 +270,7 @@ export function Onboarding({
             onClick={nextStep}
             className="flex-1 rounded-[1.5rem] bg-zinc-100 py-4 font-bold text-zinc-950 shadow-lg shadow-zinc-100/10 transition-transform active:scale-[0.98]"
           >
-            {step < 3 ? 'Weiter' : 'Setup pruefen'}
+            {step < 3 ? 'Weiter' : 'Setup prüfen'}
           </button>
         </div>
       </div>

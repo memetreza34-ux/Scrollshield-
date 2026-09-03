@@ -169,10 +169,10 @@ export function Dashboard({
             <CloudOff size={18} className="text-emerald-300" aria-hidden="true" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-emerald-100">Kein Account noetig</h2>
+            <h2 className="text-sm font-bold text-emerald-100">Kein Account nötig</h2>
             <p className="mt-1 text-xs leading-relaxed text-emerald-200/80">
-              Du verbindest hier keine Social-Media-Konten. ScrollShield laeuft lokal in dieser Webapp; echte
-              System-Sperren kommen spaeter in der nativen App.
+              Du verbindest hier keine Social-Media-Konten. ScrollShield läuft lokal in dieser Webapp; echte
+              System-Sperren kommen später in der nativen App.
             </p>
           </div>
         </div>

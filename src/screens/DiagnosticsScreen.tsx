@@ -61,11 +61,11 @@ export function DiagnosticsScreen({ navigate }: { navigate: (screen: Screen) => 
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6 pb-32">
-      <Header title="Erkennung pruefen" onBack={() => navigate('settings')} />
+      <Header title="Erkennung prüfen" onBack={() => navigate('settings')} />
 
       <p className="mb-6 text-sm leading-relaxed text-zinc-400">
-        Kurzvideo-Regeln funktionieren nur, wenn ScrollShield den Feed der jeweiligen App erkennt. Die Erkennung stuetzt
-        sich auf technische Kennungen, die die Apps jederzeit umbenennen koennen. Hier siehst du, was auf diesem Geraet
+        Kurzvideo-Regeln funktionieren nur, wenn ScrollShield den Feed der jeweiligen App erkennt. Die Erkennung stützt
+        sich auf technische Kennungen, die die Apps jederzeit umbenennen können. Hier siehst du, was auf diesem Gerät
         wirklich ankommt.
       </p>
 
@@ -83,8 +83,8 @@ export function DiagnosticsScreen({ navigate }: { navigate: (screen: Screen) => 
         </h2>
         <p className="text-sm leading-relaxed text-zinc-300">
           {accessibilityActive
-            ? 'Der Dienst laeuft. Oeffne den Feed einer geschuetzten App und komm hierher zurueck.'
-            : 'Ohne aktivierte Bedienungshilfe kann ScrollShield keinen Kurzvideo-Feed erkennen. App-Verzoegerungen und Sperren funktionieren weiterhin.'}
+            ? 'Der Dienst läuft. Oeffne den Feed einer geschützten App und komm hierher zurück.'
+            : 'Ohne aktivierte Bedienungshilfe kann ScrollShield keinen Kurzvideo-Feed erkennen. App-Verzögerungen und Sperren funktionieren weiterhin.'}
         </p>
         {!accessibilityActive && (
           <button
@@ -138,14 +138,14 @@ export function DiagnosticsScreen({ navigate }: { navigate: (screen: Screen) => 
         {!available && (
           <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/70 p-5 text-sm leading-relaxed text-zinc-400">
             <Smartphone size={18} className="mb-3 text-zinc-500" aria-hidden="true" />
-            Auf diesem Geraet stehen keine Beobachtungen zur Verfuegung. Im Browser gibt es keine Bedienungshilfe –
-            oeffne diese Seite in der Android-App.
+            Auf diesem Gerät stehen keine Beobachtungen zur Verfügung. Im Browser gibt es keine Bedienungshilfe – öffne
+            diese Seite in der Android-App.
           </div>
         )}
 
         {available && samples.length === 0 && (
           <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/70 p-5 text-sm leading-relaxed text-zinc-400">
-            Noch nichts beobachtet. Oeffne eine geschuetzte App, wechsle in ihren Kurzvideo-Feed und lade hier neu.
+            Noch nichts beobachtet. Oeffne eine geschützte App, wechsle in ihren Kurzvideo-Feed und lade hier neu.
           </div>
         )}
 
@@ -234,8 +234,8 @@ export function DiagnosticsScreen({ navigate }: { navigate: (screen: Screen) => 
 
       <p className="text-xs leading-relaxed text-zinc-600">
         Wenn ein Feed offen war und trotzdem „kein Treffer" steht, passt die hinterlegte Erkennung nicht mehr zur
-        installierten App-Version. Die Kennungen oben zeigen, woran ScrollShield den Feed stattdessen erkennen koennte.
-        ScrollShield liest dabei ausschliesslich diese technischen Kennungen – keine Texte, Nachrichten oder Eingaben.
+        installierten App-Version. Die Kennungen oben zeigen, woran ScrollShield den Feed stattdessen erkennen könnte.
+        ScrollShield liest dabei ausschließlich diese technischen Kennungen – keine Texte, Nachrichten oder Eingaben.
       </p>
     </motion.div>
   );

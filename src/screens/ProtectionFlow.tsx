@@ -49,7 +49,7 @@ export function ProtectionFlow({
   const openApp = useCallback(
     (durationOverride?: number) => {
       setSessionLimitOverrideMinutes(durationOverride);
-      logEvent('open', 'App geoeffnet');
+      logEvent('open', 'App geöffnet');
       setStep('app_opened');
     },
     [logEvent],
@@ -145,7 +145,7 @@ export function ProtectionFlow({
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-sm">
           <div className="mb-8">{renderAppIcon()}</div>
           <h2 className="text-3xl font-bold mb-3 tracking-tight">Kurzer Check</h2>
-          <p className="text-zinc-400 mb-10 text-lg">Warum moechtest du {appInfo.name} oeffnen?</p>
+          <p className="text-zinc-400 mb-10 text-lg">Warum moechtest du {appInfo.name} öffnen?</p>
 
           <div className="space-y-6 mb-10 text-left">
             <div>
@@ -227,14 +227,14 @@ export function ProtectionFlow({
               onClick={cancel}
               className="w-full py-4 rounded-[1.5rem] font-bold bg-zinc-100 text-zinc-950 shadow-lg shadow-zinc-100/10 active:scale-[0.98] transition-transform"
             >
-              App schliessen
+              App schließen
             </button>
             <button
               onClick={() => openApp()}
               disabled={delayRemaining > 0}
               className={`w-full py-4 rounded-[1.5rem] font-semibold transition-all ${delayRemaining > 0 ? 'bg-zinc-900/50 text-zinc-600 border border-zinc-800/30' : 'bg-zinc-900/80 backdrop-blur-md text-zinc-300 border border-zinc-800/50 hover:bg-zinc-800'}`}
             >
-              Trotzdem oeffnen
+              Trotzdem öffnen
             </button>
           </div>
         </motion.div>
@@ -248,7 +248,7 @@ export function ProtectionFlow({
           <h2 className="text-3xl font-bold mb-3 tracking-tight">Blockiert</h2>
           <p className="text-zinc-400 mb-10 text-lg leading-relaxed">
             {state.isFocusModeActive
-              ? `${appInfo.name} ist waehrend deiner Fokus-Sitzung gesperrt.`
+              ? `${appInfo.name} ist während deiner Fokus-Sitzung gesperrt.`
               : `${appInfo.name} ist aktuell durch deine strengen Regeln gesperrt.`}
           </p>
 
@@ -294,7 +294,7 @@ export function ProtectionFlow({
             </div>
             <p className="text-zinc-400 text-sm leading-relaxed mb-3">
               Bitte warte <span className="font-mono font-bold text-amber-400">{delayRemaining}</span> Sekunden. Nutze
-              diese Zeit, um zu pruefen, ob du die App jetzt wirklich brauchst.
+              diese Zeit, um zu prüfen, ob du die App jetzt wirklich brauchst.
             </p>
             {(() => {
               const emergencyCountToday = countEmergencyUnlocksToday(state.history);
@@ -303,8 +303,8 @@ export function ProtectionFlow({
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-start gap-2">
                   <Shield size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
                   <span className="text-xs text-amber-400/90 font-medium">
-                    Du hast heute noch {remaining} Notfallfreigabe{remaining !== 1 ? 'n' : ''} uebrig. Bei Missbrauch
-                    wird die App fuer {config.antiBinge.blockTimeframe} Min. komplett gesperrt.
+                    Du hast heute noch {remaining} Notfallfreigabe{remaining !== 1 ? 'n' : ''} übrig. Bei Missbrauch
+                    wird die App für {config.antiBinge.blockTimeframe} Min. komplett gesperrt.
                   </span>
                 </div>
               );
@@ -330,7 +330,7 @@ export function ProtectionFlow({
       {step === 'emergency_reason' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-sm text-left">
           <h2 className="text-2xl font-bold mb-2 tracking-tight">Bewusste Freigabe</h2>
-          <p className="text-zinc-400 mb-6 text-sm">Warum musst du {appInfo.name} jetzt oeffnen?</p>
+          <p className="text-zinc-400 mb-6 text-sm">Warum musst du {appInfo.name} jetzt öffnen?</p>
 
           <div className="space-y-2 mb-6">
             {EMERGENCY_REASONS.map((reason) => (
@@ -371,7 +371,7 @@ export function ProtectionFlow({
             </div>
             {state.isFocusModeActive && (
               <p className="text-[10px] text-amber-500/80 mt-3 flex items-center gap-1.5">
-                <AlertTriangle size={12} /> Warnung: Deine Fokus-Sitzung wird waehrenddessen pausiert.
+                <AlertTriangle size={12} /> Warnung: Deine Fokus-Sitzung wird währenddessen pausiert.
               </p>
             )}
           </div>
@@ -405,7 +405,7 @@ export function ProtectionFlow({
           </div>
           <h2 className="text-3xl font-bold mb-3 tracking-tight">Anti-Binge Warnung</h2>
           <p className="text-zinc-400 mb-10 text-lg leading-relaxed">
-            Du hast {appInfo.name} in letzter Zeit sehr oft geoeffnet. Versuchst du gerade, Langeweile zu bekaempfen?
+            Du hast {appInfo.name} in letzter Zeit sehr oft geöffnet. Versuchst du gerade, Langeweile zu bekämpfen?
           </p>
 
           <div className="w-full flex flex-col gap-4">
@@ -413,7 +413,7 @@ export function ProtectionFlow({
               onClick={cancel}
               className="w-full py-4 rounded-[1.5rem] font-bold bg-zinc-100 text-zinc-950 shadow-lg shadow-zinc-100/10 active:scale-[0.98] transition-transform"
             >
-              Besser nicht oeffnen
+              Besser nicht öffnen
             </button>
             <button
               onClick={() => setStep(config.mode === 'standard' ? 'standard_delay' : 'soft_intent')}
@@ -432,10 +432,10 @@ export function ProtectionFlow({
           </div>
           <h2 className="text-3xl font-bold mb-3 tracking-tight">Schutz-Sperre</h2>
           <p className="text-zinc-400 mb-10 text-lg leading-relaxed">
-            Du hast {appInfo.name} zu oft geoeffnet oder zu viele Notfallfreigaben genutzt. Die App ist nun zu deinem
-            eigenen Schutz fuer{' '}
+            Du hast {appInfo.name} zu oft geöffnet oder zu viele Notfallfreigaben genutzt. Die App ist nun zu deinem
+            eigenen Schutz für{' '}
             <span className="font-mono font-bold text-zinc-200">{config.antiBinge.blockTimeframe}</span> Minuten strikt
-            eingeschraenkt.
+            eingeschränkt.
           </p>
 
           <button
@@ -452,7 +452,7 @@ export function ProtectionFlow({
           <div className="mb-10">{renderAppIcon('w-32 h-32', 'text-6xl')}</div>
           <h2 className="text-3xl font-bold mb-3 tracking-tight">{appInfo.name} ist offen</h2>
           <div className="text-zinc-400 mb-10 text-lg leading-relaxed space-y-2">
-            <p>Dein Zeitlimit laeuft.</p>
+            <p>Dein Zeitlimit läuft.</p>
           </div>
 
           <button
@@ -478,7 +478,7 @@ export function ProtectionFlow({
             onClick={cancel}
             className="w-full py-4 rounded-[1.5rem] font-semibold bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 text-zinc-300 hover:bg-zinc-800 transition-colors"
           >
-            Doch nicht oeffnen
+            Doch nicht öffnen
           </button>
         </motion.div>
       )}

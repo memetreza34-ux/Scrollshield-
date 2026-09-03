@@ -509,7 +509,7 @@ export function AppDetail({
                     <div className="pr-4">
                       <h3 className="font-semibold mb-1">Nach Tageszeit</h3>
                       <p className="text-zinc-400 text-xs leading-relaxed">
-                        Verschaerft die Regel zu bestimmten Zeiten. Lockern ist nicht moeglich.
+                        Verschärft die Regel zu bestimmten Zeiten. Lockern ist nicht möglich.
                       </p>
                     </div>
                     <Switch
@@ -1102,7 +1102,7 @@ export function Settings({
         <section aria-labelledby="settings-notifications">
           <SectionHeader id="settings-notifications" title="Benachrichtigungen" />
           <p className="mb-3 px-2 text-xs leading-relaxed text-zinc-500">
-            Erinnerungen erreichen dich nur, solange ScrollShield geoeffnet ist – auch im Hintergrund. Eine geschlossene
+            Erinnerungen erreichen dich nur, solange ScrollShield geöffnet ist – auch im Hintergrund. Eine geschlossene
             Web-App kann sich nicht selbst aufwecken.
           </p>
           <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[2rem] overflow-hidden shadow-lg">
@@ -1185,7 +1185,7 @@ export function Settings({
               </div>
               <p className="text-sm leading-relaxed text-emerald-100/80">
                 Du musst dich nicht mit Instagram, TikTok, YouTube oder einem ScrollShield-Konto verbinden. Alles, was
-                du einstellst, bleibt lokal auf diesem Geraet.
+                du einstellst, bleibt lokal auf diesem Gerät.
               </p>
             </div>
           </div>
@@ -1210,7 +1210,7 @@ export function Settings({
             <SettingRow icon={Shield} label="Berechtigungsstatus" onClick={() => navigate('permissions')} />
             <SettingRow
               icon={Film}
-              label="Erkennung pruefen"
+              label="Erkennung prüfen"
               onClick={() => navigate('diagnostics')}
               description="Zeigt, ob Kurzvideo-Feeds erkannt werden"
             />
