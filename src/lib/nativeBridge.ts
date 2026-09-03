@@ -4,29 +4,24 @@
  * Wraps the Capacitor ScrollShieldBridgePlugin for use in React components.
  * On web/non-Android platforms all calls return graceful fallbacks.
  *
+ * The native layer only ever sees the resulting per-app rule (mode + delay).
+ * Daily limits, anti-binge windows and emergency unlocks stay in the web
+ * layer; see src/lib/protectionRules.ts.
+ *
  * Usage:
  *   import { ScrollShieldBridge } from '@/lib/nativeBridge';
  *
- *   // Check permissions
  *   const perms = await ScrollShieldBridge.getPermissionStatus();
  *   if (!perms.usageStats) {
  *     await ScrollShieldBridge.requestUsageStatsPermission();
  *   }
- *
- *   // Sync blocked apps from React state
- *   await ScrollShieldBridge.syncBlockedApps({
- *     packages: ['com.instagram.android', 'com.zhiliaoapp.musically'],
- *     monitoringEnabled: true,
- *   });
- *
- *   // Start / stop the background monitor
- *   await ScrollShieldBridge.startMonitoring();
- *   await ScrollShieldBridge.stopMonitoring();
  */
 
 import { registerPlugin } from '@capacitor/core';
 
 // ── Type definitions ──────────────────────────────────────────────────────────
+
+export type NativeProtectionMode = 'soft' | 'standard' | 'strict';
 
 export interface PermissionStatus {
   /** Whether PACKAGE_USAGE_STATS (Usage Access) is granted */
@@ -46,16 +41,25 @@ export interface ForegroundAppResult {
   hasPermission: boolean;
 }
 
+export interface NativeProtectionRule {
+  /** Android package name to watch */
+  packageName: string;
+  /** How the native overlay should behave for this package */
+  mode: NativeProtectionMode;
+  /** Countdown length before the app may be opened (standard mode) */
+  delaySeconds: number;
+}
+
 export interface SyncBlockedAppsOptions {
-  /** List of Android package names to monitor & block */
-  packages: string[];
+  /** One entry per protected Android package */
+  rules: NativeProtectionRule[];
   /** Master switch – if false the service won't intervene */
   monitoringEnabled: boolean;
 }
 
 export interface SyncResult {
   synced: boolean;
-  packageCount: number;
+  ruleCount: number;
 }
 
 export interface OpenedResult {
@@ -64,6 +68,8 @@ export interface OpenedResult {
 
 export interface StartedResult {
   started: boolean;
+  /** False when the service runs but may not draw its interruption overlay */
+  overlayGranted?: boolean;
 }
 
 export interface StoppedResult {
@@ -84,26 +90,26 @@ export interface ScrollShieldBridgePlugin {
 
 // ── Capacitor plugin registration ─────────────────────────────────────────────
 
-const ScrollShieldBridgeNative = registerPlugin<ScrollShieldBridgePlugin>(
-  'ScrollShieldBridge',
-  {
-    // Web fallback – returns safe defaults when running in the browser / iOS simulator
-    web: {
-      getPermissionStatus: async (): Promise<PermissionStatus> => ({
-        usageStats: false,
-        overlay: false,
-        notifications: Notification.permission === 'granted',
-        monitoringActive: false,
-      }),
-      requestUsageStatsPermission: async () => ({ opened: false }),
-      requestOverlayPermission: async () => ({ opened: false }),
-      getForegroundApp: async () => ({ packageName: null, hasPermission: false }),
-      syncBlockedApps: async (opts) => ({ synced: false, packageCount: opts.packages.length }),
-      startMonitoring: async () => ({ started: false }),
-      stopMonitoring: async () => ({ stopped: false }),
-    },
-  }
-);
+const ScrollShieldBridgeNative = registerPlugin<ScrollShieldBridgePlugin>('ScrollShieldBridge', {
+  // Web fallback – returns safe defaults when running in the browser / iOS simulator
+  web: {
+    getPermissionStatus: async (): Promise<PermissionStatus> => ({
+      usageStats: false,
+      overlay: false,
+      notifications: typeof Notification !== 'undefined' && Notification.permission === 'granted',
+      monitoringActive: false,
+    }),
+    requestUsageStatsPermission: async () => ({ opened: false }),
+    requestOverlayPermission: async () => ({ opened: false }),
+    getForegroundApp: async () => ({ packageName: null, hasPermission: false }),
+    syncBlockedApps: async (options: SyncBlockedAppsOptions) => ({
+      synced: false,
+      ruleCount: options.rules.length,
+    }),
+    startMonitoring: async () => ({ started: false, overlayGranted: false }),
+    stopMonitoring: async () => ({ stopped: false }),
+  },
+});
 
 // ── High-level helper API ─────────────────────────────────────────────────────
 
@@ -125,36 +131,73 @@ export async function getMissingPermissions(): Promise<string[]> {
   return missing;
 }
 
+type AppConfigSlice = {
+  active: boolean;
+  mode: NativeProtectionMode;
+  openDelay: number;
+  focusModeBehavior?: 'allow' | 'warn' | 'block';
+};
+
+type PlatformSlice = { id: string; androidPackages: string[] };
+
 /**
- * Syncs the current active-app config from the React AppState to the native
- * monitoring service. Call this whenever appsConfig changes.
+ * Translates the web-side app configuration into the flat rule list the
+ * native monitor understands. One entry per Android package, so alternative
+ * package names (lite/go builds) are covered too.
  *
- * @param appsConfig  - The appsConfig slice from AppState
- * @param allPlatforms - All known PlatformDefinitions (for package resolution)
+ * Focus mode is folded in here: an app configured to be blocked during focus
+ * sessions is handed down as `strict` while a session is running.
  */
-export async function syncNativeBlockList(
-  appsConfig: Record<string, { active: boolean }>,
-  allPlatforms: Array<{ id: string; androidPackages: string[] }>
-): Promise<void> {
-  const packages: string[] = [];
-  for (const platform of allPlatforms) {
-    const cfg = appsConfig[platform.id];
-    if (cfg?.active) {
-      packages.push(...platform.androidPackages);
+export function buildNativeProtectionRules(
+  appsConfig: Record<string, AppConfigSlice | undefined>,
+  platforms: PlatformSlice[],
+  options: { isFocusModeActive?: boolean } = {},
+): NativeProtectionRule[] {
+  const rules: NativeProtectionRule[] = [];
+  const seen = new Set<string>();
+
+  for (const platform of platforms) {
+    const config = appsConfig[platform.id];
+    if (!config?.active) continue;
+
+    const mode: NativeProtectionMode =
+      options.isFocusModeActive && config.focusModeBehavior === 'block' ? 'strict' : config.mode;
+
+    for (const packageName of platform.androidPackages) {
+      if (seen.has(packageName)) continue;
+      seen.add(packageName);
+      rules.push({
+        packageName,
+        mode,
+        delaySeconds: Math.max(0, Math.round(config.openDelay ?? 0)),
+      });
     }
   }
 
-  const monitoringEnabled = packages.length > 0;
+  return rules;
+}
+
+/**
+ * Syncs the current app configuration to the native monitoring service.
+ * Call this whenever appsConfig or the focus session state changes.
+ */
+export async function syncNativeBlockList(
+  appsConfig: Record<string, AppConfigSlice | undefined>,
+  allPlatforms: PlatformSlice[],
+  options: { isFocusModeActive?: boolean } = {},
+): Promise<void> {
+  const rules = buildNativeProtectionRules(appsConfig, allPlatforms, options);
+  const monitoringEnabled = rules.length > 0;
 
   try {
-    await ScrollShieldBridgeNative.syncBlockedApps({ packages, monitoringEnabled });
+    await ScrollShieldBridgeNative.syncBlockedApps({ rules, monitoringEnabled });
     if (monitoringEnabled) {
       await ScrollShieldBridgeNative.startMonitoring();
     } else {
       await ScrollShieldBridgeNative.stopMonitoring();
     }
   } catch {
-    // Graceful no-op on web
+    // Graceful no-op on web and whenever a permission is still missing.
   }
 }
 

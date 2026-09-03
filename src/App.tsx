@@ -95,11 +95,13 @@ export default function App() {
     }
   }, [appState, isLoaded]);
 
-  // Sync blocked-app list to native layer whenever appsConfig changes
+  // Sync protection rules to the native layer whenever they change
   useEffect(() => {
     if (!isLoaded) return;
-    void syncNativeBlockList(appState.appsConfig, SUPPORTED_APPS);
-  }, [appState.appsConfig, isLoaded]);
+    void syncNativeBlockList(appState.appsConfig, SUPPORTED_APPS, {
+      isFocusModeActive: appState.isFocusModeActive,
+    });
+  }, [appState.appsConfig, appState.isFocusModeActive, isLoaded]);
 
   if (!isLoaded)
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">Laden...</div>;

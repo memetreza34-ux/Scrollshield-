@@ -3,13 +3,23 @@ import { AppState } from '../types';
 /**
  * Local Storage Service for ScrollShield
  *
- * Security Architecture:
- * - AES-256-GCM encryption via Web Crypto API for all sensitive data.
- * - A device-bound AES key is generated once and stored in localStorage.
- *   It is never transmitted and never leaves the device.
- * - Each encryption call generates a fresh random 96-bit IV (nonce).
- * - Stats and history (non-sensitive) remain plaintext for performance.
- * - Robust migration from legacy v3 XOR-obfuscated format.
+ * What this does:
+ * - Settings and profiles are stored as AES-256-GCM ciphertext (Web Crypto API),
+ *   with a fresh random 96-bit IV per write.
+ * - Stats and history stay plaintext for performance.
+ * - Migrates the legacy v3 (XOR) and v2 (plaintext) formats on first load.
+ *
+ * What this does NOT do – read before relying on it:
+ * The AES key lives in the same localStorage as the ciphertext, because a web
+ * app has nowhere else to keep it without asking the user for a passphrase.
+ * Anything that can read localStorage (an XSS payload, a browser extension,
+ * devtools, someone holding the unlocked device) can read the key next to the
+ * data. This raises the bar against casual inspection of stored values; it is
+ * not protection against an attacker with script or device access, and it must
+ * not be described as such in user-facing copy or store listings.
+ *
+ * Real confidentiality would need either a user passphrase (PBKDF2/Argon2 →
+ * key never persisted) or platform-backed storage on the native builds.
  */
 
 const STORAGE_PREFIX = 'scrollshield_';
@@ -18,26 +28,23 @@ const CRYPTO_KEY_STORAGE = `${STORAGE_PREFIX}device_key`;
 
 // ─── AES-GCM Crypto Layer ───────────────────────────────────────────────────
 
-/** Returns the persistent device-bound AES-GCM key, creating it on first use. */
+/**
+ * Returns the persistent AES-GCM key, creating it on first use.
+ * Stored next to the ciphertext – see the security note at the top of this file.
+ */
 async function getOrCreateDeviceKey(): Promise<CryptoKey> {
   const stored = localStorage.getItem(CRYPTO_KEY_STORAGE);
   if (stored) {
     try {
       const raw = Uint8Array.from(atob(stored), (c) => c.charCodeAt(0));
-      return await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, [
-        'encrypt',
-        'decrypt',
-      ]);
+      return await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
     } catch {
       // Corrupted key – generate a new one and wipe old data
       localStorage.removeItem(CRYPTO_KEY_STORAGE);
     }
   }
 
-  const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, [
-    'encrypt',
-    'decrypt',
-  ]);
+  const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
   const raw = await crypto.subtle.exportKey('raw', key);
   localStorage.setItem(CRYPTO_KEY_STORAGE, btoa(String.fromCharCode(...new Uint8Array(raw))));
   return key;

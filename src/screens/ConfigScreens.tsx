@@ -59,9 +59,9 @@ export function AppList({
   const toggleApp = (id: string) => {
     const appsConfig = { ...state.appsConfig };
     const config = appsConfig[id];
-    
+
     // Wenn inaktiv und noch NICHT "verbunden", starte Connection-Flow
-    if ((!config || !config.active) && (!config?.connected)) {
+    if ((!config || !config.active) && !config?.connected) {
       setConnectingAppId(id);
       setConnectionStatus('checking');
       setTimeout(() => {
@@ -71,10 +71,10 @@ export function AppList({
           setConnectionStatus('idle');
           // Nach Verbindung direkt aktivieren
           const updatedAppsConfig = { ...state.appsConfig };
-          updatedAppsConfig[id] = { 
-            ...(updatedAppsConfig[id] || { id, ...DEFAULT_APP_CONFIG }), 
+          updatedAppsConfig[id] = {
+            ...(updatedAppsConfig[id] || { id, ...DEFAULT_APP_CONFIG }),
             active: true,
-            connected: true 
+            connected: true,
           };
           updateState({ appsConfig: updatedAppsConfig });
         }, 1200);
@@ -103,7 +103,7 @@ export function AppList({
     navigate('app_detail');
   };
 
-  const connectingAppDef = connectingAppId ? SUPPORTED_APPS.find(a => a.id === connectingAppId) : null;
+  const connectingAppDef = connectingAppId ? SUPPORTED_APPS.find((a) => a.id === connectingAppId) : null;
 
   return (
     <motion.div
@@ -147,7 +147,11 @@ export function AppList({
                     <div className="text-left">
                       <div className="font-semibold">{app.name}</div>
                       <div className="text-xs text-zinc-500 mt-0.5 font-medium">
-                        {isActive ? `Modus: ${config.mode}` : (config?.connected ? 'Verbunden, Inaktiv' : 'Nicht verbunden')}
+                        {isActive
+                          ? `Modus: ${config.mode}`
+                          : config?.connected
+                            ? 'Verbunden, Inaktiv'
+                            : 'Nicht verbunden'}
                       </div>
                     </div>
                     <ChevronRight size={18} className="text-zinc-600" aria-hidden="true" />
@@ -177,12 +181,20 @@ export function AppList({
               exit={{ scale: 0.9, opacity: 0 }}
               className="w-full max-w-sm rounded-[2rem] border border-zinc-800 bg-zinc-900/95 p-8 text-center shadow-2xl flex flex-col items-center"
             >
-              <div className={`w-20 h-20 rounded-3xl mb-6 flex items-center justify-center text-3xl shadow-lg relative ${connectingAppDef.color}`}>
+              <div
+                className={`w-20 h-20 rounded-3xl mb-6 flex items-center justify-center text-3xl shadow-lg relative ${connectingAppDef.color}`}
+              >
                 {connectionStatus === 'checking' && (
-                  <RefreshCw size={24} className="absolute -top-2 -right-2 text-white bg-blue-500 rounded-full p-1 animate-spin shadow-md" />
+                  <RefreshCw
+                    size={24}
+                    className="absolute -top-2 -right-2 text-white bg-blue-500 rounded-full p-1 animate-spin shadow-md"
+                  />
                 )}
                 {connectionStatus === 'success' && (
-                  <Check size={24} className="absolute -top-2 -right-2 text-white bg-emerald-500 rounded-full p-1 shadow-md" />
+                  <Check
+                    size={24}
+                    className="absolute -top-2 -right-2 text-white bg-emerald-500 rounded-full p-1 shadow-md"
+                  />
                 )}
                 {connectingAppDef.icon}
               </div>
@@ -190,8 +202,8 @@ export function AppList({
                 {connectionStatus === 'checking' ? `${connectingAppDef.name} autorisieren` : 'Erfolgreich verbunden'}
               </h3>
               <p className="text-zinc-400 text-sm leading-relaxed max-w-[250px]">
-                {connectionStatus === 'checking' 
-                  ? `ScrollShield verknüpft sich lokal mit ${connectingAppDef.name}, um den Zugriffs-Status und die Nutzungszeit auslesen zu können...` 
+                {connectionStatus === 'checking'
+                  ? `ScrollShield verknüpft sich lokal mit ${connectingAppDef.name}, um den Zugriffs-Status und die Nutzungszeit auslesen zu können...`
                   : `Der native Filter-Hook für ${connectingAppDef.name} wurde erfolgreich aktiviert.`}
               </p>
             </motion.div>

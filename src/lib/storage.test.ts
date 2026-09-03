@@ -6,12 +6,29 @@ import { StorageService } from './storage';
 class LocalStorageMock {
   [key: string]: unknown;
   private store: Record<string, string> = {};
-  get length() { return Object.keys(this.store).length; }
-  key(index: number) { return Object.keys(this.store)[index] ?? null; }
-  getItem(key: string) { return this.store[key] ?? null; }
-  setItem(key: string, value: string) { this.store[key] = value; this[key] = value; }
-  removeItem(key: string) { delete this.store[key]; delete this[key]; }
-  clear() { Object.keys(this.store).forEach((k) => { delete this[k]; }); this.store = {}; }
+  get length() {
+    return Object.keys(this.store).length;
+  }
+  key(index: number) {
+    return Object.keys(this.store)[index] ?? null;
+  }
+  getItem(key: string) {
+    return this.store[key] ?? null;
+  }
+  setItem(key: string, value: string) {
+    this.store[key] = value;
+    this[key] = value;
+  }
+  removeItem(key: string) {
+    delete this.store[key];
+    delete this[key];
+  }
+  clear() {
+    Object.keys(this.store).forEach((k) => {
+      delete this[k];
+    });
+    this.store = {};
+  }
 }
 
 // ── Web Crypto stub (JSDOM doesn't ship crypto.subtle) ────────────────────────
@@ -29,14 +46,28 @@ const cryptoSubtleStub = {
   importKey: vi.fn().mockResolvedValue(stubKey),
   encrypt: vi.fn().mockImplementation(async (_algo: unknown, _key: unknown, data: BufferSource) => {
     // Prepend 12 zero bytes to simulate IV, then copy plaintext bytes
-    const src = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array((data as ArrayBufferView).buffer, (data as ArrayBufferView).byteOffset, (data as ArrayBufferView).byteLength);
+    const src =
+      data instanceof ArrayBuffer
+        ? new Uint8Array(data)
+        : new Uint8Array(
+            (data as ArrayBufferView).buffer,
+            (data as ArrayBufferView).byteOffset,
+            (data as ArrayBufferView).byteLength,
+          );
     const out = new Uint8Array(12 + src.byteLength);
     out.set(src, 12);
     return out.buffer;
   }),
   decrypt: vi.fn().mockImplementation(async (_algo: unknown, _key: unknown, data: BufferSource) => {
     // Strip the first 12 bytes (stub IV)
-    const src = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array((data as ArrayBufferView).buffer, (data as ArrayBufferView).byteOffset, (data as ArrayBufferView).byteLength);
+    const src =
+      data instanceof ArrayBuffer
+        ? new Uint8Array(data)
+        : new Uint8Array(
+            (data as ArrayBufferView).buffer,
+            (data as ArrayBufferView).byteOffset,
+            (data as ArrayBufferView).byteLength,
+          );
     return src.slice(12).buffer;
   }),
 };

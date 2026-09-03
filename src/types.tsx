@@ -45,7 +45,7 @@ export interface AppConfig {
   id: string;
   // 0. System-Integration
   connected?: boolean; // whether the app's native accessibility hook is established
-  
+
   // 1. Allgemeiner App-Schutz
   active: boolean;
   mode: 'soft' | 'standard' | 'strict';
@@ -208,14 +208,13 @@ export interface AppState {
   };
 }
 
-
-export type PlatformCategory = 
-  | 'social' 
-  | 'short_video' 
-  | 'news' 
-  | 'entertainment' 
-  | 'messaging' 
-  | 'productivity' 
+export type PlatformCategory =
+  | 'social'
+  | 'short_video'
+  | 'news'
+  | 'entertainment'
+  | 'messaging'
+  | 'productivity'
   | 'custom';
 
 export interface PlatformSurfaceDefinition {
@@ -302,7 +301,12 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = [
     androidPackages: ['com.facebook.katana', 'com.facebook.lite'],
     iosBundleIds: ['com.facebook.Facebook'],
     hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'facebook_reels', name: 'Facebook Reels', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+    shortVideoSurface: {
+      id: 'facebook_reels',
+      name: 'Facebook Reels',
+      defaultMode: 'limit',
+      defaultDailyLimitMinutes: 15,
+    },
     detectionKeywords: ['facebook.com/reel'],
   },
   {
@@ -318,7 +322,12 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = [
     androidPackages: ['com.twitter.android', 'com.twitter.android.lite'],
     iosBundleIds: ['com.atebits.Tweetie2'],
     hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'immersive_video', name: 'Immersive Video', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+    shortVideoSurface: {
+      id: 'immersive_video',
+      name: 'Immersive Video',
+      defaultMode: 'limit',
+      defaultDailyLimitMinutes: 15,
+    },
     detectionKeywords: ['x.com', 'twitter.com'],
   },
   {
@@ -334,7 +343,12 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = [
     androidPackages: ['com.snapchat.android'],
     iosBundleIds: ['com.toyopagroup.picaboo'],
     hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'spotlight', name: 'Snapchat Spotlight', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+    shortVideoSurface: {
+      id: 'spotlight',
+      name: 'Snapchat Spotlight',
+      defaultMode: 'limit',
+      defaultDailyLimitMinutes: 15,
+    },
     detectionKeywords: ['snapchat.com', 'spotlight'],
   },
   {
@@ -350,7 +364,12 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = [
     androidPackages: ['com.reddit.frontpage', 'com.reddit.frontpage.lite'],
     iosBundleIds: ['com.reddit.Reddit'],
     hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'reddit_watch', name: 'Reddit Video Feed', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+    shortVideoSurface: {
+      id: 'reddit_watch',
+      name: 'Reddit Video Feed',
+      defaultMode: 'limit',
+      defaultDailyLimitMinutes: 15,
+    },
     detectionKeywords: ['reddit.com', 'v.redd.it'],
   },
   {
@@ -368,11 +387,10 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = [
     hasShortVideoFeed: true,
     shortVideoSurface: { id: 'watch', name: 'Pinterest Watch', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
     detectionKeywords: ['pinterest.com/watch'],
-  }
+  },
 ];
 
 export const SUPPORTED_APPS = BUILTIN_PLATFORMS;
-
 
 export const DEFAULT_APP_CONFIG: Omit<AppConfig, 'id'> = {
   connected: false,

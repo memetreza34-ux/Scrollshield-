@@ -11,13 +11,27 @@ const cryptoSubtleStub = {
   exportKey: vi.fn().mockResolvedValue(new Uint8Array(32).buffer),
   importKey: vi.fn().mockResolvedValue({} as CryptoKey),
   encrypt: vi.fn().mockImplementation(async (_a: unknown, _k: unknown, data: BufferSource) => {
-    const src = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array((data as ArrayBufferView).buffer, (data as ArrayBufferView).byteOffset, (data as ArrayBufferView).byteLength);
+    const src =
+      data instanceof ArrayBuffer
+        ? new Uint8Array(data)
+        : new Uint8Array(
+            (data as ArrayBufferView).buffer,
+            (data as ArrayBufferView).byteOffset,
+            (data as ArrayBufferView).byteLength,
+          );
     const out = new Uint8Array(12 + src.byteLength);
     out.set(src, 12);
     return out.buffer;
   }),
   decrypt: vi.fn().mockImplementation(async (_a: unknown, _k: unknown, data: BufferSource) => {
-    const src = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array((data as ArrayBufferView).buffer, (data as ArrayBufferView).byteOffset, (data as ArrayBufferView).byteLength);
+    const src =
+      data instanceof ArrayBuffer
+        ? new Uint8Array(data)
+        : new Uint8Array(
+            (data as ArrayBufferView).buffer,
+            (data as ArrayBufferView).byteOffset,
+            (data as ArrayBufferView).byteLength,
+          );
     return src.slice(12).buffer;
   }),
 };

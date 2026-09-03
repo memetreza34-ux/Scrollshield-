@@ -1,18 +1,69 @@
 # Native Android Status
 
-ScrollShield now has a Capacitor Android wrapper under `android/`.
+ScrollShield has a Capacitor Android wrapper under `android/`. The native interruption layer is **implemented but not
+yet verified on a device** — it has never been compiled in CI, and no Play Console declaration has been filed. Treat it
+as an alpha that is separate from the web/PWA launch described in `README.md`.
 
-## Implemented
+## Project Setup
 
 - Capacitor app id: `app.scrollshield.mobile`
 - Android `versionName` aligned with `package.json` version `1.0.0`
+- Kotlin (`org.jetbrains.kotlin.android`, JVM target 21) alongside the generated Java sources
 - Cleartext HTTP disabled in the Android manifest
 - Android app backup disabled so local wellbeing data is not copied into device backups
 - Android release builds use R8 minification and resource shrinking
-- Current Android manifest only requests `android.permission.INTERNET`; sensitive enforcement permissions are
-  intentionally absent until native implementation and Play Console declarations are ready
 - Release signing is configured through ignored local files only: start from `android/signing.properties.example`
-- Reproducible npm scripts for sync, Android Studio opening, and debug APK builds
+
+`npm run check:android` guards these invariants, including the declared permission list and the presence of the Kotlin
+toolchain whenever Kotlin sources exist.
+
+## Implemented Native Behaviour
+
+`ScrollShieldBridgePlugin.kt` exposes to the web layer:
+
+| Method                        | Purpose                                                     |
+| ----------------------------- | ----------------------------------------------------------- |
+| `getPermissionStatus`         | Usage Access, overlay, notifications, service running state |
+| `requestUsageStatsPermission` | Opens the system Usage Access screen                        |
+| `requestOverlayPermission`    | Opens the system overlay screen                             |
+| `getForegroundApp`            | Current foreground package (diagnostics)                    |
+| `syncBlockedApps`             | Writes the per-app rule set                                 |
+| `startMonitoring`             | Starts `AppMonitorService`                                  |
+| `stopMonitoring`              | Stops it and clears the master switch                       |
+
+`AppMonitorService.kt` runs as a foreground service, reads the foreground app from the `UsageStatsManager` **event**
+stream every 1.5 s, and shows a full-screen overlay when a protected package appears:
+
+| Rule mode  | Overlay behaviour                                               |
+| ---------- | --------------------------------------------------------------- |
+| `soft`     | Reminder, "continue" available immediately                      |
+| `standard` | Countdown of the app's own `openDelay`, then "continue" unlocks |
+| `strict`   | No "continue"; only "back to home screen"                       |
+
+Rules are synced from `src/lib/nativeBridge.ts` (`buildNativeProtectionRules`), which also escalates an app to `strict`
+while a focus session is running. Choosing "continue" grants a five-minute grace period so the overlay does not
+immediately reappear.
+
+## Known Limits
+
+- **Daily limits, anti-binge windows, session limits and emergency unlocks are evaluated in the web layer only.** The
+  native service receives the resulting mode and delay, nothing else. An app whose daily limit is exhausted is not
+  blocked natively until the web layer marks it `strict`.
+- Detection lags an app switch by up to one poll interval (1.5 s).
+- The overlay does not prevent the user from leaving through system gestures. It reappears on the next foreground
+  transition of the protected app.
+- Background reliability under Doze and OEM battery managers (Xiaomi, Samsung, Huawei) is **untested**.
+- `EncryptedSharedPreferences` comes from Jetpack Security, which is in maintenance mode. Revisit before extending its
+  use.
+
+## Still Open Before a Store Release
+
+- Compile and run the Android build on a real device; nothing here has been executed yet
+- Verify service survival after reboot, battery optimisation and OEM task killers
+- Record the Play Console permission demonstration videos (`PACKAGE_USAGE_STATS`, `SYSTEM_ALERT_WINDOW`)
+- File the `FOREGROUND_SERVICE_SPECIAL_USE` declaration (see `docs/STORE_SUBMISSION_PACKET.md`)
+- Confirm the final package id before the first Play Console upload
+- Decide whether daily limits should move into the native layer or stay web-only
 
 ## Commands
 
@@ -25,16 +76,6 @@ npm run android:build
 npm run android:release
 npm run android:bundle
 ```
-
-## Still Native Work
-
-- Implement Usage Access based app detection
-- Implement overlay or interruption UI for protected apps
-- Add background reliability handling for device reboot, battery optimization, and OEM restrictions
-- Add sensitive Android permissions only together with the native feature, Play Console declaration text, and review
-  video evidence
-- Add Play Console sensitive permission declaration videos for `PACKAGE_USAGE_STATS` and any overlay permission if used
-- Confirm the final package id before the first Play Console upload
 
 ## Local Tooling
 

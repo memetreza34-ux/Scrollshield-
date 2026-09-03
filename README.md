@@ -17,6 +17,14 @@ The web/PWA version does not physically block other installed apps. It is positi
 
 The generated Android app id is currently `app.scrollshield.mobile`. Confirm this id before the first Play Console upload because package names are hard to change after release. It is not a blocker for the first web/PWA launch.
 
+## Native Android Alpha
+
+The repository also contains a native interruption layer (`ScrollShieldBridgePlugin.kt`, `AppMonitorService.kt`) that
+detects protected apps through Usage Access and shows an overlay. It is **not part of the v1.0 web/PWA release**: it has
+not been compiled in CI, not been run on a device, and its Play Console permission declarations are still open. Daily
+limits and anti-binge rules remain web-only — the native layer receives just the resulting mode and delay. See
+`docs/NATIVE_ANDROID.md` for the exact state and limits.
+
 ## Run Locally
 
 Prerequisites: Node.js 22.12+ and npm 10+.

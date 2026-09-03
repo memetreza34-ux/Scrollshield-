@@ -91,6 +91,18 @@ The following sections are not required for the first web/PWA launch. Use them w
 > by the user is opened. The screen offers a return action and, where configured, a deliberate emergency release. It does
 > not alter, click, or read the underlying app. Without this permission, overlay-based interruption is unavailable.
 
+### `FOREGROUND_SERVICE_SPECIAL_USE` Declaration
+
+> ScrollShield runs a user-visible foreground service while protection is active. The service checks which app is in the
+> foreground so a user-configured delay or block screen can be shown at the moment a protected app is opened. No existing
+> foreground service type covers self-control app interruption, which is why `specialUse` is declared with the subtype
+> "App usage monitoring for parental and self-control purposes". The service is started only after the user enables
+> protection for at least one app, shows a persistent notification for as long as it runs, and stops as soon as the last
+> protected app is deactivated. It performs no network activity and reads no screen content.
+
+Play Console requires this declaration to be reviewed manually. Submit it together with the permission videos below;
+without an approved declaration the upload is rejected.
+
 ### Permission Video Shot List
 
 1. Show onboarding before any permission request.
