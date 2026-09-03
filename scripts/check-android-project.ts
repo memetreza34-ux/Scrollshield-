@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
 type Finding = {
@@ -80,7 +80,17 @@ requireMatch(manifestPath, manifest, /android:allowBackup="false"/, 'Android app
 requireMatch(manifestPath, manifest, /android:usesCleartextTraffic="false"/, 'Cleartext HTTP must stay disabled.');
 requireMatch(manifestPath, manifest, /android:exported="true"/, 'Launcher activity must explicitly declare exported.');
 
-const allowedPermissions = new Set(['android.permission.INTERNET']);
+// Every permission here needs a Play Console declaration before upload; see
+// docs/STORE_SUBMISSION_PACKET.md. Adding a permission without updating this
+// list (and that document) must fail the build.
+const allowedPermissions = new Set([
+  'android.permission.INTERNET',
+  'android.permission.PACKAGE_USAGE_STATS',
+  'android.permission.SYSTEM_ALERT_WINDOW',
+  'android.permission.FOREGROUND_SERVICE',
+  'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
+  'android.permission.POST_NOTIFICATIONS',
+]);
 const permissions = [...manifest.matchAll(/<uses-permission[^>]+android:name="([^"]+)"/g)].map((match) => match[1]);
 for (const permission of permissions) {
   if (allowedPermissions.has(permission)) continue;
@@ -88,6 +98,72 @@ for (const permission of permissions) {
     file: manifestPath,
     text: `Unexpected Android permission ${permission}; add store declarations before allowing it.`,
   });
+}
+
+// The manifest uses the tools namespace for the PACKAGE_USAGE_STATS lint
+// suppression; without the declaration the resource compiler fails.
+if (/\btools:/.test(manifest)) {
+  requireMatch(
+    manifestPath,
+    manifest,
+    /xmlns:tools="http:\/\/schemas\.android\.com\/tools"/,
+    'Manifest uses the tools namespace without declaring xmlns:tools.',
+  );
+}
+
+// A foreground service must declare its type from Android 14 onwards.
+if (/<service[^>]+android:name="\.AppMonitorService"/.test(manifest)) {
+  requireMatch(
+    manifestPath,
+    manifest,
+    /android:foregroundServiceType="specialUse"/,
+    'AppMonitorService must declare its foreground service type.',
+  );
+  requireMatch(
+    manifestPath,
+    manifest,
+    /PROPERTY_SPECIAL_USE_FGS_SUBTYPE/,
+    'A specialUse foreground service must declare its subtype property.',
+  );
+}
+
+// Kotlin sources only compile when the Kotlin plugin is applied. Without this
+// check a Kotlin file can be added that silently never reaches the APK.
+const kotlinSources = (await readdir(path.join(androidDir, 'app', 'src', 'main', 'java'), { recursive: true }))
+  .map((entry) => String(entry))
+  .filter((entry) => entry.endsWith('.kt'));
+
+if (kotlinSources.length > 0) {
+  requireMatch(
+    buildGradlePath,
+    buildGradle,
+    /apply plugin: 'org\.jetbrains\.kotlin\.android'/,
+    `Project contains ${kotlinSources.length} Kotlin source(s) but does not apply the Kotlin plugin.`,
+  );
+
+  const rootGradlePath = path.join(androidDir, 'build.gradle');
+  const rootGradle = await readFile(rootGradlePath, 'utf8');
+  requireMatch(
+    rootGradlePath,
+    rootGradle,
+    /kotlin-gradle-plugin/,
+    'Kotlin sources require the kotlin-gradle-plugin classpath.',
+  );
+
+  const usesSecurityCrypto = (
+    await Promise.all(
+      kotlinSources.map((file) => readFile(path.join(androidDir, 'app', 'src', 'main', 'java', file), 'utf8')),
+    )
+  ).some((source) => /androidx\.security\.crypto/.test(source));
+
+  if (usesSecurityCrypto) {
+    requireMatch(
+      buildGradlePath,
+      buildGradle,
+      /androidx\.security:security-crypto/,
+      'Kotlin sources import androidx.security.crypto without the matching dependency.',
+    );
+  }
 }
 
 if (findings.length > 0) {
@@ -99,5 +175,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `Android project check passed. SDK ${minSdk}/${targetSdk}/${compileSdk}, ${permissions.length} permission.`,
+  `Android project check passed. SDK ${minSdk}/${targetSdk}/${compileSdk}, ${permissions.length} declared permissions.`,
 );

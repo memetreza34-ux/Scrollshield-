@@ -1,4 +1,5 @@
 apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
 
 def signingPropertiesFile = rootProject.file('signing.properties')
 def signingProperties = new Properties()
@@ -32,6 +33,9 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    kotlinOptions {
+        jvmTarget = '21'
+    }
     buildTypes {
         release {
             minifyEnabled true
@@ -55,6 +59,9 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    // EncryptedSharedPreferences for the native blocked-app list.
+    // Jetpack Security is in maintenance mode; revisit before adding new usage.
+    implementation "androidx.security:security-crypto:$androidxSecurityCryptoVersion"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

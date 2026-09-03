@@ -11,13 +11,13 @@ import android.os.Process
 import android.provider.Settings
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * ScrollShieldBridgePlugin
@@ -27,9 +27,9 @@ import org.json.JSONArray
  * Capabilities:
  *  - Permission checks and requests (Usage Stats, Overlay, Notifications)
  *  - Foreground app detection via UsageStatsManager
- *  - Sync of blocked-app list from React state → AppMonitorService
+ *  - Sync of per-app protection rules from React state → AppMonitorService
  *  - Start / stop the background AppMonitorService
- *  - Persist blocked-app list in EncryptedSharedPreferences
+ *  - Persist the rule set in EncryptedSharedPreferences
  *
  * Usage from TypeScript:
  *   import { ScrollShieldBridge } from '@/lib/nativeBridge';
@@ -40,7 +40,9 @@ class ScrollShieldBridgePlugin : Plugin() {
 
     companion object {
         const val PREF_FILE = "scrollshield_native_prefs"
-        const val KEY_BLOCKED_PACKAGES = "blocked_packages"
+
+        /** JSON array of { packageName, mode, delaySeconds } objects. */
+        const val KEY_BLOCKED_RULES = "blocked_rules"
         const val KEY_MONITORING_ENABLED = "monitoring_enabled"
     }
 
@@ -58,8 +60,8 @@ class ScrollShieldBridgePlugin : Plugin() {
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
-        } catch (e: Exception) {
-            // Fallback to plain prefs if security provider is unavailable (emulators)
+        } catch (_: Exception) {
+            // Fallback to plain prefs if the security provider is unavailable (emulators)
             context.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
         }
     }
@@ -90,13 +92,21 @@ class ScrollShieldBridgePlugin : Plugin() {
     private fun hasOverlayPermission(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)
 
+    private fun hasNotificationPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+        } else {
+            true // Pre-Android 13 doesn't require explicit permission
+        }
+    }
+
     // ── Plugin methods (callable from JS/TS) ─────────────────────────────────
 
     /**
-     * Returns the current permission status for all permissions ScrollShield needs.
+     * Returns the current permission status for everything ScrollShield needs.
      *
      * JS call: ScrollShieldBridge.getPermissionStatus()
-     * Returns: { usageStats: boolean, overlay: boolean, notifications: boolean }
      */
     @PluginMethod
     fun getPermissionStatus(call: PluginCall) {
@@ -110,8 +120,6 @@ class ScrollShieldBridgePlugin : Plugin() {
 
     /**
      * Opens the system Usage Access settings screen so the user can grant permission.
-     *
-     * JS call: ScrollShieldBridge.requestUsageStatsPermission()
      */
     @PluginMethod
     fun requestUsageStatsPermission(call: PluginCall) {
@@ -122,16 +130,11 @@ class ScrollShieldBridgePlugin : Plugin() {
             }
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        context.startActivity(intent)
-        val result = JSObject()
-        result.put("opened", true)
-        call.resolve(result)
+        call.resolve(JSObject().put("opened", startSettingsActivity(intent)))
     }
 
     /**
      * Opens the system Overlay permission screen.
-     *
-     * JS call: ScrollShieldBridge.requestOverlayPermission()
      */
     @PluginMethod
     fun requestOverlayPermission(call: PluginCall) {
@@ -139,18 +142,12 @@ class ScrollShieldBridgePlugin : Plugin() {
             Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
             Uri.parse("package:${context.packageName}")
         ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-        context.startActivity(intent)
-        val result = JSObject()
-        result.put("opened", true)
-        call.resolve(result)
+        call.resolve(JSObject().put("opened", startSettingsActivity(intent)))
     }
 
     /**
-     * Returns the package name of the currently foregrounded app.
+     * Returns the package name of the app that most recently came to the foreground.
      * Requires PACKAGE_USAGE_STATS permission.
-     *
-     * JS call: ScrollShieldBridge.getForegroundApp()
-     * Returns: { packageName: string | null, hasPermission: boolean }
      */
     @PluginMethod
     fun getForegroundApp(call: PluginCall) {
@@ -162,10 +159,9 @@ class ScrollShieldBridgePlugin : Plugin() {
             return
         }
 
-        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val now = System.currentTimeMillis()
-        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 10_000L, now)
-
+        val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 60_000L, now)
         val foreground = stats?.maxByOrNull { it.lastTimeUsed }?.packageName
 
         result.put("hasPermission", true)
@@ -174,34 +170,59 @@ class ScrollShieldBridgePlugin : Plugin() {
     }
 
     /**
-     * Syncs the blocked-app package list from React state to the native layer.
-     * The AppMonitorService reads this list to decide when to intervene.
+     * Syncs the per-app protection rules from React state to the native layer.
+     * The AppMonitorService reads them to decide how to intervene.
      *
-     * JS call: ScrollShieldBridge.syncBlockedApps({ packages: string[], monitoringEnabled: boolean })
+     * JS call: ScrollShieldBridge.syncBlockedApps({
+     *   rules: [{ packageName, mode, delaySeconds }],
+     *   monitoringEnabled: boolean,
+     * })
      */
     @PluginMethod
     fun syncBlockedApps(call: PluginCall) {
-        val packages: JSONArray = call.getArray("packages") ?: JSArray()
-        val monitoringEnabled: Boolean = call.getBoolean("monitoringEnabled", false) ?: false
+        val incoming = call.getArray("rules") ?: JSONArray()
+        val monitoringEnabled = call.getBoolean("monitoringEnabled", false) ?: false
+
+        val normalized = JSONArray()
+        for (index in 0 until incoming.length()) {
+            val entry = incoming.optJSONObject(index) ?: continue
+            val packageName = entry.optString("packageName")
+            if (packageName.isEmpty()) continue
+
+            val mode = when (val rawMode = entry.optString("mode", "standard")) {
+                "soft", "standard", "strict" -> rawMode
+                else -> "standard"
+            }
+
+            normalized.put(
+                JSONObject()
+                    .put("packageName", packageName)
+                    .put("mode", mode)
+                    .put(
+                        "delaySeconds",
+                        entry.optInt("delaySeconds", AppMonitorService.DEFAULT_DELAY_SECONDS).coerceIn(0, 300)
+                    )
+            )
+        }
 
         encryptedPrefs.edit()
-            .putString(KEY_BLOCKED_PACKAGES, packages.toString())
+            .putString(KEY_BLOCKED_RULES, normalized.toString())
             .putBoolean(KEY_MONITORING_ENABLED, monitoringEnabled)
             .apply()
 
-        // Notify a running service of the update without restarting it
-        AppMonitorService.notifyConfigUpdate(context)
+        // Let a running service pick the change up without a restart.
+        if (AppMonitorService.isRunning) {
+            AppMonitorService.notifyConfigUpdate(context)
+        }
 
         val result = JSObject()
         result.put("synced", true)
-        result.put("packageCount", packages.length())
+        result.put("ruleCount", normalized.length())
         call.resolve(result)
     }
 
     /**
      * Starts the background AppMonitorService.
-     *
-     * JS call: ScrollShieldBridge.startMonitoring()
      */
     @PluginMethod
     fun startMonitoring(call: PluginCall) {
@@ -209,38 +230,45 @@ class ScrollShieldBridgePlugin : Plugin() {
             call.reject("USAGE_STATS_PERMISSION_MISSING", "Grant Usage Access permission first.")
             return
         }
+
         val intent = Intent(context, AppMonitorService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent)
-        } else {
-            context.startService(intent)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        } catch (error: Exception) {
+            call.reject("SERVICE_START_FAILED", error.message, error)
+            return
         }
+
         val result = JSObject()
         result.put("started", true)
+        // Without the overlay permission the service runs but cannot interrupt anything.
+        result.put("overlayGranted", hasOverlayPermission())
         call.resolve(result)
     }
 
     /**
      * Stops the background AppMonitorService.
-     *
-     * JS call: ScrollShieldBridge.stopMonitoring()
      */
     @PluginMethod
     fun stopMonitoring(call: PluginCall) {
+        encryptedPrefs.edit().putBoolean(KEY_MONITORING_ENABLED, false).apply()
         context.stopService(Intent(context, AppMonitorService::class.java))
-        val result = JSObject()
-        result.put("stopped", true)
-        call.resolve(result)
+        call.resolve(JSObject().put("stopped", true))
     }
 
-    // ── Notification permission (Android 13+) ─────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private fun hasNotificationPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-        } else {
-            true // Pre-Android 13 doesn't require explicit permission
+    private fun startSettingsActivity(intent: Intent): Boolean {
+        return try {
+            context.startActivity(intent)
+            true
+        } catch (_: Exception) {
+            // Some OEM builds ship without these settings screens.
+            false
         }
     }
 }

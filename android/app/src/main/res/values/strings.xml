@@ -5,4 +5,22 @@
     <string name="package_name">app.scrollshield.mobile</string>
     <string name="custom_url_scheme">app.scrollshield.mobile</string>
     <string name="accessibility_service_description">ScrollShield benötigt diesen Dienst, um gefährliche oder von dir blockierte Inhalte auf dem Bildschirm (z.B. toxische Keywords) zu erkennen und sofort zu blockieren, bevor du sie siehst.</string>
+
+    <!-- Foreground service notification -->
+    <string name="monitor_channel_name">ScrollShield Schutz</string>
+    <string name="monitor_channel_description">ScrollShield überwacht aktiv geschützte Apps.</string>
+    <string name="monitor_notification_title">ScrollShield ist aktiv</string>
+    <string name="monitor_notification_text">Deine geschützten Apps werden überwacht.</string>
+
+    <!-- Interruption overlay -->
+    <string name="overlay_title">ScrollShield</string>
+    <string name="overlay_body">%1$s ist geschützt.</string>
+    <string name="overlay_strict_hint">Diese App ist im strengen Modus gesperrt. Ändere die Regel in ScrollShield, wenn du sie öffnen möchtest.</string>
+    <string name="overlay_ready_hint">Willst du wirklich weitermachen?</string>
+    <string name="overlay_continue">Trotzdem öffnen</string>
+    <string name="overlay_go_home">Zurück zum Startbildschirm</string>
+    <plurals name="overlay_countdown">
+        <item quantity="one">Noch %d Sekunde …</item>
+        <item quantity="other">Noch %d Sekunden …</item>
+    </plurals>
 </resources>

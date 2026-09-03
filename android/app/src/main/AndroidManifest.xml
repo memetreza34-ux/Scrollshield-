@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="false"
@@ -63,10 +64,12 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
         -->
-        <!-- ── AppMonitorService (PRODUCTION – enabled) ──────────────────────
-             Foreground service that polls UsageStatsManager every second and
-             shows a SYSTEM_ALERT_WINDOW countdown overlay when a blocked app
-             comes to the foreground.
+        <!-- ── AppMonitorService ─────────────────────────────────────────────
+             Foreground service that reads UsageStatsManager foreground events
+             and shows a SYSTEM_ALERT_WINDOW interruption screen when a
+             protected app is opened. Requires an approved Play Console
+             declaration for FOREGROUND_SERVICE_SPECIAL_USE before upload;
+             see docs/STORE_SUBMISSION_PACKET.md.
         -->
         <service
             android:name=".AppMonitorService"
@@ -75,9 +78,6 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="App usage monitoring for parental and self-control purposes" />
-            <intent-filter>
-                <action android:name="app.scrollshield.ACTION_CONFIG_UPDATE" />
-            </intent-filter>
         </service>
 
     </application>
