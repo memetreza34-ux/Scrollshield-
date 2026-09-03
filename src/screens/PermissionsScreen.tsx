@@ -267,6 +267,21 @@ export function PermissionsScreen({
           )}
         </div>
 
+        {operatingSystem === 'web' && (
+          <section
+            aria-labelledby="permissions-web-note"
+            className="rounded-[1.5rem] border border-zinc-800/50 bg-zinc-900/80 p-5"
+          >
+            <h2 id="permissions-web-note" className="mb-2 font-bold text-zinc-100">
+              Du nutzt die Webversion
+            </h2>
+            <p className="text-sm leading-relaxed text-zinc-400">
+              Ein Browser kann andere Apps weder erkennen noch sperren. Systemberechtigungen gibt es deshalb erst in der
+              Android-App. Regeln, Fokuszeiten, Verlauf und Statistiken funktionieren hier vollständig.
+            </p>
+          </section>
+        )}
+
         <div className="space-y-6">
           {renderPermissionCard(
             'usageAccess',

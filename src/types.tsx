@@ -1,4 +1,5 @@
 import React from 'react';
+import type { OperatingSystem } from './lib/platform';
 
 export type Screen =
   | 'welcome'
@@ -181,7 +182,7 @@ export interface AppState {
   };
   profiles?: Profile[];
   activeProfileId?: string;
-  operatingSystem: 'ios' | 'android';
+  operatingSystem: OperatingSystem;
   permissions: AppPermissions;
   settings: {
     language: string;
@@ -584,7 +585,9 @@ export const DEFAULT_STATE: AppState = {
   },
   profiles: DEFAULT_PROFILES,
   activeProfileId: 'gentle',
-  operatingSystem: 'ios', // Defaulting to iOS for demonstration of fallbacks
+  // Replaced at startup by detectOperatingSystem(); 'web' is the honest
+  // default because a browser has neither Screen Time nor Usage Access.
+  operatingSystem: 'web',
   permissions: {
     usageAccess: false,
     overlay: false,

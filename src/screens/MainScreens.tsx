@@ -92,6 +92,10 @@ export function Dashboard({
   const renderSystemHealthBanner = () => {
     const { operatingSystem, permissions, hasCompletedOnboarding } = state;
     if (!hasCompletedOnboarding) return null;
+    // In a browser there is neither Screen Time nor Usage Access, so warning
+    // about a missing permission would be a false statement. The limits of the
+    // web version are stated in the card above instead.
+    if (operatingSystem === 'web') return null;
 
     let missingCritical = false;
     let warningText = '';

@@ -6,6 +6,7 @@ import { normalizeAppState } from './lib/state';
 import { reconcileFocusRuntime } from './lib/focus';
 import { syncNativeBlockList } from './lib/nativeBridge';
 import { getLocalDateKey } from './lib/appUtils';
+import { detectOperatingSystem } from './lib/platform';
 import {
   RELAPSE_WINDOW_MINUTES,
   buildEveningSummary,
@@ -45,9 +46,13 @@ export default function App() {
   useEffect(() => {
     const init = async () => {
       const saved = await StorageService.loadState();
+      // The platform is a property of the device, never of the stored state:
+      // the same export can be imported on a phone and in a browser.
+      const operatingSystem = detectOperatingSystem();
+
       if (saved) {
         try {
-          const normalizedState = normalizeAppState(saved);
+          const normalizedState = { ...normalizeAppState(saved), operatingSystem };
           const focusUpdate = reconcileFocusRuntime(normalizedState);
           const restoredState = focusUpdate ? { ...normalizedState, ...focusUpdate } : normalizedState;
           setAppState(restoredState);
@@ -59,6 +64,8 @@ export default function App() {
         } catch (e) {
           console.error('Failed to parse saved state', e);
         }
+      } else {
+        setAppState((previous) => ({ ...previous, operatingSystem }));
       }
       setIsLoaded(true);
     };
