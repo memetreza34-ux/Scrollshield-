@@ -17,6 +17,7 @@ import {
 import { AppState, Screen, SUPPORTED_APPS } from '../types';
 import { Header } from '../components/ui';
 import { getReelsStatsForDate } from '../lib/stats';
+import { deriveInsights } from '../lib/insights';
 import { createFocusEndUpdate } from '../lib/focus';
 import { getActiveReelsCount, REELS_PLATFORM_IDS } from '../lib/appUtils';
 
@@ -74,6 +75,9 @@ export function Dashboard({
   const randomQuote = quotes[new Date().getDate() % quotes.length];
 
   const { reelsTimeTodayMinutes, reelsBlockedSessions, singleItemsCount } = getReelsStatsForDate(state, today);
+
+  // Statements derived from the user's own data; empty until there is evidence.
+  const insights = deriveInsights(state);
 
   // Find riskiest reels app
   const riskiestReelsAppId =
@@ -478,6 +482,32 @@ export function Dashboard({
             <p className="font-semibold text-zinc-200">
               {problemApp.name} ({blockedByApp[mostBlockedAppId]}x blockiert)
             </p>
+          </div>
+        </section>
+      )}
+
+      {/* 5b. Erkenntnisse aus den eigenen Daten */}
+      {insights.length > 0 && (
+        <section aria-labelledby="dashboard-insights" className="mt-6">
+          <h2 id="dashboard-insights" className="mb-3 px-1 text-xs font-bold uppercase tracking-widest text-zinc-500">
+            Was deine Daten zeigen
+          </h2>
+          <div className="space-y-3">
+            {insights.map((insight) => (
+              <article
+                key={insight.id}
+                className={`rounded-[1.5rem] border p-5 ${
+                  insight.tone === 'positive'
+                    ? 'border-emerald-500/30 bg-emerald-500/5'
+                    : insight.tone === 'warning'
+                      ? 'border-amber-500/30 bg-amber-500/5'
+                      : 'border-zinc-800/50 bg-zinc-900/80'
+                }`}
+              >
+                <h3 className="mb-1 font-semibold text-zinc-100">{insight.title}</h3>
+                <p className="text-sm leading-relaxed text-zinc-400">{insight.detail}</p>
+              </article>
+            ))}
           </div>
         </section>
       )}

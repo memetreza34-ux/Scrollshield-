@@ -8,11 +8,8 @@ import {
   SUPPORTED_APPS,
 } from '../types';
 
-type AppConfigPatch = Partial<
-  Omit<AppConfig, 'reelsProtection' | 'singleContent' | 'emergencyUnlock' | 'timeWindows' | 'antiBinge'>
-> & {
+type AppConfigPatch = Partial<Omit<AppConfig, 'reelsProtection' | 'emergencyUnlock' | 'timeWindows' | 'antiBinge'>> & {
   reelsProtection?: Partial<AppConfig['reelsProtection']>;
-  singleContent?: Partial<AppConfig['singleContent']>;
   emergencyUnlock?: Partial<AppConfig['emergencyUnlock']>;
   timeWindows?: Partial<AppConfig['timeWindows']>;
   antiBinge?: Partial<AppConfig['antiBinge']>;
@@ -25,10 +22,6 @@ export const normalizeAppConfig = (appId: string, config?: AppConfigPatch): AppC
   reelsProtection: {
     ...DEFAULT_APP_CONFIG.reelsProtection,
     ...config?.reelsProtection,
-  },
-  singleContent: {
-    ...DEFAULT_APP_CONFIG.singleContent,
-    ...config?.singleContent,
   },
   emergencyUnlock: {
     ...DEFAULT_APP_CONFIG.emergencyUnlock,

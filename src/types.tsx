@@ -53,7 +53,6 @@ export interface AppConfig {
   openDelay: number; // seconds
   dailyLimit: number; // minutes
   sessionLimit?: number; // minutes per session
-  blockHours: string; // e.g. "22:00-07:00"
   focusModeBehavior: 'allow' | 'warn' | 'block';
 
   // 2. Reels-/Shorts-Schutz
@@ -69,13 +68,6 @@ export interface AppConfig {
     hardInterrupt: boolean;
   };
 
-  // 3. Einzelinhalt-Erlaubnis
-  singleContent: {
-    allowSharedLinks: boolean;
-    allowOnlyOne: boolean;
-    returnToPrevious: boolean;
-  };
-
   // 4. Notfallfreigabe
   emergencyUnlock: {
     enabled: boolean;
@@ -87,6 +79,13 @@ export interface AppConfig {
 
   // 5. Zeitfenster
   timeWindows: {
+    /**
+     * Opt-in switch. The rules below existed long before they were evaluated,
+     * so stored configurations carry values (workRules: 'strict') that never
+     * had an effect. Enabling them automatically would silently lock people
+     * out of their apps on the next update.
+     */
+    enabled: boolean;
     morningRules: 'normal' | 'strict' | 'block';
     workRules: 'normal' | 'strict' | 'block';
     eveningRules: 'normal' | 'strict' | 'block';
@@ -400,7 +399,6 @@ export const DEFAULT_APP_CONFIG: Omit<AppConfig, 'id'> = {
   openDelay: 5,
   dailyLimit: 60,
   sessionLimit: 15,
-  blockHours: '',
   focusModeBehavior: 'warn',
   reelsProtection: {
     enabled: true,
@@ -413,11 +411,6 @@ export const DEFAULT_APP_CONFIG: Omit<AppConfig, 'id'> = {
     warnOnEndlessScroll: true,
     hardInterrupt: true,
   },
-  singleContent: {
-    allowSharedLinks: true,
-    allowOnlyOne: true,
-    returnToPrevious: true,
-  },
   emergencyUnlock: {
     enabled: true,
     durationMinutes: 5,
@@ -426,6 +419,7 @@ export const DEFAULT_APP_CONFIG: Omit<AppConfig, 'id'> = {
     maxPerDay: 2,
   },
   timeWindows: {
+    enabled: false,
     morningRules: 'normal',
     workRules: 'strict',
     eveningRules: 'normal',
@@ -442,10 +436,9 @@ export const DEFAULT_APP_CONFIG: Omit<AppConfig, 'id'> = {
 };
 
 type AppConfigOverrides = Partial<
-  Omit<AppConfig, 'id' | 'reelsProtection' | 'singleContent' | 'emergencyUnlock' | 'timeWindows' | 'antiBinge'>
+  Omit<AppConfig, 'id' | 'reelsProtection' | 'emergencyUnlock' | 'timeWindows' | 'antiBinge'>
 > & {
   reelsProtection?: Partial<AppConfig['reelsProtection']>;
-  singleContent?: Partial<AppConfig['singleContent']>;
   emergencyUnlock?: Partial<AppConfig['emergencyUnlock']>;
   timeWindows?: Partial<AppConfig['timeWindows']>;
   antiBinge?: Partial<AppConfig['antiBinge']>;
@@ -461,10 +454,6 @@ const createAppsConfig = (overrides: AppConfigOverrides): Record<string, AppConf
       reelsProtection: {
         ...DEFAULT_APP_CONFIG.reelsProtection,
         ...overrides.reelsProtection,
-      },
-      singleContent: {
-        ...DEFAULT_APP_CONFIG.singleContent,
-        ...overrides.singleContent,
       },
       emergencyUnlock: {
         ...DEFAULT_APP_CONFIG.emergencyUnlock,

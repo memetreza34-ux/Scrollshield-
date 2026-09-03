@@ -15,6 +15,7 @@ import {
 import { AppState, Screen, AppPermissions } from '../types';
 import { Header } from '../components/ui';
 import { ScrollShieldBridge } from '../lib/nativeBridge';
+import { requestNotificationPermission } from '../lib/notifications';
 
 export function PermissionsScreen({
   state,
@@ -90,6 +91,13 @@ export function PermissionsScreen({
    */
   const requestPermission = async (key: keyof AppPermissions) => {
     try {
+      // Notifications are a browser-level permission, not a system settings screen.
+      if (key === 'notifications') {
+        const granted = await requestNotificationPermission();
+        togglePermission(key, granted);
+        return;
+      }
+
       let result = { opened: false };
       if (key === 'usageAccess') result = await ScrollShieldBridge.requestUsageStatsPermission();
       else if (key === 'overlay') result = await ScrollShieldBridge.requestOverlayPermission();

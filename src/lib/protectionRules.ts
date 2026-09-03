@@ -1,5 +1,6 @@
 import { AppConfig, AppState, HistoryEvent } from '../types';
 import { getLocalDateKey } from './appUtils';
+import { getActiveTimeWindowRule, getTimeWindowLabel } from './timeWindows';
 
 export type ProtectionFlowStep =
   | 'init'
@@ -98,7 +99,23 @@ export const evaluateProtectionAttempt = ({
     }
   }
 
-  if ((isFocusModeActive && config.focusModeBehavior === 'block') || config.mode === 'strict') {
+  // Time windows tighten the configured mode but never loosen it: an app set to
+  // 'strict' stays strict during a 'normal' window.
+  const { window, rule: timeWindowRule } = getActiveTimeWindowRule(config.timeWindows, new Date(now));
+
+  if (timeWindowRule === 'block') {
+    return {
+      step: 'anti_binge_block',
+      event: {
+        type: 'block',
+        desc: `Gesperrt im Zeitfenster ${getTimeWindowLabel(window)}`,
+      },
+    };
+  }
+
+  const effectiveMode = timeWindowRule === 'strict' && config.mode !== 'strict' ? 'strict' : config.mode;
+
+  if ((isFocusModeActive && config.focusModeBehavior === 'block') || effectiveMode === 'strict') {
     const maxEmergencyUnlocks = config.emergencyUnlock?.maxPerDay ?? 0;
     const emergencyCountToday = countEmergencyUnlocksToday(history, now);
 
@@ -116,19 +133,22 @@ export const evaluateProtectionAttempt = ({
       step: 'strict_blocked',
       event: {
         type: 'block',
-        desc: 'Durch strikten Modus / Fokus blockiert',
+        desc:
+          effectiveMode === 'strict' && config.mode !== 'strict'
+            ? `Streng im Zeitfenster ${getTimeWindowLabel(window)}`
+            : 'Durch strikten Modus / Fokus blockiert',
       },
     };
   }
 
-  if (config.mode === 'standard') {
+  if (effectiveMode === 'standard') {
     return {
       step: 'standard_delay',
       delaySeconds: config.openDelay,
     };
   }
 
-  if (config.mode === 'soft') {
+  if (effectiveMode === 'soft') {
     return { step: 'soft_intent' };
   }
 

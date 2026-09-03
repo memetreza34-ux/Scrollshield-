@@ -2,11 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { AppConfig, DEFAULT_APP_CONFIG, HistoryEvent } from '../types';
 import { countEmergencyUnlocksToday, evaluateProtectionAttempt, getAppUsageMinutesToday } from './protectionRules';
 
-type ConfigOverrides = Partial<
-  Omit<AppConfig, 'reelsProtection' | 'singleContent' | 'emergencyUnlock' | 'timeWindows' | 'antiBinge'>
-> & {
+type ConfigOverrides = Partial<Omit<AppConfig, 'reelsProtection' | 'emergencyUnlock' | 'timeWindows' | 'antiBinge'>> & {
   reelsProtection?: Partial<AppConfig['reelsProtection']>;
-  singleContent?: Partial<AppConfig['singleContent']>;
   emergencyUnlock?: Partial<AppConfig['emergencyUnlock']>;
   timeWindows?: Partial<AppConfig['timeWindows']>;
   antiBinge?: Partial<AppConfig['antiBinge']>;
@@ -20,10 +17,6 @@ const makeConfig = (overrides: ConfigOverrides = {}): AppConfig => ({
   reelsProtection: {
     ...DEFAULT_APP_CONFIG.reelsProtection,
     ...overrides.reelsProtection,
-  },
-  singleContent: {
-    ...DEFAULT_APP_CONFIG.singleContent,
-    ...overrides.singleContent,
   },
   emergencyUnlock: {
     ...DEFAULT_APP_CONFIG.emergencyUnlock,

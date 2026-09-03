@@ -497,28 +497,61 @@ export function AppDetail({
                 </div>
               </section>
 
-              <section aria-labelledby="single-content">
-                <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[2rem] overflow-hidden">
-                  <div className="p-6 flex justify-between items-center">
+              <section aria-labelledby="time-windows-title">
+                <h2
+                  id="time-windows-title"
+                  className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2"
+                >
+                  Zeitfenster
+                </h2>
+                <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[2rem] overflow-hidden mb-6">
+                  <div className="p-6 border-b border-zinc-800/50 flex justify-between items-center">
                     <div className="pr-4">
-                      <h3 className="font-semibold mb-1">Einzelinhalt-Erlaubnis</h3>
+                      <h3 className="font-semibold mb-1">Nach Tageszeit</h3>
                       <p className="text-zinc-400 text-xs leading-relaxed">
-                        Erlaube geteilte Links, schließe danach direkt wieder (nur 1 Video).
+                        Verschaerft die Regel zu bestimmten Zeiten. Lockern ist nicht moeglich.
                       </p>
                     </div>
                     <Switch
-                      checked={config.singleContent?.allowOnlyOne ?? false}
-                      onChange={(c) =>
-                        updateConfig({
-                          singleContent: {
-                            ...(config.singleContent || { returnToPrevious: true, allowSharedLinks: true }),
-                            allowOnlyOne: c,
-                          },
-                        })
-                      }
-                      ariaLabel="Einzelinhalt-Erlaubnis"
+                      checked={config.timeWindows?.enabled ?? false}
+                      onChange={(c) => updateConfig({ timeWindows: { ...config.timeWindows, enabled: c } })}
+                      ariaLabel="Zeitfenster-Regeln aktivieren"
                     />
                   </div>
+
+                  {config.timeWindows?.enabled &&
+                    (
+                      [
+                        ['morningRules', 'Morgen (6-9 Uhr)'],
+                        ['workRules', 'Arbeitszeit (9-18 Uhr)'],
+                        ['eveningRules', 'Abend (18-22 Uhr)'],
+                        ['nightRules', 'Nacht (22-6 Uhr)'],
+                        ['weekendRules', 'Wochenende'],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <div key={key} className="p-6 border-b border-zinc-800/50 flex justify-between items-center">
+                        <label htmlFor={`time-window-${key}`} className="font-semibold pr-4">
+                          {label}
+                        </label>
+                        <select
+                          id={`time-window-${key}`}
+                          value={config.timeWindows?.[key] ?? 'normal'}
+                          onChange={(e) =>
+                            updateConfig({
+                              timeWindows: {
+                                ...config.timeWindows,
+                                [key]: e.target.value as 'normal' | 'strict' | 'block',
+                              },
+                            })
+                          }
+                          className="bg-zinc-800 text-zinc-200 p-2 rounded-xl text-sm border border-zinc-700 outline-none"
+                        >
+                          <option value="normal">Normal</option>
+                          <option value="strict">Streng</option>
+                          <option value="block">Gesperrt</option>
+                        </select>
+                      </div>
+                    ))}
                 </div>
               </section>
 
@@ -1068,6 +1101,10 @@ export function Settings({
         {/* 3. Benachrichtigungen */}
         <section aria-labelledby="settings-notifications">
           <SectionHeader id="settings-notifications" title="Benachrichtigungen" />
+          <p className="mb-3 px-2 text-xs leading-relaxed text-zinc-500">
+            Erinnerungen erreichen dich nur, solange ScrollShield geoeffnet ist – auch im Hintergrund. Eine geschlossene
+            Web-App kann sich nicht selbst aufwecken.
+          </p>
           <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[2rem] overflow-hidden shadow-lg">
             <SettingRow
               id="notif-focus"

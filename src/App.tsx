@@ -5,6 +5,16 @@ import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
 import { reconcileFocusRuntime } from './lib/focus';
 import { syncNativeBlockList } from './lib/nativeBridge';
+import { getLocalDateKey } from './lib/appUtils';
+import {
+  RELAPSE_WINDOW_MINUTES,
+  buildEveningSummary,
+  buildFocusFinished,
+  buildRelapseWarning,
+  sendNotification,
+  shouldSendEveningSummary,
+  shouldSendRelapseWarning,
+} from './lib/notifications';
 import { BottomNav } from './components/ui';
 import { Welcome, Onboarding } from './screens/OnboardingScreens';
 import { Dashboard, History } from './screens/MainScreens';
@@ -25,6 +35,12 @@ export default function App() {
   const [isLoaded, setIsLoaded] = useState(false);
   const skipNextSaveRef = useRef(false);
   const screenScrollRef = useRef<HTMLDivElement>(null);
+  // Notifications are deliberately not persisted: a reminder missed because the
+  // app was closed should not fire on next launch.
+  const notificationStateRef = useRef<{ eveningSentOn: string | null; relapseSentAt: number | null }>({
+    eveningSentOn: null,
+    relapseSentAt: null,
+  });
 
   useEffect(() => {
     const init = async () => {
@@ -55,7 +71,15 @@ export default function App() {
     const syncFocusRuntime = () => {
       setAppState((previousState) => {
         const update = reconcileFocusRuntime(previousState);
-        return update ? { ...previousState, ...update } : previousState;
+        if (!update) return previousState;
+
+        // The session just ran out – tell the user, they are elsewhere by now.
+        if (previousState.isFocusModeActive && update.isFocusModeActive === false) {
+          const finished = previousState.focusSessions.find((session) => session.endTime === null);
+          if (finished) sendNotification(buildFocusFinished(finished.duration));
+        }
+
+        return { ...previousState, ...update };
       });
     };
 
@@ -63,6 +87,33 @@ export default function App() {
     const interval = window.setInterval(syncFocusRuntime, 15_000);
     return () => window.clearInterval(interval);
   }, [isLoaded, appState.isFocusModeActive]);
+
+  // Evening summary and relapse warning. Both are best-effort: without a push
+  // server the app can only notify while it is running.
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const check = () => {
+      if (shouldSendEveningSummary(appState, notificationStateRef.current.eveningSentOn)) {
+        if (sendNotification(buildEveningSummary(appState))) {
+          notificationStateRef.current.eveningSentOn = getLocalDateKey(new Date());
+        }
+      }
+
+      if (shouldSendRelapseWarning(appState, appState.history, notificationStateRef.current.relapseSentAt)) {
+        const recentBlocks = appState.history.filter(
+          (event) => event.type === 'block' && Date.now() - event.timestamp < RELAPSE_WINDOW_MINUTES * 60_000,
+        ).length;
+        if (sendNotification(buildRelapseWarning(recentBlocks))) {
+          notificationStateRef.current.relapseSentAt = Date.now();
+        }
+      }
+    };
+
+    check();
+    const interval = window.setInterval(check, 60_000);
+    return () => window.clearInterval(interval);
+  }, [isLoaded, appState]);
 
   useEffect(() => {
     if (screenScrollRef.current) {
