@@ -19,6 +19,7 @@
 
 import { registerPlugin } from '@capacitor/core';
 import { getShortVideoSignature } from './shortVideoSignatures';
+import { isShortVideoFeedBlockedByConfig } from './stats';
 
 // ── Type definitions ──────────────────────────────────────────────────────────
 
@@ -50,9 +51,12 @@ export interface NativeShortVideoRule {
   /** Surface id from the platform definition, e.g. "reels" */
   surfaceId: string;
   mode: ShortVideoMode;
-  /** Minutes of short-video time allowed per day (0 = no limit) */
+  /**
+   * Minutes of short-video time allowed per day (0 = no limit). A web-side
+   * limit of 0 means "blocked" and arrives here as mode `block` instead.
+   */
   dailyLimitMinutes: number;
-  /** Minutes allowed in one uninterrupted feed session (0 = no limit) */
+  /** Minutes allowed in one uninterrupted feed session (0 = no limit, see above) */
   sessionLimitMinutes: number;
   /** Interrupt after this many swipes (0 = never) */
   stopAfterSwipes: number;
@@ -245,8 +249,12 @@ function buildShortVideoRule(
   // whole app already is one.
   if (!signature) return undefined;
 
-  // A focus session that blocks the app blocks its feed too.
-  const mode: ShortVideoMode = options.isFocusModeActive && config.focusModeBehavior === 'block' ? 'block' : feed.mode;
+  // A focus session that blocks the app blocks its feed too, and so does a
+  // limit set to 0 ("Blockiert").
+  const mode: ShortVideoMode =
+    (options.isFocusModeActive && config.focusModeBehavior === 'block') || isShortVideoFeedBlockedByConfig(feed)
+      ? 'block'
+      : feed.mode;
 
   if (mode === 'allow') return undefined;
 

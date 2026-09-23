@@ -120,6 +120,7 @@ export interface HistoryEvent {
   timestamp: number;
   type:
     | 'open'
+    | 'session_end'
     | 'block'
     | 'focus'
     | 'focus_start'

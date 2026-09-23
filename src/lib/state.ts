@@ -95,12 +95,28 @@ export const normalizePrivacySettings = (
   return privacy;
 };
 
+/**
+ * Session ends used to be stored as a second 'open' event, which made
+ * anti-binge count every session twice. They are recognisable by their text.
+ */
+const LEGACY_SESSION_END_PREFIX = 'Sitzung beendet';
+
+export const normalizeHistory = (history: AppState['history'] | undefined): AppState['history'] => {
+  if (!Array.isArray(history)) return DEFAULT_STATE.history;
+  return history.map((event) =>
+    event.type === 'open' && event.desc?.startsWith(LEGACY_SESSION_END_PREFIX)
+      ? { ...event, type: 'session_end' }
+      : event,
+  );
+};
+
 export const normalizeAppState = (saved: Partial<AppState> | null | undefined): AppState => {
   if (!saved) return DEFAULT_STATE;
 
   return {
     ...DEFAULT_STATE,
     ...saved,
+    history: normalizeHistory(saved.history),
     appsConfig: normalizeAppsConfig(saved.appsConfig),
     profiles: normalizeProfiles(saved.profiles),
     activeProfileId: saved.activeProfileId || DEFAULT_STATE.activeProfileId,

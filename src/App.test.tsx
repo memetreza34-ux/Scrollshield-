@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { expectNoA11yViolations } from './test/a11y';
@@ -99,6 +100,67 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: 'Fokusmodus Aktiv' })).toBeInTheDocument();
     expect(screen.getByLabelText('Noch 15 Minuten')).toBeInTheDocument();
+  });
+
+  it('notifies exactly once when a focus session runs out while the app is open', async () => {
+    let now = new Date(2030, 0, 1, 12).getTime();
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const shown: string[] = [];
+    vi.stubGlobal(
+      'Notification',
+      class {
+        static permission = 'granted';
+        constructor(title: string) {
+          shown.push(title);
+        }
+      },
+    );
+    await StorageService.saveState({
+      ...DEFAULT_STATE,
+      hasCompletedOnboarding: true,
+      isFocusModeActive: true,
+      focusTimeRemaining: 1,
+      focusSessions: [
+        {
+          id: 'focus-ending',
+          startTime: now - 24 * 60_000,
+          endTime: null,
+          duration: 25,
+          successful: false,
+          protectedApps: ['instagram'],
+          blocksTriggered: 0,
+        },
+      ],
+    });
+    // Only the focus tick is captured; animation timers keep running for real.
+    const focusTicks: Array<() => void> = [];
+    const realSetInterval = window.setInterval.bind(window);
+    vi.spyOn(window, 'setInterval').mockImplementation(((handler: TimerHandler, timeout?: number) => {
+      if (timeout === 15_000) {
+        focusTicks.push(handler as () => void);
+        return 0;
+      }
+      return realSetInterval(handler, timeout);
+    }) as typeof window.setInterval);
+
+    try {
+      // StrictMode runs state updaters twice, as in development.
+      render(
+        <StrictMode>
+          <App />
+        </StrictMode>,
+      );
+      expect(await screen.findByRole('heading', { name: 'Fokusmodus Aktiv' })).toBeInTheDocument();
+      expect(shown).toHaveLength(0);
+
+      now += 2 * 60_000;
+      act(() => focusTicks.at(-1)?.());
+      act(() => focusTicks.at(-1)?.());
+
+      await waitFor(() => expect(shown).toEqual(['Fokuszeit beendet']));
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('clears persisted data and returns to onboarding after a confirmed reset', async () => {

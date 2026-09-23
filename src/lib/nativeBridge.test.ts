@@ -173,4 +173,26 @@ describe('short-video rules', () => {
     expect(requiresAccessibilityService(withFeed)).toBe(true);
     expect(requiresAccessibilityService(withoutFeed)).toBe(false);
   });
+
+  it('hands a feed limit of 0 ("Blockiert") down as a blocked feed', () => {
+    const daily = buildNativeProtectionRules(
+      {
+        instagram: activeApp({
+          reelsProtection: { enabled: true, mode: 'limit', dailyLimitMinutes: 0, sessionLimitMinutes: 5 },
+        }),
+      },
+      feedPlatforms,
+    );
+    const session = buildNativeProtectionRules(
+      {
+        instagram: activeApp({
+          reelsProtection: { enabled: true, mode: 'warn', dailyLimitMinutes: 15, sessionLimitMinutes: 0 },
+        }),
+      },
+      feedPlatforms,
+    );
+
+    expect(daily[0].shortVideo?.mode).toBe('block');
+    expect(session[0].shortVideo?.mode).toBe('block');
+  });
 });

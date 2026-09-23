@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -61,6 +62,15 @@ class ShortVideoWatchService : AccessibilityService() {
         /** Number of calibration samples kept for the diagnostics screen. */
         const val MAX_CALIBRATION_SAMPLES = 20
 
+        /**
+         * Minimum gap between two stored calibration samples. Every sample is an
+         * encrypted preferences write; scanning a normal feed every 700 ms must
+         * not turn into a write every 700 ms.
+         */
+        const val CALIBRATION_SAMPLE_INTERVAL_MS = 10_000L
+
+        const val SYSTEM_UI_PACKAGE = "com.android.systemui"
+
         const val KEY_SHORT_VIDEO_USAGE = "short_video_usage"
         const val KEY_CALIBRATION_SAMPLES = "calibration_samples"
     }
@@ -88,6 +98,9 @@ class ShortVideoWatchService : AccessibilityService() {
     private var lastSwipeAt = 0L
     private var lastTreeScanAt = 0L
     private var lastInterventionAt = 0L
+    private var ignoredPackages: Set<String> = emptySet()
+    private var lastCalibrationAt = 0L
+    private var lastCalibrationSignature: String? = null
 
     private val prefs: SharedPreferences by lazy {
         try {
@@ -117,6 +130,7 @@ class ShortVideoWatchService : AccessibilityService() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == AppMonitorService.ACTION_CONFIG_UPDATE) {
                 loadRules()
+                refreshIgnoredPackages()
             }
         }
     }
@@ -127,6 +141,7 @@ class ShortVideoWatchService : AccessibilityService() {
         super.onServiceConnected()
         isRunning = true
         loadRules()
+        refreshIgnoredPackages()
 
         if (!receiverRegistered) {
             val filter = android.content.IntentFilter(AppMonitorService.ACTION_CONFIG_UPDATE)
@@ -163,41 +178,67 @@ class ShortVideoWatchService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
-        val packageName = event.packageName?.toString() ?: return
+        val eventPackage = event.packageName?.toString() ?: return
+
+        // The status bar, the keyboard and ScrollShield's own overlay emit
+        // events constantly while the user is in a feed. None of them means the
+        // user left it.
+        if (eventPackage in ignoredPackages) return
 
         // Cheapest possible rejection path: this fires for every app on the device.
-        val rule = rules[packageName]
+        val rule = rules[eventPackage]
         if (rule == null) {
-            if (activePackage != null) leaveShortVideoSurface()
-            activePackage = null
+            // Only a real window change to another app ends the feed session.
+            // Content and scroll events from other packages (floating bubbles,
+            // picture-in-picture, widgets) would otherwise reset the swipe
+            // counter and the session timer every few seconds.
+            if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+                if (activePackage != null) leaveShortVideoSurface()
+                activePackage = null
+            }
             return
         }
 
-        if (packageName != activePackage) {
+        if (eventPackage != activePackage) {
             leaveShortVideoSurface()
-            activePackage = packageName
+            activePackage = eventPackage
         }
 
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 val className = event.className?.toString().orEmpty()
-                evaluateSurface(packageName, rule, className)
+                evaluateSurface(eventPackage, rule, className)
             }
 
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
                 val now = System.currentTimeMillis()
                 if (now - lastTreeScanAt >= TREE_SCAN_INTERVAL_MS) {
                     lastTreeScanAt = now
-                    evaluateSurface(packageName, rule, null)
+                    evaluateSurface(eventPackage, rule, null)
                 }
             }
 
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
-                if (inShortVideo) countSwipe(packageName, rule)
+                if (inShortVideo) countSwipe(eventPackage, rule)
             }
         }
 
-        if (inShortVideo) enforceTimeLimits(packageName, rule)
+        if (inShortVideo) enforceTimeLimits(eventPackage, rule)
+    }
+
+    /**
+     * Packages whose events never say anything about the feed: ScrollShield
+     * itself (its overlay), the system UI, and the current keyboard. The
+     * keyboard can change, so this is refreshed together with the rules.
+     */
+    private fun refreshIgnoredPackages() {
+        val keyboardPackage = try {
+            Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+                ?.substringBefore('/')
+        } catch (_: Exception) {
+            null
+        }
+        ignoredPackages = setOfNotNull(packageName, SYSTEM_UI_PACKAGE, keyboardPackage)
     }
 
     // ── Surface detection ─────────────────────────────────────────────────────
@@ -207,9 +248,13 @@ class ShortVideoWatchService : AccessibilityService() {
             rule.alwaysShortVideo -> true
             className != null && matchesHints(className, rule.classNameHints) -> true
             else -> {
-                val viewIds = collectViewIds()
-                recordCalibrationSample(packageName, viewIds, className)
-                viewIds.any { viewId -> matchesHints(viewId, rule.viewIdHints) }
+                // No readable tree, or the active window belongs to someone else
+                // (notification shade, a dialog mid-transition): that says
+                // nothing about the feed, so the session stays as it is.
+                val viewIds = collectViewIds(packageName) ?: return
+                val found = viewIds.any { viewId -> matchesHints(viewId, rule.viewIdHints) }
+                recordCalibrationSample(packageName, viewIds, className, found)
+                found
             }
         }
 
@@ -231,13 +276,18 @@ class ShortVideoWatchService : AccessibilityService() {
      * `viewIdResourceName`, which requires `flagReportViewIds` in the service
      * config. Bounded in depth and node count so a deep feed cannot stall the
      * accessibility thread.
+     *
+     * Returns null when the active window cannot be read or does not belong to
+     * [expectedPackage].
      */
-    private fun collectViewIds(): List<String> {
+    private fun collectViewIds(expectedPackage: String): List<String>? {
         val root = try {
             rootInActiveWindow
         } catch (_: Exception) {
             null
-        } ?: return emptyList()
+        } ?: return null
+
+        if (root.packageName?.toString() != expectedPackage) return null
 
         val collected = mutableListOf<String>()
         val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
@@ -435,18 +485,34 @@ class ShortVideoWatchService : AccessibilityService() {
      * signature still matches this build of the host app. View ids and class
      * names only – never text.
      */
-    private fun recordCalibrationSample(packageName: String, viewIds: List<String>, className: String?) {
+    private fun recordCalibrationSample(
+        packageName: String,
+        viewIds: List<String>,
+        className: String?,
+        matched: Boolean,
+    ) {
         if (viewIds.isEmpty() && className.isNullOrEmpty()) return
+
+        // Only a changed picture is worth an encrypted write, and even then at
+        // most one per interval.
+        val now = System.currentTimeMillis()
+        if (now - lastCalibrationAt < CALIBRATION_SAMPLE_INTERVAL_MS) return
+        val storedIds = viewIds.distinct().take(40)
+        val signature = "$packageName|${className.orEmpty()}|$matched|${storedIds.sorted().joinToString(",")}"
+        if (signature == lastCalibrationSignature) return
+        lastCalibrationAt = now
+        lastCalibrationSignature = signature
+
         try {
             val raw = prefs.getString(KEY_CALIBRATION_SAMPLES, "[]") ?: "[]"
             val samples = JSONArray(raw)
 
             val sample = JSONObject()
                 .put("packageName", packageName)
-                .put("viewIds", JSONArray(viewIds.distinct().take(40)))
+                .put("viewIds", JSONArray(storedIds))
                 .put("classNames", JSONArray(listOfNotNull(className)))
-                .put("matchedPlatformId", if (inShortVideo) activePackage else null)
-                .put("observedAt", System.currentTimeMillis())
+                .put("matchedPlatformId", if (matched) packageName else null)
+                .put("observedAt", now)
 
             samples.put(sample)
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { AppState, Screen, DEFAULT_STATE, SUPPORTED_APPS } from './types';
 import { StorageService } from './lib/storage';
@@ -78,15 +78,7 @@ export default function App() {
     const syncFocusRuntime = () => {
       setAppState((previousState) => {
         const update = reconcileFocusRuntime(previousState);
-        if (!update) return previousState;
-
-        // The session just ran out – tell the user, they are elsewhere by now.
-        if (previousState.isFocusModeActive && update.isFocusModeActive === false) {
-          const finished = previousState.focusSessions.find((session) => session.endTime === null);
-          if (finished) sendNotification(buildFocusFinished(finished.duration));
-        }
-
-        return { ...previousState, ...update };
+        return update ? { ...previousState, ...update } : previousState;
       });
     };
 
@@ -94,6 +86,31 @@ export default function App() {
     const interval = window.setInterval(syncFocusRuntime, 15_000);
     return () => window.clearInterval(interval);
   }, [isLoaded, appState.isFocusModeActive]);
+
+  // A focus session that ran out while the app was open – tell the user, they
+  // are elsewhere by now. Sent from committed state, not from inside the state
+  // updater: React may run an updater twice (StrictMode does), and an updater
+  // must not have side effects.
+  const runningFocusSessionIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const running = appState.focusSessions.find((session) => session.endTime === null);
+    const previousId = runningFocusSessionIdRef.current;
+    runningFocusSessionIdRef.current = running?.id ?? null;
+    if (!previousId || previousId === running?.id) return;
+
+    // Only the timer ends a session exactly at its scheduled end; a session the
+    // user stopped themselves needs no notification.
+    const finished = appState.focusSessions.find((session) => session.id === previousId);
+    if (
+      finished?.successful &&
+      finished.endTime !== null &&
+      finished.endTime === finished.startTime + finished.duration * 60_000
+    ) {
+      sendNotification(buildFocusFinished(finished.duration));
+    }
+  }, [isLoaded, appState.focusSessions]);
 
   // Evening summary and relapse warning. Both are best-effort: without a push
   // server the app can only notify while it is running.
@@ -162,12 +179,14 @@ export default function App() {
     });
   }, [appState.appsConfig, appState.isFocusModeActive, isLoaded]);
 
+  // Stable, and accepts an updater for callers that must merge into the latest
+  // state rather than the one they rendered with.
+  const updateState = useCallback((updates: Partial<AppState> | ((previous: AppState) => Partial<AppState>)) => {
+    setAppState((prev) => ({ ...prev, ...(typeof updates === 'function' ? updates(prev) : updates) }));
+  }, []);
+
   if (!isLoaded)
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">Laden...</div>;
-
-  const updateState = (updates: Partial<AppState>) => {
-    setAppState((prev) => ({ ...prev, ...updates }));
-  };
 
   const resetApp = () => {
     skipNextSaveRef.current = true;

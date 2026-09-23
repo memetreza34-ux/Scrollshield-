@@ -1,8 +1,17 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Capacitor } from '@capacitor/core';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { expectNoA11yViolations } from '../test/a11y';
-import { DEFAULT_STATE } from '../types';
+import { AppState, DEFAULT_STATE } from '../types';
 import { PermissionsScreen } from './PermissionsScreen';
+
+const getPermissionStatus = vi.hoisted(() => vi.fn());
+vi.mock('../lib/nativeBridge', () => ({ ScrollShieldBridge: { getPermissionStatus } }));
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  getPermissionStatus.mockReset();
+});
 
 // Platform-specific cards only render for their platform, so the state has to
 // name one explicitly. DEFAULT_STATE is 'web', where neither Screen Time nor
@@ -65,5 +74,44 @@ describe('PermissionsScreen', () => {
     expect(screen.getByText('App-Nutzungszugriff')).toBeInTheDocument();
     expect(screen.getByText('Kurzvideo-Erkennung (Bedienungshilfe)')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Du nutzt die Webversion' })).not.toBeInTheDocument();
+  });
+
+  it('merges the system status into the latest state instead of the first render', async () => {
+    vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
+    getPermissionStatus.mockResolvedValue({
+      usageStats: true,
+      overlay: false,
+      notifications: true,
+      monitoringActive: false,
+      accessibility: true,
+    });
+    const updateState = vi.fn();
+
+    render(<PermissionsScreen state={androidState} updateState={updateState} navigate={vi.fn()} />);
+    await waitFor(() => expect(updateState).toHaveBeenCalled());
+
+    // A switch the user set after this screen rendered must survive.
+    const latest: AppState = {
+      ...androidState,
+      permissions: { ...androidState.permissions, backgroundActivity: true },
+    };
+    const updater = updateState.mock.calls[0][0] as (previous: AppState) => Partial<AppState>;
+    expect(updater(latest).permissions).toEqual({
+      ...latest.permissions,
+      usageAccess: true,
+      overlay: false,
+      notifications: true,
+      accessibility: true,
+    });
+  });
+
+  it('keeps the browser demo switches instead of applying the web fallback', async () => {
+    const updateState = vi.fn();
+
+    render(<PermissionsScreen state={DEFAULT_STATE} updateState={updateState} navigate={vi.fn()} />);
+    await Promise.resolve();
+
+    expect(getPermissionStatus).not.toHaveBeenCalled();
+    expect(updateState).not.toHaveBeenCalled();
   });
 });

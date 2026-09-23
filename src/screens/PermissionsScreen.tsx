@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ShieldCheck,
@@ -24,7 +25,7 @@ export function PermissionsScreen({
   isOnboarding = false,
 }: {
   state: AppState;
-  updateState: (u: Partial<AppState>) => void;
+  updateState: (u: Partial<AppState> | ((previous: AppState) => Partial<AppState>)) => void;
   navigate: (s: Screen) => void;
   isOnboarding?: boolean;
 }) {
@@ -47,28 +48,30 @@ export function PermissionsScreen({
    * could claim "AKTIV" while Android had granted nothing.
    */
   const refreshNativeStatus = useCallback(async () => {
+    // The web fallback reports everything as false; applying it would wipe the
+    // switches of the browser demo on every tab change.
+    if (!Capacitor.isNativePlatform()) return;
+
     try {
       const status = await ScrollShieldBridge.getPermissionStatus();
-      // The web fallback reports everything as false; only trust a real device.
-      const nativeAvailable = status.usageStats || status.overlay || status.accessibility;
-      setIsNative((previous) => previous || nativeAvailable);
+      setIsNative(true);
 
-      updateState({
+      // Merged into the latest state, not the one this callback was created
+      // with: otherwise every return from a settings screen would reset the
+      // switches that only exist in ScrollShield (e.g. background activity).
+      updateState((previous) => ({
         permissions: {
-          ...permissions,
+          ...previous.permissions,
           usageAccess: status.usageStats,
           overlay: status.overlay,
           notifications: status.notifications,
           accessibility: status.accessibility,
         },
-      });
+      }));
     } catch {
-      // Running on web – keep the locally stored switches.
+      // Plugin not available on this platform – keep the locally stored switches.
     }
-    // updateState/permissions change on every render; re-creating the callback
-    // for them would restart the visibility listener in a loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [updateState]);
 
   useEffect(() => {
     void refreshNativeStatus();

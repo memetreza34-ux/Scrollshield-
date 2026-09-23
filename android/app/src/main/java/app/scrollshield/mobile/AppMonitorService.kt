@@ -91,19 +91,25 @@ class AppMonitorService : Service() {
         /**
          * Asks the running services to reload their rules: the monitor through a
          * start intent, the accessibility service through a broadcast it
-         * registered for at runtime.
+         * registered for at runtime. The two run independently – the
+         * accessibility service may be enabled while the monitor is off – so
+         * the broadcast goes out either way.
          */
         fun notifyConfigUpdate(context: Context) {
-            val intent = Intent(context, AppMonitorService::class.java).setAction(ACTION_CONFIG_UPDATE)
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
+            // A start intent would launch a stopped monitor; it loads its rules
+            // on start anyway.
+            if (isRunning) {
+                val intent = Intent(context, AppMonitorService::class.java).setAction(ACTION_CONFIG_UPDATE)
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.startForegroundService(intent)
+                    } else {
+                        context.startService(intent)
+                    }
+                } catch (_: Exception) {
+                    // Start not allowed from background – rules are loaded again
+                    // the next time monitoring starts.
                 }
-            } catch (_: Exception) {
-                // Service not running or start not allowed from background – rules
-                // are loaded again the next time monitoring starts.
             }
 
             try {

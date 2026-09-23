@@ -243,7 +243,7 @@ export function ReelsProtectionScreen({
                             <div className="flex justify-between items-center">
                               <label className="text-xs font-semibold text-zinc-300">Tageslimit (Feed)</label>
                               <TimeSelector
-                                value={config?.dailyLimitMinutes || 15}
+                                value={config?.dailyLimitMinutes ?? 15}
                                 onChange={(v) => updateAppReelsConfig(app.id, { dailyLimitMinutes: v })}
                                 ariaLabel={`${app.name} Tageslimit für Kurzvideos`}
                                 options={[1, 3, 5, 10, 15, 30]}
@@ -254,7 +254,7 @@ export function ReelsProtectionScreen({
                             <div className="flex justify-between items-center mt-2">
                               <label className="text-xs font-semibold text-zinc-300">Session-Limit (Am Stück)</label>
                               <TimeSelector
-                                value={config?.sessionLimitMinutes || 5}
+                                value={config?.sessionLimitMinutes ?? 5}
                                 onChange={(v) => updateAppReelsConfig(app.id, { sessionLimitMinutes: v })}
                                 ariaLabel={`${app.name} Sitzungslimit für Kurzvideos`}
                                 options={[1, 3, 5, 10]}

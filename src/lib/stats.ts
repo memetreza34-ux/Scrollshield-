@@ -8,6 +8,21 @@ const isShortVideoUsageKey = (key: string) => {
 
 export const getShortVideoUsageKey = (appId: string) => `${appId}_reels`;
 
+/**
+ * Whether the feed settings alone block the feed. A limit of 0 minutes means
+ * "blocked" – the settings label it "Blockiert" – not "no limit". The native
+ * service reads 0 as "no limit", so a feed blocked this way has to reach it as
+ * mode `block`; see buildNativeProtectionRules.
+ */
+export const isShortVideoFeedBlockedByConfig = (feed: {
+  mode: 'allow' | 'warn' | 'limit' | 'block';
+  dailyLimitMinutes?: number;
+  sessionLimitMinutes?: number;
+}) => {
+  if (feed.mode === 'allow') return false;
+  return feed.mode === 'block' || feed.dailyLimitMinutes === 0 || feed.sessionLimitMinutes === 0;
+};
+
 const isReelsEvent = (event: AppState['history'][number]) => {
   return (
     event.metadata?.surface === 'reels' ||

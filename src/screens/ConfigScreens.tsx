@@ -324,7 +324,7 @@ export function AppDetail({
                       Tägliches Kurzvideo-Limit
                     </label>
                     <TimeSelector
-                      value={config.reelsProtection?.dailyLimitMinutes || 15}
+                      value={config.reelsProtection?.dailyLimitMinutes ?? 15}
                       onChange={(v) =>
                         updateConfig({ reelsProtection: { ...config.reelsProtection, dailyLimitMinutes: v } })
                       }

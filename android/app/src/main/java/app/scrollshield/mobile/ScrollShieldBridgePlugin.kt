@@ -220,15 +220,15 @@ class ScrollShieldBridgePlugin : Plugin() {
                 else -> "standard"
             }
 
-            normalized.put(
-                JSONObject()
-                    .put("packageName", packageName)
-                    .put("mode", mode)
-                    .put(
-                        "delaySeconds",
-                        entry.optInt("delaySeconds", AppMonitorService.DEFAULT_DELAY_SECONDS).coerceIn(0, 300)
-                    )
-            )
+            val rule = JSONObject()
+                .put("packageName", packageName)
+                .put("mode", mode)
+                .put(
+                    "delaySeconds",
+                    entry.optInt("delaySeconds", AppMonitorService.DEFAULT_DELAY_SECONDS).coerceIn(0, 300)
+                )
+            normalizeShortVideo(entry.optJSONObject("shortVideo"))?.let { rule.put("shortVideo", it) }
+            normalized.put(rule)
         }
 
         encryptedPrefs.edit()
@@ -236,10 +236,10 @@ class ScrollShieldBridgePlugin : Plugin() {
             .putBoolean(KEY_MONITORING_ENABLED, monitoringEnabled)
             .apply()
 
-        // Let a running service pick the change up without a restart.
-        if (AppMonitorService.isRunning) {
-            AppMonitorService.notifyConfigUpdate(context)
-        }
+        // Let running services pick the change up without a restart. The
+        // accessibility service runs independently of the monitor, so this is
+        // not gated on the monitor.
+        AppMonitorService.notifyConfigUpdate(context)
 
         val result = JSObject()
         result.put("synced", true)
@@ -375,6 +375,37 @@ class ScrollShieldBridgePlugin : Plugin() {
         result.put("available", true)
         result.put("samples", samples)
         call.resolve(result)
+    }
+
+    /**
+     * Validates the short-video half of a rule. It used to be dropped here
+     * entirely, so ShortVideoWatchService never received a single rule.
+     */
+    private fun normalizeShortVideo(feed: JSONObject?): JSONObject? {
+        if (feed == null) return null
+
+        val mode = feed.optString("mode")
+        if (mode !in setOf("warn", "limit", "block")) return null
+
+        fun hints(key: String): JSONArray {
+            val source = feed.optJSONArray(key) ?: return JSONArray()
+            val result = JSONArray()
+            for (index in 0 until source.length()) {
+                source.optString(index).takeIf { it.isNotEmpty() }?.let { result.put(it) }
+            }
+            return result
+        }
+
+        return JSONObject()
+            .put("surfaceId", feed.optString("surfaceId").ifEmpty { "short_video" })
+            .put("mode", mode)
+            .put("dailyLimitMinutes", feed.optInt("dailyLimitMinutes", 0).coerceIn(0, 24 * 60))
+            .put("sessionLimitMinutes", feed.optInt("sessionLimitMinutes", 0).coerceIn(0, 24 * 60))
+            .put("stopAfterSwipes", feed.optInt("stopAfterSwipes", 0).coerceIn(0, 10_000))
+            .put("hardInterrupt", feed.optBoolean("hardInterrupt", false))
+            .put("viewIdHints", hints("viewIdHints"))
+            .put("classNameHints", hints("classNameHints"))
+            .put("alwaysShortVideo", feed.optBoolean("alwaysShortVideo", false))
     }
 
     /** Looks the configured surface id for a package up in the stored rules. */

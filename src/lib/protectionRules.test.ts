@@ -195,6 +195,34 @@ describe('evaluateProtectionAttempt', () => {
     expect(decision.event?.desc).toContain('Anti-Binge Sperre');
   });
 
+  it('counts a session end as no extra opening', () => {
+    const sessionEnd = (minutesAgo: number): HistoryEvent => ({
+      ...openEvent(minutesAgo),
+      id: `end-${minutesAgo}`,
+      type: 'session_end',
+      desc: 'Sitzung beendet (1 Min)',
+    });
+    const decision = evaluateProtectionAttempt({
+      appId: 'instagram',
+      config: makeConfig({
+        mode: 'soft',
+        antiBinge: {
+          enabled: true,
+          blockThreshold: 3,
+          blockTimeframe: 20,
+          warningThreshold: 3,
+          warningTimeframe: 20,
+        },
+      }),
+      // Two real openings, each followed by its session end.
+      history: [sessionEnd(1), openEvent(2), sessionEnd(3), openEvent(4)],
+      isFocusModeActive: false,
+      now,
+    });
+
+    expect(decision.step).toBe('soft_intent');
+  });
+
   it('warns when anti-binge warning threshold is reached', () => {
     const decision = evaluateProtectionAttempt({
       appId: 'instagram',

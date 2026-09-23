@@ -9,7 +9,7 @@ import {
   isSessionLimitEnabled,
   recordSessionUsage,
 } from '../lib/session';
-import { getReelsUsageMinutesForAppDate, getShortVideoUsageKey } from '../lib/stats';
+import { getReelsUsageMinutesForAppDate, getShortVideoUsageKey, isShortVideoFeedBlockedByConfig } from '../lib/stats';
 import { applyWheel, beginGesture, createSwipeCounterState, endGesture, shouldInterrupt } from '../lib/swipeCounter';
 
 export function ActiveSessionScreen({
@@ -40,7 +40,9 @@ export function ActiveSessionScreen({
   const reelsUsageToday = appId ? getReelsUsageMinutesForAppDate(state, appId) : 0;
   const reelsDailyLimit = config?.reelsProtection?.dailyLimitMinutes ?? 0;
   const isReelsFeedBlocked =
-    config?.reelsProtection?.mode === 'block' || reelsDailyLimit <= 0 || reelsUsageToday >= reelsDailyLimit;
+    !!config?.reelsProtection &&
+    (isShortVideoFeedBlockedByConfig(config.reelsProtection) ||
+      (reelsDailyLimit > 0 && reelsUsageToday >= reelsDailyLimit));
 
   useEffect(() => {
     if (!session || !appInfo) {
@@ -122,7 +124,9 @@ export function ActiveSessionScreen({
     const newEvent: HistoryEvent = {
       id: createEventId(),
       timestamp: Date.now(),
-      type: 'open', // We use 'open' to track usage, or we could add a 'session_end' type
+      // Not 'open': the opening was already logged by the protection flow, and
+      // anti-binge counts 'open' events.
+      type: 'session_end',
       appId: appInfo.id,
       desc: `Sitzung beendet (${durationMinutes} Min)`,
       metadata: hasReelsUsage

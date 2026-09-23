@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { AppConfig, DEFAULT_APP_CONFIG, DEFAULT_STATE } from '../types';
-import { normalizeAppConfig, normalizeAppsConfig, normalizeAppState, normalizePrivacySettings } from './state';
+import {
+  normalizeAppConfig,
+  normalizeAppsConfig,
+  normalizeAppState,
+  normalizeHistory,
+  normalizePrivacySettings,
+} from './state';
 
 type LegacyConfigPatch = Parameters<typeof normalizeAppConfig>[1];
 
@@ -100,5 +106,20 @@ describe('normalizePrivacySettings', () => {
       localOnly: true,
       strictPrivacyMode: false,
     });
+  });
+});
+
+describe('normalizeHistory', () => {
+  it('turns legacy session ends stored as openings into session_end events', () => {
+    const history = normalizeHistory([
+      { id: '2', timestamp: 2, type: 'open', appId: 'instagram', desc: 'Sitzung beendet (3 Min)' },
+      { id: '1', timestamp: 1, type: 'open', appId: 'instagram', desc: 'App geöffnet' },
+    ]);
+
+    expect(history.map((event) => event.type)).toEqual(['session_end', 'open']);
+  });
+
+  it('falls back to an empty history for malformed input', () => {
+    expect(normalizeHistory(undefined)).toEqual([]);
   });
 });

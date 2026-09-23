@@ -568,6 +568,8 @@ export function Dashboard({
                   } else if (event.type === 'open') {
                     icon = <CheckCircle2 size={14} className="text-emerald-400" aria-hidden="true" />;
                     text = `${app?.name || 'App'} geöffnet`;
+                  } else if (event.type === 'session_end') {
+                    text = `${app?.name || 'App'}: ${event.desc}`;
                   }
 
                   return (

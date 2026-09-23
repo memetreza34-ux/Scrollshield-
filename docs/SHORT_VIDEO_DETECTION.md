@@ -55,7 +55,8 @@ Mitigations built in:
    the rules. Correcting a hint is a TypeScript change, not a Kotlin one.
 2. **TikTok needs no hints.** Its entire app is the feed, so `alwaysShortVideo: true` cannot break.
 3. **Calibration samples.** The service stores the last 20 observed view-id/class-name sets. `getCalibrationSamples()`
-   exposes them so you can see what the device really reports.
+   exposes them so you can see what the device really reports. A sample is only stored when it differs from the
+   previous one, and at most every 10 seconds, so a long scroll session does not turn into constant encrypted writes.
 
 ### Verifying or fixing a signature
 

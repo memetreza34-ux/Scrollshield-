@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { AppState, DEFAULT_STATE } from '../types';
-import { getReelsStatsForDate, getReelsUsageMinutesForAppDate, getShortVideoUsageKey } from './stats';
+import {
+  getReelsStatsForDate,
+  getReelsUsageMinutesForAppDate,
+  getShortVideoUsageKey,
+  isShortVideoFeedBlockedByConfig,
+} from './stats';
 
 const makeState = (overrides: Partial<AppState>): AppState => ({
   ...DEFAULT_STATE,
@@ -80,5 +85,23 @@ describe('getReelsStatsForDate', () => {
     });
 
     expect(getReelsUsageMinutesForAppDate(state, 'instagram', day)).toBe(9);
+  });
+});
+
+describe('isShortVideoFeedBlockedByConfig', () => {
+  it('reads a limit of 0 as blocked, as the settings label it', () => {
+    expect(isShortVideoFeedBlockedByConfig({ mode: 'limit', dailyLimitMinutes: 0, sessionLimitMinutes: 5 })).toBe(true);
+    expect(isShortVideoFeedBlockedByConfig({ mode: 'warn', dailyLimitMinutes: 15, sessionLimitMinutes: 0 })).toBe(true);
+    expect(isShortVideoFeedBlockedByConfig({ mode: 'block', dailyLimitMinutes: 15, sessionLimitMinutes: 5 })).toBe(
+      true,
+    );
+  });
+
+  it('does not block missing limits or an allowed feed', () => {
+    expect(isShortVideoFeedBlockedByConfig({ mode: 'limit' })).toBe(false);
+    expect(isShortVideoFeedBlockedByConfig({ mode: 'limit', dailyLimitMinutes: 15, sessionLimitMinutes: 5 })).toBe(
+      false,
+    );
+    expect(isShortVideoFeedBlockedByConfig({ mode: 'allow', dailyLimitMinutes: 0 })).toBe(false);
   });
 });
