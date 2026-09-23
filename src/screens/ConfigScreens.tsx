@@ -44,7 +44,13 @@ import {
   serializeScrollShieldExport,
 } from '../lib/dataExport';
 import { normalizeAppState } from '../lib/state';
-import { usesNativeNotifications } from '../lib/notifications';
+import {
+  EVENING_REMINDER_HOUR,
+  RELAPSE_BLOCK_THRESHOLD,
+  RELAPSE_WINDOW_MINUTES,
+  SUMMARY_HOUR,
+  usesNativeNotifications,
+} from '../lib/notifications';
 
 export function AppList({
   state,
@@ -1104,12 +1110,13 @@ export function Settings({
           <SectionHeader id="settings-notifications" title="Benachrichtigungen" />
           <p className="mb-3 px-2 text-xs leading-relaxed text-zinc-500">
             {usesNativeNotifications()
-              ? 'Die Fokus-Erinnerung meldet ScrollShield beim Start der Sitzung an dein Handy – sie kommt auch, wenn die App geschlossen ist, eventuell ein paar Minuten später. Abend-Erinnerung und Rückfall-Warnung brauchen die laufende App.'
+              ? 'Fokus- und Abend-Erinnerung meldet ScrollShield bei deinem Handy an – sie kommen auch, wenn die App geschlossen ist, eventuell ein paar Minuten später. Tageszusammenfassung, Wochenrückblick und Rückfall-Warnung hängen von deinen Tagesdaten ab und kommen nur, solange die App läuft.'
               : 'Erinnerungen erreichen dich nur, solange ScrollShield geöffnet ist – auch im Hintergrund. Eine geschlossene Web-App kann sich nicht selbst aufwecken.'}
           </p>
           <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[2rem] overflow-hidden shadow-lg">
             <SettingRow
               id="notif-focus"
+              description="Wenn eine Fokus-Sitzung zu Ende ist"
               icon={Bell}
               label="Fokus-Erinnerungen"
               rightElement={
@@ -1122,6 +1129,7 @@ export function Settings({
             />
             <SettingRow
               id="notif-evening"
+              description={`Um ${EVENING_REMINDER_HOUR} Uhr: Zeit zum Abschalten`}
               icon={Moon}
               label="Abend-Erinnerung"
               rightElement={
@@ -1134,6 +1142,7 @@ export function Settings({
             />
             <SettingRow
               id="notif-relapse"
+              description={`Bei ${RELAPSE_BLOCK_THRESHOLD} Sperren innerhalb von ${RELAPSE_WINDOW_MINUTES} Minuten`}
               icon={AlertTriangle}
               label="Rückfall-Warnung"
               rightElement={
@@ -1146,6 +1155,7 @@ export function Settings({
             />
             <SettingRow
               id="notif-daily"
+              description={`Ab ${SUMMARY_HOUR} Uhr: dein Tag in Zahlen`}
               icon={BellRing}
               label="Tageszusammenfassung"
               rightElement={
@@ -1158,6 +1168,7 @@ export function Settings({
             />
             <SettingRow
               id="notif-weekly"
+              description={`Sonntags ab ${SUMMARY_HOUR} Uhr, statt der Tageszusammenfassung`}
               icon={BellRing}
               label="Wochenrückblick"
               rightElement={

@@ -9,16 +9,24 @@ import { mergeNativeShortVideoUsage } from './lib/stats';
 import { getLocalDateKey } from './lib/appUtils';
 import { detectOperatingSystem } from './lib/platform';
 import {
+  EVENING_REMINDER_HOUR,
+  EVENING_REMINDER_TAG,
   FOCUS_FINISHED_TAG,
+  NotificationPayload,
   RELAPSE_WINDOW_MINUTES,
-  buildEveningSummary,
+  buildDailySummary,
+  buildEveningReminder,
   buildFocusFinished,
   buildRelapseWarning,
+  buildWeeklyReview,
   cancelNotification,
+  scheduleDailyNotification,
   scheduleNotification,
   sendNotification,
-  shouldSendEveningSummary,
+  shouldSendDailySummary,
+  shouldSendEveningReminder,
   shouldSendRelapseWarning,
+  shouldSendWeeklyReview,
   usesNativeNotifications,
 } from './lib/notifications';
 import { BottomNav } from './components/ui';
@@ -35,6 +43,14 @@ import { ActiveSessionScreen } from './screens/ActiveSessionScreen';
 import { SupportScreen, ImprintScreen } from './screens/SupportScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
+/** When each best-effort notification was last sent, per session of the app. */
+type SentNotifications = {
+  dailySummarySentOn: string | null;
+  weeklyReviewSentOn: string | null;
+  eveningReminderSentOn: string | null;
+  relapseSentAt: number | null;
+};
+
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
   const [appState, setAppState] = useState<AppState>(DEFAULT_STATE);
@@ -43,8 +59,10 @@ export default function App() {
   const screenScrollRef = useRef<HTMLDivElement>(null);
   // Notifications are deliberately not persisted: a reminder missed because the
   // app was closed should not fire on next launch.
-  const notificationStateRef = useRef<{ eveningSentOn: string | null; relapseSentAt: number | null }>({
-    eveningSentOn: null,
+  const notificationStateRef = useRef<SentNotifications>({
+    dailySummarySentOn: null,
+    weeklyReviewSentOn: null,
+    eveningReminderSentOn: null,
     relapseSentAt: null,
   });
 
@@ -176,33 +194,63 @@ export default function App() {
     };
   }, [isLoaded]);
 
-  // Evening summary and relapse warning. Both are best-effort: they depend on
-  // the day's data, so they can only be sent while the app runs. The "sent"
-  // mark is set before the asynchronous send so a state change in between
-  // cannot send twice; a failed send clears it again.
+  // The evening reminder has a fixed text, so the native app hands it to the
+  // system as a daily alarm. Re-done on every start (an alarm does not survive
+  // a reboot) and when the permission arrives later.
+  const eveningReminderEnabled = appState.settings.notifications.eveningReminder;
+  const notificationsPermitted = appState.permissions.notifications;
+  useEffect(() => {
+    if (!isLoaded || !usesNativeNotifications()) return;
+    if (eveningReminderEnabled) {
+      void scheduleDailyNotification(buildEveningReminder(), EVENING_REMINDER_HOUR);
+    } else {
+      void cancelNotification(EVENING_REMINDER_TAG);
+    }
+  }, [isLoaded, eveningReminderEnabled, notificationsPermitted]);
+
+  // Everything that depends on the day's data can only be sent while the app
+  // runs: daily summary, weekly review and relapse warning – plus the evening
+  // reminder in the browser, where nothing can be scheduled. The "sent" mark
+  // is set before the asynchronous send so a state change in between cannot
+  // send twice; a failed send clears it again.
   useEffect(() => {
     if (!isLoaded) return;
 
+    const sendMarked = <K extends keyof SentNotifications>(
+      key: K,
+      value: SentNotifications[K],
+      payload: NotificationPayload,
+    ) => {
+      const sent = notificationStateRef.current;
+      const previous = sent[key];
+      sent[key] = value;
+      void sendNotification(payload).then((ok) => {
+        if (!ok) sent[key] = previous;
+      });
+    };
+
     const check = () => {
       const sent = notificationStateRef.current;
+      const now = new Date();
+      const today = getLocalDateKey(now);
 
-      if (shouldSendEveningSummary(appState, sent.eveningSentOn)) {
-        const previous = sent.eveningSentOn;
-        sent.eveningSentOn = getLocalDateKey(new Date());
-        void sendNotification(buildEveningSummary(appState)).then((ok) => {
-          if (!ok) sent.eveningSentOn = previous;
-        });
+      if (shouldSendWeeklyReview(appState, sent.weeklyReviewSentOn, now)) {
+        sendMarked('weeklyReviewSentOn', today, buildWeeklyReview(appState, now));
+      }
+
+      if (shouldSendDailySummary(appState, sent.dailySummarySentOn, now)) {
+        sendMarked('dailySummarySentOn', today, buildDailySummary(appState, now));
+      }
+
+      if (!usesNativeNotifications() && shouldSendEveningReminder(appState, sent.eveningReminderSentOn, now)) {
+        sendMarked('eveningReminderSentOn', today, buildEveningReminder());
       }
 
       if (shouldSendRelapseWarning(appState, appState.history, sent.relapseSentAt)) {
         const recentBlocks = appState.history.filter(
           (event) => event.type === 'block' && Date.now() - event.timestamp < RELAPSE_WINDOW_MINUTES * 60_000,
         ).length;
-        const previous = sent.relapseSentAt;
-        sent.relapseSentAt = Date.now();
-        void sendNotification(buildRelapseWarning(recentBlocks)).then((ok) => {
-          if (!ok) sent.relapseSentAt = previous;
-        });
+        sendMarked('relapseSentAt', Date.now(), buildRelapseWarning(recentBlocks));
       }
     };
 

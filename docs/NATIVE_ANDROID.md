@@ -52,10 +52,12 @@ would tell the two apart.
 The short-video minutes measured by the accessibility service are read back by the web layer once a minute and on every
 return to the app, and flow into the daily stats (dashboard, insights, in-app feed limit).
 
-Reminders use `@capacitor/local-notifications`. The focus-end reminder is scheduled with the system when a session starts
-and arrives even when the app is closed; the evening summary and the relapse warning need the running app. Alarms are
-inexact: `SCHEDULE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED` and `WAKE_LOCK`, which the plugin declares, are removed from the
-merged manifest.
+Reminders use `@capacitor/local-notifications`. Two have a fixed text and are scheduled with the system, so they arrive
+even when the app is closed: the focus-end reminder (when a session starts, withdrawn if it is stopped early) and the
+evening reminder at 22:00 (a daily alarm, rescheduled on every app start). The daily summary (from 20:00), the weekly
+review (Sundays from 20:00, instead of the daily summary) and the relapse warning depend on the day's data and need the
+running app. Alarms are inexact: `SCHEDULE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED` and `WAKE_LOCK`, which the plugin
+declares, are removed from the merged manifest.
 
 ## Short-Video Detection
 
@@ -72,7 +74,8 @@ Full mechanism, privacy boundary, calibration procedure and Play Console require
   service receives mode, delay, time-window schedule and feed rule, nothing else.
 - A focus session is folded into the synced mode. If it ends while the app is not running, the native rules stay `strict`
   until ScrollShield is opened again and re-syncs.
-- A focus-end reminder may arrive a few minutes late (inexact alarm) and is dropped by a reboot.
+- Scheduled reminders may arrive a few minutes late (inexact alarms). A reboot drops them until ScrollShield is opened
+  again.
 - Feed detection is heuristic and breaks silently when a host app renames its view ids. Re-verify per platform before
   each release.
 - Detection lags an app switch by up to one poll interval (1.5 s).

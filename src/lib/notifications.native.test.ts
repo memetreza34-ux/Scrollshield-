@@ -14,10 +14,12 @@ vi.mock('@capacitor/core', async (importOriginal) => {
 vi.mock('@capacitor/local-notifications', () => ({ LocalNotifications: plugin }));
 
 import {
+  buildEveningReminder,
   buildFocusFinished,
   cancelNotification,
   notificationIdForTag,
   requestNotificationPermission,
+  scheduleDailyNotification,
   scheduleNotification,
   sendNotification,
 } from './notifications';
@@ -53,6 +55,20 @@ describe('native notifications', () => {
 
     const [{ notifications }] = plugin.schedule.mock.calls[0];
     expect(notifications[0]).toMatchObject({ isExactNotification: false, schedule: { at, allowWhileIdle: true } });
+  });
+
+  it('schedules the evening reminder as a daily alarm', async () => {
+    plugin.checkPermissions.mockResolvedValue({ display: 'granted' });
+    plugin.schedule.mockResolvedValue({ notifications: [] });
+
+    expect(await scheduleDailyNotification(buildEveningReminder(), 22)).toBe(true);
+
+    const [{ notifications }] = plugin.schedule.mock.calls[0];
+    expect(notifications[0]).toMatchObject({
+      id: notificationIdForTag('evening-reminder'),
+      isExactNotification: false,
+      schedule: { on: { hour: 22, minute: 0 }, allowWhileIdle: true },
+    });
   });
 
   it('never prompts for permission on its own', async () => {
