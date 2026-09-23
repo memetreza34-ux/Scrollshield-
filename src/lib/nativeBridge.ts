@@ -4,9 +4,9 @@
  * Wraps the Capacitor ScrollShieldBridgePlugin for use in React components.
  * On web/non-Android platforms all calls return graceful fallbacks.
  *
- * The native layer only ever sees the resulting per-app rule (mode + delay).
- * Daily limits, anti-binge windows and emergency unlocks stay in the web
- * layer; see src/lib/protectionRules.ts.
+ * The native layer sees the per-app rule (mode + delay), the time-window
+ * schedule and the short-video rule. Daily limits, anti-binge windows and
+ * emergency unlocks stay in the web layer; see src/lib/protectionRules.ts.
  *
  * Usage:
  *   import { ScrollShieldBridge } from '@/lib/nativeBridge';
@@ -20,6 +20,7 @@
 import { registerPlugin } from '@capacitor/core';
 import { getShortVideoSignature } from './shortVideoSignatures';
 import { isShortVideoFeedBlockedByConfig } from './stats';
+import { TIME_WINDOWS, TimeWindowRule } from './timeWindows';
 
 // ── Type definitions ──────────────────────────────────────────────────────────
 
@@ -70,6 +71,26 @@ export interface NativeShortVideoRule {
   alwaysShortVideo: boolean;
 }
 
+export interface NativeTimeWindow {
+  /** Inclusive start hour, local time */
+  startHour: number;
+  /** Exclusive end hour; smaller than startHour for a window past midnight */
+  endHour: number;
+  rule: Exclude<TimeWindowRule, 'normal'>;
+}
+
+/**
+ * Time-window rules, evaluated on the device at the moment the app is opened.
+ * The web layer cannot re-sync at every window boundary – it may not be
+ * running at 22:00 – so the schedule itself goes down, not today's result.
+ * Hours come from TIME_WINDOWS so both sides use the same boundaries.
+ */
+export interface NativeTimeWindows {
+  windows: NativeTimeWindow[];
+  /** Applies on Saturday and Sunday when stricter than the time of day */
+  weekendRule: TimeWindowRule;
+}
+
 export interface NativeProtectionRule {
   /** Android package name to watch */
   packageName: string;
@@ -77,6 +98,8 @@ export interface NativeProtectionRule {
   mode: NativeProtectionMode;
   /** Countdown length before the app may be opened (standard mode) */
   delaySeconds: number;
+  /** Stricter schedule; absent when time windows are off or all 'normal' */
+  timeWindows?: NativeTimeWindows;
   /** Short-video surface rule; absent when the app has no protected feed */
   shortVideo?: NativeShortVideoRule;
 }
@@ -96,6 +119,8 @@ export interface ShortVideoUsageResult {
   entries: ShortVideoUsageEntry[];
   /** False when the accessibility service is not running */
   available: boolean;
+  /** Local day (YYYY-MM-DD) the entries belong to */
+  date?: string;
 }
 
 export interface CalibrationSample {
@@ -211,11 +236,21 @@ type ShortVideoConfigSlice = {
   hardInterrupt?: boolean;
 };
 
+type TimeWindowsConfigSlice = {
+  enabled: boolean;
+  morningRules?: TimeWindowRule;
+  workRules?: TimeWindowRule;
+  eveningRules?: TimeWindowRule;
+  nightRules?: TimeWindowRule;
+  weekendRules?: TimeWindowRule;
+};
+
 type AppConfigSlice = {
   active: boolean;
   mode: NativeProtectionMode;
   openDelay: number;
   focusModeBehavior?: 'allow' | 'warn' | 'block';
+  timeWindows?: TimeWindowsConfigSlice;
   reelsProtection?: ShortVideoConfigSlice;
 };
 
@@ -272,6 +307,27 @@ function buildShortVideoRule(
 }
 
 /**
+ * The schedule half of a rule, mirroring getActiveTimeWindowRule(). Returns
+ * undefined when nothing would ever tighten the mode.
+ */
+function buildTimeWindows(config: AppConfigSlice): NativeTimeWindows | undefined {
+  const timeWindows = config.timeWindows;
+  if (!timeWindows?.enabled) return undefined;
+
+  const windows: NativeTimeWindow[] = [];
+  for (const window of TIME_WINDOWS) {
+    const rule = timeWindows[`${window.id}Rules`] ?? 'normal';
+    if (rule === 'normal') continue;
+    windows.push({ startHour: window.startHour, endHour: window.endHour, rule });
+  }
+
+  const weekendRule = timeWindows.weekendRules ?? 'normal';
+  if (windows.length === 0 && weekendRule === 'normal') return undefined;
+
+  return { windows, weekendRule };
+}
+
+/**
  * Translates the web-side app configuration into the flat rule list the
  * native monitor understands. One entry per Android package, so alternative
  * package names (lite/go builds) are covered too.
@@ -295,6 +351,7 @@ export function buildNativeProtectionRules(
     const mode: NativeProtectionMode =
       options.isFocusModeActive && config.focusModeBehavior === 'block' ? 'strict' : config.mode;
     const shortVideo = buildShortVideoRule(platform, config, options);
+    const timeWindows = buildTimeWindows(config);
 
     for (const packageName of platform.androidPackages) {
       if (seen.has(packageName)) continue;
@@ -303,6 +360,7 @@ export function buildNativeProtectionRules(
         packageName,
         mode,
         delaySeconds: nonNegativeInt(config.openDelay),
+        ...(timeWindows ? { timeWindows } : {}),
         ...(shortVideo ? { shortVideo } : {}),
       });
     }

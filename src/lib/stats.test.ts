@@ -5,6 +5,7 @@ import {
   getReelsUsageMinutesForAppDate,
   getShortVideoUsageKey,
   isShortVideoFeedBlockedByConfig,
+  mergeNativeShortVideoUsage,
 } from './stats';
 
 const makeState = (overrides: Partial<AppState>): AppState => ({
@@ -103,5 +104,65 @@ describe('isShortVideoFeedBlockedByConfig', () => {
       false,
     );
     expect(isShortVideoFeedBlockedByConfig({ mode: 'allow', dailyLimitMinutes: 0 })).toBe(false);
+  });
+});
+
+describe('mergeNativeShortVideoUsage', () => {
+  const platforms = [
+    { id: 'instagram', androidPackages: ['com.instagram.android', 'com.instagram.lite'] },
+    { id: 'tiktok', androidPackages: ['com.zhiliaoapp.musically'] },
+  ];
+  const day = '2030-01-01';
+
+  it('adds the measured minutes per app, main and lite build together', () => {
+    const merged = mergeNativeShortVideoUsage(
+      {},
+      {
+        date: day,
+        entries: [
+          { packageName: 'com.instagram.android', minutesToday: 12 },
+          { packageName: 'com.instagram.lite', minutesToday: 3 },
+          { packageName: 'com.zhiliaoapp.musically', minutesToday: 7 },
+          { packageName: 'com.unknown.app', minutesToday: 50 },
+        ],
+      },
+      platforms,
+    );
+
+    expect(merged[day].usageMinutes).toEqual({ instagram_reels: 15, tiktok_reels: 7 });
+    expect(merged[day].blockedOpens).toBe(0);
+  });
+
+  it('never lowers a larger value and never adds to it', () => {
+    const stats = {
+      [day]: {
+        date: day,
+        usageMinutes: { instagram: 30, instagram_reels: 20 },
+        blockedOpens: 2,
+        savedTimeMinutes: 10,
+        emergencyUnlocks: 0,
+        focusMinutes: 0,
+      },
+    };
+
+    const lower = mergeNativeShortVideoUsage(
+      stats,
+      { date: day, entries: [{ packageName: 'com.instagram.android', minutesToday: 5 }] },
+      platforms,
+    );
+    const higher = mergeNativeShortVideoUsage(
+      stats,
+      { date: day, entries: [{ packageName: 'com.instagram.android', minutesToday: 25 }] },
+      platforms,
+    );
+
+    expect(lower).toBe(stats);
+    expect(higher[day].usageMinutes).toEqual({ instagram: 30, instagram_reels: 25 });
+    expect(higher[day].blockedOpens).toBe(2);
+  });
+
+  it('returns the same object when there is nothing to take over', () => {
+    const stats = {};
+    expect(mergeNativeShortVideoUsage(stats, { date: day, entries: [] }, platforms)).toBe(stats);
   });
 });

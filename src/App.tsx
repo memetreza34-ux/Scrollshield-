@@ -4,17 +4,22 @@ import { AppState, Screen, DEFAULT_STATE, SUPPORTED_APPS } from './types';
 import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
 import { reconcileFocusRuntime } from './lib/focus';
-import { syncNativeBlockList } from './lib/nativeBridge';
+import { readShortVideoUsage, syncNativeBlockList } from './lib/nativeBridge';
+import { mergeNativeShortVideoUsage } from './lib/stats';
 import { getLocalDateKey } from './lib/appUtils';
 import { detectOperatingSystem } from './lib/platform';
 import {
+  FOCUS_FINISHED_TAG,
   RELAPSE_WINDOW_MINUTES,
   buildEveningSummary,
   buildFocusFinished,
   buildRelapseWarning,
+  cancelNotification,
+  scheduleNotification,
   sendNotification,
   shouldSendEveningSummary,
   shouldSendRelapseWarning,
+  usesNativeNotifications,
 } from './lib/notifications';
 import { BottomNav } from './components/ui';
 import { Welcome, Onboarding } from './screens/OnboardingScreens';
@@ -87,50 +92,117 @@ export default function App() {
     return () => window.clearInterval(interval);
   }, [isLoaded, appState.isFocusModeActive]);
 
-  // A focus session that ran out while the app was open – tell the user, they
-  // are elsewhere by now. Sent from committed state, not from inside the state
+  // Focus-end reminder. Sent from committed state, not from inside the state
   // updater: React may run an updater twice (StrictMode does), and an updater
   // must not have side effects.
+  //  - Native app: handed to the system when the session starts, so it arrives
+  //    even when ScrollShield is closed at the end; withdrawn if the session is
+  //    stopped early or the switch is turned off.
+  //  - Browser: nothing can be scheduled, so it is sent when the running app
+  //    notices the session ran out.
+  const focusRemindersEnabled = appState.settings.notifications.focusReminders;
   const runningFocusSessionIdRef = useRef<string | null>(null);
+  const scheduledFocusReminderRef = useRef<string | null>(null);
   useEffect(() => {
     if (!isLoaded) return;
 
     const running = appState.focusSessions.find((session) => session.endTime === null);
     const previousId = runningFocusSessionIdRef.current;
     runningFocusSessionIdRef.current = running?.id ?? null;
-    if (!previousId || previousId === running?.id) return;
 
-    // Only the timer ends a session exactly at its scheduled end; a session the
-    // user stopped themselves needs no notification.
-    const finished = appState.focusSessions.find((session) => session.id === previousId);
-    if (
-      finished?.successful &&
-      finished.endTime !== null &&
-      finished.endTime === finished.startTime + finished.duration * 60_000
-    ) {
-      sendNotification(buildFocusFinished(finished.duration));
+    if (running) {
+      const key = focusRemindersEnabled ? running.id : null;
+      if (scheduledFocusReminderRef.current === key) return;
+      scheduledFocusReminderRef.current = key;
+      if (key) {
+        void scheduleNotification(
+          buildFocusFinished(running.duration),
+          new Date(running.startTime + running.duration * 60_000),
+        );
+      } else {
+        void cancelNotification(FOCUS_FINISHED_TAG);
+      }
+      return;
     }
-  }, [isLoaded, appState.focusSessions]);
 
-  // Evening summary and relapse warning. Both are best-effort: without a push
-  // server the app can only notify while it is running.
+    scheduledFocusReminderRef.current = null;
+    if (!previousId) return;
+
+    // Only the timer ends a session exactly at its scheduled end.
+    const finished = appState.focusSessions.find((session) => session.id === previousId);
+    const ranOut =
+      !!finished?.successful &&
+      finished.endTime !== null &&
+      finished.endTime === finished.startTime + finished.duration * 60_000;
+
+    if (!ranOut) {
+      void cancelNotification(FOCUS_FINISHED_TAG);
+    } else if (focusRemindersEnabled && !usesNativeNotifications()) {
+      void sendNotification(buildFocusFinished(finished.duration));
+    }
+  }, [isLoaded, appState.focusSessions, focusRemindersEnabled]);
+
+  // Short-video minutes the accessibility service measured on the device.
+  // Pulled on start, on return to the app and once a minute while it runs; the
+  // browser fallback reports `available: false` and changes nothing.
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    let cancelled = false;
+    const pull = async () => {
+      const usage = await readShortVideoUsage();
+      if (cancelled || !usage.available || usage.entries.length === 0) return;
+      const date = usage.date ?? getLocalDateKey(new Date());
+      setAppState((previous) => {
+        const dailyStats = mergeNativeShortVideoUsage(
+          previous.dailyStats,
+          { date, entries: usage.entries },
+          SUPPORTED_APPS,
+        );
+        return dailyStats === previous.dailyStats ? previous : { ...previous, dailyStats };
+      });
+    };
+    const pullWhenVisible = () => {
+      if (document.visibilityState === 'visible') void pull();
+    };
+
+    void pull();
+    const interval = window.setInterval(() => void pull(), 60_000);
+    document.addEventListener('visibilitychange', pullWhenVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', pullWhenVisible);
+    };
+  }, [isLoaded]);
+
+  // Evening summary and relapse warning. Both are best-effort: they depend on
+  // the day's data, so they can only be sent while the app runs. The "sent"
+  // mark is set before the asynchronous send so a state change in between
+  // cannot send twice; a failed send clears it again.
   useEffect(() => {
     if (!isLoaded) return;
 
     const check = () => {
-      if (shouldSendEveningSummary(appState, notificationStateRef.current.eveningSentOn)) {
-        if (sendNotification(buildEveningSummary(appState))) {
-          notificationStateRef.current.eveningSentOn = getLocalDateKey(new Date());
-        }
+      const sent = notificationStateRef.current;
+
+      if (shouldSendEveningSummary(appState, sent.eveningSentOn)) {
+        const previous = sent.eveningSentOn;
+        sent.eveningSentOn = getLocalDateKey(new Date());
+        void sendNotification(buildEveningSummary(appState)).then((ok) => {
+          if (!ok) sent.eveningSentOn = previous;
+        });
       }
 
-      if (shouldSendRelapseWarning(appState, appState.history, notificationStateRef.current.relapseSentAt)) {
+      if (shouldSendRelapseWarning(appState, appState.history, sent.relapseSentAt)) {
         const recentBlocks = appState.history.filter(
           (event) => event.type === 'block' && Date.now() - event.timestamp < RELAPSE_WINDOW_MINUTES * 60_000,
         ).length;
-        if (sendNotification(buildRelapseWarning(recentBlocks))) {
-          notificationStateRef.current.relapseSentAt = Date.now();
-        }
+        const previous = sent.relapseSentAt;
+        sent.relapseSentAt = Date.now();
+        void sendNotification(buildRelapseWarning(recentBlocks)).then((ok) => {
+          if (!ok) sent.relapseSentAt = previous;
+        });
       }
     };
 

@@ -44,6 +44,19 @@ Rules are synced from `src/lib/nativeBridge.ts` (`buildNativeProtectionRules`), 
 while a focus session is running. Choosing "continue" grants a five-minute grace period so the overlay does not
 immediately reappear.
 
+Time windows travel down as a schedule (hours from `TIME_WINDOWS` in `src/lib/timeWindows.ts`) and are evaluated by the
+service on every app switch, because the web layer may not be running when a window starts. A window set to `strict` or
+`block` locks the app like `strict` mode and overrides the grace period; the native side has no emergency unlock that
+would tell the two apart.
+
+The short-video minutes measured by the accessibility service are read back by the web layer once a minute and on every
+return to the app, and flow into the daily stats (dashboard, insights, in-app feed limit).
+
+Reminders use `@capacitor/local-notifications`. The focus-end reminder is scheduled with the system when a session starts
+and arrives even when the app is closed; the evening summary and the relapse warning need the running app. Alarms are
+inexact: `SCHEDULE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED` and `WAKE_LOCK`, which the plugin declares, are removed from the
+merged manifest.
+
 ## Short-Video Detection
 
 `ShortVideoWatchService` (accessibility) recognises whether a protected app's short-video feed is on screen, counts
@@ -55,8 +68,11 @@ Full mechanism, privacy boundary, calibration procedure and Play Console require
 
 ## Known Limits
 
-- **Anti-binge windows and emergency unlocks are evaluated in the web layer only.** The native service receives the
-  resulting mode, delay and feed rule, nothing else.
+- **Anti-binge windows, app-level daily limits and emergency unlocks are evaluated in the web layer only.** The native
+  service receives mode, delay, time-window schedule and feed rule, nothing else.
+- A focus session is folded into the synced mode. If it ends while the app is not running, the native rules stay `strict`
+  until ScrollShield is opened again and re-syncs.
+- A focus-end reminder may arrive a few minutes late (inexact alarm) and is dropped by a reboot.
 - Feed detection is heuristic and breaks silently when a host app renames its view ids. Re-verify per platform before
   each release.
 - Detection lags an app switch by up to one poll interval (1.5 s).

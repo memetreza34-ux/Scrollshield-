@@ -20,6 +20,9 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * ScrollShieldBridgePlugin
@@ -200,7 +203,7 @@ class ScrollShieldBridgePlugin : Plugin() {
      * The AppMonitorService reads them to decide how to intervene.
      *
      * JS call: ScrollShieldBridge.syncBlockedApps({
-     *   rules: [{ packageName, mode, delaySeconds }],
+     *   rules: [{ packageName, mode, delaySeconds, timeWindows?, shortVideo? }],
      *   monitoringEnabled: boolean,
      * })
      */
@@ -227,6 +230,7 @@ class ScrollShieldBridgePlugin : Plugin() {
                     "delaySeconds",
                     entry.optInt("delaySeconds", AppMonitorService.DEFAULT_DELAY_SECONDS).coerceIn(0, 300)
                 )
+            normalizeTimeWindows(entry.optJSONObject("timeWindows"))?.let { rule.put("timeWindows", it) }
             normalizeShortVideo(entry.optJSONObject("shortVideo"))?.let { rule.put("shortVideo", it) }
             normalized.put(rule)
         }
@@ -315,10 +319,14 @@ class ScrollShieldBridgePlugin : Plugin() {
             return
         }
 
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
+
         try {
             val raw = encryptedPrefs.getString(ShortVideoWatchService.KEY_SHORT_VIDEO_USAGE, null)
             val stored = if (raw != null) JSONObject(raw) else JSONObject()
-            val packages = stored.optJSONObject("packages")
+            // The service only resets the counters when it next writes, so
+            // yesterday's minutes would otherwise be reported as today's.
+            val packages = if (stored.optString("date") == today) stored.optJSONObject("packages") else null
             val updatedAt = stored.optLong("updatedAt", 0L)
 
             if (packages != null) {
@@ -341,6 +349,7 @@ class ScrollShieldBridgePlugin : Plugin() {
         }
 
         result.put("available", true)
+        result.put("date", today)
         result.put("entries", entries)
         call.resolve(result)
     }
@@ -375,6 +384,38 @@ class ScrollShieldBridgePlugin : Plugin() {
         result.put("available", true)
         result.put("samples", samples)
         call.resolve(result)
+    }
+
+    /**
+     * Validates the time-window schedule (see NativeTimeWindows in
+     * src/lib/nativeBridge.ts). Only windows that tighten the mode are kept.
+     */
+    private fun normalizeTimeWindows(schedule: JSONObject?): JSONObject? {
+        if (schedule == null) return null
+
+        val windows = JSONArray()
+        val source = schedule.optJSONArray("windows") ?: JSONArray()
+        for (index in 0 until source.length()) {
+            val window = source.optJSONObject(index) ?: continue
+            val rule = window.optString("rule")
+            val startHour = window.optInt("startHour", -1)
+            val endHour = window.optInt("endHour", -1)
+            if (rule !in setOf("strict", "block")) continue
+            if (startHour !in 0..23 || endHour !in 0..24 || startHour == endHour) continue
+            windows.put(
+                JSONObject()
+                    .put("startHour", startHour)
+                    .put("endHour", endHour)
+                    .put("rule", rule)
+            )
+        }
+
+        val weekendRule = schedule.optString("weekendRule").takeIf { it in setOf("strict", "block") } ?: "normal"
+        if (windows.length() == 0 && weekendRule == "normal") return null
+
+        return JSONObject()
+            .put("windows", windows)
+            .put("weekendRule", weekendRule)
     }
 
     /**

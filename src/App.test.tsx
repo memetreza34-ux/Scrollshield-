@@ -102,7 +102,11 @@ describe('App', () => {
     expect(screen.getByLabelText('Noch 15 Minuten')).toBeInTheDocument();
   });
 
-  it('notifies exactly once when a focus session runs out while the app is open', async () => {
+  /**
+   * Restores a focus session one minute before its end, lets the 15 s focus
+   * tick run past it and returns the titles of the notifications shown.
+   */
+  const runFocusSessionPastItsEnd = async (focusReminders: boolean) => {
     let now = new Date(2030, 0, 1, 12).getTime();
     vi.spyOn(Date, 'now').mockImplementation(() => now);
     const shown: string[] = [];
@@ -120,6 +124,10 @@ describe('App', () => {
       hasCompletedOnboarding: true,
       isFocusModeActive: true,
       focusTimeRemaining: 1,
+      settings: {
+        ...DEFAULT_STATE.settings,
+        notifications: { ...DEFAULT_STATE.settings.notifications, focusReminders },
+      },
       focusSessions: [
         {
           id: 'focus-ending',
@@ -157,10 +165,20 @@ describe('App', () => {
       act(() => focusTicks.at(-1)?.());
       act(() => focusTicks.at(-1)?.());
 
-      await waitFor(() => expect(shown).toEqual(['Fokuszeit beendet']));
+      await waitFor(() => expect(screen.queryByRole('heading', { name: 'Fokusmodus Aktiv' })).not.toBeInTheDocument());
+      await act(async () => {});
+      return shown;
     } finally {
       vi.unstubAllGlobals();
     }
+  };
+
+  it('notifies exactly once when a focus session runs out while the app is open', async () => {
+    expect(await runFocusSessionPastItsEnd(true)).toEqual(['Fokuszeit beendet']);
+  });
+
+  it('respects a switched-off focus reminder', async () => {
+    expect(await runFocusSessionPastItsEnd(false)).toEqual([]);
   });
 
   it('clears persisted data and returns to onboarding after a confirmed reset', async () => {

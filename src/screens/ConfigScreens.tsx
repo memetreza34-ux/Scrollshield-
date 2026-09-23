@@ -44,6 +44,7 @@ import {
   serializeScrollShieldExport,
 } from '../lib/dataExport';
 import { normalizeAppState } from '../lib/state';
+import { usesNativeNotifications } from '../lib/notifications';
 
 export function AppList({
   state,
@@ -1102,8 +1103,9 @@ export function Settings({
         <section aria-labelledby="settings-notifications">
           <SectionHeader id="settings-notifications" title="Benachrichtigungen" />
           <p className="mb-3 px-2 text-xs leading-relaxed text-zinc-500">
-            Erinnerungen erreichen dich nur, solange ScrollShield geöffnet ist – auch im Hintergrund. Eine geschlossene
-            Web-App kann sich nicht selbst aufwecken.
+            {usesNativeNotifications()
+              ? 'Die Fokus-Erinnerung meldet ScrollShield beim Start der Sitzung an dein Handy – sie kommt auch, wenn die App geschlossen ist, eventuell ein paar Minuten später. Abend-Erinnerung und Rückfall-Warnung brauchen die laufende App.'
+              : 'Erinnerungen erreichen dich nur, solange ScrollShield geöffnet ist – auch im Hintergrund. Eine geschlossene Web-App kann sich nicht selbst aufwecken.'}
           </p>
           <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[2rem] overflow-hidden shadow-lg">
             <SettingRow

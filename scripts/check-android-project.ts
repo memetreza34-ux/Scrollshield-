@@ -91,13 +91,28 @@ const allowedPermissions = new Set([
   'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
   'android.permission.POST_NOTIFICATIONS',
 ]);
-const permissions = [...manifest.matchAll(/<uses-permission[^>]+android:name="([^"]+)"/g)].map((match) => match[1]);
+// Entries with tools:node="remove" strip a permission a library would merge
+// in; they declare nothing.
+const permissions = [...manifest.matchAll(/<uses-permission[^>]+android:name="([^"]+)"[^>]*>/g)]
+  .filter((match) => !/tools:node="remove"/.test(match[0]))
+  .map((match) => match[1]);
 for (const permission of permissions) {
   if (allowedPermissions.has(permission)) continue;
   findings.push({
     file: manifestPath,
     text: `Unexpected Android permission ${permission}; add store declarations before allowing it.`,
   });
+}
+
+// @capacitor/local-notifications merges these into the final manifest. The
+// check above only sees this file, so the removals themselves are guarded.
+for (const permission of ['SCHEDULE_EXACT_ALARM', 'RECEIVE_BOOT_COMPLETED', 'WAKE_LOCK']) {
+  requireMatch(
+    manifestPath,
+    manifest,
+    new RegExp(`android:name="android\\.permission\\.${permission}"\\s+tools:node="remove"`),
+    `${permission} from @capacitor/local-notifications must stay removed from the merged manifest.`,
+  );
 }
 
 // The manifest uses the tools namespace for the PACKAGE_USAGE_STATS lint

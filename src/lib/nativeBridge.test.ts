@@ -196,3 +196,57 @@ describe('short-video rules', () => {
     expect(session[0].shortVideo?.mode).toBe('block');
   });
 });
+
+describe('time-window rules', () => {
+  const schedule = {
+    enabled: true,
+    morningRules: 'normal' as const,
+    workRules: 'strict' as const,
+    eveningRules: 'normal' as const,
+    nightRules: 'block' as const,
+    weekendRules: 'normal' as const,
+  };
+
+  it('hands the tightening windows down with the shared hour boundaries', () => {
+    const rules = buildNativeProtectionRules({ tiktok: activeApp({ timeWindows: schedule }) }, platforms);
+
+    expect(rules[0].timeWindows).toEqual({
+      windows: [
+        { startHour: 9, endHour: 18, rule: 'strict' },
+        { startHour: 22, endHour: 6, rule: 'block' },
+      ],
+      weekendRule: 'normal',
+    });
+  });
+
+  it('sends nothing while time windows are off or never tighten the mode', () => {
+    const off = buildNativeProtectionRules(
+      { tiktok: activeApp({ timeWindows: { ...schedule, enabled: false } }) },
+      platforms,
+    );
+    const allNormal = buildNativeProtectionRules(
+      {
+        tiktok: activeApp({
+          timeWindows: { ...schedule, workRules: 'normal', nightRules: 'normal' },
+        }),
+      },
+      platforms,
+    );
+
+    expect(off[0].timeWindows).toBeUndefined();
+    expect(allNormal[0].timeWindows).toBeUndefined();
+  });
+
+  it('keeps a weekend rule even without a stricter time of day', () => {
+    const rules = buildNativeProtectionRules(
+      {
+        tiktok: activeApp({
+          timeWindows: { ...schedule, workRules: 'normal', nightRules: 'normal', weekendRules: 'block' },
+        }),
+      },
+      platforms,
+    );
+
+    expect(rules[0].timeWindows).toEqual({ windows: [], weekendRule: 'block' });
+  });
+});

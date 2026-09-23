@@ -30,6 +30,8 @@ import androidx.core.app.NotificationCompat
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import org.json.JSONArray
+import org.json.JSONObject
+import java.util.Calendar
 
 /**
  * AppMonitorService
@@ -49,7 +51,8 @@ import org.json.JSONArray
  *  - The overlay cannot prevent the user from leaving via gestures; it
  *    reappears the next time the protected app comes to the foreground.
  *  - Daily limits and anti-binge rules are still evaluated in the web layer
- *    only; the native side receives the resulting mode and delay.
+ *    only. Time windows are evaluated here, on every app switch, because the
+ *    web layer is not guaranteed to run when a window starts.
  *
  * Lifecycle:
  *  - Started by ScrollShieldBridgePlugin.startMonitoring()
@@ -122,7 +125,15 @@ class AppMonitorService : Service() {
         }
     }
 
-    private data class BlockRule(val mode: String, val delaySeconds: Int)
+    /** A window that tightens the mode; `endHour < startHour` wraps past midnight. */
+    private data class TimeWindow(val startHour: Int, val endHour: Int)
+
+    private data class BlockRule(
+        val mode: String,
+        val delaySeconds: Int,
+        val timeWindows: List<TimeWindow> = emptyList(),
+        val weekendRule: String = "normal",
+    )
 
     // ── State ─────────────────────────────────────────────────────────────────
 
@@ -245,9 +256,12 @@ class AppMonitorService : Service() {
                 if (entry != null) {
                     val packageName = entry.optString("packageName")
                     if (packageName.isNotEmpty()) {
+                        val schedule = entry.optJSONObject("timeWindows")
                         parsed[packageName] = BlockRule(
                             mode = entry.optString("mode", "standard"),
-                            delaySeconds = entry.optInt("delaySeconds", DEFAULT_DELAY_SECONDS)
+                            delaySeconds = entry.optInt("delaySeconds", DEFAULT_DELAY_SECONDS),
+                            timeWindows = parseTimeWindows(schedule),
+                            weekendRule = schedule?.optString("weekendRule", "normal") ?: "normal",
                         )
                     }
                 } else {
@@ -267,6 +281,37 @@ class AppMonitorService : Service() {
         if (!monitoringEnabled || parsed.isEmpty()) {
             dismissOverlay()
         }
+    }
+
+    private fun parseTimeWindows(schedule: JSONObject?): List<TimeWindow> {
+        val windows = schedule?.optJSONArray("windows") ?: return emptyList()
+        return (0 until windows.length()).mapNotNull { index ->
+            val window = windows.optJSONObject(index) ?: return@mapNotNull null
+            TimeWindow(window.optInt("startHour"), window.optInt("endHour"))
+        }
+    }
+
+    /**
+     * Mirrors getActiveTimeWindowRule() in src/lib/timeWindows.ts: a window of
+     * the current hour, or on a weekend the weekend rule, tightens the mode.
+     * Only windows set to "strict" or "block" are synced, and the native side
+     * has no emergency unlock that would tell the two apart, so both lock the
+     * app like strict mode.
+     */
+    private fun isLockedByTimeWindow(rule: BlockRule, now: Calendar = Calendar.getInstance()): Boolean {
+        val hour = now.get(Calendar.HOUR_OF_DAY)
+        val inWindow = rule.timeWindows.any { window ->
+            if (window.startHour < window.endHour) {
+                hour >= window.startHour && hour < window.endHour
+            } else {
+                hour >= window.startHour || hour < window.endHour
+            }
+        }
+        if (inWindow) return true
+
+        val day = now.get(Calendar.DAY_OF_WEEK)
+        val isWeekend = day == Calendar.SATURDAY || day == Calendar.SUNDAY
+        return isWeekend && rule.weekendRule != "normal"
     }
 
     // ── Core logic ────────────────────────────────────────────────────────────
@@ -291,9 +336,16 @@ class AppMonitorService : Service() {
         lastForegroundPackage = foreground
 
         val rule = rules[foreground] ?: return
-        if (System.currentTimeMillis() < (allowedUntil[foreground] ?: 0L)) return
+        val lockedByTimeWindow = isLockedByTimeWindow(rule)
+        // A grace period from "continue" must not outlast the start of a
+        // window that locks the app.
+        if (!lockedByTimeWindow && System.currentTimeMillis() < (allowedUntil[foreground] ?: 0L)) return
 
-        showInterruptionOverlay(foreground, rule)
+        showInterruptionOverlay(
+            foreground,
+            if (lockedByTimeWindow) rule.copy(mode = "strict") else rule,
+            lockedByTimeWindow,
+        )
     }
 
     /**
@@ -325,7 +377,7 @@ class AppMonitorService : Service() {
 
     // ── Overlay ───────────────────────────────────────────────────────────────
 
-    private fun showInterruptionOverlay(blockedPackage: String, rule: BlockRule) {
+    private fun showInterruptionOverlay(blockedPackage: String, rule: BlockRule, lockedByTimeWindow: Boolean) {
         val appName = getAppName(blockedPackage)
         presentOverlay(
             blockedPackage = blockedPackage,
@@ -336,7 +388,7 @@ class AppMonitorService : Service() {
                 dismissOverlay()
             },
         ) { statusView, continueButton ->
-            startCountdown(statusView, continueButton, rule)
+            startCountdown(statusView, continueButton, rule, lockedByTimeWindow)
         }
     }
 
@@ -474,9 +526,16 @@ class AppMonitorService : Service() {
         }
     }
 
-    private fun startCountdown(statusView: TextView, continueButton: Button, rule: BlockRule) {
+    private fun startCountdown(
+        statusView: TextView,
+        continueButton: Button,
+        rule: BlockRule,
+        lockedByTimeWindow: Boolean,
+    ) {
         if (rule.mode == "strict") {
-            statusView.text = getString(R.string.overlay_strict_hint)
+            statusView.text = getString(
+                if (lockedByTimeWindow) R.string.overlay_time_window_hint else R.string.overlay_strict_hint
+            )
             return
         }
 
