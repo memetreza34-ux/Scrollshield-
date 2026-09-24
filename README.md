@@ -42,6 +42,9 @@ npm run dev
 
 Open the local Vite URL shown in the terminal, usually `http://localhost:3000`.
 
+The dev server only listens on this computer. To open it from a phone on the same network, use `npm run dev:lan` –
+only on a network you trust, since everyone on it can then reach the dev server.
+
 ## Useful Commands
 
 ```bash
