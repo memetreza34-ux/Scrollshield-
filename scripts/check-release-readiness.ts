@@ -17,8 +17,8 @@ const releaseScreenFiles = readdirSync(path.join(repoRoot, 'src/screens'))
 const checks = [
   {
     label: 'Legal details required',
-    pattern: /Angaben vor Release|Musterstra|Max Mustermann/i,
-    files: ['src/screens/SupportScreen.tsx'],
+    pattern: /Angaben vor Release|Vor Release ergänzen|Musterstra|Max Mustermann/i,
+    files: ['src/screens/SupportScreen.tsx', 'public/privacy.html'],
   },
   {
     label: 'Unfinished release UI',
@@ -28,7 +28,13 @@ const checks = [
   {
     label: 'Unverified support domain',
     pattern: /support@scrollshield\.app/i,
-    files: ['src/lib/contact.ts', 'src/screens/SupportScreen.tsx', 'docs/RELEASE_CHECKLIST.md', 'docs/ROLLOUT_PLAN.md'],
+    files: [
+      'src/lib/contact.ts',
+      'src/screens/SupportScreen.tsx',
+      'public/privacy.html',
+      'docs/RELEASE_CHECKLIST.md',
+      'docs/ROLLOUT_PLAN.md',
+    ],
   },
   {
     label: 'Risky store claim',

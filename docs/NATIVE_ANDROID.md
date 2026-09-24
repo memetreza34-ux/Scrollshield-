@@ -72,6 +72,11 @@ Full mechanism, privacy boundary, calibration procedure and Play Console require
 
 - **Anti-binge windows, app-level daily limits and emergency unlocks are evaluated in the web layer only.** The native
   service receives mode, delay, time-window schedule and feed rule, nothing else.
+- **Native interruptions are not recorded.** The overlay writes nothing to the history, so the dashboard, statistics,
+  anti-binge, app-level daily limits, the relapse warning and the summaries only reflect what happens inside
+  ScrollShield. Short-video minutes are the exception; they are read back from the device.
+- **No restart after a reboot.** There is no boot receiver, so `AppMonitorService` only runs again once ScrollShield is
+  opened. The accessibility service is rebound by the system on its own.
 - A focus session is folded into the synced mode. If it ends while the app is not running, the native rules stay `strict`
   until ScrollShield is opened again and re-syncs.
 - Scheduled reminders may arrive a few minutes late (inexact alarms). A reboot drops them until ScrollShield is opened

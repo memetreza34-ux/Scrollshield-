@@ -12,6 +12,12 @@ In der aktuellen Version (v1.0 Offline-MVP) verarbeitet ScrollShield folgende Da
 - **Zeitstempel:** Wann eine App geöffnet, blockiert oder freigegeben wurde.
 - **Statistiken:** Berechnete Fokus-Zeit, gesparte Zeit, Streaks.
 - **Konfigurationsdaten:** Vom Nutzer erstellte Regeln, Profile und Limits.
+- **Freitext „Grund“:** Was der Nutzer vor dem Öffnen einer App als Grund eintippt, gespeichert im Verlauf (letzte 100
+  Ereignisse). Kann beliebige, auch sensible Inhalte enthalten.
+- **Kurzvideo-Nutzung (nur Android, nur mit Bedienungshilfe):** Minuten im Feed pro App und Tag; die letzten 20
+  Beobachtungen technischer Oberflächenkennungen (View-IDs, Klassennamen, Paketname, Zeitpunkt) für die Diagnose. Keine
+  Texte.
+- **Benachrichtigungen:** Lokal erzeugte Erinnerungen; auf Android teils beim System eingeplant.
 - _(Zukunft / v2.0+):_ E-Mail-Adresse, Authentifizierungs-Token, Geräte-IDs (für Cloud-Sync).
 
 ## 2. Verarbeitungszwecke
@@ -25,7 +31,11 @@ Die Datenverarbeitung erfolgt **ausschließlich zur Bereitstellung der App-Funkt
 
 ## 3. Speicherorte
 
-- **Aktuell (v1.0):** 100 % lokal auf dem Endgerät des Nutzers (sichere App-Sandbox / LocalStorage / native Datenbank).
+- **Aktuell (v1.0):** 100 % lokal auf dem Endgerät des Nutzers. Einstellungen und Profile AES-GCM-verschlüsselt im
+  LocalStorage (Schlüssel liegt daneben – kein Schutz bei Gerätezugriff); Verlauf und Statistiken unverschlüsselt im
+  LocalStorage; native Regeln und Kurzvideo-Daten in EncryptedSharedPreferences.
+- **Webversion:** Der Hosting-Anbieter verarbeitet beim Abruf Server-Logs (IP-Adresse, Zeitpunkt, Datei, Browser).
+  Anbieter noch nicht gewählt.
 - **Zukunft (v2.0+):** Bei Opt-in für Cloud-Sync erfolgt die Speicherung in Google Firebase (Firestore). _Compliance-Ziel:_ Server-Standort Europa (z. B. `europe-west3` / Frankfurt) zwingend festlegen.
 
 ## 4. Aufbewahrungsdauer
@@ -48,13 +58,16 @@ Der Nutzer hat jederzeit die volle Kontrolle über seine Daten. Folgende Routine
 Die App arbeitet nach dem Prinzip der Datenminimierung (Data Minimization). Details siehe `PERMISSION_MATRIX.md`.
 
 - **iOS:** Screen Time API (Family Controls).
-- **Android:** Nutzungsdatenzugriff (`PACKAGE_USAGE_STATS`), Überlagerung (`SYSTEM_ALERT_WINDOW`).
+- **Android:** Nutzungsdatenzugriff (`PACKAGE_USAGE_STATS`), Überlagerung (`SYSTEM_ALERT_WINDOW`),
+  Vordergrunddienst, Benachrichtigungen (`POST_NOTIFICATIONS`), optional Bedienungshilfe (Kurzvideo-Erkennung).
 - _Zweckbindung:_ Diese Rechte werden ausschließlich lokal ausgewertet, um den Blockier-Screen zu triggern.
 
 ## 7. Drittanbieter-Abhängigkeiten (Third-Party)
 
 - **Aktuell:** Keine aktiven Tracking- oder Analytics-SDKs, die Nutzungsdaten ausleiten.
-- **Firebase (Google):** Das SDK ist im Code vorbereitet. Sobald Cloud-Features aktiviert werden, verarbeitet Firebase Auth (Logins) und Firestore (Daten-Sync). Google fungiert dann als Auftragsverarbeiter (AVV / DPA muss abgeschlossen werden).
+- **Firebase (Google):** Nicht enthalten (Stand 24.09.2026, keine Abhängigkeit in `package.json`). Nur eine Planung für
+  spätere Cloud-Features; Google wäre dann Auftragsverarbeiter (AVV / DPA muss abgeschlossen werden).
+- **@capacitor/local-notifications:** Lokale Benachrichtigungen, keine Datenübertragung (siehe `docs/SDK_REGISTRY.md`).
 
 ## 8. Plattformspezifische Unterschiede
 

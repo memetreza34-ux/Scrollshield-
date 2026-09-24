@@ -82,8 +82,12 @@
   </head>
   <body>
     <main>
-      <p class="muted">Stand: 3. September 2026</p>
+      <p class="muted">Stand: 24. September 2026</p>
       <h1>Datenschutzerklärung</h1>
+      <div class="notice">
+        <strong>Entwurf – vor Release ergänzen und prüfen lassen.</strong> Die mit „Vor Release ergänzen“ markierten
+        Angaben fehlen noch. Dieser Hinweis wird entfernt, sobald die Erklärung rechtlich geprüft ist.
+      </div>
       <p class="lead">
         ScrollShield ist als Offline-First-App konzipiert. Regeln, Verlauf und Statistiken bleiben auf deinem Gerät,
         solange du keine zukünftige Online-Funktion ausdrücklich aktivierst.
@@ -96,8 +100,8 @@
 
       <h2>1. Verantwortlicher</h2>
       <p>
-        Die vollständigen Anbieterangaben werden vor Veröffentlichung im Impressum ergänzt. Für Datenschutzanfragen ist
-        aktuell folgende Adresse vorgesehen:
+        [Vor Release ergänzen: vollständiger Name bzw. Firma, ladungsfähige Anschrift, E-Mail-Adresse.] Für
+        Datenschutzanfragen ist aktuell folgende Adresse vorgesehen:
         <a href="mailto:support@scrollshield.app?subject=Datenschutzanfrage%20ScrollShield">support@scrollshield.app</a
         >.
       </p>
@@ -106,19 +110,60 @@
       <p>ScrollShield kann auf deinem Gerät folgende Daten speichern:</p>
       <ul>
         <li>ausgewählte geschützte Apps und Schutzregeln,</li>
-        <li>lokale Nutzungs- und Blockierhistorie,</li>
-        <li>Statistiken wie gesparte Zeit, Streaks und Fokus-Sitzungen,</li>
-        <li>lokale App-Einstellungen, Berechtigungsstatus und Profilkonfiguration.</li>
+        <li>
+          lokale Nutzungs- und Blockierhistorie (die letzten 100 Ereignisse) – dazu gehört auch der Grund, den du vor
+          dem Öffnen einer App eintippen kannst, genau so, wie du ihn geschrieben hast,
+        </li>
+        <li>Statistiken wie gesparte Zeit, Streaks, Nutzungsminuten und Fokus-Sitzungen,</li>
+        <li>lokale App-Einstellungen, Berechtigungsstatus und Profilkonfiguration,</li>
+        <li>
+          nur in der Android-App mit aktivierter Bedienungshilfe: die im Kurzvideo-Feed verbrachte Zeit pro App und Tag
+          sowie die letzten 20 Beobachtungen technischer Oberflächenkennungen für die Diagnose (siehe 4a).
+        </li>
       </ul>
       <p>
         Diese Daten dienen ausschließlich dazu, deine gewählten Schutzregeln auszuführen und dir lokale Auswertungen zu
         zeigen.
       </p>
+      <p>
+        Einstellungen, Profile und die Regeln der Android-App werden verschlüsselt gespeichert. Verlauf und Statistiken
+        liegen unverschlüsselt im Speicher der App, auf den andere Apps keinen Zugriff haben. Die Verschlüsselung
+        schützt nicht vor jemandem, der dein entsperrtes Gerät benutzt. Schreib als Grund deshalb nichts, was niemand
+        sehen soll.
+      </p>
 
       <h2>3. Keine Serverübertragung in Version 1.0</h2>
       <p>
         In der aktuellen Version gibt es keinen Account, keinen Cloud-Sync und keine Entwickler-Server, an die deine
-        Nutzungsdaten übertragen werden. Deine Daten bleiben in der lokalen App-Sandbox deines Geräts.
+        Nutzungsdaten übertragen werden. Deine Daten bleiben in der lokalen App-Sandbox deines Geräts. Die Android-App
+        lädt ihre Oberfläche aus dem App-Paket, nicht aus dem Internet.
+      </p>
+
+      <h2>3a. Webversion: Bereitstellung durch einen Hosting-Anbieter</h2>
+      <p>
+        Wenn du ScrollShield im Browser öffnest, werden die Dateien der App von einem Hosting-Anbieter ausgeliefert [Vor
+        Release ergänzen: Name und Sitz des Anbieters]. Dabei verarbeitet der Anbieter technisch notwendige Daten wie
+        deine IP-Adresse, Datum und Uhrzeit des Abrufs, die abgerufene Datei und Angaben zu deinem Browser, um die Seite
+        auszuliefern und vor Angriffen zu schützen. Rechtsgrundlage ist unser berechtigtes Interesse an einer sicheren
+        Bereitstellung (Art. 6 Abs. 1 lit. f DSGVO). [Vor Release ergänzen: Speicherdauer der Server-Logs,
+        Auftragsverarbeitungsvertrag, gegebenenfalls Übermittlung in ein Drittland.] Deine Regeln, dein Verlauf und
+        deine Statistiken werden dabei nicht übertragen. Damit die App offline funktioniert, speichert dein Browser die
+        App-Dateien in einem lokalen Zwischenspeicher.
+      </p>
+
+      <h2>3b. Download über Google Play</h2>
+      <p>
+        Wenn du die Android-App über Google Play installierst, verarbeitet Google dabei Daten nach seinen eigenen
+        Datenschutzbestimmungen. Google stellt Entwicklern zusammengefasste Statistiken bereit, etwa Installationszahlen
+        und, wenn du der Weitergabe an Entwickler zugestimmt hast, Absturzberichte. Auf deine Regeln, deinen Verlauf und
+        deine Statistiken in ScrollShield hat Google dadurch keinen Zugriff.
+      </p>
+
+      <h2>3c. Kontakt per E-Mail</h2>
+      <p>
+        Wenn du uns schreibst, verarbeiten wir deine E-Mail-Adresse und den Inhalt deiner Nachricht, um deine Anfrage zu
+        beantworten (Art. 6 Abs. 1 lit. b bzw. lit. f DSGVO). Wir löschen die Nachricht, wenn sie erledigt ist und keine
+        gesetzlichen Aufbewahrungspflichten bestehen.
       </p>
 
       <h2>4. Systemberechtigungen</h2>
@@ -128,11 +173,18 @@
       </p>
       <ul>
         <li>
-          <strong>iOS:</strong> Screen-Time- beziehungsweise Family-Controls-Funktionen, sofern von Apple freigegeben.
+          <strong>Android, Nutzungsdatenzugriff:</strong> zur Erkennung der Vordergrund-App. Das System meldet dabei,
+          welche App gerade geöffnet ist; ScrollShield wertet nur deine geschützten Apps aus und speichert die übrigen
+          Angaben nicht.
         </li>
         <li>
-          <strong>Android:</strong> Nutzungsdatenzugriff zur Erkennung der Vordergrund-App und optional Overlay-Rechte
-          zur Anzeige des Schutzbildschirms.
+          <strong>Android, Überlagerung:</strong> zur Anzeige des Schutzbildschirms über der geschützten App. Solange
+          der Schutz läuft, zeigt Android dazu eine dauerhafte Benachrichtigung an.
+        </li>
+        <li>
+          <strong>Benachrichtigungen (optional):</strong> für Erinnerungen wie das Ende einer Fokus-Sitzung oder die
+          Abend-Erinnerung. Sie entstehen auf deinem Gerät; in der Android-App werden einige beim System zur Anzeige
+          eingeplant. Ihr Inhalt verlässt das Gerät nicht.
         </li>
         <li>
           <strong>Android, optionale Bedienungshilfe:</strong> Wenn du Regeln für Kurzvideo-Feeds (Reels, Shorts,
@@ -160,8 +212,10 @@
           Kontaktdaten oder Bildschirminhalte. Die entsprechenden Systemaufrufe sind im Quelltext nicht enthalten.
         </li>
         <li>
-          <strong>Was gespeichert wird:</strong> die im Feed verbrachte Zeit pro Tag und die Anzahl der Wischbewegungen,
-          ausschließlich lokal auf deinem Gerät.
+          <strong>Was gespeichert wird:</strong> die im Feed verbrachte Zeit pro App und Tag sowie für die Diagnose die
+          letzten 20 beobachteten Oberflächenkennungen mit App-Name und Zeitpunkt, ausschließlich lokal und
+          verschlüsselt auf deinem Gerät. Wischbewegungen werden nur während einer laufenden Feed-Sitzung gezählt und
+          nicht dauerhaft gespeichert.
         </li>
         <li>
           <strong>Steuerung fremder Apps:</strong> Der Dienst kann keine Eingaben in anderen Apps simulieren. Die

@@ -1,5 +1,8 @@
 # ScrollShield – Datenschutz-Struktur & In-App Disclosure
 
+> **Veraltet – nicht als Grundlage verwenden.** Maßgeblich ist die gepflegte Erklärung in `public/privacy.html`. Diese
+> Vorlage beschreibt unter anderem Absturzberichte, die es in der App nicht gibt, und erwähnt die Bedienungshilfe nicht.
+
 Dieses Dokument dient als Vorlage für die offizielle Datenschutzerklärung (Privacy Policy) im App Store / Google Play Store sowie als Leitfaden für die In-App-Kommunikation.
 
 Das Ziel ist **"Privacy by Design"** und **radikale Transparenz**. Die Sprache ist bewusst einfach, direkt und verzichtet auf unnötiges Juristen-Kauderwelsch, erfüllt aber alle rechtlichen Anforderungen (DSGVO/GDPR).
