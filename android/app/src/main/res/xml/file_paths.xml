@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Folders the FileProvider may hand out. Capacitor only shares files from the
+    app's own external files folder (camera capture in a file input) and from
+    its cache; the template's external-path "." covered the whole shared
+    storage of the phone.
+-->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
+    <external-files-path name="my_images" path="." />
     <cache-path name="my_cache_images" path="." />
 </paths>
