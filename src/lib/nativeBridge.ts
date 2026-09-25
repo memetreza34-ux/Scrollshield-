@@ -123,6 +123,23 @@ export interface ShortVideoUsageResult {
   date?: string;
 }
 
+/** One interruption shown by the Android overlay; see InterruptionLog.kt. */
+export interface NativeInterruptionEvent {
+  id: string;
+  timestamp: number;
+  packageName: string;
+  kind: 'app' | 'short_video';
+  /** blocked: locked · warned: soft interruption shown · stopped: user went home · continued: user opened the app */
+  outcome: 'blocked' | 'warned' | 'stopped' | 'continued';
+  /** STRICT, TIME_WINDOW, SOFT, STANDARD, or for feeds SWIPES, SESSION_LIMIT, DAILY_LIMIT, BLOCKED */
+  reason: string;
+  swipes: number;
+}
+
+export interface InterruptionEventsResult {
+  events: NativeInterruptionEvent[];
+}
+
 export interface CalibrationSample {
   packageName: string;
   viewIds: string[];
@@ -175,6 +192,8 @@ export interface ScrollShieldBridgePlugin {
   openAccessibilitySettings(): Promise<OpenedResult>;
   getShortVideoUsage(): Promise<ShortVideoUsageResult>;
   getCalibrationSamples(): Promise<CalibrationResult>;
+  getInterruptionEvents(): Promise<InterruptionEventsResult>;
+  acknowledgeInterruptionEvents(options: { ids: string[] }): Promise<void>;
 }
 
 // ── Capacitor plugin registration ─────────────────────────────────────────────
@@ -201,6 +220,8 @@ const ScrollShieldBridgeNative = registerPlugin<ScrollShieldBridgePlugin>('Scrol
     openAccessibilitySettings: async () => ({ opened: false }),
     getShortVideoUsage: async () => ({ entries: [], available: false }),
     getCalibrationSamples: async () => ({ samples: [], available: false }),
+    getInterruptionEvents: async () => ({ events: [] }),
+    acknowledgeInterruptionEvents: async () => undefined,
   },
 });
 
@@ -408,6 +429,28 @@ export async function readShortVideoUsage(): Promise<ShortVideoUsageResult> {
     return await ScrollShieldBridgeNative.getShortVideoUsage();
   } catch {
     return { entries: [], available: false };
+  }
+}
+
+/**
+ * Reads the interruptions the Android overlay recorded. Empty on web and when
+ * the plugin is unavailable.
+ */
+export async function readInterruptionEvents(): Promise<NativeInterruptionEvent[]> {
+  try {
+    return (await ScrollShieldBridgeNative.getInterruptionEvents()).events ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Lets the native side drop interruptions that are now in the history. */
+export async function acknowledgeInterruptionEvents(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  try {
+    await ScrollShieldBridgeNative.acknowledgeInterruptionEvents({ ids });
+  } catch {
+    // Kept on the device; the next pull finds them already imported.
   }
 }
 

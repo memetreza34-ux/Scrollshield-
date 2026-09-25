@@ -16,9 +16,8 @@ Merkliste für alles, was noch fehlt. Stand: 25. September 2026. Erledigtes hier
 ## Technik – vor dem Release
 
 - [ ] Android-Teil bauen und auf einem echten Handy testen: `docs/DEVICE_TEST_CHECKLIST.md`.
-- [ ] Echte Sperren auf dem Handy landen nicht in Verlauf und Statistik (Dashboard, Anti-Binge, Tageslimit pro App,
-      Rückfall-Warnung). Siehe „Known Limits“ in `docs/NATIVE_ANDROID.md`.
-- [ ] Nach einem Neustart des Handys startet die App-Sperre erst, wenn ScrollShield geöffnet wird.
+- [ ] Anti-Binge und Tageslimit pro App greifen auf dem Handy nicht beim echten Öffnen einer App, nur im Schutzablauf
+      innerhalb von ScrollShield. Siehe „Known Limits“ in `docs/NATIVE_ANDROID.md`.
 - [ ] Endet eine Fokus-Sitzung bei geschlossener App, bleibt die Sperre bis zum nächsten Öffnen.
 
 ## Rechtliches – später

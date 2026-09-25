@@ -76,6 +76,20 @@
                 android:value="App usage monitoring for parental and self-control purposes" />
         </service>
 
+        <!-- ── BootReceiver ──────────────────────────────────────────────────
+             Restarts AppMonitorService after a reboot or an app update, if
+             the user had monitoring on. Both actions are protected broadcasts
+             that only the system can send; the receiver must be exported to
+             receive them and ignores every other action.
+        -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 
     <!-- ── Permissions ──────────────────────────────────────────────────── -->
@@ -98,16 +112,17 @@
     <!-- Optional: Notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Restart the app lock after a reboot or an update (BootReceiver). Also
+         lets @capacitor/local-notifications restore scheduled reminders. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <!--
-        @capacitor/local-notifications declares these; ScrollShield needs none
-        of them. Reminders are scheduled as inexact alarms
+        @capacitor/local-notifications declares these as well; ScrollShield
+        needs neither. Reminders are scheduled as inexact alarms
         (isExactNotification: false), which need no exact-alarm access and no
-        Play Console declaration. Without boot access a reminder scheduled
-        before a reboot is dropped, which is acceptable for a focus-end note.
-        The plugin never takes a wake lock.
+        Play Console declaration. The plugin never takes a wake lock.
     -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" tools:node="remove" />
     <uses-permission android:name="android.permission.WAKE_LOCK" tools:node="remove" />
 
 </manifest>

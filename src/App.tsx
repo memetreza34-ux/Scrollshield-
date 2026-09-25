@@ -4,7 +4,13 @@ import { AppState, Screen, DEFAULT_STATE, SUPPORTED_APPS } from './types';
 import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
 import { reconcileFocusRuntime } from './lib/focus';
-import { readShortVideoUsage, syncNativeBlockList } from './lib/nativeBridge';
+import {
+  acknowledgeInterruptionEvents,
+  readInterruptionEvents,
+  readShortVideoUsage,
+  syncNativeBlockList,
+} from './lib/nativeBridge';
+import { mergeNativeInterruptions } from './lib/nativeEvents';
 import { mergeNativeShortVideoUsage } from './lib/stats';
 import { getLocalDateKey } from './lib/appUtils';
 import { detectOperatingSystem } from './lib/platform';
@@ -160,25 +166,40 @@ export default function App() {
     }
   }, [isLoaded, appState.focusSessions, focusRemindersEnabled]);
 
-  // Short-video minutes the accessibility service measured on the device.
-  // Pulled on start, on return to the app and once a minute while it runs; the
-  // browser fallback reports `available: false` and changes nothing.
+  // What happened on the device while ScrollShield was in the background:
+  // short-video minutes from the accessibility service and the interruptions
+  // the overlay showed. Pulled on start, on return to the app and once a
+  // minute while it runs; in the browser both come back empty.
   useEffect(() => {
     if (!isLoaded) return;
 
     let cancelled = false;
     const pull = async () => {
-      const usage = await readShortVideoUsage();
-      if (cancelled || !usage.available || usage.entries.length === 0) return;
+      const [usage, interruptions] = await Promise.all([readShortVideoUsage(), readInterruptionEvents()]);
+      if (cancelled) return;
       const date = usage.date ?? getLocalDateKey(new Date());
+
       setAppState((previous) => {
-        const dailyStats = mergeNativeShortVideoUsage(
-          previous.dailyStats,
-          { date, entries: usage.entries },
-          SUPPORTED_APPS,
-        );
-        return dailyStats === previous.dailyStats ? previous : { ...previous, dailyStats };
+        let next = previous;
+        if (usage.available && usage.entries.length > 0) {
+          const dailyStats = mergeNativeShortVideoUsage(
+            next.dailyStats,
+            { date, entries: usage.entries },
+            SUPPORTED_APPS,
+          );
+          if (dailyStats !== next.dailyStats) next = { ...next, dailyStats };
+        }
+        if (interruptions.length > 0) {
+          const merged = mergeNativeInterruptions(next, interruptions, SUPPORTED_APPS);
+          if (merged.history !== next.history) next = { ...next, ...merged };
+        }
+        return next;
       });
+
+      // Now part of the state, which the save effect persists right away.
+      // Should the acknowledgement fail, the next pull finds them in the
+      // history and skips them.
+      void acknowledgeInterruptionEvents(interruptions.map((event) => event.id));
     };
     const pullWhenVisible = () => {
       if (document.visibilityState === 'visible') void pull();

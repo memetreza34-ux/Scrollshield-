@@ -1,17 +1,13 @@
 package app.scrollshield.mobile
 
-import android.app.AppOpsManager
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
-import android.os.Process
 import android.provider.Settings
 import android.text.TextUtils
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -53,45 +49,12 @@ class ScrollShieldBridgePlugin : Plugin() {
 
     // ── Encrypted SharedPreferences ───────────────────────────────────────────
 
-    private val encryptedPrefs: SharedPreferences by lazy {
-        try {
-            val masterKey = MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            EncryptedSharedPreferences.create(
-                context,
-                PREF_FILE,
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
-        } catch (_: Exception) {
-            // Fallback to plain prefs if the security provider is unavailable (emulators)
-            context.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
-        }
-    }
+    private val encryptedPrefs: SharedPreferences by lazy { SecurePrefs.open(context) }
 
     // ── Permission helpers ────────────────────────────────────────────────────
 
     /** Returns true if the app has PACKAGE_USAGE_STATS (Usage Access) permission. */
-    private fun hasUsageStatsPermission(): Boolean {
-        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            appOps.unsafeCheckOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                context.packageName
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                context.packageName
-            )
-        }
-        return mode == AppOpsManager.MODE_ALLOWED
-    }
+    private fun hasUsageStatsPermission(): Boolean = AppMonitorService.hasUsageAccess(context)
 
     /** Returns true if SYSTEM_ALERT_WINDOW (overlay) permission is granted. */
     private fun hasOverlayPermission(): Boolean =
@@ -447,6 +410,34 @@ class ScrollShieldBridgePlugin : Plugin() {
             .put("viewIdHints", hints("viewIdHints"))
             .put("classNameHints", hints("classNameHints"))
             .put("alwaysShortVideo", feed.optBoolean("alwaysShortVideo", false))
+    }
+
+    /**
+     * Returns the interruptions the overlay recorded and the web layer has not
+     * taken over yet. See InterruptionLog.
+     */
+    @PluginMethod
+    fun getInterruptionEvents(call: PluginCall) {
+        val events = JSArray()
+        val stored = InterruptionLog.read(encryptedPrefs)
+        for (index in 0 until stored.length()) {
+            stored.optJSONObject(index)?.let { events.put(it) }
+        }
+
+        val result = JSObject()
+        result.put("events", events)
+        call.resolve(result)
+    }
+
+    /** Drops the interruptions the web layer has put into its history. */
+    @PluginMethod
+    fun acknowledgeInterruptionEvents(call: PluginCall) {
+        val ids = call.getArray("ids") ?: JSArray()
+        val acknowledged = (0 until ids.length())
+            .mapNotNull { index -> ids.optString(index).takeIf { it.isNotEmpty() } }
+            .toSet()
+        InterruptionLog.acknowledge(encryptedPrefs, acknowledged)
+        call.resolve()
     }
 
     /** Looks the configured surface id for a package up in the stored rules. */

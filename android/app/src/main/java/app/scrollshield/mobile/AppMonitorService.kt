@@ -1,5 +1,6 @@
 package app.scrollshield.mobile
 
+import android.app.AppOpsManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -18,6 +19,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
+import android.os.Process
 import android.provider.Settings
 import android.view.Gravity
 import android.view.KeyEvent
@@ -27,8 +29,6 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
@@ -123,6 +123,50 @@ class AppMonitorService : Service() {
                 // Accessibility service not enabled.
             }
         }
+
+        /** True when the user granted Usage Access; without it the monitor sees nothing. */
+        fun hasUsageAccess(context: Context): Boolean {
+            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                appOps.unsafeCheckOpNoThrow(
+                    AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    Process.myUid(),
+                    context.packageName
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                appOps.checkOpNoThrow(
+                    AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    Process.myUid(),
+                    context.packageName
+                )
+            }
+            return mode == AppOpsManager.MODE_ALLOWED
+        }
+
+        /**
+         * Starts the monitor if the user had it running: monitoring switched on,
+         * at least one rule, Usage Access granted. Used after a reboot or an
+         * update, when nothing else would start it.
+         */
+        fun startIfEnabled(context: Context) {
+            val prefs = SecurePrefs.open(context)
+            if (!prefs.getBoolean(ScrollShieldBridgePlugin.KEY_MONITORING_ENABLED, false)) return
+            val rules = prefs.getString(ScrollShieldBridgePlugin.KEY_BLOCKED_RULES, "[]") ?: "[]"
+            if (rules.isBlank() || rules.trim() == "[]") return
+            if (!hasUsageAccess(context)) return
+
+            val intent = Intent(context, AppMonitorService::class.java)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (_: Exception) {
+                // Start refused; the app starts the monitor again when opened.
+            }
+        }
     }
 
     /** A window that tightens the mode; `endHour < startHour` wraps past midnight. */
@@ -154,22 +198,7 @@ class AppMonitorService : Service() {
     private var lastForegroundPackage: String? = null
     private val allowedUntil = mutableMapOf<String, Long>()
 
-    private val prefs: SharedPreferences by lazy {
-        try {
-            val masterKey = MasterKey.Builder(this)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            EncryptedSharedPreferences.create(
-                this,
-                ScrollShieldBridgePlugin.PREF_FILE,
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
-        } catch (_: Exception) {
-            getSharedPreferences(ScrollShieldBridgePlugin.PREF_FILE, MODE_PRIVATE)
-        }
-    }
+    private val prefs: SharedPreferences by lazy { SecurePrefs.open(this) }
 
     // ── Polling runnable ──────────────────────────────────────────────────────
 
@@ -379,13 +408,31 @@ class AppMonitorService : Service() {
 
     private fun showInterruptionOverlay(blockedPackage: String, rule: BlockRule, lockedByTimeWindow: Boolean) {
         val appName = getAppName(blockedPackage)
+        val locked = rule.mode == "strict"
+        val reason = when {
+            lockedByTimeWindow -> "TIME_WINDOW"
+            locked -> "STRICT"
+            rule.mode == "soft" -> "SOFT"
+            else -> "STANDARD"
+        }
         presentOverlay(
             blockedPackage = blockedPackage,
             bodyText = getString(R.string.overlay_body, appName),
-            showContinue = rule.mode != "strict",
+            showContinue = !locked,
+            onShown = {
+                // A locked app is a block the moment it is shown; a soft or
+                // standard interruption only counts once the user decides.
+                if (locked) recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_BLOCKED, reason)
+            },
             onContinue = {
+                recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_CONTINUED, reason)
                 allowedUntil[blockedPackage] = System.currentTimeMillis() + GRACE_PERIOD_MS
                 dismissOverlay()
+            },
+            onGoHome = {
+                if (!locked) {
+                    recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_STOPPED, reason)
+                }
             },
         ) { statusView, continueButton ->
             startCountdown(statusView, continueButton, rule, lockedByTimeWindow)
@@ -415,6 +462,15 @@ class AppMonitorService : Service() {
             blockedPackage = packageName,
             bodyText = body,
             showContinue = !hardInterrupt,
+            onShown = {
+                recordInterruption(
+                    packageName,
+                    InterruptionLog.KIND_SHORT_VIDEO,
+                    if (hardInterrupt) InterruptionLog.OUTCOME_BLOCKED else InterruptionLog.OUTCOME_WARNED,
+                    reason,
+                    swipes,
+                )
+            },
             onContinue = {
                 // The feed itself stays protected; this only dismisses the screen.
                 dismissOverlay()
@@ -429,15 +485,23 @@ class AppMonitorService : Service() {
         }
     }
 
+    private fun recordInterruption(packageName: String, kind: String, outcome: String, reason: String, swipes: Int = 0) {
+        InterruptionLog.record(prefs, packageName, kind, outcome, reason, swipes)
+    }
+
     /**
      * Shared overlay scaffold. `configure` receives the status line and the
      * continue button so each caller can drive its own countdown or hint.
+     * `onShown` runs only when the overlay really appeared; `onGoHome` when
+     * the user leaves through "back to home screen" or the back key.
      */
     private fun presentOverlay(
         blockedPackage: String,
         bodyText: String,
         showContinue: Boolean,
+        onShown: () -> Unit = {},
         onContinue: () -> Unit,
+        onGoHome: () -> Unit = {},
         configure: (TextView, Button) -> Unit,
     ) {
         if (!Settings.canDrawOverlays(this)) return
@@ -476,7 +540,10 @@ class AppMonitorService : Service() {
 
             val homeButton = Button(this).apply {
                 text = getString(R.string.overlay_go_home)
-                setOnClickListener { goHome() }
+                setOnClickListener {
+                    onGoHome()
+                    goHome()
+                }
             }
 
             val root = LinearLayout(this).apply {
@@ -505,6 +572,7 @@ class AppMonitorService : Service() {
 
                 setOnKeyListener { _, keyCode, event ->
                     if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
+                        onGoHome()
                         goHome()
                         true
                     } else {
@@ -519,6 +587,7 @@ class AppMonitorService : Service() {
                 overlayPackage = blockedPackage
                 root.requestFocus()
                 configure(statusView, continueButton)
+                onShown()
             } catch (_: Exception) {
                 overlayView = null
                 overlayPackage = null

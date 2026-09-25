@@ -92,18 +92,25 @@ Zum Testen darfst du die Uhrzeit des Handys vorstellen (automatische Zeit aus). 
 - [ ] Handy eine Stunde liegen lassen (Bildschirm aus), dann Instagram öffnen. **Erwartet:** der Schutz greift noch.
 - [ ] Samsung, Xiaomi, Huawei und ähnliche: in den Akku-Einstellungen prüfen, ob ScrollShield „eingeschränkt“ ist. Den
       Test einmal mit und einmal ohne Einschränkung machen.
-- [ ] Handy neu starten, **ohne** ScrollShield zu öffnen, dann Instagram öffnen. Notiere, was passiert (siehe
-      „Bekannte Lücken“).
+- [ ] Handy neu starten und entsperren, **ohne** ScrollShield zu öffnen, dann Instagram öffnen. **Erwartet:** der
+      Schutzbildschirm erscheint (die dauerhafte Benachrichtigung ist nach dem Hochfahren wieder da).
+- [ ] ScrollShield über Android Studio neu installieren (Update), danach Instagram öffnen. **Erwartet:** der Schutz
+      greift, ohne ScrollShield zu öffnen.
+
+## 8. Verlauf und Statistik
+
+- [ ] Instagram im Modus „Strict“ zweimal öffnen, im Modus „Standard“ einmal „Weiter“ und einmal „Zurück zum
+      Startbildschirm“ wählen. Dann ScrollShield öffnen. **Erwartet:** spätestens nach einer Minute steht im Dashboard
+      „3 unbewusste Impulse heute gestoppt.“; im Verlauf stehen die Einträge mit „Auf dem Handy gesperrt“, „Unterbrochen
+      und nicht geöffnet“ und „Nach der Unterbrechung geöffnet“.
+- [ ] ScrollShield schließen und wieder öffnen. **Erwartet:** die Zahl bleibt 3, nichts wird doppelt gezählt.
+- [ ] Eine Kurzvideo-Unterbrechung auslösen (Abschnitt 4). **Erwartet:** sie erscheint im Verlauf als „Kurzvideo: …“.
 
 ## Bekannte Lücken – nicht als Fehler melden
 
 Diese Punkte sind bekannt und dokumentiert. Notiere trotzdem, wie sehr sie im Alltag stören:
 
-- **Statistiken zählen die echten Sperren nicht.** Der Schutzbildschirm auf dem Handy trägt nichts in den Verlauf ein.
-  Dashboard („heute blockiert“, gesparte Zeit), Anti-Binge, das Tageslimit pro App, Rückfall-Warnung und die Zahlen in
-  Tageszusammenfassung und Wochenrückblick beruhen nur auf den Vorgängen innerhalb von ScrollShield. Ausnahme: Die
-  Kurzvideo-Minuten kommen vom Handy.
-- **Nach einem Neustart** schützt die App-Sperre erst wieder, wenn ScrollShield einmal geöffnet wurde. Die
-  Kurzvideo-Erkennung startet von selbst.
+- **Anti-Binge und Tageslimit pro App** greifen auf dem Handy nicht beim echten Öffnen einer App. Sie wirken nur im
+  Schutzablauf innerhalb von ScrollShield.
 - **Fokus-Ende bei geschlossener App:** Die Sperre bleibt, bis ScrollShield wieder geöffnet wird.
-- **Erinnerungen** kommen oft ein paar Minuten später und gehen durch einen Neustart verloren, bis die App geöffnet wird.
+- **Erinnerungen** kommen oft ein paar Minuten später.

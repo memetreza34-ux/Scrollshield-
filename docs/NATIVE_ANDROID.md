@@ -21,15 +21,17 @@ toolchain whenever Kotlin sources exist.
 
 `ScrollShieldBridgePlugin.kt` exposes to the web layer:
 
-| Method                        | Purpose                                                     |
-| ----------------------------- | ----------------------------------------------------------- |
-| `getPermissionStatus`         | Usage Access, overlay, notifications, service running state |
-| `requestUsageStatsPermission` | Opens the system Usage Access screen                        |
-| `requestOverlayPermission`    | Opens the system overlay screen                             |
-| `getForegroundApp`            | Current foreground package (diagnostics)                    |
-| `syncBlockedApps`             | Writes the per-app rule set                                 |
-| `startMonitoring`             | Starts `AppMonitorService`                                  |
-| `stopMonitoring`              | Stops it and clears the master switch                       |
+| Method                          | Purpose                                                     |
+| ------------------------------- | ----------------------------------------------------------- |
+| `getPermissionStatus`           | Usage Access, overlay, notifications, service running state |
+| `requestUsageStatsPermission`   | Opens the system Usage Access screen                        |
+| `requestOverlayPermission`      | Opens the system overlay screen                             |
+| `getForegroundApp`              | Current foreground package (diagnostics)                    |
+| `syncBlockedApps`               | Writes the per-app rule set                                 |
+| `startMonitoring`               | Starts `AppMonitorService`                                  |
+| `stopMonitoring`                | Stops it and clears the master switch                       |
+| `getInterruptionEvents`         | Interruptions the overlay showed, not yet in the history    |
+| `acknowledgeInterruptionEvents` | Drops the ones the web layer took over                      |
 
 `AppMonitorService.kt` runs as a foreground service, reads the foreground app from the `UsageStatsManager` **event**
 stream every 1.5 s, and shows a full-screen overlay when a protected package appears:
@@ -59,6 +61,11 @@ review (Sundays from 20:00, instead of the daily summary) and the relapse warnin
 running app. Alarms are inexact: `SCHEDULE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED` and `WAKE_LOCK`, which the plugin
 declares, are removed from the merged manifest.
 
+Every interruption is recorded (`InterruptionLog.kt`: package, outcome, reason, time – nothing from the screen) until
+the web layer takes it into its history and acknowledges it (`src/lib/nativeEvents.ts`). Dashboard, statistics, stop
+rate, relapse warning and summaries therefore count what happens on the phone. `BootReceiver` restarts the monitor after
+a reboot or an app update if monitoring was on; the accessibility service is rebound by the system on its own.
+
 ## Short-Video Detection
 
 `ShortVideoWatchService` (accessibility) recognises whether a protected app's short-video feed is on screen, counts
@@ -71,16 +78,11 @@ Full mechanism, privacy boundary, calibration procedure and Play Console require
 ## Known Limits
 
 - **Anti-binge windows, app-level daily limits and emergency unlocks are evaluated in the web layer only.** The native
-  service receives mode, delay, time-window schedule and feed rule, nothing else.
-- **Native interruptions are not recorded.** The overlay writes nothing to the history, so the dashboard, statistics,
-  anti-binge, app-level daily limits, the relapse warning and the summaries only reflect what happens inside
-  ScrollShield. Short-video minutes are the exception; they are read back from the device.
-- **No restart after a reboot.** There is no boot receiver, so `AppMonitorService` only runs again once ScrollShield is
-  opened. The accessibility service is rebound by the system on its own.
+  service receives mode, delay, time-window schedule and feed rule, nothing else. On the phone they therefore do not
+  stop a real app opening; they only act inside ScrollShield's own protection flow.
 - A focus session is folded into the synced mode. If it ends while the app is not running, the native rules stay `strict`
   until ScrollShield is opened again and re-syncs.
-- Scheduled reminders may arrive a few minutes late (inexact alarms). A reboot drops them until ScrollShield is opened
-  again.
+- Scheduled reminders may arrive a few minutes late (inexact alarms).
 - Feed detection is heuristic and breaks silently when a host app renames its view ids. Re-verify per platform before
   each release.
 - Detection lags an app switch by up to one poll interval (1.5 s).

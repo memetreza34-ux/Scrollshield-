@@ -18,6 +18,8 @@ In der aktuellen Version (v1.0 Offline-MVP) verarbeitet ScrollShield folgende Da
   Beobachtungen technischer Oberflächenkennungen (View-IDs, Klassennamen, Paketname, Zeitpunkt) für die Diagnose. Keine
   Texte.
 - **Benachrichtigungen:** Lokal erzeugte Erinnerungen; auf Android teils beim System eingeplant.
+- **Unterbrechungsprotokoll (nur Android):** Paketname, Zeitpunkt, Grund und Entscheidung jeder Unterbrechung durch den
+  Schutzbildschirm, verschlüsselt, bis die App sie in den Verlauf übernimmt (höchstens 300 Einträge).
 - _(Zukunft / v2.0+):_ E-Mail-Adresse, Authentifizierungs-Token, Geräte-IDs (für Cloud-Sync).
 
 ## 2. Verarbeitungszwecke

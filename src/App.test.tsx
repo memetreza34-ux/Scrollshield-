@@ -6,6 +6,13 @@ import { expectNoA11yViolations } from './test/a11y';
 import { StorageService } from './lib/storage';
 import { DEFAULT_STATE } from './types';
 
+const nativeEvents = vi.hoisted(() => ({ read: vi.fn(), acknowledge: vi.fn() }));
+vi.mock('./lib/nativeBridge', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./lib/nativeBridge')>()),
+  readInterruptionEvents: nativeEvents.read,
+  acknowledgeInterruptionEvents: nativeEvents.acknowledge,
+}));
+
 // ── Web Crypto stub (same as storage.test.ts) ─────────────────────────────────
 const cryptoSubtleStub = {
   generateKey: vi.fn().mockResolvedValue({} as CryptoKey),
@@ -39,6 +46,8 @@ const cryptoSubtleStub = {
 
 describe('App', () => {
   beforeEach(() => {
+    nativeEvents.read.mockResolvedValue([]);
+    nativeEvents.acknowledge.mockResolvedValue(undefined);
     localStorage.clear();
     vi.stubGlobal('crypto', {
       getRandomValues: (arr: Uint8Array) => arr.fill(0),
@@ -179,6 +188,36 @@ describe('App', () => {
 
   it('respects a switched-off focus reminder', async () => {
     expect(await runFocusSessionPastItsEnd(false)).toEqual([]);
+  });
+
+  it('counts interruptions from the phone on the dashboard and acknowledges them', async () => {
+    const now = Date.now();
+    nativeEvents.read.mockResolvedValue([
+      {
+        id: 'n1',
+        timestamp: now - 60_000,
+        packageName: 'com.instagram.android',
+        kind: 'app',
+        outcome: 'blocked',
+        reason: 'STRICT',
+        swipes: 0,
+      },
+      {
+        id: 'n2',
+        timestamp: now - 30_000,
+        packageName: 'com.instagram.android',
+        kind: 'app',
+        outcome: 'stopped',
+        reason: 'STANDARD',
+        swipes: 0,
+      },
+    ]);
+    await StorageService.saveState({ ...DEFAULT_STATE, hasCompletedOnboarding: true });
+
+    render(<App />);
+
+    expect(await screen.findByText('2 unbewusste Impulse heute gestoppt.')).toBeInTheDocument();
+    await waitFor(() => expect(nativeEvents.acknowledge).toHaveBeenCalledWith(['n1', 'n2']));
   });
 
   it('clears persisted data and returns to onboarding after a confirmed reset', async () => {

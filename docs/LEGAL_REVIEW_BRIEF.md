@@ -36,6 +36,7 @@ sein Verhalten.
 | Verlauf (letzte 100 Ereignisse), Statistiken      | Gerät, unverschlüsselt in der Sandbox  | Nein                               |
 | Freitext „Grund“ vor dem Öffnen einer App         | im Verlauf                             | Nein                               |
 | Vordergrund-App (Android)                         | nur im Arbeitsspeicher                 | Nein, wird nicht gespeichert       |
+| Unterbrechungen durch den Schutzbildschirm        | Gerät, verschlüsselt, dann im Verlauf  | Nein                               |
 | Kurzvideo-Minuten, Oberflächenkennungen (Android) | Gerät, verschlüsselt                   | Nein                               |
 | Benachrichtigungen                                | Gerät bzw. Android-System              | Nein                               |
 | Datenexport (JSON)                                | Datei, die der Nutzer selbst speichert | Nur wenn der Nutzer sie weitergibt |

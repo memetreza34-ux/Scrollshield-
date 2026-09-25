@@ -7,8 +7,6 @@ import android.content.SharedPreferences
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -102,22 +100,7 @@ class ShortVideoWatchService : AccessibilityService() {
     private var lastCalibrationAt = 0L
     private var lastCalibrationSignature: String? = null
 
-    private val prefs: SharedPreferences by lazy {
-        try {
-            val masterKey = MasterKey.Builder(this)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            EncryptedSharedPreferences.create(
-                this,
-                ScrollShieldBridgePlugin.PREF_FILE,
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
-        } catch (_: Exception) {
-            getSharedPreferences(ScrollShieldBridgePlugin.PREF_FILE, Context.MODE_PRIVATE)
-        }
-    }
+    private val prefs: SharedPreferences by lazy { SecurePrefs.open(this) }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 

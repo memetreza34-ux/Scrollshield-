@@ -90,6 +90,9 @@ const allowedPermissions = new Set([
   'android.permission.FOREGROUND_SERVICE',
   'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
   'android.permission.POST_NOTIFICATIONS',
+  // Normal permission, no Play Console declaration: restarts the app lock
+  // after a reboot (BootReceiver).
+  'android.permission.RECEIVE_BOOT_COMPLETED',
 ]);
 // Entries with tools:node="remove" strip a permission a library would merge
 // in; they declare nothing.
@@ -106,7 +109,7 @@ for (const permission of permissions) {
 
 // @capacitor/local-notifications merges these into the final manifest. The
 // check above only sees this file, so the removals themselves are guarded.
-for (const permission of ['SCHEDULE_EXACT_ALARM', 'RECEIVE_BOOT_COMPLETED', 'WAKE_LOCK']) {
+for (const permission of ['SCHEDULE_EXACT_ALARM', 'WAKE_LOCK']) {
   requireMatch(
     manifestPath,
     manifest,
