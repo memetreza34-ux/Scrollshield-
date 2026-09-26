@@ -35,9 +35,6 @@ class LocalStorageMock {
 // We stub encrypt/decrypt with a trivial reversible transform so the storage
 // layer can be tested end-to-end without a real browser crypto context.
 
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
-
 const stubKey = {} as CryptoKey;
 
 const cryptoSubtleStub = {

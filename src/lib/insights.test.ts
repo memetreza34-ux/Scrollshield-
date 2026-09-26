@@ -169,7 +169,7 @@ describe('findFrequentIntent', () => {
   });
 
   it('ignores events without a stated reason', () => {
-    const history: HistoryEvent[] = Array.from({ length: 6 }, (_, i) => eventAt('2026-09-02T12:00', 'open'));
+    const history: HistoryEvent[] = Array.from({ length: 6 }, () => eventAt('2026-09-02T12:00', 'open'));
 
     expect(findFrequentIntent(history, now)).toBeNull();
   });

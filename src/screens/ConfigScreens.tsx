@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Database,
+  FileText,
   Globe,
   Home,
   Bell,
@@ -1663,6 +1664,18 @@ export function PrivacyScreen({
             <div className="flex items-center gap-3">
               <Globe size={18} className="text-zinc-400" aria-hidden="true" />
               <span className="font-semibold text-zinc-200 text-sm">Öffentliche Datenschutzseite</span>
+            </div>
+            <ChevronRight size={18} className="text-zinc-500" aria-hidden="true" />
+          </a>
+          <a
+            href="/third-party-licenses.txt"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 w-full bg-zinc-900/60 border border-zinc-800/50 rounded-[1.5rem] p-5 flex items-center justify-between hover:bg-zinc-800/40 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[48px]"
+          >
+            <div className="flex items-center gap-3">
+              <FileText size={18} className="text-zinc-400" aria-hidden="true" />
+              <span className="font-semibold text-zinc-200 text-sm">Open-Source-Lizenzen</span>
             </div>
             <ChevronRight size={18} className="text-zinc-500" aria-hidden="true" />
           </a>

@@ -71,6 +71,10 @@ describe('PrivacyScreen', () => {
     );
 
     expect(screen.getByRole('link', { name: 'Öffentliche Datenschutzseite' })).toHaveAttribute('href', '/privacy.html');
+    expect(screen.getByRole('link', { name: 'Open-Source-Lizenzen' })).toHaveAttribute(
+      'href',
+      '/third-party-licenses.txt',
+    );
     await expectNoA11yViolations(container);
   });
 });

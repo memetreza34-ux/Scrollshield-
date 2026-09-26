@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Check, CloudOff, Lock, ScanLine, Shield, Smartphone, Sparkles, Target, UserRound } from 'lucide-react';
+import { Check, CloudOff, Lock, ScanLine, Shield, Smartphone, Target, UserRound } from 'lucide-react';
 import { AppState, DEFAULT_APP_CONFIG, Screen, SUPPORTED_APPS } from '../types';
 
 export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {

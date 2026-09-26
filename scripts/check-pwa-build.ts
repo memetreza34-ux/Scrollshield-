@@ -76,4 +76,12 @@ if (!privacyHtmlRaw.includes('Datenschutzerklärung') || !privacyHtmlRaw.include
   throw new Error('Production build must include the public privacy.html page.');
 }
 
+// MIT, ISC and 0BSD require the license texts to ship with the app.
+const licensesText = await readDistFile('third-party-licenses.txt').catch(() => '');
+const packageJson = JSON.parse(await readFile('package.json', 'utf8')) as { dependencies?: Record<string, string> };
+const unlicensed = Object.keys(packageJson.dependencies ?? {}).filter((name) => !licensesText.includes(`${name} `));
+if (!licensesText || unlicensed.length > 0) {
+  throw new Error(`third-party-licenses.txt is missing or lacks: ${unlicensed.join(', ') || 'everything'}`);
+}
+
 console.log('PWA build checks passed.');

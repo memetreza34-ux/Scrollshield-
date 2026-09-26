@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "vite --port=3000",
     "dev:lan": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build && tsx scripts/generate-service-worker.ts",
+    "build": "vite build && tsx scripts/generate-third-party-licenses.ts && tsx scripts/generate-service-worker.ts",
     "preview": "vite preview",
     "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
     "generate:icons": "tsx scripts/generate-pwa-icons.ts",
