@@ -57,6 +57,19 @@ describe('toHistoryEvent', () => {
     });
   });
 
+  it('names daily limit, anti-binge lock and anti-binge warning', () => {
+    expect(toHistoryEvent(event({ reason: 'DAILY_LIMIT' }), platforms)?.desc).toBe(
+      'Auf dem Handy gesperrt (Tageslimit)',
+    );
+    expect(toHistoryEvent(event({ reason: 'ANTI_BINGE' }), platforms)?.desc).toBe(
+      'Auf dem Handy gesperrt (Anti-Binge)',
+    );
+    expect(toHistoryEvent(event({ outcome: 'warned', reason: 'ANTI_BINGE_WARNING' }), platforms)).toMatchObject({
+      type: 'warning',
+      desc: 'Anti-Binge-Warnung auf dem Handy',
+    });
+  });
+
   it('skips packages no platform knows', () => {
     expect(toHistoryEvent(event({ packageName: 'com.example.other' }), platforms)).toBeNull();
   });

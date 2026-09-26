@@ -166,7 +166,7 @@ class ScrollShieldBridgePlugin : Plugin() {
      * The AppMonitorService reads them to decide how to intervene.
      *
      * JS call: ScrollShieldBridge.syncBlockedApps({
-     *   rules: [{ packageName, mode, delaySeconds, timeWindows?, shortVideo? }],
+     *   rules: [{ packageName, appId, mode, delaySeconds, dailyLimitMinutes?, antiBinge?, timeWindows?, shortVideo? }],
      *   monitoringEnabled: boolean,
      * })
      */
@@ -193,6 +193,11 @@ class ScrollShieldBridgePlugin : Plugin() {
                     "delaySeconds",
                     entry.optInt("delaySeconds", AppMonitorService.DEFAULT_DELAY_SECONDS).coerceIn(0, 300)
                 )
+            entry.optString("appId").takeIf { it.isNotEmpty() && it.length <= 64 }?.let { rule.put("appId", it) }
+            entry.optInt("dailyLimitMinutes", 0).coerceIn(0, 24 * 60).takeIf { it > 0 }?.let {
+                rule.put("dailyLimitMinutes", it)
+            }
+            normalizeAntiBinge(entry.optJSONObject("antiBinge"))?.let { rule.put("antiBinge", it) }
             normalizeTimeWindows(entry.optJSONObject("timeWindows"))?.let { rule.put("timeWindows", it) }
             normalizeShortVideo(entry.optJSONObject("shortVideo"))?.let { rule.put("shortVideo", it) }
             normalized.put(rule)
@@ -349,6 +354,20 @@ class ScrollShieldBridgePlugin : Plugin() {
         call.resolve(result)
     }
 
+    /** Validates the anti-binge thresholds; absent when switched off. */
+    private fun normalizeAntiBinge(config: JSONObject?): JSONObject? {
+        if (config == null) return null
+        val warningThreshold = config.optInt("warningThreshold", 0)
+        val blockThreshold = config.optInt("blockThreshold", 0)
+        if (warningThreshold !in 1..100 || blockThreshold !in 1..100) return null
+
+        return JSONObject()
+            .put("warningThreshold", warningThreshold)
+            .put("warningTimeframe", config.optInt("warningTimeframe", 0).coerceIn(1, 24 * 60))
+            .put("blockThreshold", blockThreshold)
+            .put("blockTimeframe", config.optInt("blockTimeframe", 0).coerceIn(1, 24 * 60))
+    }
+
     /**
      * Validates the time-window schedule (see NativeTimeWindows in
      * src/lib/nativeBridge.ts). Only windows that tighten the mode are kept.
@@ -410,6 +429,47 @@ class ScrollShieldBridgePlugin : Plugin() {
             .put("viewIdHints", hints("viewIdHints"))
             .put("classNameHints", hints("classNameHints"))
             .put("alwaysShortVideo", feed.optBoolean("alwaysShortVideo", false))
+    }
+
+    /**
+     * Returns how long each protected package was in the foreground today, so
+     * the dashboard and the daily limit in the app see real use. Only packages
+     * with a rule are looked at.
+     */
+    @PluginMethod
+    fun getAppUsage(call: PluginCall) {
+        val result = JSObject()
+        val entries = JSArray()
+
+        if (!hasUsageStatsPermission()) {
+            result.put("available", false)
+            result.put("entries", entries)
+            call.resolve(result)
+            return
+        }
+
+        val packages = mutableSetOf<String>()
+        try {
+            val rules = JSONArray(encryptedPrefs.getString(KEY_BLOCKED_RULES, "[]") ?: "[]")
+            for (index in 0 until rules.length()) {
+                rules.optJSONObject(index)?.optString("packageName")?.takeIf { it.isNotEmpty() }?.let(packages::add)
+            }
+        } catch (_: Exception) {
+            // No readable rules, nothing to report.
+        }
+
+        for ((packageName, minutes) in ForegroundUsage.minutesToday(context, packages)) {
+            entries.put(
+                JSObject()
+                    .put("packageName", packageName)
+                    .put("minutesToday", minutes)
+            )
+        }
+
+        result.put("available", true)
+        result.put("date", SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date()))
+        result.put("entries", entries)
+        call.resolve(result)
     }
 
     /**

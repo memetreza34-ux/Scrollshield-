@@ -97,7 +97,18 @@ Zum Testen darfst du die Uhrzeit des Handys vorstellen (automatische Zeit aus). 
 - [ ] ScrollShield über Android Studio neu installieren (Update), danach Instagram öffnen. **Erwartet:** der Schutz
       greift, ohne ScrollShield zu öffnen.
 
-## 8. Verlauf und Statistik
+## 8. Tageslimit und Anti-Binge
+
+- [ ] Bei Instagram ein Tageslimit von 5 Minuten setzen, Modus „Soft“. Instagram 5 Minuten nutzen („Weiter“), schließen
+      und erneut öffnen. **Erwartet:** gesperrt mit „Tageslimit erreicht: heute 5 von 5 Minuten“.
+- [ ] ScrollShield öffnen. **Erwartet:** die Instagram-Minuten im Dashboard passen ungefähr zur echten Nutzung.
+- [ ] Tageslimit aus, Anti-Binge an (z. B. Warnung ab 2 Öffnungen in 10 Minuten, Sperre ab 4 in 20 Minuten). Instagram
+      mehrmals öffnen und jeweils „Weiter“ wählen. **Erwartet:** ab der 3. Öffnung der Hinweis „Du hast Instagram in den
+      letzten 10 Minuten schon 2-mal geöffnet“; ab der 5. gesperrt mit „Zu oft geöffnet“.
+- [ ] Anti-Binge-Warnung erreichen und zusätzlich das aktuelle Zeitfenster auf „Gesperrt“ stellen. **Erwartet:**
+      gesperrt, nicht nur gewarnt.
+
+## 9. Verlauf und Statistik
 
 - [ ] Instagram im Modus „Strict“ zweimal öffnen, im Modus „Standard“ einmal „Weiter“ und einmal „Zurück zum
       Startbildschirm“ wählen. Dann ScrollShield öffnen. **Erwartet:** spätestens nach einer Minute steht im Dashboard
@@ -110,7 +121,8 @@ Zum Testen darfst du die Uhrzeit des Handys vorstellen (automatische Zeit aus). 
 
 Diese Punkte sind bekannt und dokumentiert. Notiere trotzdem, wie sehr sie im Alltag stören:
 
-- **Anti-Binge und Tageslimit pro App** greifen auf dem Handy nicht beim echten Öffnen einer App. Sie wirken nur im
-  Schutzablauf innerhalb von ScrollShield.
+- **Geprüft wird beim Öffnen.** Wer über das Tageslimit hinaus in der App bleibt, wird erst beim nächsten Öffnen
+  gesperrt.
+- **Keine Notfallfreigabe auf dem Handy.** Eine Sperre lässt sich dort nicht vorzeitig aufheben.
 - **Fokus-Ende bei geschlossener App:** Die Sperre bleibt, bis ScrollShield wieder geöffnet wird.
 - **Erinnerungen** kommen oft ein paar Minuten später.

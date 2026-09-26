@@ -12,8 +12,9 @@ import { recordProtectionEventStats } from './session';
  * in-app protection flow writes.
  *
  * Mapping, mirroring the in-app flow:
- *  - blocked   → 'block'   (strict mode, time window, hard feed interrupt)
- *  - warned    → 'warning' (soft feed interrupt)
+ *  - blocked   → 'block'   (strict mode, time window, daily limit,
+ *                           anti-binge, hard feed interrupt)
+ *  - warned    → 'warning' (anti-binge warning, soft feed interrupt)
  *  - stopped   → 'warning' (interrupted, the user went back to the home screen)
  *  - continued → 'open'    (the user opened the app after the interruption)
  */
@@ -27,6 +28,13 @@ const APP_DESCRIPTIONS: Record<NativeInterruptionEvent['outcome'], string> = {
   warned: 'Auf dem Handy unterbrochen',
   stopped: 'Unterbrochen und nicht geöffnet',
   continued: 'Nach der Unterbrechung geöffnet',
+};
+
+const LOCK_REASONS: Record<string, string> = {
+  TIME_WINDOW: 'Zeitfenster',
+  DAILY_LIMIT: 'Tageslimit',
+  ANTI_BINGE: 'Anti-Binge',
+  STRICT: 'strenger Modus',
 };
 
 const describe = (event: NativeInterruptionEvent): string => {
@@ -43,9 +51,11 @@ const describe = (event: NativeInterruptionEvent): string => {
     }
   }
 
+  if (event.outcome === 'warned' && event.reason === 'ANTI_BINGE_WARNING') return 'Anti-Binge-Warnung auf dem Handy';
+
   const base = APP_DESCRIPTIONS[event.outcome];
   if (event.outcome !== 'blocked') return base;
-  return event.reason === 'TIME_WINDOW' ? `${base} (Zeitfenster)` : `${base} (strenger Modus)`;
+  return `${base} (${LOCK_REASONS[event.reason] ?? LOCK_REASONS.STRICT})`;
 };
 
 const typeFor = (outcome: NativeInterruptionEvent['outcome']): HistoryEvent['type'] => {

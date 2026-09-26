@@ -4,9 +4,10 @@
  * Wraps the Capacitor ScrollShieldBridgePlugin for use in React components.
  * On web/non-Android platforms all calls return graceful fallbacks.
  *
- * The native layer sees the per-app rule (mode + delay), the time-window
- * schedule and the short-video rule. Daily limits, anti-binge windows and
- * emergency unlocks stay in the web layer; see src/lib/protectionRules.ts.
+ * The native layer sees the per-app rule (mode, delay, daily limit,
+ * anti-binge), the time-window schedule and the short-video rule, and
+ * evaluates them itself when an app is opened. Emergency unlocks stay in the
+ * web layer; see src/lib/protectionRules.ts.
  *
  * Usage:
  *   import { ScrollShieldBridge } from '@/lib/nativeBridge';
@@ -91,13 +92,28 @@ export interface NativeTimeWindows {
   weekendRule: TimeWindowRule;
 }
 
+export interface NativeAntiBinge {
+  warningThreshold: number;
+  /** Minutes */
+  warningTimeframe: number;
+  blockThreshold: number;
+  /** Minutes */
+  blockTimeframe: number;
+}
+
 export interface NativeProtectionRule {
   /** Android package name to watch */
   packageName: string;
+  /** Platform id; the packages of one app share daily limit and anti-binge */
+  appId: string;
   /** How the native overlay should behave for this package */
   mode: NativeProtectionMode;
   /** Countdown length before the app may be opened (standard mode) */
   delaySeconds: number;
+  /** Minutes per day across the app's packages; absent when there is no limit */
+  dailyLimitMinutes?: number;
+  /** Absent when anti-binge is switched off */
+  antiBinge?: NativeAntiBinge;
   /** Stricter schedule; absent when time windows are off or all 'normal' */
   timeWindows?: NativeTimeWindows;
   /** Short-video surface rule; absent when the app has no protected feed */
@@ -138,6 +154,15 @@ export interface NativeInterruptionEvent {
 
 export interface InterruptionEventsResult {
   events: NativeInterruptionEvent[];
+}
+
+export interface AppUsageResult {
+  /** Minutes each protected package was in the foreground today */
+  entries: { packageName: string; minutesToday: number }[];
+  /** False without Usage Access, and on web */
+  available: boolean;
+  /** Local day (YYYY-MM-DD) the minutes belong to */
+  date?: string;
 }
 
 export interface CalibrationSample {
@@ -193,6 +218,7 @@ export interface ScrollShieldBridgePlugin {
   getShortVideoUsage(): Promise<ShortVideoUsageResult>;
   getCalibrationSamples(): Promise<CalibrationResult>;
   getInterruptionEvents(): Promise<InterruptionEventsResult>;
+  getAppUsage(): Promise<AppUsageResult>;
   acknowledgeInterruptionEvents(options: { ids: string[] }): Promise<void>;
 }
 
@@ -221,6 +247,7 @@ const ScrollShieldBridgeNative = registerPlugin<ScrollShieldBridgePlugin>('Scrol
     getShortVideoUsage: async () => ({ entries: [], available: false }),
     getCalibrationSamples: async () => ({ samples: [], available: false }),
     getInterruptionEvents: async () => ({ events: [] }),
+    getAppUsage: async () => ({ entries: [], available: false }),
     acknowledgeInterruptionEvents: async () => undefined,
   },
 });
@@ -270,6 +297,8 @@ type AppConfigSlice = {
   active: boolean;
   mode: NativeProtectionMode;
   openDelay: number;
+  dailyLimit?: number;
+  antiBinge?: NativeAntiBinge & { enabled: boolean };
   focusModeBehavior?: 'allow' | 'warn' | 'block';
   timeWindows?: TimeWindowsConfigSlice;
   reelsProtection?: ShortVideoConfigSlice;
@@ -373,14 +402,26 @@ export function buildNativeProtectionRules(
       options.isFocusModeActive && config.focusModeBehavior === 'block' ? 'strict' : config.mode;
     const shortVideo = buildShortVideoRule(platform, config, options);
     const timeWindows = buildTimeWindows(config);
+    const dailyLimitMinutes = nonNegativeInt(config.dailyLimit);
+    const antiBinge = config.antiBinge?.enabled
+      ? {
+          warningThreshold: nonNegativeInt(config.antiBinge.warningThreshold),
+          warningTimeframe: nonNegativeInt(config.antiBinge.warningTimeframe),
+          blockThreshold: nonNegativeInt(config.antiBinge.blockThreshold),
+          blockTimeframe: nonNegativeInt(config.antiBinge.blockTimeframe),
+        }
+      : undefined;
 
     for (const packageName of platform.androidPackages) {
       if (seen.has(packageName)) continue;
       seen.add(packageName);
       rules.push({
         packageName,
+        appId: platform.id,
         mode,
         delaySeconds: nonNegativeInt(config.openDelay),
+        ...(dailyLimitMinutes > 0 ? { dailyLimitMinutes } : {}),
+        ...(antiBinge ? { antiBinge } : {}),
         ...(timeWindows ? { timeWindows } : {}),
         ...(shortVideo ? { shortVideo } : {}),
       });
@@ -427,6 +468,15 @@ export async function syncNativeBlockList(
 export async function readShortVideoUsage(): Promise<ShortVideoUsageResult> {
   try {
     return await ScrollShieldBridgeNative.getShortVideoUsage();
+  } catch {
+    return { entries: [], available: false };
+  }
+}
+
+/** Reads today's foreground minutes of the protected apps from the device. */
+export async function readAppUsage(): Promise<AppUsageResult> {
+  try {
+    return await ScrollShieldBridgeNative.getAppUsage();
   } catch {
     return { entries: [], available: false };
   }

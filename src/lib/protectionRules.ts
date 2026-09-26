@@ -80,23 +80,6 @@ export const evaluateProtectionAttempt = ({
         },
       };
     }
-
-    const recentWarningWindowOpens = history.filter(
-      (event) =>
-        event.appId === appId &&
-        event.type === 'open' &&
-        now - event.timestamp < config.antiBinge.warningTimeframe * 60_000,
-    );
-
-    if (recentWarningWindowOpens.length >= config.antiBinge.warningThreshold) {
-      return {
-        step: 'anti_binge_warning',
-        event: {
-          type: 'warning',
-          desc: `Anti-Binge Warnung (${recentWarningWindowOpens.length} Oeffnungen in ${config.antiBinge.warningTimeframe}m)`,
-        },
-      };
-    }
   }
 
   // Time windows tighten the configured mode but never loosen it: an app set to
@@ -139,6 +122,28 @@ export const evaluateProtectionAttempt = ({
             : 'Durch strikten Modus / Fokus blockiert',
       },
     };
+  }
+
+  // The anti-binge warning comes after every lock: its "Trotzdem weiter" leads
+  // into the normal soft or standard flow, so placed earlier it let a time
+  // window block or strict mode be bypassed.
+  if (config.antiBinge.enabled) {
+    const recentWarningWindowOpens = history.filter(
+      (event) =>
+        event.appId === appId &&
+        event.type === 'open' &&
+        now - event.timestamp < config.antiBinge.warningTimeframe * 60_000,
+    );
+
+    if (recentWarningWindowOpens.length >= config.antiBinge.warningThreshold) {
+      return {
+        step: 'anti_binge_warning',
+        event: {
+          type: 'warning',
+          desc: `Anti-Binge Warnung (${recentWarningWindowOpens.length} Oeffnungen in ${config.antiBinge.warningTimeframe}m)`,
+        },
+      };
+    }
   }
 
   if (effectiveMode === 'standard') {

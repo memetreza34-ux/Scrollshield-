@@ -37,6 +37,8 @@ sein Verhalten.
 | Freitext „Grund“ vor dem Öffnen einer App         | im Verlauf                             | Nein                               |
 | Vordergrund-App (Android)                         | nur im Arbeitsspeicher                 | Nein, wird nicht gespeichert       |
 | Unterbrechungen durch den Schutzbildschirm        | Gerät, verschlüsselt, dann im Verlauf  | Nein                               |
+| Öffnungszeitpunkte geschützter Apps (Anti-Binge)  | Gerät, verschlüsselt, 24 Stunden       | Nein                               |
+| Nutzungsminuten geschützter Apps (Android)        | Tagesstatistik auf dem Gerät           | Nein                               |
 | Kurzvideo-Minuten, Oberflächenkennungen (Android) | Gerät, verschlüsselt                   | Nein                               |
 | Benachrichtigungen                                | Gerät bzw. Android-System              | Nein                               |
 | Datenexport (JSON)                                | Datei, die der Nutzer selbst speichert | Nur wenn der Nutzer sie weitergibt |

@@ -31,6 +31,7 @@ toolchain whenever Kotlin sources exist.
 | `startMonitoring`               | Starts `AppMonitorService`                                  |
 | `stopMonitoring`                | Stops it and clears the master switch                       |
 | `getInterruptionEvents`         | Interruptions the overlay showed, not yet in the history    |
+| `getAppUsage`                   | Today's foreground minutes of the protected packages        |
 | `acknowledgeInterruptionEvents` | Drops the ones the web layer took over                      |
 
 `AppMonitorService.kt` runs as a foreground service, reads the foreground app from the `UsageStatsManager` **event**
@@ -77,9 +78,12 @@ Full mechanism, privacy boundary, calibration procedure and Play Console require
 
 ## Known Limits
 
-- **Anti-binge windows, app-level daily limits and emergency unlocks are evaluated in the web layer only.** The native
-  service receives mode, delay, time-window schedule and feed rule, nothing else. On the phone they therefore do not
-  stop a real app opening; they only act inside ScrollShield's own protection flow.
+- **Checked on opening only.** Daily limit, anti-binge and time windows are evaluated when a protected app comes to the
+  front, in the same order as `src/lib/protectionRules.ts`. Someone who stays in the app past the limit or into a
+  locking window is not thrown out until the next opening.
+- **Emergency unlocks exist only in the web layer.** On the phone, a lock cannot be lifted early.
+- **Anti-binge counts openings on the phone only** (continue on the overlay, or a return during the grace period), not
+  openings inside ScrollShield's own protection flow.
 - A focus session is folded into the synced mode. If it ends while the app is not running, the native rules stay `strict`
   until ScrollShield is opened again and re-syncs.
 - Scheduled reminders may arrive a few minutes late (inexact alarms).

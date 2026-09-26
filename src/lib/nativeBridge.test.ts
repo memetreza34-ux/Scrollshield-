@@ -23,7 +23,9 @@ describe('buildNativeProtectionRules', () => {
   it('carries mode and delay per package', () => {
     const rules = buildNativeProtectionRules({ tiktok: { active: true, mode: 'strict', openDelay: 30 } }, platforms);
 
-    expect(rules).toEqual([{ packageName: 'com.zhiliaoapp.musically', mode: 'strict', delaySeconds: 30 }]);
+    expect(rules).toEqual([
+      { packageName: 'com.zhiliaoapp.musically', appId: 'tiktok', mode: 'strict', delaySeconds: 30 },
+    ]);
   });
 
   it('escalates to strict while a focus session blocks the app', () => {
@@ -248,5 +250,29 @@ describe('time-window rules', () => {
     );
 
     expect(rules[0].timeWindows).toEqual({ windows: [], weekendRule: 'block' });
+  });
+});
+
+describe('daily limit and anti-binge rules', () => {
+  const antiBinge = { warningThreshold: 3, warningTimeframe: 10, blockThreshold: 5, blockTimeframe: 20 };
+
+  it('hands the daily limit and anti-binge thresholds down with the app id', () => {
+    const rules = buildNativeProtectionRules(
+      { instagram: activeApp({ dailyLimit: 45, antiBinge: { enabled: true, ...antiBinge } }) },
+      platforms,
+    );
+
+    expect(rules.map((rule) => rule.appId)).toEqual(['instagram', 'instagram']);
+    expect(rules[0]).toMatchObject({ dailyLimitMinutes: 45, antiBinge });
+  });
+
+  it('leaves both out when they are switched off', () => {
+    const rules = buildNativeProtectionRules(
+      { instagram: activeApp({ dailyLimit: 0, antiBinge: { enabled: false, ...antiBinge } }) },
+      platforms,
+    );
+
+    expect(rules[0].dailyLimitMinutes).toBeUndefined();
+    expect(rules[0].antiBinge).toBeUndefined();
   });
 });

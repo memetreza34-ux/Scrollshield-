@@ -223,6 +223,36 @@ describe('evaluateProtectionAttempt', () => {
     expect(decision.step).toBe('soft_intent');
   });
 
+  it('does not let the anti-binge warning bypass a time window block or strict mode', () => {
+    const antiBinge = {
+      enabled: true,
+      blockThreshold: 10,
+      blockTimeframe: 20,
+      warningThreshold: 2,
+      warningTimeframe: 10,
+    };
+    const history = [openEvent(1), openEvent(2)];
+
+    const windowBlocked = evaluateProtectionAttempt({
+      appId: 'instagram',
+      config: makeConfig({ mode: 'soft', antiBinge, timeWindows: { enabled: true, workRules: 'block' } }),
+      history,
+      isFocusModeActive: false,
+      now,
+    });
+    const strict = evaluateProtectionAttempt({
+      appId: 'instagram',
+      config: makeConfig({ mode: 'strict', antiBinge }),
+      history,
+      isFocusModeActive: false,
+      now,
+    });
+
+    expect(windowBlocked.step).toBe('anti_binge_block');
+    expect(windowBlocked.event?.desc).toContain('Zeitfenster');
+    expect(strict.step).toBe('strict_blocked');
+  });
+
   it('warns when anti-binge warning threshold is reached', () => {
     const decision = evaluateProtectionAttempt({
       appId: 'instagram',

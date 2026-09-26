@@ -50,9 +50,10 @@ import java.util.Calendar
  *  - Detection is event based and lags an app switch by up to POLL_INTERVAL_MS.
  *  - The overlay cannot prevent the user from leaving via gestures; it
  *    reappears the next time the protected app comes to the foreground.
- *  - Daily limits and anti-binge rules are still evaluated in the web layer
- *    only. Time windows are evaluated here, on every app switch, because the
- *    web layer is not guaranteed to run when a window starts.
+ *  - Daily limit, anti-binge and time windows are evaluated here when a
+ *    protected app comes to the front (see evaluate()), because the web layer
+ *    is not guaranteed to run at that moment. They are not re-checked while
+ *    the app stays open. Emergency unlocks exist only in the web layer.
  *
  * Lifecycle:
  *  - Started by ScrollShieldBridgePlugin.startMonitoring()
@@ -172,11 +173,35 @@ class AppMonitorService : Service() {
     /** A window that tightens the mode; `endHour < startHour` wraps past midnight. */
     private data class TimeWindow(val startHour: Int, val endHour: Int)
 
+    private data class AntiBinge(
+        val warningThreshold: Int,
+        val warningTimeframe: Int,
+        val blockThreshold: Int,
+        val blockTimeframe: Int,
+    )
+
     private data class BlockRule(
         val mode: String,
         val delaySeconds: Int,
+        /** Platform id; packages of one app (main and lite build) share limits. */
+        val appId: String = "",
         val timeWindows: List<TimeWindow> = emptyList(),
         val weekendRule: String = "normal",
+        /** Minutes per day across all packages of the app; 0 = no limit. */
+        val dailyLimitMinutes: Int = 0,
+        val antiBinge: AntiBinge? = null,
+    )
+
+    /**
+     * What happens when a protected app comes to the front. `lockReason` set:
+     * the app is locked and `statusText` says why. Otherwise the rule's normal
+     * interruption runs, with `warningText` in place of the usual body when the
+     * anti-binge warning applies.
+     */
+    private data class Verdict(
+        val lockReason: String? = null,
+        val statusText: String? = null,
+        val warningText: String? = null,
     )
 
     // ── State ─────────────────────────────────────────────────────────────────
@@ -199,6 +224,7 @@ class AppMonitorService : Service() {
     private val allowedUntil = mutableMapOf<String, Long>()
 
     private val prefs: SharedPreferences by lazy { SecurePrefs.open(this) }
+    private val openLog: OpenLog by lazy { OpenLog(prefs) }
 
     // ── Polling runnable ──────────────────────────────────────────────────────
 
@@ -289,15 +315,18 @@ class AppMonitorService : Service() {
                         parsed[packageName] = BlockRule(
                             mode = entry.optString("mode", "standard"),
                             delaySeconds = entry.optInt("delaySeconds", DEFAULT_DELAY_SECONDS),
+                            appId = entry.optString("appId").ifEmpty { packageName },
                             timeWindows = parseTimeWindows(schedule),
                             weekendRule = schedule?.optString("weekendRule", "normal") ?: "normal",
+                            dailyLimitMinutes = entry.optInt("dailyLimitMinutes", 0),
+                            antiBinge = parseAntiBinge(entry.optJSONObject("antiBinge")),
                         )
                     }
                 } else {
                     // Backwards compatible with the previous plain package-name list.
                     val packageName = array.optString(index)
                     if (packageName.isNotEmpty()) {
-                        parsed[packageName] = BlockRule("standard", DEFAULT_DELAY_SECONDS)
+                        parsed[packageName] = BlockRule("standard", DEFAULT_DELAY_SECONDS, appId = packageName)
                     }
                 }
             }
@@ -310,6 +339,16 @@ class AppMonitorService : Service() {
         if (!monitoringEnabled || parsed.isEmpty()) {
             dismissOverlay()
         }
+    }
+
+    private fun parseAntiBinge(config: JSONObject?): AntiBinge? {
+        if (config == null) return null
+        return AntiBinge(
+            warningThreshold = config.optInt("warningThreshold"),
+            warningTimeframe = config.optInt("warningTimeframe"),
+            blockThreshold = config.optInt("blockThreshold"),
+            blockTimeframe = config.optInt("blockTimeframe"),
+        ).takeIf { it.warningThreshold > 0 && it.blockThreshold > 0 }
     }
 
     private fun parseTimeWindows(schedule: JSONObject?): List<TimeWindow> {
@@ -365,16 +404,70 @@ class AppMonitorService : Service() {
         lastForegroundPackage = foreground
 
         val rule = rules[foreground] ?: return
-        val lockedByTimeWindow = isLockedByTimeWindow(rule)
-        // A grace period from "continue" must not outlast the start of a
-        // window that locks the app.
-        if (!lockedByTimeWindow && System.currentTimeMillis() < (allowedUntil[foreground] ?: 0L)) return
+        val now = System.currentTimeMillis()
+        val verdict = evaluate(foreground, rule, now)
 
-        showInterruptionOverlay(
-            foreground,
-            if (lockedByTimeWindow) rule.copy(mode = "strict") else rule,
-            lockedByTimeWindow,
-        )
+        // Inside the grace period after "continue" nothing is shown, but it is
+        // an opening. A lock always wins over the grace period.
+        if (verdict.lockReason == null && now < (allowedUntil[foreground] ?: 0L)) {
+            openLog.record(rule.appId, now)
+            return
+        }
+
+        showInterruptionOverlay(foreground, rule, verdict)
+    }
+
+    /**
+     * Mirrors evaluateProtectionAttempt() in src/lib/protectionRules.ts, in the
+     * same order: daily limit, anti-binge block, time window, strict mode,
+     * then the anti-binge warning in front of the normal interruption.
+     * Emergency unlocks stay in the web layer.
+     */
+    private fun evaluate(packageName: String, rule: BlockRule, now: Long): Verdict {
+        if (rule.dailyLimitMinutes > 0) {
+            val packages = rules.filterValues { it.appId == rule.appId }.keys
+            val usedMinutes = ForegroundUsage.minutesToday(this, packages).values.sum()
+            if (usedMinutes >= rule.dailyLimitMinutes) {
+                return Verdict(
+                    lockReason = "DAILY_LIMIT",
+                    statusText = getString(R.string.overlay_daily_limit_hint, usedMinutes, rule.dailyLimitMinutes),
+                )
+            }
+        }
+
+        rule.antiBinge?.let { antiBinge ->
+            val opens = openLog.count(rule.appId, now, antiBinge.blockTimeframe)
+            if (opens >= antiBinge.blockThreshold) {
+                return Verdict(
+                    lockReason = "ANTI_BINGE",
+                    statusText = getString(R.string.overlay_anti_binge_block_hint, opens, antiBinge.blockTimeframe),
+                )
+            }
+        }
+
+        if (isLockedByTimeWindow(rule)) {
+            return Verdict(lockReason = "TIME_WINDOW", statusText = getString(R.string.overlay_time_window_hint))
+        }
+
+        if (rule.mode == "strict") {
+            return Verdict(lockReason = "STRICT", statusText = getString(R.string.overlay_strict_hint))
+        }
+
+        rule.antiBinge?.let { antiBinge ->
+            val opens = openLog.count(rule.appId, now, antiBinge.warningTimeframe)
+            if (opens >= antiBinge.warningThreshold) {
+                return Verdict(
+                    warningText = getString(
+                        R.string.overlay_anti_binge_warning,
+                        getAppName(packageName),
+                        opens,
+                        antiBinge.warningTimeframe,
+                    ),
+                )
+            }
+        }
+
+        return Verdict()
     }
 
     /**
@@ -406,36 +499,48 @@ class AppMonitorService : Service() {
 
     // ── Overlay ───────────────────────────────────────────────────────────────
 
-    private fun showInterruptionOverlay(blockedPackage: String, rule: BlockRule, lockedByTimeWindow: Boolean) {
+    private fun showInterruptionOverlay(blockedPackage: String, rule: BlockRule, verdict: Verdict) {
         val appName = getAppName(blockedPackage)
-        val locked = rule.mode == "strict"
-        val reason = when {
-            lockedByTimeWindow -> "TIME_WINDOW"
-            locked -> "STRICT"
+        val locked = verdict.lockReason != null
+        val warned = verdict.warningText != null
+        val reason = verdict.lockReason ?: when {
+            warned -> "ANTI_BINGE_WARNING"
             rule.mode == "soft" -> "SOFT"
             else -> "STANDARD"
         }
         presentOverlay(
             blockedPackage = blockedPackage,
-            bodyText = getString(R.string.overlay_body, appName),
+            bodyText = verdict.warningText ?: getString(R.string.overlay_body, appName),
             showContinue = !locked,
             onShown = {
-                // A locked app is a block the moment it is shown; a soft or
-                // standard interruption only counts once the user decides.
-                if (locked) recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_BLOCKED, reason)
+                // A lock and an anti-binge warning count the moment they are
+                // shown, as in the in-app flow; a plain interruption only once
+                // the user decides.
+                when {
+                    locked -> recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_BLOCKED, reason)
+                    warned -> recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_WARNED, reason)
+                    else -> Unit
+                }
             },
             onContinue = {
+                val now = System.currentTimeMillis()
                 recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_CONTINUED, reason)
-                allowedUntil[blockedPackage] = System.currentTimeMillis() + GRACE_PERIOD_MS
+                openLog.record(rule.appId, now)
+                allowedUntil[blockedPackage] = now + GRACE_PERIOD_MS
                 dismissOverlay()
             },
             onGoHome = {
-                if (!locked) {
+                // Already counted when a lock or a warning was shown.
+                if (!locked && !warned) {
                     recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_STOPPED, reason)
                 }
             },
         ) { statusView, continueButton ->
-            startCountdown(statusView, continueButton, rule, lockedByTimeWindow)
+            if (locked) {
+                statusView.text = verdict.statusText
+            } else {
+                startCountdown(statusView, continueButton, rule)
+            }
         }
     }
 
@@ -595,18 +700,8 @@ class AppMonitorService : Service() {
         }
     }
 
-    private fun startCountdown(
-        statusView: TextView,
-        continueButton: Button,
-        rule: BlockRule,
-        lockedByTimeWindow: Boolean,
-    ) {
-        if (rule.mode == "strict") {
-            statusView.text = getString(
-                if (lockedByTimeWindow) R.string.overlay_time_window_hint else R.string.overlay_strict_hint
-            )
-            return
-        }
+    /** Countdown of a soft (none) or standard interruption; locks never get here. */
+    private fun startCountdown(statusView: TextView, continueButton: Button, rule: BlockRule) {
 
         val totalSeconds = if (rule.mode == "soft") 0 else rule.delaySeconds.coerceAtLeast(0)
         var remaining = totalSeconds

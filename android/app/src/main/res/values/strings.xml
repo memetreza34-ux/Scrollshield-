@@ -18,6 +18,9 @@
     <string name="overlay_body">%1$s ist geschützt.</string>
     <string name="overlay_strict_hint">Diese App ist im strengen Modus gesperrt. Ändere die Regel in ScrollShield, wenn du sie öffnen möchtest.</string>
     <string name="overlay_time_window_hint">In diesem Zeitfenster ist die App gesperrt. Die Zeitfenster kannst du in ScrollShield ändern.</string>
+    <string name="overlay_daily_limit_hint">Tageslimit erreicht: heute %1$d von %2$d Minuten. Morgen ist die App wieder frei.</string>
+    <string name="overlay_anti_binge_block_hint">Zu oft geöffnet: %1$d-mal in den letzten %2$d Minuten. Mach eine Pause.</string>
+    <string name="overlay_anti_binge_warning">Du hast %1$s in den letzten %3$d Minuten schon %2$d-mal geöffnet.</string>
     <string name="overlay_ready_hint">Willst du wirklich weitermachen?</string>
     <string name="overlay_continue">Trotzdem öffnen</string>
     <string name="overlay_go_home">Zurück zum Startbildschirm</string>

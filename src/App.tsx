@@ -6,12 +6,13 @@ import { normalizeAppState } from './lib/state';
 import { reconcileFocusRuntime } from './lib/focus';
 import {
   acknowledgeInterruptionEvents,
+  readAppUsage,
   readInterruptionEvents,
   readShortVideoUsage,
   syncNativeBlockList,
 } from './lib/nativeBridge';
 import { mergeNativeInterruptions } from './lib/nativeEvents';
-import { mergeNativeShortVideoUsage } from './lib/stats';
+import { mergeNativeAppUsage, mergeNativeShortVideoUsage } from './lib/stats';
 import { getLocalDateKey } from './lib/appUtils';
 import { detectOperatingSystem } from './lib/platform';
 import {
@@ -167,24 +168,36 @@ export default function App() {
   }, [isLoaded, appState.focusSessions, focusRemindersEnabled]);
 
   // What happened on the device while ScrollShield was in the background:
-  // short-video minutes from the accessibility service and the interruptions
-  // the overlay showed. Pulled on start, on return to the app and once a
+  // short-video minutes from the accessibility service, foreground minutes of
+  // the protected apps and the interruptions the overlay showed. Pulled on start, on return to the app and once a
   // minute while it runs; in the browser both come back empty.
   useEffect(() => {
     if (!isLoaded) return;
 
     let cancelled = false;
     const pull = async () => {
-      const [usage, interruptions] = await Promise.all([readShortVideoUsage(), readInterruptionEvents()]);
+      const [usage, appUsage, interruptions] = await Promise.all([
+        readShortVideoUsage(),
+        readAppUsage(),
+        readInterruptionEvents(),
+      ]);
       if (cancelled) return;
-      const date = usage.date ?? getLocalDateKey(new Date());
+      const today = getLocalDateKey(new Date());
 
       setAppState((previous) => {
         let next = previous;
         if (usage.available && usage.entries.length > 0) {
           const dailyStats = mergeNativeShortVideoUsage(
             next.dailyStats,
-            { date, entries: usage.entries },
+            { date: usage.date ?? today, entries: usage.entries },
+            SUPPORTED_APPS,
+          );
+          if (dailyStats !== next.dailyStats) next = { ...next, dailyStats };
+        }
+        if (appUsage.available && appUsage.entries.length > 0) {
+          const dailyStats = mergeNativeAppUsage(
+            next.dailyStats,
+            { date: appUsage.date ?? today, entries: appUsage.entries },
             SUPPORTED_APPS,
           );
           if (dailyStats !== next.dailyStats) next = { ...next, dailyStats };

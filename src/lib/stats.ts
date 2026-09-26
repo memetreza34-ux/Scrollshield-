@@ -56,27 +56,28 @@ export const getReelsUsageMinutesForAppDate = (state: AppState, appId: string, d
   return state.dailyStats[dateKey]?.usageMinutes[getShortVideoUsageKey(appId)] ?? 0;
 };
 
+type NativeUsage = { date: string; entries: { packageName: string; minutesToday: number }[] };
+type PlatformPackages = { id: string; androidPackages: string[] };
+
 /**
- * Takes the short-video minutes the accessibility service measured on the
- * device into the daily stats, so the dashboard, the insights and the in-app
- * feed limit see them. Before, only the diagnostics screen read them.
- *
- * The native figure covers the whole day, so it replaces a smaller value
- * instead of adding to it: an in-app session may already have recorded part
- * of the same time. Returns the input unchanged when nothing grows, so callers
- * can skip the state update.
+ * Takes minutes measured on the device into the daily stats under
+ * `keyFor(appId)`. The native figure covers the whole day, so it replaces a
+ * smaller value instead of adding to it: an in-app session may already have
+ * recorded part of the same time. Main and lite builds of one app count
+ * together. Returns the input unchanged when nothing grows, so callers can
+ * skip the state update.
  */
-export const mergeNativeShortVideoUsage = (
+const mergeNativeMinutes = (
   dailyStats: AppState['dailyStats'],
-  usage: { date: string; entries: { packageName: string; minutesToday: number }[] },
-  platforms: { id: string; androidPackages: string[] }[],
+  usage: NativeUsage,
+  platforms: PlatformPackages[],
+  keyFor: (appId: string) => string,
 ): AppState['dailyStats'] => {
   const minutesByApp = new Map<string, number>();
   for (const entry of usage.entries) {
     if (!(entry.minutesToday > 0)) continue;
     const platform = platforms.find((candidate) => candidate.androidPackages.includes(entry.packageName));
     if (!platform) continue;
-    // Lite and main builds of one app count together.
     minutesByApp.set(platform.id, (minutesByApp.get(platform.id) ?? 0) + entry.minutesToday);
   }
   if (minutesByApp.size === 0) return dailyStats;
@@ -92,7 +93,7 @@ export const mergeNativeShortVideoUsage = (
 
   let usageMinutes = existing.usageMinutes;
   for (const [appId, minutes] of minutesByApp) {
-    const key = getShortVideoUsageKey(appId);
+    const key = keyFor(appId);
     if ((usageMinutes[key] ?? 0) >= minutes) continue;
     usageMinutes = { ...usageMinutes, [key]: minutes };
   }
@@ -100,3 +101,25 @@ export const mergeNativeShortVideoUsage = (
 
   return { ...dailyStats, [usage.date]: { ...existing, usageMinutes } };
 };
+
+/**
+ * Short-video minutes the accessibility service measured. Before, only the
+ * diagnostics screen read them; now the dashboard, the insights and the
+ * in-app feed limit see them.
+ */
+export const mergeNativeShortVideoUsage = (
+  dailyStats: AppState['dailyStats'],
+  usage: NativeUsage,
+  platforms: PlatformPackages[],
+): AppState['dailyStats'] => mergeNativeMinutes(dailyStats, usage, platforms, getShortVideoUsageKey);
+
+/**
+ * Minutes the protected apps were in the foreground on the device. Before,
+ * app usage only counted sessions inside ScrollShield, so the daily limit and
+ * the usage figures ignored the real phone.
+ */
+export const mergeNativeAppUsage = (
+  dailyStats: AppState['dailyStats'],
+  usage: NativeUsage,
+  platforms: PlatformPackages[],
+): AppState['dailyStats'] => mergeNativeMinutes(dailyStats, usage, platforms, (appId) => appId);

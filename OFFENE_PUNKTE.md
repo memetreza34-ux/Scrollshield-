@@ -16,8 +16,8 @@ Merkliste für alles, was noch fehlt. Stand: 25. September 2026. Erledigtes hier
 ## Technik – vor dem Release
 
 - [ ] Android-Teil bauen und auf einem echten Handy testen: `docs/DEVICE_TEST_CHECKLIST.md`.
-- [ ] Anti-Binge und Tageslimit pro App greifen auf dem Handy nicht beim echten Öffnen einer App, nur im Schutzablauf
-      innerhalb von ScrollShield. Siehe „Known Limits“ in `docs/NATIVE_ANDROID.md`.
+- [ ] Tageslimit, Anti-Binge und Zeitfenster werden nur beim Öffnen einer App geprüft, nicht während man in ihr bleibt.
+- [ ] Auf dem Handy gibt es keine Notfallfreigabe; eine Sperre lässt sich dort nicht vorzeitig aufheben.
 - [ ] Endet eine Fokus-Sitzung bei geschlossener App, bleibt die Sperre bis zum nächsten Öffnen.
 
 ## Rechtliches – später

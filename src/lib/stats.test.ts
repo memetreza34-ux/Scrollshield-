@@ -5,6 +5,7 @@ import {
   getReelsUsageMinutesForAppDate,
   getShortVideoUsageKey,
   isShortVideoFeedBlockedByConfig,
+  mergeNativeAppUsage,
   mergeNativeShortVideoUsage,
 } from './stats';
 
@@ -164,5 +165,47 @@ describe('mergeNativeShortVideoUsage', () => {
   it('returns the same object when there is nothing to take over', () => {
     const stats = {};
     expect(mergeNativeShortVideoUsage(stats, { date: day, entries: [] }, platforms)).toBe(stats);
+  });
+});
+
+describe('mergeNativeAppUsage', () => {
+  const platforms = [{ id: 'instagram', androidPackages: ['com.instagram.android', 'com.instagram.lite'] }];
+  const day = '2030-01-01';
+
+  it('stores the foreground minutes under the app id, main and lite build together', () => {
+    const merged = mergeNativeAppUsage(
+      {},
+      {
+        date: day,
+        entries: [
+          { packageName: 'com.instagram.android', minutesToday: 40 },
+          { packageName: 'com.instagram.lite', minutesToday: 5 },
+        ],
+      },
+      platforms,
+    );
+
+    expect(merged[day].usageMinutes).toEqual({ instagram: 45 });
+  });
+
+  it('keeps the short-video key apart', () => {
+    const stats = {
+      [day]: {
+        date: day,
+        usageMinutes: { instagram_reels: 12 },
+        blockedOpens: 0,
+        savedTimeMinutes: 0,
+        emergencyUnlocks: 0,
+        focusMinutes: 0,
+      },
+    };
+
+    const merged = mergeNativeAppUsage(
+      stats,
+      { date: day, entries: [{ packageName: 'com.instagram.android', minutesToday: 30 }] },
+      platforms,
+    );
+
+    expect(merged[day].usageMinutes).toEqual({ instagram_reels: 12, instagram: 30 });
   });
 });

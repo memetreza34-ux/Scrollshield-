@@ -20,6 +20,10 @@ In der aktuellen Version (v1.0 Offline-MVP) verarbeitet ScrollShield folgende Da
 - **Benachrichtigungen:** Lokal erzeugte Erinnerungen; auf Android teils beim System eingeplant.
 - **Unterbrechungsprotokoll (nur Android):** Paketname, Zeitpunkt, Grund und Entscheidung jeder Unterbrechung durch den
   Schutzbildschirm, verschlüsselt, bis die App sie in den Verlauf übernimmt (höchstens 300 Einträge).
+- **Öffnungszeitpunkte (nur Android):** Wann geschützte Apps geöffnet wurden, pro App, verschlüsselt, 24 Stunden lang
+  (Anti-Binge).
+- **Nutzungsminuten geschützter Apps (nur Android):** Aus dem Nutzungsdatenzugriff berechnet, nur für geschützte Apps;
+  landen in der Tagesstatistik.
 - _(Zukunft / v2.0+):_ E-Mail-Adresse, Authentifizierungs-Token, Geräte-IDs (für Cloud-Sync).
 
 ## 2. Verarbeitungszwecke
