@@ -50,9 +50,10 @@ technische Einschätzung; Details und Fragen für eine Prüfung stehen in `docs/
 - [ ] **[Du] Keine Heilversprechen.** App und Store-Texte nicht als Behandlung von „Sucht“ darstellen, sonst droht die
       Einstufung als Medizinprodukt. Als Produktivitäts- bzw. Selbstkontroll-App beschreiben. Der Release-Check blockt
       schon einige Formulierungen.
-- [ ] **[Du] Fremde Logos:** Die App zeigt die echten Logos von Instagram, TikTok, YouTube usw. (in `src/types.tsx`).
-      Das kann bei der Store-Prüfung oder bei den Markeninhabern Ärger geben, vor allem auf Screenshots. Prüfen lassen
-      oder **[Claude]** durch neutrale Symbole ersetzen.
+- [x] **Fremde Logos:** Die App zeigte die echten Logos von Instagram, TikTok, YouTube usw. Ersetzt durch neutrale
+      Kürzel (IG, TT, YT …); der App-Name steht daneben.
+- [ ] **[Du] Screenshots neu aufnehmen** (`docs/store-assets`): Die alten zeigen noch die Logos und den alten Namen.
+      Am besten nach der Umbenennung.
 - [ ] **[Du] Zielgruppe festlegen.** Mit Zielgruppe unter 13 gelten Googles strenge Familien-Richtlinien. Einfachster
       Weg für Version 1: 16+ oder 18+. Mit Anwalt klären, ob Jugendliche die Bedienungshilfe selbst erlauben dürfen.
 - [ ] **[Du] Rechtstexte prüfen lassen** (Generator einer Kanzlei oder Erstberatung), vor allem Bedienungshilfe,
@@ -86,7 +87,6 @@ Vorlagen: `docs/STORE_SUBMISSION_PACKET.md`, `docs/STORE_LISTING_COPY.md`, `STOR
   - Tageslimit, Anti-Binge und Zeitfenster werden nur beim Öffnen einer App geprüft, nicht während man in ihr bleibt.
   - Auf dem Handy gibt es keine Notfallfreigabe.
   - Endet eine Fokus-Sitzung bei geschlossener App, bleibt die Sperre bis zum nächsten Öffnen.
-  - Die Modus-Knöpfe heißen „soft / standard / strict“ (englisch) in einer sonst deutschen App.
 - [ ] **iPhone:** Es gibt keine iOS-App. Dafür wären eigener Swift-Code mit Apples Bildschirmzeit-Schnittstelle, Apples
       Sondergenehmigung dafür, ein Mac mit Xcode und ein Apple-Entwicklerkonto (99 US-Dollar pro Jahr) nötig.
 

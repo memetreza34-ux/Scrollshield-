@@ -33,11 +33,11 @@ gemacht hast, was passiert ist, Handy-Modell und Android-Version. Ein Screenshot
 
 Teste mit Instagram; jede andere geschützte App geht auch.
 
-- [ ] Modus „Soft“: Instagram öffnen. **Erwartet:** innerhalb von etwa 2 Sekunden erscheint der Schutzbildschirm,
+- [ ] Modus „Sanft“: Instagram öffnen. **Erwartet:** innerhalb von etwa 2 Sekunden erscheint der Schutzbildschirm,
       „Weiter“ geht sofort.
 - [ ] Modus „Standard“ mit 15 Sekunden Verzögerung. **Erwartet:** Countdown von 15, danach „Weiter“. Nach „Weiter“
       erscheint der Schutzbildschirm 5 Minuten lang nicht erneut.
-- [ ] Modus „Strict“. **Erwartet:** kein „Weiter“, nur „Zurück zum Startbildschirm“.
+- [ ] Modus „Streng“. **Erwartet:** kein „Weiter“, nur „Zurück zum Startbildschirm“.
 - [ ] Auf dem Schutzbildschirm die Zurück-Taste drücken. **Erwartet:** du landest auf dem Startbildschirm.
 - [ ] Den Modus in ScrollShield ändern, ohne das Handy neu zu starten. **Erwartet:** beim nächsten Öffnen von Instagram
       gilt der neue Modus.
@@ -99,7 +99,7 @@ Zum Testen darfst du die Uhrzeit des Handys vorstellen (automatische Zeit aus). 
 
 ## 8. Tageslimit und Anti-Binge
 
-- [ ] Bei Instagram ein Tageslimit von 5 Minuten setzen, Modus „Soft“. Instagram 5 Minuten nutzen („Weiter“), schließen
+- [ ] Bei Instagram ein Tageslimit von 5 Minuten setzen, Modus „Sanft“. Instagram 5 Minuten nutzen („Weiter“), schließen
       und erneut öffnen. **Erwartet:** gesperrt mit „Tageslimit erreicht: heute 5 von 5 Minuten“.
 - [ ] ScrollShield öffnen. **Erwartet:** die Instagram-Minuten im Dashboard passen ungefähr zur echten Nutzung.
 - [ ] Tageslimit aus, Anti-Binge an (z. B. Warnung ab 2 Öffnungen in 10 Minuten, Sperre ab 4 in 20 Minuten). Instagram
@@ -110,7 +110,7 @@ Zum Testen darfst du die Uhrzeit des Handys vorstellen (automatische Zeit aus). 
 
 ## 9. Verlauf und Statistik
 
-- [ ] Instagram im Modus „Strict“ zweimal öffnen, im Modus „Standard“ einmal „Weiter“ und einmal „Zurück zum
+- [ ] Instagram im Modus „Streng“ zweimal öffnen, im Modus „Standard“ einmal „Weiter“ und einmal „Zurück zum
       Startbildschirm“ wählen. Dann ScrollShield öffnen. **Erwartet:** spätestens nach einer Minute steht im Dashboard
       „3 unbewusste Impulse heute gestoppt.“; im Verlauf stehen die Einträge mit „Auf dem Handy gesperrt“, „Unterbrochen
       und nicht geöffnet“ und „Nach der Unterbrechung geöffnet“.

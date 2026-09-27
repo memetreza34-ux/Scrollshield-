@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { expectNoA11yViolations } from '../test/a11y';
-import { DEFAULT_STATE } from '../types';
-import { AppList, PrivacyScreen, Rules, Settings } from './ConfigScreens';
+import { DEFAULT_APP_CONFIG, DEFAULT_STATE } from '../types';
+import { AppDetail, AppList, PrivacyScreen, Rules, Settings } from './ConfigScreens';
 
 describe('Rules', () => {
   it('keeps custom profile selection and editing as separate accessible actions', () => {
@@ -41,6 +41,28 @@ describe('AppList', () => {
     expect(screen.getByRole('button', { name: 'Instagram Details. Status: Inaktiv' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Instagram Schutz umschalten' })).toBeInTheDocument();
     await expectNoA11yViolations(container);
+  });
+});
+
+describe('AppDetail', () => {
+  it('names the protection modes in German and shows no platform logo', () => {
+    const { container } = render(
+      <AppDetail
+        state={{
+          ...DEFAULT_STATE,
+          hasCompletedOnboarding: true,
+          selectedAppId: 'instagram',
+          appsConfig: { instagram: { ...DEFAULT_APP_CONFIG, id: 'instagram', active: true } },
+        }}
+        updateState={vi.fn()}
+        navigate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('radio', { name: 'Sanft' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Standard' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Streng' })).toBeInTheDocument();
+    expect(container.querySelector('svg path[d^="M7.0301"]')).toBeNull();
   });
 });
 

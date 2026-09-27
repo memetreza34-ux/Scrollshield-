@@ -53,6 +53,13 @@ import {
   usesNativeNotifications,
 } from '../lib/notifications';
 
+/** The modes are stored as soft/standard/strict; the German UI names them. */
+const PROTECTION_MODE_LABELS: Record<'soft' | 'standard' | 'strict', string> = {
+  soft: 'Sanft',
+  standard: 'Standard',
+  strict: 'Streng',
+};
+
 export function AppList({
   state,
   updateState,
@@ -157,7 +164,7 @@ export function AppList({
                       <div className="font-semibold">{app.name}</div>
                       <div className="text-xs text-zinc-500 mt-0.5 font-medium">
                         {isActive
-                          ? `Modus: ${config.mode}`
+                          ? `Modus: ${PROTECTION_MODE_LABELS[config.mode]}`
                           : config?.connected
                             ? 'Verbunden, Inaktiv'
                             : 'Nicht verbunden'}
@@ -288,9 +295,9 @@ export function AppDetail({
                   role="radio"
                   aria-checked={config.mode === mode}
                   onClick={() => updateConfig({ mode })}
-                  className={`flex-1 py-3 text-sm font-semibold capitalize transition-all rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[44px] ${config.mode === mode ? 'bg-zinc-100 text-zinc-950 shadow-md' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  className={`flex-1 py-3 text-sm font-semibold transition-all rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[44px] ${config.mode === mode ? 'bg-zinc-100 text-zinc-950 shadow-md' : 'text-zinc-400 hover:text-zinc-200'}`}
                 >
-                  {mode}
+                  {PROTECTION_MODE_LABELS[mode]}
                 </button>
               ))}
             </div>
