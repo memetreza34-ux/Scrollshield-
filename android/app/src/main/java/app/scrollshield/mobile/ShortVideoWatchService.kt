@@ -7,6 +7,7 @@ import android.content.SharedPreferences
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -366,24 +367,29 @@ class ShortVideoWatchService : AccessibilityService() {
             surfaceEnteredAt = now
         }
 
+        // A blocked feed that offers "continue" is not blocked.
+        val hardInterrupt = rule.hardInterrupt || rule.mode == "block"
+
         val intent = Intent(this, AppMonitorService::class.java).apply {
             action = AppMonitorService.ACTION_SHORT_VIDEO_INTERRUPT
             putExtra(AppMonitorService.EXTRA_PACKAGE_NAME, packageName)
             putExtra(AppMonitorService.EXTRA_SURFACE_ID, rule.surfaceId)
             putExtra(AppMonitorService.EXTRA_REASON, reason.name)
-            putExtra(AppMonitorService.EXTRA_HARD_INTERRUPT, rule.hardInterrupt)
+            putExtra(AppMonitorService.EXTRA_HARD_INTERRUPT, hardInterrupt)
             putExtra(AppMonitorService.EXTRA_SWIPES, swipesInSession)
         }
 
         try {
-            startForegroundService(intent)
+            // ContextCompat: startForegroundService() only exists from Android 8,
+            // and the NoSuchMethodError on Android 7 is not an Exception.
+            ContextCompat.startForegroundService(this, intent)
         } catch (_: Exception) {
             // Monitoring service unavailable – fall back to leaving the feed.
         }
 
         // A hard interrupt also navigates out of the feed. GLOBAL_ACTION_BACK is
         // a standard accessibility action and needs no gesture capability.
-        if (rule.hardInterrupt) {
+        if (hardInterrupt) {
             try {
                 performGlobalAction(GLOBAL_ACTION_BACK)
             } catch (_: Exception) {

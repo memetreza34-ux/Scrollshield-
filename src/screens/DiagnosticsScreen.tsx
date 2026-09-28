@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { AlertTriangle, CheckCircle2, Film, RefreshCw, Smartphone } from 'lucide-react';
 import { Screen, SUPPORTED_APPS } from '../types';
 import { Header } from '../components/ui';
+import { AccessibilityDisclosure } from '../components/AccessibilityDisclosure';
 import { CalibrationSample, ScrollShieldBridge, ShortVideoUsageEntry, readShortVideoUsage } from '../lib/nativeBridge';
 import { SHORT_VIDEO_SIGNATURES, getShortVideoSignature, matchesShortVideoSurface } from '../lib/shortVideoSignatures';
 
@@ -33,6 +34,7 @@ export function DiagnosticsScreen({ navigate }: { navigate: (screen: Screen) => 
   const [usage, setUsage] = useState<ShortVideoUsageEntry[]>([]);
   const [available, setAvailable] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showDisclosure, setShowDisclosure] = useState(false);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -61,6 +63,15 @@ export function DiagnosticsScreen({ navigate }: { navigate: (screen: Screen) => 
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6 pb-32">
+      {showDisclosure && (
+        <AccessibilityDisclosure
+          onAccept={() => {
+            setShowDisclosure(false);
+            void ScrollShieldBridge.openAccessibilitySettings().catch(() => undefined);
+          }}
+          onDecline={() => setShowDisclosure(false)}
+        />
+      )}
       <Header title="Erkennung prüfen" onBack={() => navigate('settings')} />
 
       <p className="mb-6 text-sm leading-relaxed text-zinc-400">
@@ -83,12 +94,12 @@ export function DiagnosticsScreen({ navigate }: { navigate: (screen: Screen) => 
         </h2>
         <p className="text-sm leading-relaxed text-zinc-300">
           {accessibilityActive
-            ? 'Der Dienst läuft. Oeffne den Feed einer geschützten App und komm hierher zurück.'
+            ? 'Der Dienst läuft. Öffne den Feed einer geschützten App und komm hierher zurück.'
             : 'Ohne aktivierte Bedienungshilfe kann ScrollShield keinen Kurzvideo-Feed erkennen. App-Verzögerungen und Sperren funktionieren weiterhin.'}
         </p>
         {!accessibilityActive && (
           <button
-            onClick={() => void ScrollShieldBridge.openAccessibilitySettings()}
+            onClick={() => setShowDisclosure(true)}
             className="mt-4 w-full rounded-[1.25rem] bg-zinc-100 py-3 text-sm font-bold text-zinc-950"
           >
             In den Einstellungen aktivieren
@@ -145,7 +156,7 @@ export function DiagnosticsScreen({ navigate }: { navigate: (screen: Screen) => 
 
         {available && samples.length === 0 && (
           <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/70 p-5 text-sm leading-relaxed text-zinc-400">
-            Noch nichts beobachtet. Oeffne eine geschützte App, wechsle in ihren Kurzvideo-Feed und lade hier neu.
+            Noch nichts beobachtet. Öffne eine geschützte App, wechsle in ihren Kurzvideo-Feed und lade hier neu.
           </div>
         )}
 

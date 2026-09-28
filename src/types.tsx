@@ -485,8 +485,8 @@ export const DEFAULT_PROFILES: Profile[] = [
   {
     id: 'strict',
     name: 'Streng',
-    description:
-      'Sehr strenge Limits. Kurzvideos werden mit den verfügbaren Systemfunktionen auf max. 5 Min/Tag begrenzt.',
+    // mode 'strict' locks the app itself; only changing the rule opens it again.
+    description: 'Geschützte Apps bleiben gesperrt, ohne Notfallfreigabe. Kurzvideo-Feeds werden blockiert.',
     icon: 'Shield',
     color: 'text-indigo-400',
     appsConfig: createAppsConfig({
@@ -516,8 +516,10 @@ export const DEFAULT_PROFILES: Profile[] = [
     description: 'Fokus auf normale Nutzung. Endlos-Feeds erhalten die strengste verfügbare Unterbrechung.',
     icon: 'Target',
     color: 'text-red-500',
+    // The apps stay usable after a short pause; only the feeds are locked. It
+    // used to be 'strict', which locked the whole app.
     appsConfig: createAppsConfig({
-      mode: 'strict',
+      mode: 'standard',
       openDelay: 10,
       dailyLimit: 45,
       sessionLimit: 10,

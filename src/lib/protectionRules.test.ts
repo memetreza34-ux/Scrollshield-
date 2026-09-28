@@ -126,6 +126,7 @@ describe('evaluateProtectionAttempt', () => {
 
     expect(decision.step).toBe('anti_binge_block');
     expect(decision.event?.desc).toBe('Zu viele Notfallfreigaben heute');
+    expect(decision.blockReason).toBe('emergency_limit');
   });
 
   it('blocks when the app daily limit is already reached', () => {
@@ -149,6 +150,7 @@ describe('evaluateProtectionAttempt', () => {
 
     expect(decision.step).toBe('anti_binge_block');
     expect(decision.event?.desc).toBe('Tageslimit erreicht (20/20 Min)');
+    expect(decision.blockReason).toBe('daily_limit');
   });
 
   it('ignores disabled daily limits', () => {
@@ -193,6 +195,7 @@ describe('evaluateProtectionAttempt', () => {
 
     expect(decision.step).toBe('anti_binge_block');
     expect(decision.event?.desc).toContain('Anti-Binge Sperre');
+    expect(decision.blockReason).toBe('anti_binge');
   });
 
   it('counts a session end as no extra opening', () => {
@@ -249,6 +252,7 @@ describe('evaluateProtectionAttempt', () => {
     });
 
     expect(windowBlocked.step).toBe('anti_binge_block');
+    expect(windowBlocked.blockReason).toBe('time_window');
     expect(windowBlocked.event?.desc).toContain('Zeitfenster');
     expect(strict.step).toBe('strict_blocked');
   });

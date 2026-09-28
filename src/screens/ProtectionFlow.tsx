@@ -3,7 +3,13 @@ import { motion } from 'motion/react';
 import { AlertTriangle, Clock, Lock, Shield } from 'lucide-react';
 import { AppState, HistoryEvent, Screen, SUPPORTED_APPS } from '../types';
 import { createEventId } from '../lib/appUtils';
-import { countEmergencyUnlocksToday, evaluateProtectionAttempt, ProtectionFlowStep } from '../lib/protectionRules';
+import {
+  countEmergencyUnlocksToday,
+  evaluateProtectionAttempt,
+  ProtectionBlockReason,
+  ProtectionFlowStep,
+} from '../lib/protectionRules';
+import { getActiveTimeWindowRule, getTimeWindowLabel } from '../lib/timeWindows';
 import { recordProtectionEventStats } from '../lib/session';
 
 const EMERGENCY_REASONS = ['Dringende Nachricht', 'Wichtiger Post / Upload', 'Kurz etwas recherchieren'];
@@ -22,6 +28,7 @@ export function ProtectionFlow({
   const config = state.appsConfig[appId || ''];
 
   const [step, setStep] = useState<ProtectionFlowStep>('init');
+  const [blockReason, setBlockReason] = useState<ProtectionBlockReason | undefined>();
   const [delayRemaining, setDelayRemaining] = useState(0);
   const [intentReason, setIntentReason] = useState('');
   const [intentDuration, setIntentDuration] = useState(5);
@@ -89,6 +96,7 @@ export function ProtectionFlow({
     if (decision.delaySeconds !== undefined) {
       setDelayRemaining(decision.delaySeconds);
     }
+    setBlockReason(decision.blockReason);
 
     if (decision.event) {
       logEvent(decision.event.type, decision.event.desc);
@@ -130,6 +138,21 @@ export function ProtectionFlow({
     </div>
   );
 
+  const describeBlock = () => {
+    switch (blockReason) {
+      case 'daily_limit':
+        return `Dein Tageslimit für ${appInfo.name} ist für heute aufgebraucht. Morgen ist die App wieder frei.`;
+      case 'time_window': {
+        const { window } = getActiveTimeWindowRule(config.timeWindows);
+        return `${appInfo.name} ist im Zeitfenster „${getTimeWindowLabel(window)}“ gesperrt. Die Zeitfenster kannst du in den App-Regeln ändern.`;
+      }
+      case 'emergency_limit':
+        return `Du hast heute alle Notfallfreigaben genutzt. ${appInfo.name} bleibt bis morgen gesperrt.`;
+      default:
+        return `Du hast ${appInfo.name} in den letzten ${config.antiBinge.blockTimeframe} Minuten zu oft geöffnet. Mach eine Pause und versuch es später wieder.`;
+    }
+  };
+
   const renderIosFallbackInfo = () => {
     if (state.operatingSystem !== 'ios') return null;
 
@@ -155,7 +178,7 @@ export function ProtectionFlow({
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-sm">
           <div className="mb-8">{renderAppIcon()}</div>
           <h2 className="text-3xl font-bold mb-3 tracking-tight">Kurzer Check</h2>
-          <p className="text-zinc-400 mb-10 text-lg">Warum moechtest du {appInfo.name} öffnen?</p>
+          <p className="text-zinc-400 mb-10 text-lg">Warum möchtest du {appInfo.name} öffnen?</p>
 
           <div className="space-y-6 mb-10 text-left">
             <div>
@@ -313,8 +336,8 @@ export function ProtectionFlow({
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-start gap-2">
                   <Shield size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
                   <span className="text-xs text-amber-400/90 font-medium">
-                    Du hast heute noch {remaining} Notfallfreigabe{remaining !== 1 ? 'n' : ''} übrig. Bei Missbrauch
-                    wird die App für {config.antiBinge.blockTimeframe} Min. komplett gesperrt.
+                    Du hast heute noch {remaining} Notfallfreigabe{remaining !== 1 ? 'n' : ''} übrig. Sind sie
+                    aufgebraucht, bleibt die App bis morgen gesperrt.
                   </span>
                 </div>
               );
@@ -426,7 +449,17 @@ export function ProtectionFlow({
               Besser nicht öffnen
             </button>
             <button
-              onClick={() => setStep(config.mode === 'standard' ? 'standard_delay' : 'soft_intent')}
+              onClick={() => {
+                // The warning replaces the first decision, so the delay of the
+                // standard flow has not been set yet; without it the countdown
+                // started at zero and the warning skipped the pause.
+                if (config.mode === 'standard') {
+                  setDelayRemaining(config.openDelay);
+                  setStep('standard_delay');
+                } else {
+                  setStep('soft_intent');
+                }
+              }}
               className="w-full py-4 rounded-[1.5rem] font-semibold bg-zinc-900/80 backdrop-blur-md text-zinc-400 border border-zinc-800/50 hover:text-zinc-300 transition-colors"
             >
               Trotzdem weiter
@@ -441,12 +474,7 @@ export function ProtectionFlow({
             <Shield size={40} className="text-red-500 drop-shadow-md" />
           </div>
           <h2 className="text-3xl font-bold mb-3 tracking-tight">Schutz-Sperre</h2>
-          <p className="text-zinc-400 mb-10 text-lg leading-relaxed">
-            Du hast {appInfo.name} zu oft geöffnet oder zu viele Notfallfreigaben genutzt. Die App ist nun zu deinem
-            eigenen Schutz für{' '}
-            <span className="font-mono font-bold text-zinc-200">{config.antiBinge.blockTimeframe}</span> Minuten strikt
-            eingeschränkt.
-          </p>
+          <p className="text-zinc-400 mb-10 text-lg leading-relaxed">{describeBlock()}</p>
 
           <button
             onClick={cancel}

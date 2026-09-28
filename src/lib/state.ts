@@ -55,6 +55,31 @@ export const normalizeAppsConfig = (appsConfig: Partial<AppState['appsConfig']> 
   return normalized;
 };
 
+/**
+ * The app configuration after switching to a profile. A profile brings its
+ * rules; which apps are protected stays the user's choice. The built-in
+ * profiles list every app as inactive, so taking their `active` flags over
+ * switched the whole protection off without a word.
+ */
+export const applyProfileConfig = (
+  profileAppsConfig: Partial<AppState['appsConfig']> | undefined,
+  currentAppsConfig: AppState['appsConfig'],
+): AppState['appsConfig'] => {
+  const appIds = new Set([
+    ...SUPPORTED_APPS.map((app) => app.id),
+    ...Object.keys(currentAppsConfig),
+    ...Object.keys(profileAppsConfig ?? {}),
+  ]);
+
+  const merged: AppState['appsConfig'] = {};
+  appIds.forEach((appId) => {
+    const current = currentAppsConfig[appId];
+    const rules = profileAppsConfig?.[appId] ?? current;
+    merged[appId] = normalizeAppConfig(appId, { ...rules, active: current?.active ?? false });
+  });
+  return merged;
+};
+
 const normalizeProfiles = (savedProfiles: Profile[] | undefined) => {
   const savedById = new Map(savedProfiles?.map((profile) => [profile.id, profile]) ?? []);
   const defaultIds = new Set(DEFAULT_PROFILES.map((profile) => profile.id));

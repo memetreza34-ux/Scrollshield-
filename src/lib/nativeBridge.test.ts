@@ -197,6 +197,19 @@ describe('short-video rules', () => {
     expect(daily[0].shortVideo?.mode).toBe('block');
     expect(session[0].shortVideo?.mode).toBe('block');
   });
+
+  it('never lets a blocked feed be continued', () => {
+    const rules = buildNativeProtectionRules(
+      {
+        instagram: activeApp({
+          reelsProtection: { enabled: true, mode: 'block', dailyLimitMinutes: 15, hardInterrupt: false },
+        }),
+      },
+      feedPlatforms,
+    );
+
+    expect(rules[0].shortVideo).toMatchObject({ mode: 'block', hardInterrupt: true });
+  });
 });
 
 describe('time-window rules', () => {

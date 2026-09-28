@@ -37,14 +37,18 @@ Diese Matrix definiert die strikte Berechtigungsstrategie für ScrollShield. Das
 
 ---
 
-## 4. Hintergrundaktivität (Akku-Optimierung ignorieren / `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`)
+## 4. Hintergrundaktivität (Akku-Optimierung ignorieren)
+
+> Umgesetzt ohne die Berechtigung `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, die Google Play nur wenigen App-Arten erlaubt:
+> ScrollShield öffnet die Liste der Akku-Ausnahmen, der Nutzer wählt ScrollShield dort selbst. Der Status kommt von
+> Android (`PowerManager.isIgnoringBatteryOptimizations`). Optional; das Dashboard warnt deshalb nicht mehr ohne sie.
 
 - **Plattform:** Android
 - **Wofür gebraucht:** Verhindert, dass das Android-Betriebssystem ScrollShield nach ein paar Stunden Inaktivität im Hintergrund "killt", was den Schutz deaktivieren würde.
 - **Status:** **Dringend empfohlen**
 - **Was ohne funktioniert:** Die App funktioniert initial perfekt, der Schutz fällt aber unvorhersehbar aus, wenn das System RAM leert.
 - **Nutzer-Erklärung:** _"Damit dein Schutz nicht plötzlich vom System beendet wird, muss ScrollShield im Hintergrund aktiv bleiben dürfen."_
-- **Fallback-Logik:** Die App funktioniert, aber das Dashboard zeigt einen Warn-Banner ("Hintergrundschutz eingeschränkt"), der den Nutzer bittet, die Akku-Einstellungen anzupassen.
+- **Fallback-Logik:** Die App funktioniert; die Berechtigungsseite zeigt die Karte als optional mit einem Knopf zu den Akku-Einstellungen.
 
 ---
 

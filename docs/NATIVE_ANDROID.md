@@ -21,18 +21,22 @@ toolchain whenever Kotlin sources exist.
 
 `ScrollShieldBridgePlugin.kt` exposes to the web layer:
 
-| Method                          | Purpose                                                     |
-| ------------------------------- | ----------------------------------------------------------- |
-| `getPermissionStatus`           | Usage Access, overlay, notifications, service running state |
-| `requestUsageStatsPermission`   | Opens the system Usage Access screen                        |
-| `requestOverlayPermission`      | Opens the system overlay screen                             |
-| `getForegroundApp`              | Current foreground package (diagnostics)                    |
-| `syncBlockedApps`               | Writes the per-app rule set                                 |
-| `startMonitoring`               | Starts `AppMonitorService`                                  |
-| `stopMonitoring`                | Stops it and clears the master switch                       |
-| `getInterruptionEvents`         | Interruptions the overlay showed, not yet in the history    |
-| `getAppUsage`                   | Today's foreground minutes of the protected packages        |
-| `acknowledgeInterruptionEvents` | Drops the ones the web layer took over                      |
+| Method                            | Purpose                                                                  |
+| --------------------------------- | ------------------------------------------------------------------------ |
+| `getPermissionStatus`             | Usage Access, overlay, notifications, battery exemption, service state   |
+| `requestUsageStatsPermission`     | Opens the system Usage Access screen                                     |
+| `requestOverlayPermission`        | Opens the system overlay screen                                          |
+| `openBatteryOptimizationSettings` | Opens the battery-optimisation list (no `REQUEST_IGNORE_…` permission)   |
+| `getForegroundApp`                | Current foreground package (diagnostics)                                 |
+| `syncBlockedApps`                 | Writes the per-app rule set                                              |
+| `startMonitoring`                 | Starts `AppMonitorService`                                               |
+| `stopMonitoring`                  | Stops it and clears the master switch                                    |
+| `getInterruptionEvents`           | Interruptions the overlay showed, not yet in the history                 |
+| `getAppUsage`                     | Today's foreground minutes of the protected packages                     |
+| `acknowledgeInterruptionEvents`   | Drops the ones the web layer took over                                   |
+| `clearNativeData`                 | Deletes all native data and stops the monitor ("App zurücksetzen")       |
+| `saveTextFile`                    | Writes the data export through the system "save as" dialog               |
+| `minimizeApp`, `backButton` event | Android back button: the web layer navigates, or the app goes background |
 
 `AppMonitorService.kt` runs as a foreground service, reads the foreground app from the `UsageStatsManager` **event**
 stream every 1.5 s, and shows a full-screen overlay when a protected package appears:

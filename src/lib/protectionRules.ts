@@ -13,9 +13,17 @@ export type ProtectionFlowStep =
   | 'anti_binge_block'
   | 'app_opened';
 
+/**
+ * Why an attempt ends in 'anti_binge_block'. The step is shared by every
+ * lock without an emergency unlock, and the screen used to explain all of
+ * them as "opened too often".
+ */
+export type ProtectionBlockReason = 'daily_limit' | 'anti_binge' | 'time_window' | 'emergency_limit';
+
 export interface ProtectionDecision {
   step: ProtectionFlowStep;
   delaySeconds?: number;
+  blockReason?: ProtectionBlockReason;
   event?: {
     type: HistoryEvent['type'];
     desc: string;
@@ -56,6 +64,7 @@ export const evaluateProtectionAttempt = ({
   if (config.dailyLimit > 0 && usageMinutesToday >= config.dailyLimit) {
     return {
       step: 'anti_binge_block',
+      blockReason: 'daily_limit',
       event: {
         type: 'block',
         desc: `Tageslimit erreicht (${usageMinutesToday}/${config.dailyLimit} Min)`,
@@ -74,9 +83,10 @@ export const evaluateProtectionAttempt = ({
     if (recentBlockWindowOpens.length >= config.antiBinge.blockThreshold) {
       return {
         step: 'anti_binge_block',
+        blockReason: 'anti_binge',
         event: {
           type: 'block',
-          desc: `Anti-Binge Sperre (${recentBlockWindowOpens.length} Oeffnungen in ${config.antiBinge.blockTimeframe}m)`,
+          desc: `Anti-Binge Sperre (${recentBlockWindowOpens.length} Öffnungen in ${config.antiBinge.blockTimeframe}m)`,
         },
       };
     }
@@ -89,6 +99,7 @@ export const evaluateProtectionAttempt = ({
   if (timeWindowRule === 'block') {
     return {
       step: 'anti_binge_block',
+      blockReason: 'time_window',
       event: {
         type: 'block',
         desc: `Gesperrt im Zeitfenster ${getTimeWindowLabel(window)}`,
@@ -105,6 +116,7 @@ export const evaluateProtectionAttempt = ({
     if (maxEmergencyUnlocks > 0 && emergencyCountToday >= maxEmergencyUnlocks) {
       return {
         step: 'anti_binge_block',
+        blockReason: 'emergency_limit',
         event: {
           type: 'block',
           desc: 'Zu viele Notfallfreigaben heute',
@@ -140,7 +152,7 @@ export const evaluateProtectionAttempt = ({
         step: 'anti_binge_warning',
         event: {
           type: 'warning',
-          desc: `Anti-Binge Warnung (${recentWarningWindowOpens.length} Oeffnungen in ${config.antiBinge.warningTimeframe}m)`,
+          desc: `Anti-Binge Warnung (${recentWarningWindowOpens.length} Öffnungen in ${config.antiBinge.warningTimeframe}m)`,
         },
       };
     }

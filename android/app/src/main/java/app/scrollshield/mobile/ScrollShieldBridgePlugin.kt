@@ -1,18 +1,23 @@
 package app.scrollshield.mobile
 
+import android.app.Activity
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import android.text.TextUtils
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.ActivityResult
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
+import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import org.json.JSONArray
 import org.json.JSONObject
@@ -45,11 +50,49 @@ class ScrollShieldBridgePlugin : Plugin() {
         /** JSON array of { packageName, mode, delaySeconds } objects. */
         const val KEY_BLOCKED_RULES = "blocked_rules"
         const val KEY_MONITORING_ENABLED = "monitoring_enabled"
+
+        /** Sent to the web layer when the user presses Android's back button. */
+        const val EVENT_BACK_BUTTON = "backButton"
     }
 
     // ── Encrypted SharedPreferences ───────────────────────────────────────────
 
     private val encryptedPrefs: SharedPreferences by lazy { SecurePrefs.open(context) }
+
+    // ── Back button ───────────────────────────────────────────────────────────
+
+    /**
+     * The web layer navigates between screens without browser history, so
+     * Android's back button closed ScrollShield on every screen. While the web
+     * layer listens, back goes to it and it decides: previous screen, or
+     * minimizeApp() on the start screen.
+     */
+    private val backCallback = object : OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() = onBackButton()
+    }
+
+    private fun onBackButton() {
+        if (hasListeners(EVENT_BACK_BUTTON)) {
+            notifyListeners(EVENT_BACK_BUTTON, JSObject())
+            return
+        }
+        // Nobody listens (page still loading): default behaviour.
+        backCallback.isEnabled = false
+        activity.onBackPressedDispatcher.onBackPressed()
+        backCallback.isEnabled = true
+    }
+
+    override fun load() {
+        super.load()
+        activity.onBackPressedDispatcher.addCallback(activity, backCallback)
+    }
+
+    /** Sends ScrollShield to the background, as back on the start screen does in other apps. */
+    @PluginMethod
+    fun minimizeApp(call: PluginCall) {
+        activity.runOnUiThread { activity.moveTaskToBack(true) }
+        call.resolve()
+    }
 
     // ── Permission helpers ────────────────────────────────────────────────────
 
@@ -83,6 +126,12 @@ class ScrollShieldBridgePlugin : Plugin() {
         }
     }
 
+    /** True when Android exempted ScrollShield from battery optimisation. */
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
+        return powerManager.isIgnoringBatteryOptimizations(context.packageName)
+    }
+
     private fun hasNotificationPermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
@@ -107,6 +156,7 @@ class ScrollShieldBridgePlugin : Plugin() {
         result.put("notifications", hasNotificationPermission())
         result.put("monitoringActive", AppMonitorService.isRunning)
         result.put("accessibility", hasAccessibilityService())
+        result.put("batteryOptimizationIgnored", isIgnoringBatteryOptimizations())
         call.resolve(result)
     }
 
@@ -122,7 +172,31 @@ class ScrollShieldBridgePlugin : Plugin() {
             }
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        call.resolve(JSObject().put("opened", startSettingsActivity(intent)))
+        // Some OEM builds only know the list without the app entry.
+        val opened = startSettingsActivity(intent) ||
+            startSettingsActivity(
+                Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        call.resolve(JSObject().put("opened", opened))
+    }
+
+    /**
+     * Opens the list of apps exempt from battery optimisation. The one-tap
+     * request (ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS) needs a permission
+     * Google Play only allows for a few kinds of apps, so the user picks
+     * ScrollShield in the list; the app's own settings page is the fallback.
+     */
+    @PluginMethod
+    fun openBatteryOptimizationSettings(call: PluginCall) {
+        val opened = startSettingsActivity(
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        ) || startSettingsActivity(
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", context.packageName, null)
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+        call.resolve(JSObject().put("opened", opened))
     }
 
     /**
@@ -225,7 +299,7 @@ class ScrollShieldBridgePlugin : Plugin() {
     @PluginMethod
     fun startMonitoring(call: PluginCall) {
         if (!hasUsageStatsPermission()) {
-            call.reject("USAGE_STATS_PERMISSION_MISSING", "Grant Usage Access permission first.")
+            call.reject("Grant Usage Access permission first.", "USAGE_STATS_PERMISSION_MISSING")
             return
         }
 
@@ -237,7 +311,7 @@ class ScrollShieldBridgePlugin : Plugin() {
                 context.startService(intent)
             }
         } catch (error: Exception) {
-            call.reject("SERVICE_START_FAILED", error.message, error)
+            call.reject(error.message ?: "Could not start the monitor.", "SERVICE_START_FAILED", error)
             return
         }
 
@@ -498,6 +572,67 @@ class ScrollShieldBridgePlugin : Plugin() {
             .toSet()
         InterruptionLog.acknowledge(encryptedPrefs, acknowledged)
         call.resolve()
+    }
+
+    /**
+     * Deletes everything the native side stored: rules, usage minutes, opening
+     * times, interruptions and calibration samples, and stops the monitor.
+     * Part of "App zurücksetzen"; before, those stayed on the device.
+     */
+    @PluginMethod
+    fun clearNativeData(call: PluginCall) {
+        context.stopService(Intent(context, AppMonitorService::class.java))
+        val cleared = try {
+            // EncryptedSharedPreferences keeps its own keysets on clear().
+            encryptedPrefs.edit().clear().commit()
+        } catch (_: Exception) {
+            // An unreadable entry makes clear() fail; drop the whole file.
+            context.deleteSharedPreferences(PREF_FILE)
+        }
+        // The accessibility service drops its rules and stops recording.
+        AppMonitorService.notifyConfigUpdate(context)
+        call.resolve(JSObject().put("cleared", cleared))
+    }
+
+    /**
+     * Saves a text file where the user chooses, through Android's own "save as"
+     * dialog. Used for the data export: the WebView ignores `<a download>`, so
+     * the export did nothing in the app. Needs no storage permission.
+     */
+    @PluginMethod
+    fun saveTextFile(call: PluginCall) {
+        val filename = call.getString("filename")
+        if (filename.isNullOrBlank() || call.getString("content") == null) {
+            call.reject("filename and content are required.", "INVALID_FILE")
+            return
+        }
+
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = call.getString("mimeType") ?: "application/json"
+            putExtra(Intent.EXTRA_TITLE, filename)
+        }
+        startActivityForResult(call, intent, "saveTextFileResult")
+    }
+
+    @Suppress("unused") // Called by Capacitor through reflection.
+    @ActivityCallback
+    private fun saveTextFileResult(call: PluginCall?, result: ActivityResult) {
+        if (call == null) return
+        val uri = result.data?.data
+        if (result.resultCode != Activity.RESULT_OK || uri == null) {
+            call.resolve(JSObject().put("saved", false))
+            return
+        }
+
+        try {
+            val stream = context.contentResolver.openOutputStream(uri, "wt")
+                ?: throw IllegalStateException("No output stream for the chosen file.")
+            stream.use { it.write((call.getString("content") ?: "").toByteArray(Charsets.UTF_8)) }
+            call.resolve(JSObject().put("saved", true))
+        } catch (error: Exception) {
+            call.reject(error.message ?: "Could not save the file.", "SAVE_FAILED", error)
+        }
     }
 
     /** Looks the configured surface id for a package up in the stored rules. */

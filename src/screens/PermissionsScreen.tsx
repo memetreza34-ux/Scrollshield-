@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { AppState, Screen, AppPermissions } from '../types';
 import { Header } from '../components/ui';
+import { AccessibilityDisclosure } from '../components/AccessibilityDisclosure';
 import { ScrollShieldBridge } from '../lib/nativeBridge';
 import { requestNotificationPermission } from '../lib/notifications';
 
@@ -32,6 +33,7 @@ export function PermissionsScreen({
   const { permissions, operatingSystem } = state;
   const [expandedInfo, setExpandedInfo] = useState<keyof AppPermissions | null>(null);
   const [isNative, setIsNative] = useState(false);
+  const [showAccessibilityDisclosure, setShowAccessibilityDisclosure] = useState(false);
 
   const togglePermission = (key: keyof AppPermissions, forceState?: boolean) => {
     updateState({
@@ -66,6 +68,9 @@ export function PermissionsScreen({
           overlay: status.overlay,
           notifications: status.notifications,
           accessibility: status.accessibility,
+          backgroundActivity: status.batteryOptimizationIgnored ?? previous.permissions.backgroundActivity,
+          ignoreBatteryOptimization:
+            status.batteryOptimizationIgnored ?? previous.permissions.ignoreBatteryOptimization,
         },
       }));
     } catch {
@@ -87,12 +92,26 @@ export function PermissionsScreen({
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [refreshNativeStatus]);
 
+  const openAccessibilitySettings = () => {
+    setShowAccessibilityDisclosure(false);
+    void ScrollShieldBridge.openAccessibilitySettings().catch(() => undefined);
+  };
+
   /**
-   * Opens the matching system settings screen. Android grants none of these
-   * programmatically. When no native screen is available (web demo) the local
-   * switch is toggled instead.
+   * Opens the matching system settings screen; Android grants none of these
+   * programmatically. The status shown afterwards is what Android reports on
+   * return – never a local switch, which used to say "AKTIV" for a permission
+   * the system had not granted.
    */
   const requestPermission = async (key: keyof AppPermissions) => {
+    // Google Play requires the disclosure and an explicit "yes" before the
+    // service is switched on; managing a running one needs neither.
+    if (key === 'accessibility') {
+      if (permissions.accessibility) openAccessibilitySettings();
+      else setShowAccessibilityDisclosure(true);
+      return;
+    }
+
     try {
       // Notifications are a browser-level permission, not a system settings screen.
       if (key === 'notifications') {
@@ -101,16 +120,12 @@ export function PermissionsScreen({
         return;
       }
 
-      let result = { opened: false };
-      if (key === 'usageAccess') result = await ScrollShieldBridge.requestUsageStatsPermission();
-      else if (key === 'overlay') result = await ScrollShieldBridge.requestOverlayPermission();
-      else if (key === 'accessibility') result = await ScrollShieldBridge.openAccessibilitySettings();
-
-      if (result.opened) return;
+      if (key === 'usageAccess') await ScrollShieldBridge.requestUsageStatsPermission();
+      else if (key === 'overlay') await ScrollShieldBridge.requestOverlayPermission();
+      else if (key === 'backgroundActivity') await ScrollShieldBridge.openBatteryOptimizationSettings();
     } catch {
-      // Fall through to the local switch.
+      // Plugin unavailable; the status stays as Android reports it.
     }
-    togglePermission(key);
   };
 
   const getStatusText = (isActive: boolean, isOptional: boolean = false) => {
@@ -244,6 +259,12 @@ export function PermissionsScreen({
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6 pb-32">
+      {showAccessibilityDisclosure && (
+        <AccessibilityDisclosure
+          onAccept={openAccessibilitySettings}
+          onDecline={() => setShowAccessibilityDisclosure(false)}
+        />
+      )}
       <Header
         title={isOnboarding ? 'Setup' : 'Berechtigungen'}
         onBack={() => navigate(isOnboarding ? 'onboarding' : 'settings')}

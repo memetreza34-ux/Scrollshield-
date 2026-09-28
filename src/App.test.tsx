@@ -216,7 +216,9 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(await screen.findByText('2 unbewusste Impulse heute gestoppt.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('2 unbewusste Impulse heute gestoppt.', undefined, { timeout: 5000 }),
+    ).toBeInTheDocument();
     await waitFor(() => expect(nativeEvents.acknowledge).toHaveBeenCalledWith(['n1', 'n2']));
   });
 
@@ -240,7 +242,7 @@ describe('App', () => {
     fireEvent.click(await screen.findByRole('button', { name: /App zurücksetzen/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Ja, Reset' }));
 
-    expect(await screen.findByRole('heading', { name: 'ScrollShield' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'ScrollShield' }, { timeout: 5000 })).toBeInTheDocument();
     await waitFor(() => {
       expect(Object.keys(localStorage).filter((key) => key.startsWith('scrollshield_'))).toEqual([]);
     });

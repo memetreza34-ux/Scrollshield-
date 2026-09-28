@@ -3,6 +3,7 @@ package app.scrollshield.mobile
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.os.Build
 import java.util.Calendar
 
 /**
@@ -43,13 +44,42 @@ object ForegroundUsage {
         val totals = mutableMapOf<String, Long>()
         val event = UsageEvents.Event()
 
+        // Closes every running interval at `end`. Android does not always log
+        // the matching MOVE_TO_BACKGROUND (process killed, reboot); the open
+        // interval then ran on until now and the daily limit locked the app
+        // for time nobody spent in it.
+        fun closeAll(end: Long) {
+            for ((packageName, start) in since) {
+                totals[packageName] = (totals[packageName] ?: 0L) + (end - start).coerceAtLeast(0L)
+            }
+            since.clear()
+            resumed.clear()
+        }
+
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
             val packageName = event.packageName ?: continue
-            if (packageName !in packages) continue
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+                (event.eventType == UsageEvents.Event.DEVICE_SHUTDOWN ||
+                    event.eventType == UsageEvents.Event.DEVICE_STARTUP)
+            ) {
+                closeAll(event.timeStamp)
+                continue
+            }
+
+            if (packageName !in packages) {
+                // Another app in front ends the protected one's time, whether or
+                // not its own background event was logged. In split screen this
+                // undercounts, which errs on the lenient side.
+                if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) closeAll(event.timeStamp)
+                continue
+            }
 
             when (event.eventType) {
                 UsageEvents.Event.MOVE_TO_FOREGROUND -> {
+                    // Switching straight from one protected app to another.
+                    if (since.keys.any { it != packageName }) closeAll(event.timeStamp)
                     val count = resumed[packageName] ?: 0
                     if (count == 0) since[packageName] = event.timeStamp
                     resumed[packageName] = count + 1

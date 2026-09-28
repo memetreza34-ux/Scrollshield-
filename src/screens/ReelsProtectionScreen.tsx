@@ -61,9 +61,11 @@ export function ReelsProtectionScreen({
           hardInterrupt: true,
         };
       } else if (mode === 'strict') {
+        // 'limit', as the card promises five minutes a day; blocking the feed
+        // outright is what "Kein Endlos-Swipe" does.
         newReelsConfig = {
           enabled: true,
-          mode: 'block',
+          mode: 'limit',
           dailyLimitMinutes: 5,
           sessionLimitMinutes: 1,
           hardInterrupt: true,

@@ -19,8 +19,10 @@ import { Capacitor } from '@capacitor/core';
 export type OperatingSystem = 'ios' | 'android' | 'web';
 
 /**
- * Returns the platform the app is running on. Uses Capacitor inside the native
- * shell and falls back to user-agent detection in the browser.
+ * Returns the platform the app is running on. Only the native shell counts:
+ * a browser on a phone can neither read Usage Access nor use Screen Time, so
+ * calling it 'android' or 'ios' showed permissions that cannot be granted
+ * there – and let the user "activate" them anyway.
  */
 export function detectOperatingSystem(): OperatingSystem {
   try {
@@ -29,24 +31,8 @@ export function detectOperatingSystem(): OperatingSystem {
       if (platform === 'ios' || platform === 'android') return platform;
     }
   } catch {
-    // Capacitor unavailable – fall through to the browser check.
+    // Capacitor unavailable – a plain browser.
   }
-
-  return detectFromUserAgent(typeof navigator !== 'undefined' ? navigator.userAgent : '');
-}
-
-/**
- * Browser detection. Exported for tests: user-agent strings are the kind of
- * thing that silently stops matching.
- */
-export function detectFromUserAgent(userAgent: string): OperatingSystem {
-  const ua = userAgent.toLowerCase();
-
-  if (/android/.test(ua)) return 'android';
-
-  // iPadOS 13+ reports itself as a Mac, distinguishable by touch support.
-  const isIpadOs = /macintosh/.test(ua) && typeof navigator !== 'undefined' && (navigator.maxTouchPoints ?? 0) > 1;
-  if (/iphone|ipad|ipod/.test(ua) || isIpadOs) return 'ios';
 
   return 'web';
 }

@@ -101,7 +101,9 @@ export function Dashboard({
     let warningText = '';
 
     if (operatingSystem === 'android') {
-      if (!permissions.usageAccess || !permissions.backgroundActivity || !permissions.overlay) {
+      // The battery exemption is optional (see the permissions screen); it
+      // made this warning stay until a switch without effect was tapped.
+      if (!permissions.usageAccess || !permissions.overlay) {
         missingCritical = true;
         warningText = 'Wichtige Android-Berechtigungen fehlen. Der Schutz kann jederzeit systembedingt ausfallen.';
       }

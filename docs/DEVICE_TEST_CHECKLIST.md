@@ -23,10 +23,13 @@ gemacht hast, was passiert ist, Handy-Modell und Android-Version. Ein Screenshot
       Rückkehr steht die Karte auf „AKTIV“.
 - [ ] Gleiches für „Über anderen Apps einblenden“.
 - [ ] „Benachrichtigungen“ aktivieren. **Erwartet:** Android fragt nach (ab Android 13), danach „AKTIV“.
-- [ ] „Kurzvideo-Erkennung (Bedienungshilfe)“ aktivieren, in den Android-Einstellungen den ScrollShield-Dienst
+- [ ] „Kurzvideo-Erkennung (Bedienungshilfe)“ → „Aktivieren“. **Erwartet:** zuerst ein Hinweis-Dialog mit „Ablehnen“
+      und „Zustimmen“; die Android-Einstellungen öffnen sich erst nach „Zustimmen“. Dort den ScrollShield-Dienst
       einschalten. **Erwartet:** nach der Rückkehr „AKTIV“.
-- [ ] Einen Schalter umlegen, der nur in ScrollShield existiert (z. B. „Zuverlässiger Schutz im Hintergrund“), dann kurz
-      in eine andere App und zurück. **Erwartet:** der Schalter bleibt, wie du ihn gesetzt hast.
+- [ ] Denselben Dialog mit „Ablehnen“ schließen. **Erwartet:** keine Android-Einstellung öffnet sich.
+- [ ] „Zuverlässiger Schutz im Hintergrund“ → „Aktivieren“. **Erwartet:** die Android-Liste der Akku-Ausnahmen öffnet
+      sich (je nach Hersteller die App-Info). ScrollShield dort auf „Nicht optimieren“ stellen; nach der Rückkehr
+      „AKTIV“. Ohne diesen Schritt bleibt die Karte „OPTIONAL“.
 - [ ] Instagram als geschützte App aktivieren. **Erwartet:** eine dauerhafte Benachrichtigung „ScrollShield ist aktiv“.
 
 ## 2. App-Sperre
@@ -116,6 +119,17 @@ Zum Testen darfst du die Uhrzeit des Handys vorstellen (automatische Zeit aus). 
       und nicht geöffnet“ und „Nach der Unterbrechung geöffnet“.
 - [ ] ScrollShield schließen und wieder öffnen. **Erwartet:** die Zahl bleibt 3, nichts wird doppelt gezählt.
 - [ ] Eine Kurzvideo-Unterbrechung auslösen (Abschnitt 4). **Erwartet:** sie erscheint im Verlauf als „Kurzvideo: …“.
+
+## 10. Bedienung und Daten
+
+- [ ] In „Geschützte Apps“ → eine App öffnen, dann die Android-Zurück-Taste (oder Zurück-Geste). **Erwartet:** zurück zur
+      App-Liste, nicht raus aus ScrollShield. Auf dem Dashboard schickt Zurück die App in den Hintergrund.
+- [ ] Datenschutz → „Lokale Daten exportieren“. **Erwartet:** Android fragt, wo die Datei gespeichert werden soll; danach
+      „Gespeichert als …“ und die Datei liegt am gewählten Ort.
+- [ ] Die exportierte Datei über „Lokale Daten importieren“ wieder einlesen. **Erwartet:** „erfolgreich importiert“.
+- [ ] Regeln → anderes Profil wählen. **Erwartet:** die geschützten Apps bleiben geschützt, nur die Regeln ändern sich.
+- [ ] Datenschutz → „App zurücksetzen“. **Erwartet:** die Benachrichtigung „ScrollShield ist aktiv“ verschwindet,
+      Instagram öffnet sich ohne Schutzbildschirm, „Erkennung prüfen“ zeigt keine alten Beobachtungen mehr.
 
 ## Bekannte Lücken – nicht als Fehler melden
 

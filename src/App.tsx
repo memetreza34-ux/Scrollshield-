@@ -6,11 +6,15 @@ import { normalizeAppState } from './lib/state';
 import { reconcileFocusRuntime } from './lib/focus';
 import {
   acknowledgeInterruptionEvents,
+  clearNativeData,
+  minimizeApp,
+  onHardwareBack,
   readAppUsage,
   readInterruptionEvents,
   readShortVideoUsage,
   syncNativeBlockList,
 } from './lib/nativeBridge';
+import { getBackTarget } from './lib/navigation';
 import { mergeNativeInterruptions } from './lib/nativeEvents';
 import { mergeNativeAppUsage, mergeNativeShortVideoUsage } from './lib/stats';
 import { getLocalDateKey } from './lib/appUtils';
@@ -299,6 +303,28 @@ export default function App() {
     }
   }, [currentScreen]);
 
+  // Android's back button. Screens are switched without browser history, so
+  // without this back closed ScrollShield on every screen. Registered once;
+  // the ref carries the current screen into the handler.
+  const backStateRef = useRef({ screen: currentScreen, onboarded: false });
+  useEffect(() => {
+    backStateRef.current = { screen: currentScreen, onboarded: appState.hasCompletedOnboarding };
+  }, [currentScreen, appState.hasCompletedOnboarding]);
+  useEffect(() => {
+    if (!isLoaded) return;
+    return onHardwareBack(() => {
+      const { screen, onboarded } = backStateRef.current;
+      const target = getBackTarget(screen, onboarded);
+      if (!target) {
+        void minimizeApp();
+        return;
+      }
+      // Leaving the protection flow is its "cancel".
+      if (screen === 'protection_flow') setAppState((previous) => ({ ...previous, simulatedAppToOpen: null }));
+      setCurrentScreen(target);
+    });
+  }, [isLoaded]);
+
   useEffect(() => {
     if (isLoaded) {
       if (import.meta.env.PROD && currentScreen === 'debug') {
@@ -345,6 +371,7 @@ export default function App() {
   const resetApp = () => {
     skipNextSaveRef.current = true;
     StorageService.clearState();
+    void clearNativeData();
     setAppState(DEFAULT_STATE);
     setCurrentScreen('welcome');
   };

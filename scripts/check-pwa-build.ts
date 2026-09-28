@@ -53,7 +53,6 @@ const builtAssets = (await readdir(path.join(distDir, 'assets')))
 const requiredPrecachedFiles = [
   'index.html',
   'manifest.webmanifest',
-  'registerSW.js',
   'privacy.html',
   ...requiredIcons.map((icon) => icon.replace(/^\//, '')),
   ...builtAssets,
@@ -66,6 +65,17 @@ if (missingPrecachedFiles.length > 0) {
 
 if (!/createHandlerBoundToURL\(["']\/index\.html["']\)/.test(swRaw)) {
   throw new Error('Service worker must use index.html as its offline navigation fallback.');
+}
+
+// src/main.tsx registers the service worker in the browser only; a script tag
+// in index.html would register it inside the Android app as well.
+if (htmlRaw.includes('registerSW')) {
+  throw new Error('index.html must not register the service worker; src/main.tsx does it outside the native app.');
+}
+
+const sourceMaps = (await readdir(distDir, { recursive: true })).filter((file) => file.endsWith('.map'));
+if (sourceMaps.length > 0) {
+  throw new Error(`Source maps must not ship, they contain local file paths: ${sourceMaps.join(', ')}`);
 }
 
 if (!htmlRaw.includes('Content-Security-Policy')) {

@@ -1,6 +1,6 @@
 # Offene Punkte – Fahrplan bis zur Veröffentlichung
 
-Stand: 26. September 2026. Reihenfolge = Arbeitsreihenfolge. **[Du]** kannst nur du erledigen, **[Claude]** kann im
+Stand: 27. September 2026. Reihenfolge = Arbeitsreihenfolge. **[Du]** kannst nur du erledigen, **[Claude]** kann im
 Code erledigt werden. Erledigtes abhaken oder löschen. Keine Rechtsberatung – die rechtlichen Punkte sind eine
 technische Einschätzung; Details und Fragen für eine Prüfung stehen in `docs/LEGAL_REVIEW_BRIEF.md`.
 
@@ -87,6 +87,14 @@ Vorlagen: `docs/STORE_SUBMISSION_PACKET.md`, `docs/STORE_LISTING_COPY.md`, `STOR
   - Tageslimit, Anti-Binge und Zeitfenster werden nur beim Öffnen einer App geprüft, nicht während man in ihr bleibt.
   - Auf dem Handy gibt es keine Notfallfreigabe.
   - Endet eine Fokus-Sitzung bei geschlossener App, bleibt die Sperre bis zum nächsten Öffnen.
+- [x] **Fehler aus der Code-Analyse vom 27.09.2026** behoben (28.09.): Profilwechsel schaltete den Schutz aus, Profil
+      „Kein Endlos-Swipe“ sperrte die ganze App, Export ging in der Android-App nicht, App-Reset ließ Android-Daten
+      liegen, Zurück-Taste schloss die App, Schein-Schalter „Schutz im Hintergrund“, falsche Plattform im Handy-Browser,
+      Bedienungshilfe ohne Zustimmungs-Dialog, übersprungene Wartezeit nach Anti-Binge, falscher Sperrgrund,
+      wegklickbarer gesperrter Feed, Absturz auf Android 7, zu hoch gezähltes Tageslimit, Service Worker in der App.
+  - [ ] **[Du]** Auf dem Handy mitprüfen (`docs/DEVICE_TEST_CHECKLIST.md`): Export speichert eine Datei, Zurück-Taste
+        geht einen Bildschirm zurück, „App zurücksetzen“ stoppt den Schutz, Akku-Knopf öffnet die Akku-Liste,
+        Zustimmungs-Dialog erscheint vor der Bedienungshilfe.
 - [ ] **iPhone:** Es gibt keine iOS-App. Dafür wären eigener Swift-Code mit Apples Bildschirmzeit-Schnittstelle, Apples
       Sondergenehmigung dafür, ein Mac mit Xcode und ein Apple-Entwicklerkonto (99 US-Dollar pro Jahr) nötig.
 

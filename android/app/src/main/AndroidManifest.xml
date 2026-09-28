@@ -73,7 +73,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="App usage monitoring for parental and self-control purposes" />
+                android:value="Self-control: shows a pause screen when the user opens an app they chose to limit" />
         </service>
 
         <!-- ── BootReceiver ──────────────────────────────────────────────────

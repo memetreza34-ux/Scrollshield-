@@ -5,12 +5,20 @@ import { expectNoA11yViolations } from '../test/a11y';
 import { AppState, DEFAULT_STATE } from '../types';
 import { PermissionsScreen } from './PermissionsScreen';
 
-const getPermissionStatus = vi.hoisted(() => vi.fn());
-vi.mock('../lib/nativeBridge', () => ({ ScrollShieldBridge: { getPermissionStatus } }));
+const { getPermissionStatus, openAccessibilitySettings, openBatteryOptimizationSettings } = vi.hoisted(() => ({
+  getPermissionStatus: vi.fn(),
+  openAccessibilitySettings: vi.fn(),
+  openBatteryOptimizationSettings: vi.fn(),
+}));
+vi.mock('../lib/nativeBridge', () => ({
+  ScrollShieldBridge: { getPermissionStatus, openAccessibilitySettings, openBatteryOptimizationSettings },
+}));
 
 afterEach(() => {
   vi.restoreAllMocks();
   getPermissionStatus.mockReset();
+  openAccessibilitySettings.mockReset();
+  openBatteryOptimizationSettings.mockReset();
 });
 
 // Platform-specific cards only render for their platform, so the state has to
@@ -103,6 +111,45 @@ describe('PermissionsScreen', () => {
       notifications: true,
       accessibility: true,
     });
+  });
+
+  it('shows the accessibility disclosure and opens the settings only after consent', async () => {
+    openAccessibilitySettings.mockResolvedValue({ opened: true });
+    const { container } = render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aktivieren: Kurzvideo-Erkennung (Bedienungshilfe)' }));
+
+    expect(screen.getByRole('dialog', { name: 'Bedienungshilfe für die Kurzvideo-Erkennung' })).toBeInTheDocument();
+    expect(openAccessibilitySettings).not.toHaveBeenCalled();
+    await expectNoA11yViolations(container);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zustimmen' }));
+
+    expect(openAccessibilitySettings).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('does not open the accessibility settings when the disclosure is declined', () => {
+    render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aktivieren: Kurzvideo-Erkennung (Bedienungshilfe)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ablehnen' }));
+
+    expect(openAccessibilitySettings).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('opens the battery settings instead of flipping a local switch', async () => {
+    openBatteryOptimizationSettings.mockResolvedValue({ opened: true });
+    const updateState = vi.fn();
+
+    render(<PermissionsScreen state={androidState} updateState={updateState} navigate={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Aktivieren: Zuverlässiger Schutz im Hintergrund' }));
+    await Promise.resolve();
+
+    expect(openBatteryOptimizationSettings).toHaveBeenCalledTimes(1);
+    // "AKTIV" only when Android reports the exemption on return.
+    expect(updateState).not.toHaveBeenCalled();
   });
 
   it('keeps the browser demo switches instead of applying the web fallback', async () => {

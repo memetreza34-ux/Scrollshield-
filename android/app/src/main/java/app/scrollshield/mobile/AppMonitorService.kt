@@ -32,6 +32,7 @@ import androidx.core.app.NotificationCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * AppMonitorService
@@ -221,7 +222,8 @@ class AppMonitorService : Service() {
     private var monitoringEnabled = false
 
     private var lastForegroundPackage: String? = null
-    private val allowedUntil = mutableMapOf<String, Long>()
+    /** Written by the overlay buttons on the main thread, read by the poll worker. */
+    private val allowedUntil = ConcurrentHashMap<String, Long>()
 
     private val prefs: SharedPreferences by lazy { SecurePrefs.open(this) }
     private val openLog: OpenLog by lazy { OpenLog(prefs) }
@@ -785,7 +787,7 @@ class AppMonitorService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.monitor_notification_title))
             .setContentText(getString(R.string.monitor_notification_text))
-            .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setSmallIcon(R.drawable.ic_stat_shield)
             .setContentIntent(openIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)

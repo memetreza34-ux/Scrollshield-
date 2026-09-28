@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Capacitor } from '@capacitor/core';
 import {
   Database,
   FileText,
@@ -44,7 +45,8 @@ import {
   parseScrollShieldExport,
   serializeScrollShieldExport,
 } from '../lib/dataExport';
-import { normalizeAppState } from '../lib/state';
+import { applyProfileConfig, normalizeAppState } from '../lib/state';
+import { saveTextFileNatively } from '../lib/nativeBridge';
 import {
   EVENING_REMINDER_HOUR,
   RELAPSE_BLOCK_THRESHOLD,
@@ -701,22 +703,13 @@ export function Rules({
       p.id === activeProfileId ? { ...p, appsConfig: state.appsConfig } : p,
     );
 
-    // Lade Konfiguration des neuen Profils
+    // Lade die Regeln des neuen Profils; die geschützten Apps bleiben dieselben
     const newProfile = updatedProfiles.find((p) => p.id === profileId);
-    const newAppsConfig = newProfile?.appsConfig || {};
-
-    // Stelle sicher, dass alle Apps zumindest eine Default-Konfiguration haben
-    const mergedConfig = { ...newAppsConfig };
-    SUPPORTED_APPS.forEach((app) => {
-      if (!mergedConfig[app.id]) {
-        mergedConfig[app.id] = state.appsConfig[app.id] || { id: app.id, ...DEFAULT_APP_CONFIG, active: false };
-      }
-    });
 
     updateState({
       profiles: updatedProfiles,
       activeProfileId: profileId,
-      appsConfig: mergedConfig,
+      appsConfig: applyProfileConfig(newProfile?.appsConfig, state.appsConfig),
     });
   };
 
@@ -761,14 +754,7 @@ export function Rules({
       const fallbackActive = updatedProfiles[0]?.id || 'gentle'; // fallback
       newConfigsAndProfile.activeProfileId = fallbackActive;
       const newProfile = updatedProfiles.find((p) => p.id === fallbackActive);
-      const newAppsConfig = newProfile?.appsConfig || {};
-      const mergedConfig = { ...newAppsConfig };
-      SUPPORTED_APPS.forEach((app) => {
-        if (!mergedConfig[app.id]) {
-          mergedConfig[app.id] = state.appsConfig[app.id] || { id: app.id, ...DEFAULT_APP_CONFIG, active: false };
-        }
-      });
-      newConfigsAndProfile.appsConfig = mergedConfig;
+      newConfigsAndProfile.appsConfig = applyProfileConfig(newProfile?.appsConfig, state.appsConfig);
     }
 
     updateState(newConfigsAndProfile);
@@ -1447,7 +1433,7 @@ export function PrivacyScreen({
   const [showHistoryConfirm, setShowHistoryConfirm] = useState(false);
   const [showStatsConfirm, setShowStatsConfirm] = useState(false);
   const [showDetailedPolicy, setShowDetailedPolicy] = useState(false);
-  const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [dataStatus, setDataStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const clearHistory = () => {
     updateState({ history: [] });
@@ -1462,16 +1448,29 @@ export function PrivacyScreen({
     setShowStatsConfirm(false);
   };
 
-  const exportLocalData = () => {
-    const exportData = createScrollShieldExport(state, { appVersion: __APP_VERSION__ });
-    const blob = new Blob([serializeScrollShieldExport(exportData)], { type: 'application/json' });
-    const objectUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+  const exportLocalData = async () => {
+    const content = serializeScrollShieldExport(createScrollShieldExport(state, { appVersion: __APP_VERSION__ }));
+    const filename = createExportFilename();
 
+    // The Android WebView ignores <a download>; the export silently did nothing
+    // in the app. There Android's own "save as" dialog writes the file.
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const saved = await saveTextFileNatively({ filename, content, mimeType: 'application/json' });
+        if (saved) setDataStatus({ type: 'success', message: `Gespeichert als ${filename}.` });
+      } catch {
+        setDataStatus({ type: 'error', message: 'Die Datei konnte nicht gespeichert werden.' });
+      }
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
+    const link = document.createElement('a');
     link.href = objectUrl;
-    link.download = createExportFilename();
+    link.download = filename;
     link.click();
-    URL.revokeObjectURL(objectUrl);
+    // Revoked right after the click, some browsers cancel the download.
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
   };
 
   const importLocalData = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1480,7 +1479,7 @@ export function PrivacyScreen({
     if (!file) return;
 
     if (file.size > MAX_IMPORT_BYTES) {
-      setImportStatus({ type: 'error', message: 'Die Importdatei ist größer als 5 MB.' });
+      setDataStatus({ type: 'error', message: 'Die Importdatei ist größer als 5 MB.' });
       return;
     }
 
@@ -1496,9 +1495,9 @@ export function PrivacyScreen({
       });
 
       updateState(normalized);
-      setImportStatus({ type: 'success', message: 'Lokale Daten wurden erfolgreich importiert.' });
+      setDataStatus({ type: 'success', message: 'Lokale Daten wurden erfolgreich importiert.' });
     } catch (error) {
-      setImportStatus({
+      setDataStatus({
         type: 'error',
         message: error instanceof Error ? error.message : 'Die Importdatei konnte nicht gelesen werden.',
       });
@@ -1698,7 +1697,7 @@ export function PrivacyScreen({
           </h2>
           <div className="bg-zinc-900/80 border border-zinc-800/50 rounded-[2rem] overflow-hidden">
             <button
-              onClick={exportLocalData}
+              onClick={() => void exportLocalData()}
               className="w-full p-5 flex items-center justify-between border-b border-zinc-800/50 hover:bg-zinc-800/40 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[48px]"
             >
               <div>
@@ -1725,16 +1724,16 @@ export function PrivacyScreen({
               />
             </label>
 
-            {importStatus && (
+            {dataStatus && (
               <div
-                role={importStatus.type === 'error' ? 'alert' : 'status'}
+                role={dataStatus.type === 'error' ? 'alert' : 'status'}
                 className={`px-5 py-3 text-xs border-b ${
-                  importStatus.type === 'error'
+                  dataStatus.type === 'error'
                     ? 'text-red-300 bg-red-500/10 border-red-500/20'
                     : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'
                 }`}
               >
-                {importStatus.message}
+                {dataStatus.message}
               </div>
             )}
 

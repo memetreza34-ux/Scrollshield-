@@ -18,7 +18,7 @@
  *   }
  */
 
-import { registerPlugin } from '@capacitor/core';
+import { Capacitor, PluginListenerHandle, registerPlugin } from '@capacitor/core';
 import { getShortVideoSignature } from './shortVideoSignatures';
 import { isShortVideoFeedBlockedByConfig } from './stats';
 import { TIME_WINDOWS, TimeWindowRule } from './timeWindows';
@@ -38,6 +38,8 @@ export interface PermissionStatus {
   monitoringActive: boolean;
   /** Whether the user enabled ScrollShield's accessibility service */
   accessibility: boolean;
+  /** Whether Android exempted ScrollShield from battery optimisation */
+  batteryOptimizationIgnored?: boolean;
 }
 
 export interface ForegroundAppResult {
@@ -204,6 +206,12 @@ export interface StoppedResult {
   stopped: boolean;
 }
 
+export interface SaveTextFileOptions {
+  filename: string;
+  content: string;
+  mimeType?: string;
+}
+
 // ── Plugin interface ──────────────────────────────────────────────────────────
 
 export interface ScrollShieldBridgePlugin {
@@ -220,6 +228,11 @@ export interface ScrollShieldBridgePlugin {
   getInterruptionEvents(): Promise<InterruptionEventsResult>;
   getAppUsage(): Promise<AppUsageResult>;
   acknowledgeInterruptionEvents(options: { ids: string[] }): Promise<void>;
+  openBatteryOptimizationSettings(): Promise<OpenedResult>;
+  clearNativeData(): Promise<{ cleared: boolean }>;
+  saveTextFile(options: SaveTextFileOptions): Promise<{ saved: boolean }>;
+  minimizeApp(): Promise<void>;
+  addListener(eventName: 'backButton', listenerFunc: () => void): Promise<PluginListenerHandle>;
 }
 
 // ── Capacitor plugin registration ─────────────────────────────────────────────
@@ -249,6 +262,10 @@ const ScrollShieldBridgeNative = registerPlugin<ScrollShieldBridgePlugin>('Scrol
     getInterruptionEvents: async () => ({ events: [] }),
     getAppUsage: async () => ({ entries: [], available: false }),
     acknowledgeInterruptionEvents: async () => undefined,
+    openBatteryOptimizationSettings: async () => ({ opened: false }),
+    clearNativeData: async () => ({ cleared: false }),
+    saveTextFile: async () => ({ saved: false }),
+    minimizeApp: async () => undefined,
   },
 });
 
@@ -349,7 +366,8 @@ function buildShortVideoRule(
     dailyLimitMinutes: nonNegativeInt(feed.dailyLimitMinutes),
     sessionLimitMinutes: nonNegativeInt(feed.sessionLimitMinutes),
     stopAfterSwipes: nonNegativeInt(feed.stopAfterSwipes),
-    hardInterrupt: feed.hardInterrupt ?? false,
+    // A blocked feed that offers "continue" is not blocked.
+    hardInterrupt: mode === 'block' || (feed.hardInterrupt ?? false),
     viewIdHints: signature.viewIdHints,
     classNameHints: signature.classNameHints,
     alwaysShortVideo,
@@ -501,6 +519,49 @@ export async function acknowledgeInterruptionEvents(ids: string[]): Promise<void
     await ScrollShieldBridgeNative.acknowledgeInterruptionEvents({ ids });
   } catch {
     // Kept on the device; the next pull finds them already imported.
+  }
+}
+
+/**
+ * Deletes what the Android side stored (rules, usage, interruptions,
+ * calibration samples). Part of the app reset; a no-op on web.
+ */
+export async function clearNativeData(): Promise<void> {
+  try {
+    await ScrollShieldBridgeNative.clearNativeData();
+  } catch {
+    // Nothing stored natively.
+  }
+}
+
+/**
+ * Saves a text file through Android's "save as" dialog. Resolves false when
+ * the user cancelled; throws when writing failed. Only for the native app –
+ * the browser downloads files itself.
+ */
+export async function saveTextFileNatively(options: SaveTextFileOptions): Promise<boolean> {
+  return (await ScrollShieldBridgeNative.saveTextFile(options)).saved;
+}
+
+/**
+ * Hands Android's back button to `handler` while it is registered. Returns
+ * the unsubscribe function; does nothing outside the native app.
+ */
+export function onHardwareBack(handler: () => void): () => void {
+  if (!Capacitor.isNativePlatform()) return () => undefined;
+
+  const registration = ScrollShieldBridgeNative.addListener('backButton', handler);
+  return () => {
+    void registration.then((handle) => handle.remove()).catch(() => undefined);
+  };
+}
+
+/** Sends the app to the background, as back on the start screen does elsewhere. */
+export async function minimizeApp(): Promise<void> {
+  try {
+    await ScrollShieldBridgeNative.minimizeApp();
+  } catch {
+    // Web: nothing to minimise.
   }
 }
 
