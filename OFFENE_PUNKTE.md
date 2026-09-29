@@ -1,6 +1,6 @@
 # Offene Punkte – Fahrplan bis zur Veröffentlichung
 
-Stand: 27. September 2026. Reihenfolge = Arbeitsreihenfolge. **[Du]** kannst nur du erledigen, **[Claude]** kann im
+Stand: 28. September 2026. Reihenfolge = Arbeitsreihenfolge. **[Du]** kannst nur du erledigen, **[Claude]** kann im
 Code erledigt werden. Erledigtes abhaken oder löschen. Keine Rechtsberatung – die rechtlichen Punkte sind eine
 technische Einschätzung; Details und Fragen für eine Prüfung stehen in `docs/LEGAL_REVIEW_BRIEF.md`.
 
@@ -19,6 +19,15 @@ technische Einschätzung; Details und Fragen für eine Prüfung stehen in `docs/
 - [ ] **[Du] Android Studio installieren** und die App bauen. Der Android-Teil ist noch nie kompiliert worden. Danach
       **[Claude]** Kompilierfehler beheben.
 - [ ] **[Du] Auf einem echten Handy testen:** `docs/DEVICE_TEST_CHECKLIST.md`.
+- [x] **Funde vom 28.09.2026 behoben** (29.09.): App-Symbol und Startbild waren das Logo von Capacitor – jetzt das
+      eigene Schild (`npm run generate:android-icons`). Die gespielte „Instagram autorisieren … Filter-Hook
+      aktiviert“-Animation ist entfernt. Store-Texte korrigiert: Bedienungshilfe in Beschreibung und Prüfer-Notiz,
+      kein „ADHS“; `npm run check:store` prüft das jetzt. Dazu: „Mehr erfahren“ auf dem Startbildschirm sprang sofort
+      zurück.
+- [x] **Mindestalter 16+** (Empfehlung übernommen, 29.09.; änderbar): Hinweis auf dem Startbildschirm, in
+      Store-Beschreibung und Datenschutzerklärung; Unterlagen angeglichen. In der Play Console **[Du]** Zielgruppe
+      „16–17“ und „18+“ wählen und für den Anfang nur EU-Länder freigeben (in Texas gilt seit 2026 ein Alters-Gesetz
+      für App-Stores, weitere US-Staaten folgen).
 
 ## 2. Konten und Sicherheit
 

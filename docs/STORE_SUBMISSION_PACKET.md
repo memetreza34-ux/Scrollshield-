@@ -88,8 +88,9 @@ The following sections are not required for the first web/PWA launch. Use them w
 ### `SYSTEM_ALERT_WINDOW` Declaration
 
 > Display over other apps is used only to show a clearly branded ScrollShield interruption when a protected app selected
-> by the user is opened. The screen offers a return action and, where configured, a deliberate emergency release. It does
-> not alter, click, or read the underlying app. Without this permission, overlay-based interruption is unavailable.
+> by the user is opened. The screen offers a return action and, unless the user locked the app, a "continue" button after
+> the configured delay. It does not alter, click, or read the underlying app. Without this permission, overlay-based
+> interruption is unavailable.
 
 ### `FOREGROUND_SERVICE_SPECIAL_USE` Declaration
 
@@ -123,8 +124,15 @@ explicitly enables, which requires the declaration below plus the in-app promine
 > The service is inactive until the user enables it in Android settings after reading the in-app disclosure, and every
 > other feature of the app works without it.
 
-**Prominent disclosure:** shown on the "Kurzvideo-Erkennung" permission card in `PermissionsScreen.tsx` before the user
-is sent to the system settings. It names what is read, what is not read, and that nothing leaves the device.
+**Prominent disclosure:** a dialog of its own (`src/components/AccessibilityDisclosure.tsx`), opened by "Aktivieren" on
+the "Kurzvideo-Erkennung" card of the setup/permissions screen – part of the onboarding, not hidden in a menu. It
+names what is read, what is not read, what is stored, that nothing leaves the device and that BACK is the only action,
+and ends in "Ablehnen" / "Zustimmen". Only "Zustimmen" opens the system settings; "Ablehnen", Escape or Back do not.
+The store description mentions the accessibility use as well (`docs/STORE_LISTING_COPY.md`).
+
+**Autonomous actions:** Google Play prohibits accessibility use that lets an app "autonomously initiate, plan, and
+execute actions". The only action is GLOBAL_ACTION_BACK, and only when the user configured a hard interruption or
+blocked a feed. Should review object, the fallback is to drop the BACK action and keep the overlay alone.
 
 ### Permission Video Shot List
 
@@ -133,14 +141,23 @@ is sent to the system settings. It names what is read, what is not read, and tha
 3. Grant Usage Access from Android settings and return to ScrollShield.
 4. Grant display-over-apps permission and return.
 5. Select a protected app and trigger the branded interruption.
-6. Show the accessibility disclosure, enable the service, open a protected app's short-video feed, and show the
+6. Tap "Aktivieren" on the accessibility card, scroll through the full disclosure, tap "Ablehnen" and show that no
+   settings screen opens (non-consent case).
+7. Tap "Aktivieren" again, tap "Zustimmen", enable the service, open a protected app's short-video feed, and show the
    swipe-based interruption.
-7. Disable each permission and show that ScrollShield remains usable with a warning.
+8. Disable each permission and show that ScrollShield remains usable with a warning.
 
 ### Rating Target
 
 - Target: **USK 0 / PEGI 3**
 - Confirm no social communication, user-generated content, purchases, gambling, violence, or sexual content.
+
+### Target Audience
+
+- Age groups: **16–17 and 18+** only. Not directed at children, so the Families policy does not apply. The minimum
+  age is stated in the store description and the privacy policy.
+- Countries for the first release: EU/EEA. US states such as Texas (SB 2420) now have app-store age laws with duties
+  for developers; add the US only after checking them.
 
 ## Manual Completion Fields
 

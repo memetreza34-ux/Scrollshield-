@@ -62,14 +62,17 @@ Scroll-Ereignisse. Aufrufe, die Texte oder Beschreibungen lesen, kommen im Quell
 5. **Impressum und Händlerstatus:** Welche Pflichtangaben nach § 5 DDG gelten für den Anbieter? Google Play verlangt die
    Angabe, ob der Anbieter Händler im Sinne des Digital Services Act ist; dann werden Name und Anschrift öffentlich
    angezeigt.
-6. **Minderjährige:** Die App fragt kein Alter ab und ist ohne Altersgrenze nutzbar; sie behandelt jeden Nutzer mit den
-   strengeren Datenschutz-Voreinstellungen. Gilt Art. 8 DSGVO für die Einwilligung in die
-   Bedienungshilfe bei Nutzern unter 16? Welche Altersangabe sollte der Store-Eintrag haben?
+6. **Minderjährige:** Vorgesehen ist ein Mindestalter von 16 Jahren: Zielgruppe 16+ in der Play Console, Hinweis in
+   Store-Beschreibung und Datenschutzerklärung. Die App selbst fragt kein Alter ab. Reicht das mit Blick auf Art. 8
+   DSGVO (Einwilligung in die Bedienungshilfe), oder braucht es eine Altersbestätigung in der App? Zum Start ist nur die
+   EU vorgesehen; US-Staaten wie Texas (SB 2420) haben inzwischen eigene Altersgesetze für App-Stores.
 7. **Freitext „Grund“:** Nutzer können dort beliebige, auch sensible Inhalte eintippen. Genügt der Hinweis in der
    Datenschutzerklärung?
 8. **Store-Texte:** Frei von Heilversprechen (Stichwort Sucht)? Ist die Nennung von Instagram, TikTok, YouTube usw.
    zulässig, wie sie in App und Store-Texten vorkommt?
 9. **Haftung:** Braucht es einen Hinweis, dass die App keine Garantie bietet, dass Sperren nicht umgangen werden können?
+10. **Name:** „ScrollShield“ wird bereits von einer anderen App derselben Kategorie genutzt. Der neue Name braucht eine
+    Markenrecherche (DPMA, EUIPO).
 
 ## 5. Was der Anbieter vor Release selbst erledigen muss
 

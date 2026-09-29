@@ -13,6 +13,12 @@ describe('getBackTarget', () => {
     expect(getBackTarget('permissions', true)).toBe('settings');
   });
 
+  it('returns to the welcome screen from the pages readable before the onboarding', () => {
+    expect(getBackTarget('support', false)).toBe('welcome');
+    expect(getBackTarget('help', false)).toBe('support');
+    expect(getBackTarget('support', true)).toBe('settings');
+  });
+
   it('sends the app to the background from a start screen', () => {
     expect(getBackTarget('dashboard', true)).toBeNull();
     expect(getBackTarget('welcome', false)).toBeNull();

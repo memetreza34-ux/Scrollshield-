@@ -55,7 +55,7 @@ export function AccessibilityDisclosure({ onAccept, onDecline }: { onAccept: () 
           </li>
           <li>
             <span className="font-semibold text-zinc-200">Was der Dienst auslöst:</span> nur „Zurück“, wenn du eine
-            harte Unterbrechung eingestellt hast. Er tippt und wischt nie in anderen Apps.
+            harte Unterbrechung eingestellt oder einen Feed gesperrt hast. Er tippt und wischt nie in anderen Apps.
           </li>
         </ul>
         <p className="mb-6 text-xs leading-relaxed text-zinc-500">

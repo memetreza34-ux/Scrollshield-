@@ -37,7 +37,7 @@ export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
             <UserRound size={16} className="mt-0.5 text-emerald-400" aria-hidden="true" />
             <div>
               <span className="block text-sm font-semibold text-emerald-100">Kein Konto verbinden</span>
-              <span className="text-xs text-zinc-500">Alles bleibt lokal in dieser Webapp</span>
+              <span className="text-xs text-zinc-500">Alles bleibt lokal auf deinem Gerät</span>
             </div>
           </div>
           <div className="flex items-start gap-3">
@@ -70,6 +70,7 @@ export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
         >
           Mehr erfahren
         </button>
+        <p className="text-center text-xs text-zinc-500">Für Nutzer ab 16 Jahren.</p>
       </div>
     </motion.div>
   );

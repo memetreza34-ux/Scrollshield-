@@ -14,6 +14,7 @@
     "preview": "vite preview",
     "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
     "generate:icons": "tsx scripts/generate-pwa-icons.ts",
+    "generate:android-icons": "tsx scripts/generate-android-icons.ts",
     "generate:sw": "tsx scripts/generate-service-worker.ts",
     "check:bundle": "tsx scripts/check-bundle-budget.ts",
     "check:a11y": "tsx scripts/check-accessibility-source.ts",

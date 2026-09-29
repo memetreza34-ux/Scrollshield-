@@ -27,13 +27,37 @@ const publicPrivacy = await readFile(publicPrivacyPath, 'utf8');
 
 requireText(listingPath, listing, /## Kurzbeschreibung/i, 'Missing short description.');
 requireText(listingPath, listing, /## Lange Beschreibung/i, 'Missing long description.');
-requireText(listingPath, listing, /## Keywords/i, 'Missing keyword section.');
+requireText(listingPath, listing, /## (?:Keywords|Suchbegriffe)/i, 'Missing keyword section.');
 requireText(listingPath, listing, /## Screenshot-Texte/i, 'Missing screenshot text section.');
 requireText(listingPath, listing, /## Review Notes - Apple/i, 'Missing Apple review notes.');
 requireText(listingPath, listing, /## Review Notes - Google Play/i, 'Missing Google Play review notes.');
 requireText(listingPath, listing, /Werkzeug zur Selbstkontrolle/i, 'Missing self-control positioning.');
 requireText(listingPath, listing, /Best-Effort-Unterbrecher/i, 'Missing best-effort short-video disclosure.');
-requireText(listingPath, listing, /keinen Cloud-Sync, keine Werbung und kein Tracking/i, 'Missing privacy promise.');
+requireText(
+  listingPath,
+  listing,
+  /keinen Cloud-Sync, keine Werbung(?:, keine Käufe)? und kein Tracking/i,
+  'Missing privacy promise.',
+);
+
+// Google Play: an app using the accessibility API without being an
+// accessibility tool has to say so in its store description. The review notes
+// once claimed the opposite ("verwendet keinen Bedienungshilfen-Dienst").
+requireText(
+  listingPath,
+  listing,
+  /## Lange Beschreibung[\s\S]*Bedienungshilfe[\s\S]*## (?:Keywords|Suchbegriffe)/i,
+  'Long description must mention the accessibility service.',
+);
+if (/keinen\s+Bedienungshilfen?-?Dienst/i.test(listing)) {
+  findings.push({ file: listingPath, text: 'Store copy denies the accessibility service the app ships.' });
+}
+requireText(listingPath, listing, /ab 16 Jahren/i, 'Store copy must state the minimum age (16).');
+
+// Health and addiction terms suggest a medical purpose (keyword list and description alike).
+if (/\b(?:ADHS|ADHD|Sucht|süchtig|Therapie|heilen|Heilung)\b/i.test(listing)) {
+  findings.push({ file: listingPath, text: 'Store copy uses health or addiction terms.' });
+}
 
 const riskyClaimPattern =
   /100%\s*(?:unumgehbar|offline)|unumgehbar|un.berwind|komplett\s+blockier|garantiert\s+block|ohne\s+Ausnahme\s+block/i;

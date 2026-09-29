@@ -77,6 +77,14 @@ describe('App', () => {
     await waitFor(() => expect(scrollArea.scrollTop).toBe(0));
   });
 
+  it('opens the help from the welcome screen instead of bouncing back', async () => {
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Mehr erfahren' }));
+
+    expect(await screen.findByRole('heading', { name: 'Hilfe & FAQ' }, { timeout: 5000 })).toBeInTheDocument();
+  });
+
   it('has no obvious accessibility violations on the welcome screen', async () => {
     const { container } = render(<App />);
 

@@ -71,44 +71,13 @@ export function AppList({
   updateState: (u: Partial<AppState>) => void;
   navigate: (s: Screen) => void;
 }) {
-  const [connectingAppId, setConnectingAppId] = useState<string | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'checking' | 'success'>('idle');
-
+  // Switching an app on used to play a two-second "Instagram autorisieren …
+  // Filter-Hook aktiviert" animation. Nothing was connected – protection
+  // comes from the system permissions, never from a link to the app – so it
+  // told the user something that did not happen.
   const toggleApp = (id: string) => {
-    const appsConfig = { ...state.appsConfig };
-    const config = appsConfig[id];
-
-    // Wenn inaktiv und noch NICHT "verbunden", starte Connection-Flow
-    if ((!config || !config.active) && !config?.connected) {
-      setConnectingAppId(id);
-      setConnectionStatus('checking');
-      setTimeout(() => {
-        setConnectionStatus('success');
-        setTimeout(() => {
-          setConnectingAppId(null);
-          setConnectionStatus('idle');
-          // Nach Verbindung direkt aktivieren
-          const updatedAppsConfig = { ...state.appsConfig };
-          updatedAppsConfig[id] = {
-            ...(updatedAppsConfig[id] || { id, ...DEFAULT_APP_CONFIG }),
-            active: true,
-            connected: true,
-          };
-          updateState({ appsConfig: updatedAppsConfig });
-        }, 1200);
-      }, 2000);
-      return;
-    }
-
-    if (appsConfig[id]) {
-      appsConfig[id] = {
-        ...appsConfig[id],
-        active: !appsConfig[id].active,
-      };
-    } else {
-      appsConfig[id] = { id, ...DEFAULT_APP_CONFIG, active: true, connected: true };
-    }
-    updateState({ appsConfig });
+    const current = state.appsConfig[id] ?? { id, ...DEFAULT_APP_CONFIG, active: false };
+    updateState({ appsConfig: { ...state.appsConfig, [id]: { ...current, active: !current.active } } });
   };
 
   const openDetail = (id: string) => {
@@ -120,8 +89,6 @@ export function AppList({
     updateState({ selectedAppId: id });
     navigate('app_detail');
   };
-
-  const connectingAppDef = connectingAppId ? SUPPORTED_APPS.find((a) => a.id === connectingAppId) : null;
 
   return (
     <motion.div
@@ -165,11 +132,7 @@ export function AppList({
                     <div className="text-left">
                       <div className="font-semibold">{app.name}</div>
                       <div className="text-xs text-zinc-500 mt-0.5 font-medium">
-                        {isActive
-                          ? `Modus: ${PROTECTION_MODE_LABELS[config.mode]}`
-                          : config?.connected
-                            ? 'Verbunden, Inaktiv'
-                            : 'Nicht verbunden'}
+                        {isActive ? `Modus: ${PROTECTION_MODE_LABELS[config.mode]}` : 'Nicht geschützt'}
                       </div>
                     </div>
                     <ChevronRight size={18} className="text-zinc-600" aria-hidden="true" />
@@ -184,50 +147,6 @@ export function AppList({
             );
           })}
       </ul>
-
-      <AnimatePresence>
-        {connectingAppId && connectingAppDef && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-zinc-950/90 backdrop-blur-sm rounded-[2.5rem]"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-sm rounded-[2rem] border border-zinc-800 bg-zinc-900/95 p-8 text-center shadow-2xl flex flex-col items-center"
-            >
-              <div
-                className={`w-20 h-20 rounded-3xl mb-6 flex items-center justify-center text-3xl shadow-lg relative ${connectingAppDef.color}`}
-              >
-                {connectionStatus === 'checking' && (
-                  <RefreshCw
-                    size={24}
-                    className="absolute -top-2 -right-2 text-white bg-blue-500 rounded-full p-1 animate-spin shadow-md"
-                  />
-                )}
-                {connectionStatus === 'success' && (
-                  <Check
-                    size={24}
-                    className="absolute -top-2 -right-2 text-white bg-emerald-500 rounded-full p-1 shadow-md"
-                  />
-                )}
-                {connectingAppDef.icon}
-              </div>
-              <h3 className="text-2xl font-bold text-white mb-3">
-                {connectionStatus === 'checking' ? `${connectingAppDef.name} autorisieren` : 'Erfolgreich verbunden'}
-              </h3>
-              <p className="text-zinc-400 text-sm leading-relaxed max-w-[250px]">
-                {connectionStatus === 'checking'
-                  ? `ScrollShield verknüpft sich lokal mit ${connectingAppDef.name}, um den Zugriffs-Status und die Nutzungszeit auslesen zu können...`
-                  : `Der native Filter-Hook für ${connectingAppDef.name} wurde erfolgreich aktiviert.`}
-              </p>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }

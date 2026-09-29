@@ -14,7 +14,7 @@ import {
   readShortVideoUsage,
   syncNativeBlockList,
 } from './lib/nativeBridge';
-import { getBackTarget } from './lib/navigation';
+import { getBackTarget, isAllowedBeforeOnboarding } from './lib/navigation';
 import { mergeNativeInterruptions } from './lib/nativeEvents';
 import { mergeNativeAppUsage, mergeNativeShortVideoUsage } from './lib/stats';
 import { getLocalDateKey } from './lib/appUtils';
@@ -329,10 +329,7 @@ export default function App() {
     if (isLoaded) {
       if (import.meta.env.PROD && currentScreen === 'debug') {
         setCurrentScreen('dashboard');
-      } else if (
-        !appState.hasCompletedOnboarding &&
-        !['welcome', 'onboarding', 'permissions'].includes(currentScreen)
-      ) {
+      } else if (!appState.hasCompletedOnboarding && !isAllowedBeforeOnboarding(currentScreen)) {
         setCurrentScreen('welcome');
       } else if (appState.hasCompletedOnboarding && ['welcome', 'onboarding'].includes(currentScreen)) {
         setCurrentScreen('dashboard');

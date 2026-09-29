@@ -1,7 +1,7 @@
 # ScrollShield - Store Listing Copy
 
 Diese Texte sind bewusst vorsichtig formuliert: ScrollShield wird als Werkzeug zur Selbstkontrolle beschrieben, nicht
-als technische Blockier-Garantie.
+als technische Blockier-Garantie und nicht als Hilfe bei Krankheiten oder Abhängigkeit.
 
 ## Kurzbeschreibung
 
@@ -20,21 +20,38 @@ Funktionen:
 
 - App-spezifische Schutzregeln und Profile
 - Öffnungsverzögerung gegen Autopilot-Nutzung
-- Tages- und Sitzungs-Limits
+- Tageslimits und Anti-Binge-Sperre
 - Fokus-Sitzungen für Arbeit, Lernen und Schlafenszeit
 - Kurzvideo-/Reels-Schutz mit bewussten Unterbrechungen
 - Lokale Statistiken und Verlauf
 - Offline-First: keine Serverübertragung deiner Nutzungsdaten in Version 1.0
 
-Wichtig: ScrollShield ist ein Werkzeug zur Selbstkontrolle. Je nach Betriebssystem und erteilten Berechtigungen kann die
-Schutzwirkung unterschiedlich stark sein. Der Kurzvideo-Schutz arbeitet als Best-Effort-Unterbrecher: Er kann
-Scroll-Muster unterbrechen, aber nicht garantieren, jeden Reels-, Shorts- oder TikTok-Feed technisch zu erkennen oder zu
-blockieren.
+Berechtigungen:
 
-## Keywords
+- Nutzungsdatenzugriff: erkennt, wann du eine geschützte App öffnest.
+- Über anderen Apps einblenden: zeigt den Schutzbildschirm über dieser App.
+- Bedienungshilfe (optional): ScrollShield nutzt die Bedienungshilfe-Schnittstelle von Android (Accessibility-API), um
+  zu erkennen, ob in einer von dir geschützten App gerade ein Kurzvideo-Feed wie Reels, Shorts oder TikTok offen ist,
+  und um deine Wischbewegungen darin zu zählen. Gelesen werden nur technische Kennungen der Oberfläche – keine Texte,
+  Nachrichten oder Eingaben. Nichts verlässt dein Gerät. Du schaltest den Dienst selbst ein, nachdem die App dir erklärt
+  hat, was er tut, und kannst ihn jederzeit abschalten. Alle anderen Funktionen laufen auch ohne ihn.
 
-Fokus, Bildschirmzeit, Digital Wellbeing, Selbstkontrolle, Social Media, ADHS, Prokrastination, Kurzvideos, Reels,
-Shorts, Konzentration, App-Limits
+Wichtig: ScrollShield ist ein Werkzeug zur Selbstkontrolle. Je nach erteilten Berechtigungen kann die Schutzwirkung
+unterschiedlich stark sein. Der Kurzvideo-Schutz arbeitet als Best-Effort-Unterbrecher: Er kann Scroll-Muster
+unterbrechen, aber nicht garantieren, jeden Reels-, Shorts- oder TikTok-Feed technisch zu erkennen oder zu blockieren.
+
+ScrollShield ist für Nutzer ab 16 Jahren gedacht. ScrollShield steht in keiner Verbindung zu Instagram, TikTok,
+YouTube, Facebook, X, Snapchat, Reddit oder Pinterest; die Namen gehören ihren Inhabern und dienen nur zur Beschreibung,
+welche Apps sich schützen lassen.
+
+## Suchbegriffe
+
+Google Play hat kein eigenes Stichwortfeld; diese Begriffe sollen in der Beschreibung natürlich vorkommen. Keine
+Begriffe zu Krankheiten, Störungen oder Abhängigkeit: Sie klingen nach einem Gesundheitsversprechen
+(`npm run check:store` prüft das).
+
+Fokus, Bildschirmzeit, Digital Wellbeing, Selbstkontrolle, Social Media, Prokrastination, Kurzvideos, Reels, Shorts,
+Konzentration, App-Limits
 
 ## Screenshot-Texte
 
@@ -46,14 +63,23 @@ Shorts, Konzentration, App-Limits
 
 ## Review Notes - Apple
 
-ScrollShield verarbeitet App-Regeln, Verlauf und Statistiken lokal auf dem Gerät. Version 1.0 enthält keinen Account,
-keinen Cloud-Sync, keine Werbung und kein Tracking. Auf iPhone und iPad nutzt ScrollShield, sofern freigegeben, Apples
-Screen-Time-/Family-Controls-Funktionen. Der Kurzvideo-Schutz wird als unterstützende Unterbrechung und nicht als
-garantierte Sperre beschrieben.
+Entfällt: Es gibt keine iOS-App. Siehe `OFFENE_PUNKTE.md`, Abschnitt 5.
 
 ## Review Notes - Google Play
 
 ScrollShield verarbeitet App-Regeln, Verlauf und Statistiken lokal auf dem Gerät. Version 1.0 enthält keinen Account,
-keinen Cloud-Sync, keine Werbung und kein Tracking. Android nutzt den Nutzungsdatenzugriff, um ausgewählte Apps zu
-erkennen, und optional die Berechtigung zur Anzeige über anderen Apps für den Schutzbildschirm. ScrollShield verwendet
-keinen Bedienungshilfen-Dienst.
+keinen Cloud-Sync, keine Werbung, keine Käufe und kein Tracking; zum Testen sind keine Zugangsdaten nötig.
+
+So lässt sich die App prüfen:
+
+1. Onboarding durchlaufen, Instagram (oder eine andere installierte App) auswählen.
+2. Auf der Seite „Setup“ den Nutzungsdatenzugriff und „Über anderen Apps einblenden“ erteilen.
+3. Die geschützte App öffnen: Der ScrollShield-Schutzbildschirm erscheint.
+4. Optional: Auf der Karte „Kurzvideo-Erkennung (Bedienungshilfe)“ auf „Aktivieren“ tippen. Vor den
+   Android-Einstellungen erscheint der Hinweis zur Bedienungshilfe mit „Ablehnen“ und „Zustimmen“; erst nach „Zustimmen“
+   öffnen sich die Einstellungen. Danach den Reels-Feed öffnen und wischen: Nach der eingestellten Zahl von Wischern
+   unterbricht ScrollShield.
+
+Die Bedienungshilfe liest nur technische Kennungen der Oberfläche (`viewIdResourceName`) und Fensterklassen, nie Texte.
+Die einzige Aktion, die sie auslöst, ist „Zurück“, wenn der Nutzer für einen Feed eine harte Unterbrechung eingestellt
+oder den Feed gesperrt hat. Details: `docs/STORE_SUBMISSION_PACKET.md`, Abschnitt „Accessibility API Declaration“.
