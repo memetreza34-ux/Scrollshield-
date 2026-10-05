@@ -12,6 +12,7 @@ export type ScrollShieldExport = {
     | 'goals'
     | 'history'
     | 'focusSessions'
+    | 'focusSchedules'
     | 'dailyStats'
     | 'stats'
     | 'profiles'
@@ -36,6 +37,7 @@ export const createScrollShieldExport = (
     goals: state.goals,
     history: state.history,
     focusSessions: state.focusSessions,
+    focusSchedules: state.focusSchedules,
     dailyStats: state.dailyStats,
     stats: state.stats,
     profiles: state.profiles,

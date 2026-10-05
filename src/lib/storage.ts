@@ -1,4 +1,5 @@
 import { AppState } from '../types';
+import { normalizeAppState } from './state';
 
 /**
  * Local Storage Service for ScrollShield
@@ -24,20 +25,14 @@ async function getOrCreateDeviceKey(): Promise<CryptoKey> {
   if (stored) {
     try {
       const raw = Uint8Array.from(atob(stored), (c) => c.charCodeAt(0));
-      return await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, [
-        'encrypt',
-        'decrypt',
-      ]);
+      return await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
     } catch {
       // Corrupted key – generate a new one and wipe old data
       localStorage.removeItem(CRYPTO_KEY_STORAGE);
     }
   }
 
-  const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, [
-    'encrypt',
-    'decrypt',
-  ]);
+  const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
   const raw = await crypto.subtle.exportKey('raw', key);
   localStorage.setItem(CRYPTO_KEY_STORAGE, btoa(String.fromCharCode(...new Uint8Array(raw))));
   return key;
@@ -136,6 +131,8 @@ export const StorageService = {
         activeProtectionLevel: state.activeProtectionLevel,
         isFocusModeActive: state.isFocusModeActive,
         focusTimeRemaining: state.focusTimeRemaining,
+        focusSchedules: state.focusSchedules,
+        pendingFocusResultId: state.pendingFocusResultId,
         activeSession: state.activeSession,
       };
       localStorage.setItem(KEYS.SETTINGS, await encrypt(JSON.stringify(settingsData)));
@@ -176,7 +173,8 @@ export const StorageService = {
       const metaRaw = localStorage.getItem(KEYS.META);
       if (!metaRaw) {
         // Try legacy v3 migration first, then v2
-        return StorageService.migrateFromV3() ?? StorageService.migrateFromV2();
+        const migratedV3 = await StorageService.migrateFromV3();
+        return migratedV3 ?? (await StorageService.migrateFromV2());
       }
 
       let state: Partial<AppState> = {};
@@ -239,7 +237,7 @@ export const StorageService = {
   /**
    * Migrates from legacy v3 XOR-obfuscated format to AES-GCM v4.
    */
-  migrateFromV3: (): Partial<AppState> | null => {
+  migrateFromV3: async (): Promise<Partial<AppState> | null> => {
     const settingsRaw = localStorage.getItem(KEYS.LEGACY_SETTINGS);
     const profilesRaw = localStorage.getItem(KEYS.LEGACY_PROFILES);
     if (!settingsRaw && !profilesRaw) return null;
@@ -257,8 +255,7 @@ export const StorageService = {
       }
 
       if (Object.keys(state).length > 0) {
-        // Re-save in new AES-GCM format (async, fire-and-forget for migration)
-        void StorageService.saveState(state as AppState);
+        await StorageService.saveState(normalizeAppState(state));
         // Remove legacy keys
         localStorage.removeItem(KEYS.LEGACY_SETTINGS);
         localStorage.removeItem(KEYS.LEGACY_PROFILES);
@@ -275,12 +272,12 @@ export const StorageService = {
   /**
    * Migrates from legacy v2 monolithic plaintext storage.
    */
-  migrateFromV2: (): Partial<AppState> | null => {
+  migrateFromV2: async (): Promise<Partial<AppState> | null> => {
     try {
       const oldRaw = localStorage.getItem('scrollshield_state_v2');
       if (!oldRaw) return null;
       const oldState = JSON.parse(oldRaw) as AppState;
-      void StorageService.saveState(oldState);
+      await StorageService.saveState(normalizeAppState(oldState));
       localStorage.removeItem('scrollshield_state_v2');
       console.info('ScrollShield: migrated from v2 plaintext to v4 AES-GCM');
       return oldState;

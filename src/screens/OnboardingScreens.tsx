@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Check, CloudOff, Lock, ScanLine, Shield, Smartphone, Sparkles, Target, UserRound } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { Check, Shield, Smartphone, Target, UserRound } from 'lucide-react';
 import { AppState, DEFAULT_APP_CONFIG, Screen, SUPPORTED_APPS } from '../types';
 
 export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
@@ -43,15 +44,15 @@ export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
           <div className="flex items-start gap-3">
             <Smartphone size={18} className="mt-0.5 text-blue-400" aria-hidden="true" />
             <div>
-              <span className="block text-sm font-semibold text-blue-100">App-Zugang begrenzen</span>
-              <span className="text-xs text-zinc-500">Pausen erzwingen und App-Limits setzen</span>
+              <span className="block text-sm font-semibold text-blue-100">Fokuszeit planen</span>
+              <span className="text-xs text-zinc-400">Mit einem Timer bewusst Abstand nehmen</span>
             </div>
           </div>
           <div className="flex items-start gap-3">
             <Target size={18} className="mt-0.5 text-rose-400" aria-hidden="true" />
             <div>
-              <span className="block text-sm font-semibold text-rose-100">Kurzvideo-Sog stoppen</span>
-              <span className="text-xs text-zinc-500">Bewusste Stopps statt Endlos-Feed</span>
+              <span className="block text-sm font-semibold text-rose-100">Unterbrechung üben</span>
+              <span className="text-xs text-zinc-400">Eine Pause vor dem nächsten Feed einlegen</span>
             </div>
           </div>
         </div>
@@ -100,11 +101,12 @@ export function Onboarding({
           appsConfig[id] = { id, ...DEFAULT_APP_CONFIG, active: true };
         }
       });
-      updateState({ appsConfig, activeProfileId: selectedProfileId });
+      updateState({ appsConfig, activeProfileId: selectedProfileId, hasCompletedOnboarding: true });
+      navigate('dashboard');
+      return;
     }
 
-    if (step < 3) setStep(step + 1);
-    else navigate('permissions');
+    setStep(2);
   };
 
   return (
@@ -120,9 +122,9 @@ export function Onboarding({
             <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-[1.5rem] border border-rose-400/30 bg-rose-500/10 shadow-lg shadow-rose-950/30">
               <Target size={32} className="text-rose-300" aria-hidden="true" />
             </div>
-            <h2 className="mb-3 text-center text-3xl font-bold tracking-tight">Ziele auswaehlen</h2>
-            <p className="mb-8 text-center text-base text-zinc-400">
-              Welche Apps ziehen dich am haeufigsten in Endlos-Feeds oder rauben dir Zeit?
+            <h2 className="mb-3 text-center text-3xl font-bold tracking-tight">Ziele auswählen</h2>
+            <p className="mb-8 text-center text-base text-zinc-300">
+              Bei welchen Apps möchtest du bewusster entscheiden, wie lange du bleibst?
             </p>
             <div className="space-y-3">
               {SUPPORTED_APPS.map((app) => {
@@ -170,9 +172,9 @@ export function Onboarding({
             <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-[1.5rem] border border-emerald-400/30 bg-emerald-500/10 shadow-lg shadow-emerald-950/30">
               <Shield size={32} className="text-emerald-300" aria-hidden="true" />
             </div>
-            <h2 className="mb-3 text-center text-3xl font-bold tracking-tight">Start-Profil waehlen</h2>
-            <p className="mb-6 text-center text-sm text-zinc-400">
-              Das ist nur dein Startpunkt. Du kannst spaeter jede App und jeden Feed einzeln anpassen.
+            <h2 className="mb-3 text-center text-3xl font-bold tracking-tight">Startprofil wählen</h2>
+            <p className="mb-6 text-center text-base text-zinc-300">
+              Wähle, wie deutlich ScrollShield dich an deine Ziele erinnern soll. Du kannst das später ändern.
             </p>
             <div className="space-y-4">
               {state.profiles?.map((profile) => {
@@ -191,7 +193,7 @@ export function Onboarding({
                       <span className="text-lg font-bold text-zinc-100">{profile.name}</span>
                       {selected && <Check size={16} className={profile.color} aria-hidden="true" />}
                     </span>
-                    <span className="block text-sm leading-relaxed text-zinc-400">{profile.description}</span>
+                    <span className="block text-[15px] leading-relaxed text-zinc-300">{profile.description}</span>
                   </button>
                 );
               })}
@@ -199,38 +201,17 @@ export function Onboarding({
           </div>
         )}
 
-        {step === 3 && (
-          <div className="mt-6 flex flex-col items-center text-center">
-            <div className="mb-8 flex h-24 w-24 items-center justify-center rounded-[2rem] border border-zinc-800/50 bg-zinc-900/80 shadow-lg backdrop-blur-md">
-              <Lock size={40} className="text-zinc-100" aria-hidden="true" />
-            </div>
-            <h2 className="mb-5 text-3xl font-bold tracking-tight">Privatsphaere & Schutz</h2>
-            <p className="mb-6 text-sm leading-relaxed text-zinc-400">
-              Du musst dich nicht mit deinen Social-Media-Konten verbinden. ScrollShield funktioniert komplett lokal und ohne Account-Zwang.
-            </p>
-            <div className="mb-4 w-full rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 p-5 text-left text-sm text-emerald-100 shadow-inner">
-              <div className="mb-2 flex items-center gap-2 font-bold text-emerald-300">
-                <CloudOff size={16} aria-hidden="true" />
-                100% Offline-First
-              </div>
-              Regeln, Verlauf und Statistiken bleiben verschluesselt auf deinem Geraet. ScrollShield liest keine privaten Chats 
-              und uebertraegt niemals Nutzungsdaten an externe Server.
-            </div>
-            <div className="w-full rounded-[1.5rem] border border-blue-500/30 bg-blue-500/10 p-5 text-left text-sm text-blue-200 shadow-inner">
-              <div className="mb-2 flex items-center gap-2 font-bold text-blue-300">
-                <ScanLine size={16} aria-hidden="true" />
-                Volle Kontrolle
-              </div>
-              Die App hilft dir mit bewussten Pausen, strengen Regeln,
-              Fokuszeiten und klaren Unterbrechungen, deine digitale Balance zurueckzugewinnen.
-            </div>
-          </div>
+        {step === 2 && !Capacitor.isNativePlatform() && (
+          <p className="mt-5 rounded-2xl border border-zinc-700/70 bg-zinc-900/70 p-4 text-sm leading-relaxed text-zinc-300">
+            Im Browser bleiben deine Einstellungen auf diesem Gerät. Automatische Sperren anderer Apps sind hier nicht
+            möglich.
+          </p>
         )}
       </div>
 
       <div className="bg-zinc-950 pt-4">
         <div className="mb-6 flex justify-center gap-2">
-          {[1, 2, 3].map((i) => (
+          {[1, 2].map((i) => (
             <div
               key={i}
               className={`h-1.5 rounded-full transition-all duration-300 ${i === step ? 'w-8 bg-zinc-100' : 'w-2 bg-zinc-800'}`}
@@ -241,7 +222,7 @@ export function Onboarding({
           <button
             onClick={() => (step > 1 ? setStep(step - 1) : navigate('welcome'))}
             className="flex w-16 items-center justify-center rounded-[1.5rem] border border-zinc-800 bg-zinc-900 py-4 text-zinc-400 shadow-lg transition-transform active:scale-[0.98]"
-            aria-label="Zurueck"
+            aria-label="Zurück"
           >
             <svg
               viewBox="0 0 24 24"
@@ -260,7 +241,7 @@ export function Onboarding({
             onClick={nextStep}
             className="flex-1 rounded-[1.5rem] bg-zinc-100 py-4 font-bold text-zinc-950 shadow-lg shadow-zinc-100/10 transition-transform active:scale-[0.98]"
           >
-            {step < 3 ? 'Weiter' : 'Setup pruefen'}
+            {step === 1 ? 'Weiter' : 'App einrichten'}
           </button>
         </div>
       </div>

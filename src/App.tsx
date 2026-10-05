@@ -4,13 +4,14 @@ import { AppState, Screen, DEFAULT_STATE, SUPPORTED_APPS } from './types';
 import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
 import { reconcileFocusRuntime } from './lib/focus';
+import { reconcileFocusSchedules } from './lib/focusSchedule';
 import { syncNativeBlockList } from './lib/nativeBridge';
 import { BottomNav } from './components/ui';
 import { Welcome, Onboarding } from './screens/OnboardingScreens';
 import { Dashboard, History } from './screens/MainScreens';
 import { AppList, AppDetail, Rules, Settings, Help, PrivacyScreen } from './screens/ConfigScreens';
 import { ReelsProtectionScreen } from './screens/ReelsProtectionScreen';
-import { Focus } from './screens/FocusScreens';
+import { Focus, FocusResult } from './screens/FocusScreens';
 import { ProtectionFlow } from './screens/ProtectionFlow';
 import { PermissionsScreen } from './screens/PermissionsScreen';
 import { DebugScreen } from './screens/DebugScreen';
@@ -33,9 +34,17 @@ export default function App() {
           const normalizedState = normalizeAppState(saved);
           const focusUpdate = reconcileFocusRuntime(normalizedState);
           const restoredState = focusUpdate ? { ...normalizedState, ...focusUpdate } : normalizedState;
-          setAppState(restoredState);
+          const scheduleUpdate = reconcileFocusSchedules(restoredState);
+          const readyState = scheduleUpdate ? { ...restoredState, ...scheduleUpdate } : restoredState;
+          setAppState(readyState);
           if (saved.hasCompletedOnboarding) {
-            setCurrentScreen(restoredState.activeSession ? 'active_session' : 'dashboard');
+            setCurrentScreen(
+              readyState.pendingFocusResultId
+                ? 'focus_result'
+                : readyState.activeSession
+                  ? 'active_session'
+                  : 'dashboard',
+            );
           } else {
             setCurrentScreen('welcome');
           }
@@ -48,20 +57,44 @@ export default function App() {
     void init();
   }, []);
 
+  const hasActiveSchedules = appState.focusSchedules.some((schedule) => schedule.active);
+
   useEffect(() => {
-    if (!isLoaded || !appState.isFocusModeActive) return;
+    if (!isLoaded || (!appState.isFocusModeActive && !hasActiveSchedules)) return;
 
     const syncFocusRuntime = () => {
       setAppState((previousState) => {
-        const update = reconcileFocusRuntime(previousState);
-        return update ? { ...previousState, ...update } : previousState;
+        const focusUpdate = reconcileFocusRuntime(previousState);
+        const currentState = focusUpdate ? { ...previousState, ...focusUpdate } : previousState;
+        const scheduleUpdate = reconcileFocusSchedules(currentState);
+        return scheduleUpdate ? { ...currentState, ...scheduleUpdate } : currentState;
       });
     };
 
     syncFocusRuntime();
     const interval = window.setInterval(syncFocusRuntime, 15_000);
-    return () => window.clearInterval(interval);
-  }, [isLoaded, appState.isFocusModeActive]);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') syncFocusRuntime();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', syncFocusRuntime);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', syncFocusRuntime);
+    };
+  }, [isLoaded, appState.isFocusModeActive, hasActiveSchedules]);
+
+  useEffect(() => {
+    if (
+      isLoaded &&
+      appState.hasCompletedOnboarding &&
+      appState.pendingFocusResultId &&
+      currentScreen !== 'focus_result'
+    ) {
+      setCurrentScreen('focus_result');
+    }
+  }, [isLoaded, appState.hasCompletedOnboarding, appState.pendingFocusResultId, currentScreen]);
 
   useEffect(() => {
     if (screenScrollRef.current) {
@@ -165,6 +198,9 @@ export default function App() {
               {currentScreen === 'focus' && (
                 <Focus key="focus" state={appState} updateState={updateState} navigate={navigate} />
               )}
+              {currentScreen === 'focus_result' && (
+                <FocusResult key="focus_result" state={appState} updateState={updateState} navigate={navigate} />
+              )}
               {currentScreen === 'history' && <History key="history" state={appState} navigate={navigate} />}
               {currentScreen === 'settings' && (
                 <Settings
@@ -205,9 +241,9 @@ export default function App() {
           </div>
 
           {appState.hasCompletedOnboarding &&
-            !['welcome', 'onboarding', 'protection_flow', 'active_session', 'permissions'].includes(currentScreen) && (
-              <BottomNav currentScreen={currentScreen} navigate={navigate} />
-            )}
+            !['welcome', 'onboarding', 'protection_flow', 'active_session', 'permissions', 'focus_result'].includes(
+              currentScreen,
+            ) && <BottomNav currentScreen={currentScreen} navigate={navigate} />}
         </div>
       </div>
     </ErrorBoundary>

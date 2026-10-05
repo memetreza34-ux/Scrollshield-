@@ -1,12 +1,12 @@
-import { normalizeAppState, normalizeAppsConfig, normalizeAppConfig } from '../src/lib/state';
-import { DEFAULT_STATE, DEFAULT_PROFILES, AppState, AppConfig } from '../src/types';
+import { normalizeAppState } from '../src/lib/state';
+import { DEFAULT_STATE } from '../src/types';
 import { createScrollShieldExport, parseScrollShieldExport } from '../src/lib/dataExport';
 
-console.log("=== EMPIRICAL TEST 2: Schema Migration & JSON Backup Compatibility ===");
+console.log('=== EMPIRICAL TEST 2: Schema Migration & JSON Backup Compatibility ===');
 
 // 1. Create a current export
 const currentExport = createScrollShieldExport(DEFAULT_STATE);
-console.log("Export created with schemaVersion:", currentExport.schemaVersion);
+console.log('Export created with schemaVersion:', currentExport.schemaVersion);
 
 // 2. Simulate an imported JSON string with legacy 6-app state
 const rawLegacyJson = JSON.stringify({
@@ -23,14 +23,14 @@ const rawLegacyJson = JSON.stringify({
       facebook: { active: false, mode: 'standard', openDelay: 5, dailyLimit: 60, sessionLimit: 15 },
       twitter: { active: true, mode: 'soft', openDelay: 10, dailyLimit: 40, sessionLimit: 10 },
       snapchat: { active: false, mode: 'standard', openDelay: 5, dailyLimit: 60, sessionLimit: 15 },
-    }
-  }
+    },
+  },
 });
 
 const parsed = parseScrollShieldExport(rawLegacyJson);
-console.log("Parsed export successfully:", parsed.app === 'ScrollShield');
+console.log('Parsed export successfully:', parsed.app === 'ScrollShield');
 
-const normalized = normalizeAppState(parsed.state as any);
-console.log("Total apps in normalized imported state:", Object.keys(normalized.appsConfig).length);
-console.log("Instagram openDelay preserved:", normalized.appsConfig.instagram.openDelay === 15);
-console.log("TikTok active preserved:", normalized.appsConfig.tiktok.active === true);
+const normalized = normalizeAppState(parsed.state);
+console.log('Total apps in normalized imported state:', Object.keys(normalized.appsConfig).length);
+console.log('Instagram openDelay preserved:', normalized.appsConfig.instagram.openDelay === 15);
+console.log('TikTok active preserved:', normalized.appsConfig.tiktok.active === true);

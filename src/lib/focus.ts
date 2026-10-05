@@ -65,7 +65,7 @@ export const createFocusStartUpdate = (
 export const createFocusEndUpdate = (state: AppState, successful: boolean, now = Date.now()): Partial<AppState> => {
   const activeSession = state.focusSessions.find((session) => session.endTime === null);
   const elapsedMinutes = activeSession
-    ? Math.max(0, Math.min(activeSession.duration, Math.ceil((now - activeSession.startTime) / 60_000)))
+    ? Math.max(0, Math.min(activeSession.duration, Math.floor((now - activeSession.startTime) / 60_000)))
     : 0;
   const creditedMinutes = successful && activeSession ? activeSession.duration : elapsedMinutes;
 
@@ -79,6 +79,7 @@ export const createFocusEndUpdate = (state: AppState, successful: boolean, now =
   return {
     isFocusModeActive: false,
     focusTimeRemaining: 0,
+    pendingFocusResultId: activeSession?.id ?? null,
     focusSessions: state.focusSessions.map((session) =>
       session.id === activeSession?.id ? { ...session, endTime: now, successful } : session,
     ),

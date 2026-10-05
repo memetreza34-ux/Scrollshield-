@@ -35,6 +35,30 @@ describe('normalizeAppsConfig', () => {
 });
 
 describe('normalizeAppState', () => {
+  it('restores edited focus schedules and disables invalid times', () => {
+    const state = normalizeAppState({
+      focusSchedules: [
+        {
+          ...DEFAULT_STATE.focusSchedules[0],
+          active: true,
+          startTime: '10:30',
+          days: [1, 3],
+          lastStartedOn: '2026-10-05',
+        },
+        { ...DEFAULT_STATE.focusSchedules[1], active: true, startTime: 'invalid' },
+      ],
+    });
+
+    expect(state.focusSchedules[0]).toMatchObject({
+      active: true,
+      startTime: '10:30',
+      days: [1, 3],
+      lastStartedOn: '2026-10-05',
+    });
+    expect(state.focusSchedules[1].startTime).toBe('22:30');
+    expect(state.focusSchedules[1].active).toBe(false);
+  });
+
   it('preserves custom profiles and fills nested defaults', () => {
     const state = normalizeAppState({
       ...DEFAULT_STATE,

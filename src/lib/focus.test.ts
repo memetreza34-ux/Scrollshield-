@@ -45,6 +45,7 @@ describe('createFocusEndUpdate', () => {
 
     expect(update.isFocusModeActive).toBe(false);
     expect(update.focusSessions?.[0].successful).toBe(true);
+    expect(update.pendingFocusResultId).toBe('focus-1');
     expect(update.dailyStats?.['1970-01-01'].focusMinutes).toBe(25);
     expect(update.history?.[0].desc).toBe('Fokus-Sitzung erfolgreich beendet.');
   });
@@ -69,6 +70,7 @@ describe('createFocusEndUpdate', () => {
     const update = createFocusEndUpdate(state, false, 1_000 + 10 * 60_000);
 
     expect(update.focusSessions?.[0].successful).toBe(false);
+    expect(update.pendingFocusResultId).toBe('focus-1');
     expect(update.dailyStats?.['1970-01-01'].focusMinutes).toBe(10);
     expect(update.history?.[0].desc).toBe('Fokus-Sitzung vorzeitig abgebrochen.');
   });

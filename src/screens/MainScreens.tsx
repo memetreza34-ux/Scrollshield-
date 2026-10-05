@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
+import { Capacitor } from '@capacitor/core';
 import {
   Shield,
   Smartphone,
   Settings,
-  PieChart,
   Play,
   AlertTriangle,
   Clock,
-  Activity,
   CheckCircle2,
   XCircle,
   Target,
@@ -16,9 +15,11 @@ import {
 } from 'lucide-react';
 import { AppState, Screen, SUPPORTED_APPS } from '../types';
 import { Header } from '../components/ui';
-import { getReelsStatsForDate } from '../lib/stats';
 import { createFocusEndUpdate } from '../lib/focus';
-import { getActiveReelsCount, REELS_PLATFORM_IDS } from '../lib/appUtils';
+import { getLocalDateKey } from '../lib/appUtils';
+
+const formatFocusMinutes = (minutes: number) =>
+  minutes >= 60 ? `${Math.floor(minutes / 60)} h ${minutes % 60} min` : `${minutes} Min`;
 
 export function Dashboard({
   state,
@@ -29,532 +30,297 @@ export function Dashboard({
   updateState: (u: Partial<AppState>) => void;
   navigate: (s: Screen) => void;
 }) {
-  const protectedApps = Object.values(state.appsConfig).filter((a) => a.active);
-  const activeAppsCount = protectedApps.length;
-
-  const activeReelsCount = getActiveReelsCount(state.appsConfig);
-
+  const [selectedDayIndex, setSelectedDayIndex] = useState(6);
+  const selectedApps = Object.values(state.appsConfig).filter((app) => app.active).length;
+  const activeProfile = state.profiles?.find((profile) => profile.id === state.activeProfileId);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const todaysHistory = state.history.filter((event) => event.timestamp >= today.getTime());
+  const focusSessions = todaysHistory.filter((event) => event.type === 'focus_start').length;
+  const activeFocusSession = state.focusSessions.find((session) => session.endTime === null);
+  const activeFocusMinutes = activeFocusSession
+    ? Math.max(
+        0,
+        Math.min(
+          activeFocusSession.duration,
+          Math.floor((Date.now() - Math.max(activeFocusSession.startTime, today.getTime())) / 60_000),
+        ),
+      )
+    : 0;
+  const todayFocusMinutes = (state.dailyStats[getLocalDateKey(today)]?.focusMinutes ?? 0) + activeFocusMinutes;
+  const weeklyFocusDays = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(today);
+    day.setDate(today.getDate() - (6 - index));
+    return {
+      label: day.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', ''),
+      fullLabel: day.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }),
+      minutes: (state.dailyStats[getLocalDateKey(day)]?.focusMinutes ?? 0) + (index === 6 ? activeFocusMinutes : 0),
+    };
+  });
+  const weeklyFocusMinutes = weeklyFocusDays.map((day) => day.minutes);
+  const weeklyFocusTotal = weeklyFocusMinutes.reduce((sum, minutes) => sum + minutes, 0);
+  const weeklyFocusMax = Math.max(30, ...weeklyFocusMinutes);
+  const chartScale = Math.max(15, Math.ceil(Math.max(...weeklyFocusMinutes) / 15) * 15);
+  const selectedDay = weeklyFocusDays[selectedDayIndex];
 
-  const todaysHistory = state.history.filter((e) => e.timestamp >= today.getTime());
-
-  const blockedToday = todaysHistory.filter((e) => e.type === 'block' || e.type === 'warning').length;
-
-  const savedTimeToday = blockedToday * 5; // Estimate 5 mins per block
-  const hours = Math.floor(savedTimeToday / 60);
-  const mins = savedTimeToday % 60;
-  const timeString = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-
-  const activeProfile = state.profiles?.find((p) => p.id === state.activeProfileId);
-  const profileName = activeProfile?.name || 'Standard';
-
-  // Problem App Detection
-  const blockedByApp = todaysHistory
-    .filter((e) => e.type === 'block' || e.type === 'warning')
-    .reduce(
-      (acc, curr) => {
-        if (curr.appId) {
-          acc[curr.appId] = (acc[curr.appId] || 0) + 1;
-        }
-        return acc;
-      },
-      {} as Record<string, number>,
-    );
-
-  const mostBlockedAppId = Object.keys(blockedByApp).sort((a, b) => blockedByApp[b] - blockedByApp[a])[0];
-  const problemApp = SUPPORTED_APPS.find((a) => a.id === mostBlockedAppId);
-
-  // Motivation Card Quotes
-  const quotes = [
-    'Weniger Impulse, mehr Kontrolle.',
-    'Kurze Unterbrechungen verhindern lange Sessions.',
-    'Jede blockierte Spirale spart echte Zeit.',
-  ];
-  const randomQuote = quotes[new Date().getDate() % quotes.length];
-
-  const { reelsTimeTodayMinutes, reelsBlockedSessions, singleItemsCount } = getReelsStatsForDate(state, today);
-
-  // Find riskiest reels app
-  const riskiestReelsAppId =
-    REELS_PLATFORM_IDS.find((id) => state.appsConfig[id]?.reelsProtection?.enabled) || 'tiktok';
-  const riskiestReelsApp = SUPPORTED_APPS.find((a) => a.id === riskiestReelsAppId);
-
-  // Greeting Status
-  let greetingStatus = 'Heute unter Kontrolle';
-  if (blockedToday > 10) greetingStatus = 'Achte heute auf impulsive Öffnungen';
-  else if (state.isFocusModeActive) greetingStatus = 'Guter Fokus bisher';
-
-  const renderSystemHealthBanner = () => {
-    const { operatingSystem, permissions, hasCompletedOnboarding } = state;
-    if (!hasCompletedOnboarding) return null;
-
-    let missingCritical = false;
-    let warningText = '';
-
-    if (operatingSystem === 'android') {
-      if (!permissions.usageAccess || !permissions.backgroundActivity || !permissions.overlay) {
-        missingCritical = true;
-        warningText = 'Wichtige Android-Berechtigungen fehlen. Der Schutz kann jederzeit systembedingt ausfallen.';
-      }
-    } else if (operatingSystem === 'ios') {
-      if (!permissions.screenTime) {
-        missingCritical = true;
-        warningText =
-          'Der Bildschirmzeit-Zugriff ist inaktiv. ScrollShield kann deine Apps nicht rechtzeitig unterbrechen.';
-      }
-    }
-
-    if (missingCritical) {
-      return (
-        <button
-          onClick={() => navigate('permissions')}
-          className="w-full text-left bg-amber-500/10 border border-amber-500/30 rounded-[1.5rem] p-4 flex gap-3 mb-4 cursor-pointer hover:bg-amber-500/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-          aria-label="Warnung: Fehlende Berechtigungen. Tippe hier, um sie zu aktivieren."
-        >
-          <AlertTriangle className="text-amber-400 flex-shrink-0 mt-0.5" size={20} />
-          <div>
-            <span className="block font-bold text-sm text-amber-400 mb-0.5">Schutzschild lückenhaft!</span>
-            <p className="text-xs text-amber-300/80 leading-relaxed">{warningText} Tippe hier, um das zu beheben.</p>
-          </div>
-        </button>
-      );
-    }
-    return null;
+  const tryInterruption = () => {
+    const appId = Object.keys(state.appsConfig).find((id) => state.appsConfig[id]?.active) || 'instagram';
+    updateState({ simulatedAppToOpen: appId });
+    navigate('protection_flow');
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6 pb-32 space-y-8">
-      {/* 1. Premium Hero Area */}
-      <header className="mt-4 mb-2">
-        <div className="flex justify-between items-start mb-6">
-          <div className="flex items-center gap-3" aria-hidden="true">
-            <div className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-inner">
-              <Shield size={14} className="text-zinc-300" />
-            </div>
-            <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-zinc-500">ScrollShield</span>
-          </div>
-          <button
-            onClick={() => navigate('settings')}
-            aria-label="Einstellungen"
-            className="w-11 h-11 -mt-1.5 -mr-1.5 rounded-full bg-zinc-900/50 border border-zinc-800/50 flex items-center justify-center hover:bg-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-          >
-            <Settings size={14} className="text-zinc-400" />
-          </button>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="space-y-4 p-5 pb-32 sm:p-6 sm:pb-32"
+    >
+      <header className="flex items-start justify-between gap-4 pb-1 pt-2">
+        <div>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.24em] text-[#9ed6bd]">ScrollShield</p>
+          <h1 className="max-w-xs font-display text-[30px] font-bold leading-[1.08] tracking-[-0.045em] text-[#f4f6ef]">
+            Zeit für das, was zählt.
+          </h1>
         </div>
-        <h1 className="text-3xl sm:text-4xl font-medium tracking-tight text-zinc-50 mb-2 leading-tight">
-          {greetingStatus}.
-        </h1>
-        <p className="text-zinc-400 text-sm" aria-live="polite">
-          {blockedToday === 0
-            ? 'Bereit für einen fokussierten Tag.'
-            : `${blockedToday} unbewusste Impulse heute gestoppt.`}
-        </p>
+        <button
+          onClick={() => navigate('settings')}
+          aria-label="Einstellungen"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#355048] bg-[#1a2825] text-[#c4d4cc] transition-colors hover:bg-[#263a34] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a9dcc0]"
+        >
+          <Settings size={20} aria-hidden="true" />
+        </button>
       </header>
 
-      <motion.section
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.08, duration: 0.35 }}
-        aria-label="Account- und Datenschutzstatus"
-        className="relative overflow-hidden rounded-[1.5rem] border border-emerald-500/25 bg-emerald-500/10 p-4"
+      <section
+        aria-labelledby="focus-island-title"
+        className="flex items-center justify-between gap-4 rounded-[1.5rem] border border-[#304a40] bg-[#172823] px-4 py-3 shadow-[0_12px_28px_rgba(0,0,0,0.16)]"
       >
-        <div className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full bg-emerald-400/20 blur-2xl" />
-        <div className="relative flex items-start gap-3">
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-400/10">
-            <CloudOff size={18} className="text-emerald-300" aria-hidden="true" />
-          </div>
-          <div>
-            <h2 className="text-sm font-bold text-emerald-100">Kein Account noetig</h2>
-            <p className="mt-1 text-xs leading-relaxed text-emerald-200/80">
-              Du verbindest hier keine Social-Media-Konten. ScrollShield laeuft lokal in dieser Webapp; echte
-              System-Sperren kommen spaeter in der nativen App.
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#b9e5c9]/12 text-[#b9e5c9]">
+            <Clock size={21} aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <h2 id="focus-island-title" className="text-xs font-semibold text-[#adc2b6]">
+              Fokuszeit heute
+            </h2>
+            <p className="font-display text-[24px] font-bold leading-tight tabular-nums tracking-tight text-[#f4f6ef]">
+              {formatFocusMinutes(todayFocusMinutes)}
             </p>
           </div>
         </div>
-      </motion.section>
-
-      {renderSystemHealthBanner()}
-
-      {/* 7. Focus Status (High Priority) */}
-      {state.isFocusModeActive && (
-        <section
-          aria-labelledby="focus-status-title"
-          className="bg-emerald-500/10 border border-emerald-500/30 rounded-[2rem] p-6 relative overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.15)]"
-        >
-          <div
-            className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 blur-[50px] rounded-full"
-            aria-hidden="true"
-          />
-          <div className="relative z-10 flex flex-col items-center text-center">
-            <div className="flex items-center gap-2 mb-2">
-              <div
-                className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"
-                aria-hidden="true"
+        <div className="shrink-0 text-right" aria-hidden="true">
+          <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9fb9aa]">7 Tage</span>
+          <div className="mt-1 flex h-6 items-end justify-end gap-1.5">
+            {weeklyFocusMinutes.map((minutes, index) => (
+              <span
+                key={index}
+                className={`w-1.5 rounded-full ${minutes > 0 ? 'bg-[#a9dec0]' : 'bg-[#486057]'} ${index === 6 ? 'ring-2 ring-[#a9dec0]/25 ring-offset-2 ring-offset-[#172823]' : ''}`}
+                style={{ height: `${Math.max(4, Math.round((minutes / weeklyFocusMax) * 21))}px` }}
               />
-              <h2 id="focus-status-title" className="font-bold text-emerald-400 uppercase tracking-widest text-xs">
-                Fokusmodus Aktiv
-              </h2>
-            </div>
-            <div
-              className="text-5xl font-mono font-bold tracking-tighter text-emerald-50 mt-2 mb-4"
-              aria-live="polite"
-              aria-label={`Noch ${state.focusTimeRemaining} Minuten`}
-            >
-              {state.focusTimeRemaining}
-              <span className="text-2xl text-emerald-400/80" aria-hidden="true">
-                m
-              </span>
-            </div>
-            <button
-              onClick={() => updateState(createFocusEndUpdate(state, false))}
-              className="bg-emerald-950/50 hover:bg-emerald-900/50 text-emerald-400 border border-emerald-800/50 px-6 py-2.5 rounded-full text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[44px]"
-            >
-              Fokus beenden
-            </button>
+            ))}
           </div>
-        </section>
-      )}
-
-      {/* 2. Layer 1: App-Schutz */}
-      <section aria-labelledby="app-protection-title" className="mb-8">
-        <h2
-          id="app-protection-title"
-          className="text-xs font-bold text-emerald-500 uppercase tracking-widest mb-3 px-2 flex items-center gap-2"
-        >
-          <Smartphone size={14} /> App-Schutz
-        </h2>
-
-        {activeAppsCount === 0 ? (
-          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-[1.5rem] p-6 text-center">
-            <h3 className="font-bold text-emerald-400 mb-2">Keine Apps geschützt</h3>
-            <p className="text-sm text-emerald-300/80 mb-4">Wähle Apps aus, um den Schutz zu aktivieren.</p>
-            <button
-              onClick={() => navigate('apps')}
-              className="bg-emerald-500 text-emerald-950 px-6 py-2 rounded-full text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[44px]"
-            >
-              Apps auswählen
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[1.5rem] p-5 flex flex-col justify-between min-h-[110px]">
-              <h3 className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">Geschützte Apps</h3>
-              <div className="text-3xl font-bold font-mono tracking-tighter mt-2 text-zinc-100">{activeAppsCount}</div>
-            </div>
-            <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[1.5rem] p-5 flex flex-col justify-between min-h-[110px]">
-              <h3 className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">Heute Blockiert</h3>
-              <div className="text-3xl font-bold font-mono tracking-tighter mt-2 text-zinc-100">
-                {blockedToday} <span className="text-sm text-zinc-500 font-sans">mal</span>
-              </div>
-            </div>
-            <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[1.5rem] p-5 flex flex-col justify-between min-h-[110px]">
-              <h3 className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5">
-                <Clock size={12} /> Gesparte Zeit
-              </h3>
-              <div className="text-3xl font-bold font-mono tracking-tighter mt-2 text-emerald-400">{timeString}</div>
-            </div>
-            <button
-              onClick={() => navigate('rules')}
-              className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[1.5rem] p-5 flex flex-col justify-between min-h-[110px] text-left hover:bg-zinc-800 transition-colors"
-            >
-              <h3 className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">Schutzstufe</h3>
-              <div className="mt-2">
-                <span className="text-lg font-bold text-zinc-100 block">{profileName}</span>
-                <span className="text-xs text-blue-400 font-medium">Profil ändern &rarr;</span>
-              </div>
-            </button>
-          </div>
-        )}
+        </div>
       </section>
 
-      {/* 3. Layer 2: Kurzvideo-Schutz */}
-      <section aria-labelledby="reels-protection-title" className="mb-8">
-        <h2
-          id="reels-protection-title"
-          className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3 px-2 flex items-center gap-2"
-        >
-          <Play size={14} /> Kurzvideo-Schutz
-        </h2>
-
+      <section
+        aria-labelledby="focus-card-title"
+        className="relative overflow-hidden rounded-[2rem] border border-[#e7f2df] bg-[#dcebdd] p-6 text-[#14362b] shadow-[0_22px_46px_rgba(0,0,0,0.28)]"
+      >
         <div
-          className={`rounded-[1.5rem] p-5 border ${activeReelsCount > 0 ? 'bg-blue-500/10 border-blue-500/30' : 'bg-zinc-900/80 border-zinc-800/50'}`}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              {activeReelsCount > 0 ? (
-                <Shield className="text-blue-400" size={20} />
-              ) : (
-                <AlertTriangle className="text-zinc-500" size={20} />
-              )}
-              <h3 className="font-bold text-lg text-zinc-100">{activeReelsCount > 0 ? 'Aktiv' : 'Inaktiv'}</h3>
-            </div>
-            <span className="text-xs font-bold px-2.5 py-1 bg-black/40 rounded-lg text-zinc-300">
-              {activeReelsCount} / {REELS_PLATFORM_IDS.length} Apps
-            </span>
+          className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full border border-[#92b9a4]/50"
+          aria-hidden="true"
+        />
+        <div
+          className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 rounded-full border border-[#92b9a4]/45"
+          aria-hidden="true"
+        />
+        <div
+          className="pointer-events-none absolute -right-4 top-14 h-24 w-24 rounded-full bg-[#eff9e8]/60 blur-2xl"
+          aria-hidden="true"
+        />
+        <div className="relative">
+          <div className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#366d56]">
+            <Target size={15} aria-hidden="true" /> Dein Fokusfenster
           </div>
-
-          {activeReelsCount > 0 ? (
-            <div className="grid grid-cols-2 gap-3 mt-2">
-              <div className="bg-black/30 rounded-xl p-3 border border-zinc-800/50">
-                <p className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase mb-1">Heute im Feed</p>
-                <p className="text-xl font-bold font-mono text-zinc-100">
-                  {reelsTimeTodayMinutes} <span className="text-xs text-zinc-500 font-sans">Min</span>
-                </p>
+          {state.isFocusModeActive ? (
+            <>
+              <h2 id="focus-card-title" className="font-display text-[26px] font-bold tracking-tight">
+                Fokus läuft.
+              </h2>
+              <div aria-label={`Noch ${state.focusTimeRemaining} Minuten`} className="my-3 flex items-baseline gap-2">
+                <span className="font-display text-[64px] font-bold tabular-nums leading-none tracking-[-0.075em]">
+                  {state.focusTimeRemaining}
+                </span>
+                <span className="text-base font-medium text-[#436754]">Minuten übrig</span>
               </div>
-              <div className="bg-black/30 rounded-xl p-3 border border-zinc-800/50">
-                <p className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase mb-1">Erlaubte Videos</p>
-                <p className="text-xl font-bold font-mono text-zinc-100">{singleItemsCount}</p>
-              </div>
-              <div className="bg-black/30 rounded-xl p-3 border border-zinc-800/50">
-                <p className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase mb-1">
-                  Blockierte Sessions
-                </p>
-                <p className="text-xl font-bold font-mono text-zinc-100">{reelsBlockedSessions}</p>
-              </div>
-              {riskiestReelsApp && (
-                <div className="bg-black/30 rounded-xl p-3 border border-zinc-800/50 flex flex-col justify-center">
-                  <p className="text-[10px] text-red-400 font-bold tracking-widest uppercase mb-1 leading-tight">
-                    Höchstes Risiko
-                  </p>
-                  <p className="text-sm font-bold text-zinc-200 flex items-center gap-1.5 break-words">
-                    {riskiestReelsApp.name}
-                  </p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="mt-2">
-              <p className="text-sm text-zinc-400 mb-4">
-                Schütze dich gezielt vor endlosen Feeds in Instagram, TikTok und YouTube.
-              </p>
               <button
-                onClick={() => navigate('reels_protection')}
-                className="bg-blue-500 text-blue-950 px-5 py-2 rounded-full text-sm font-bold min-h-[44px]"
+                onClick={() => updateState(createFocusEndUpdate(state, false))}
+                className="w-full rounded-2xl border border-[#638675] bg-[#c7dfce] px-5 py-3.5 font-semibold text-[#14362b] transition-colors hover:bg-[#b6d5c0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#14362b]"
               >
-                Kurzvideo-Schutz aktivieren
+                Fokus beenden
               </button>
-            </div>
+            </>
+          ) : (
+            <>
+              <h2
+                id="focus-card-title"
+                className="font-display text-[26px] font-bold leading-tight tracking-[-0.035em]"
+              >
+                Ein Moment nur für dich.
+              </h2>
+              <div className="my-3 flex items-baseline gap-2">
+                <span className="font-display text-[64px] font-bold tabular-nums leading-none tracking-[-0.075em]">
+                  {state.settings.defaultFocusDuration}
+                </span>
+                <span className="text-base font-medium text-[#436754]">Minuten als Startwert</span>
+              </div>
+              <p className="mb-4 text-sm leading-relaxed text-[#345847]">Wähle deine Dauer und starte den Timer.</p>
+              <button
+                onClick={() => navigate('focus')}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#173f32] px-5 py-3.5 font-bold text-[#f3f8ef] shadow-[0_8px_20px_rgba(24,67,50,0.18)] transition-colors hover:bg-[#265a45] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#173f32] focus-visible:ring-offset-2 focus-visible:ring-offset-[#dcebdd]"
+              >
+                <Play size={17} fill="currentColor" aria-hidden="true" /> Fokuszeit wählen
+              </button>
+            </>
           )}
         </div>
       </section>
 
-      {/* 4. Statuskarten (Smart Insights) */}
-      {(protectedApps.length > 0 || activeReelsCount > 0) && (
-        <section aria-labelledby="status-cards-title" className="mb-8">
-          <h2 id="status-cards-title" className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2">
-            Aktueller App-Status
-          </h2>
-          <div className="space-y-3">
-            {SUPPORTED_APPS.filter((app) => state.appsConfig[app.id]?.active)
-              .slice(0, 3)
-              .map((app) => {
-                const config = state.appsConfig[app.id];
-                const reelsConfig = config.reelsProtection;
-                let statusText = 'Normale Nutzung erlaubt';
-                let statusColor = 'text-emerald-400';
-                let bgColor = 'bg-emerald-500/10';
-
-                if (reelsConfig && reelsConfig.enabled) {
-                  if (reelsConfig.mode === 'block') {
-                    statusText = 'Normale Nutzung erlaubt, Kurzvideos blockiert';
-                    statusColor = 'text-blue-400';
-                    bgColor = 'bg-blue-500/10';
-                  } else if (reelsConfig.mode === 'limit') {
-                    statusText = 'App erlaubt, Kurzvideo-Feed begrenzt';
-                    statusColor = 'text-amber-400';
-                    bgColor = 'bg-amber-500/10';
-                  } else {
-                    statusText = 'App erlaubt, Kurzvideo-Warnung aktiv';
-                    statusColor = 'text-indigo-400';
-                    bgColor = 'bg-indigo-500/10';
-                  }
-                }
-
-                return (
-                  <div
-                    key={app.id}
-                    className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-4 flex items-center gap-4"
-                  >
-                    <div
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl shadow-inner ${app.color}`}
-                    >
-                      {app.icon}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-zinc-100 text-sm mb-0.5">{app.name}</h3>
-                      <div
-                        className={`text-xs font-medium px-2 py-0.5 rounded-md inline-block ${bgColor} ${statusColor}`}
-                      >
-                        {statusText}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+      <section
+        id="focus-chart"
+        aria-labelledby="focus-chart-title"
+        className="rounded-[1.75rem] border border-[#2e4439] bg-[#17241f] p-5 shadow-lg shadow-black/10"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="focus-chart-title" className="text-lg font-bold text-zinc-100">
+              Deine Fokuszeit
+            </h2>
+            <p className="mt-0.5 text-sm text-[#aec1b3]">Minuten pro Tag · letzte 7 Tage</p>
           </div>
-        </section>
-      )}
-
-      {/* 5. Schnellaktionen */}
-      <section aria-labelledby="quick-actions-title" className="space-y-3">
-        <h2 id="quick-actions-title" className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2">
-          Schnellaktionen
-        </h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-          {!state.isFocusModeActive && (
-            <button
-              onClick={() => navigate('focus')}
-              className="w-full bg-gradient-to-r from-emerald-900/40 to-emerald-800/20 border border-emerald-500/30 rounded-[1.5rem] p-4 flex items-center justify-between text-left group hover:from-emerald-900/60 transition-all min-h-[80px]"
-            >
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Target size={16} className="text-emerald-400" />
-                  <h3 className="font-bold text-emerald-100 text-base">Fokus starten</h3>
-                </div>
-              </div>
-            </button>
-          )}
-
-          <button
-            onClick={() => navigate('reels_protection')}
-            className={`w-full bg-gradient-to-r from-blue-900/40 to-blue-800/20 border border-blue-500/30 rounded-[1.5rem] p-4 flex items-center justify-between text-left group hover:from-blue-900/60 transition-all min-h-[80px] ${state.isFocusModeActive ? 'col-span-1 sm:col-span-2' : ''}`}
-          >
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Play size={16} className="text-blue-400" />
-                <h3 className="font-bold text-blue-100 text-base">Feed-Schutz einstellen</h3>
-              </div>
-            </div>
-          </button>
+          <div className="text-right">
+            <p className="font-display text-2xl font-bold tabular-nums leading-none text-[#b9e5c9]">
+              {formatFocusMinutes(weeklyFocusTotal)}
+            </p>
+            <p className="mt-1 text-xs text-[#aec1b3]">insgesamt</p>
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="relative mt-5 pl-8">
+          <div
+            className="pointer-events-none absolute inset-y-0 left-8 right-0 flex flex-col justify-between"
+            aria-hidden="true"
+          >
+            <span className="border-t border-dashed border-[#496052]/70" />
+            <span className="border-t border-dashed border-[#496052]/50" />
+            <span className="border-t border-[#496052]" />
+          </div>
+          <div
+            className="pointer-events-none absolute inset-y-0 left-0 flex flex-col justify-between text-[11px] tabular-nums text-[#a9bdb0]"
+            aria-hidden="true"
+          >
+            <span>{chartScale}</span>
+            <span>{Math.round(chartScale / 2)}</span>
+            <span>0</span>
+          </div>
+          <div className="relative grid h-36 grid-cols-7 gap-1" role="group" aria-label="Fokusminuten pro Tag">
+            {weeklyFocusDays.map((day, index) => (
+              <button
+                key={day.fullLabel}
+                onClick={() => setSelectedDayIndex(index)}
+                aria-label={`${day.fullLabel}: ${day.minutes} Minuten Fokus`}
+                aria-pressed={selectedDayIndex === index}
+                className="flex min-w-0 items-end justify-center rounded-xl px-1 pb-0.5 transition-colors hover:bg-[#2a4034] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9e5c9]"
+              >
+                <span
+                  className={`w-full max-w-5 rounded-t-md transition-all ${day.minutes > 0 ? (selectedDayIndex === index ? 'bg-[#b9e5c9]' : 'bg-[#76af8d]') : 'bg-[#516056]'}`}
+                  style={{
+                    height: `${day.minutes > 0 ? Math.max(6, Math.round((day.minutes / chartScale) * 116)) : 4}px`,
+                  }}
+                  aria-hidden="true"
+                />
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 grid grid-cols-7 gap-1" aria-hidden="true">
+            {weeklyFocusDays.map((day, index) => (
+              <span
+                key={day.fullLabel}
+                className={`text-center text-xs ${selectedDayIndex === index ? 'font-bold text-[#b9e5c9]' : 'text-[#a9bdb0]'}`}
+              >
+                {day.label}
+              </span>
+            ))}
+          </div>
+        </div>
+        <p className="mt-4 border-t border-[#2e4439] pt-3 text-sm text-[#d1ded2]" aria-live="polite">
+          {weeklyFocusTotal === 0
+            ? 'Noch keine Fokuszeit erfasst. Dein Verlauf erscheint nach der ersten Sitzung.'
+            : `${selectedDay.fullLabel}: ${formatFocusMinutes(selectedDay.minutes)} Fokus`}
+        </p>
+      </section>
+
+      <section aria-labelledby="setup-title">
+        <div className="mb-3 flex items-baseline justify-between gap-2">
+          <h2 id="setup-title" className="text-lg font-bold text-zinc-100">
+            Dein Setup
+          </h2>
+          <span className="text-sm text-zinc-400">Jederzeit anpassbar</span>
+        </div>
+        <div className="overflow-hidden rounded-[1.5rem] border border-[#2e4439] bg-[#17241f]">
           <button
             onClick={() => navigate('apps')}
-            className="bg-zinc-900/80 border border-zinc-800/50 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 text-center hover:bg-zinc-800 transition-colors"
+            className="flex w-full items-center gap-4 border-b border-[#2e4439] px-5 py-4 text-left hover:bg-[#263c30] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#b9e5c9]"
           >
-            <Settings size={20} className="text-zinc-400" />
-            <span className="text-xs font-semibold text-zinc-300">App-Regeln bearbeiten</span>
+            <Smartphone size={21} className="shrink-0 text-emerald-400" aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold text-zinc-100">Apps für deine Ziele</span>
+              <span className="block text-sm text-zinc-400">{selectedApps} ausgewählt</span>
+            </span>
+            <span className="text-zinc-400" aria-hidden="true">
+              ›
+            </span>
           </button>
-
           <button
-            onClick={() => navigate('history')}
-            className="bg-zinc-900/80 border border-zinc-800/50 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 text-center hover:bg-zinc-800 transition-colors"
+            onClick={() => navigate('rules')}
+            className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-[#263c30] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#b9e5c9]"
           >
-            <PieChart size={20} className="text-zinc-400" />
-            <span className="text-xs font-semibold text-zinc-300">Tagesbericht ansehen</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const activeAppId = Object.keys(state.appsConfig).find((id) => state.appsConfig[id].active);
-              updateState({ simulatedAppToOpen: activeAppId || 'instagram' });
-              navigate('protection_flow');
-            }}
-            className="col-span-2 sm:col-span-1 bg-zinc-900/80 border border-zinc-800/50 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 text-center hover:bg-zinc-800 transition-colors"
-          >
-            <Activity size={20} className="text-amber-400" />
-            <span className="text-xs font-semibold text-amber-200">Schutzablauf testen</span>
+            <Shield size={21} className="shrink-0 text-blue-400" aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold text-zinc-100">Startprofil</span>
+              <span className="block text-sm text-zinc-400">{activeProfile?.name || 'Standard'}</span>
+            </span>
+            <span className="text-zinc-400" aria-hidden="true">
+              ›
+            </span>
           </button>
         </div>
       </section>
 
-      {/* 5. Problem App Detection */}
-      {problemApp && blockedByApp[mostBlockedAppId] > 2 && (
-        <section
-          aria-label="Problem-App Erkenntnis"
-          className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[1.5rem] p-5 flex items-center gap-4"
-        >
-          <div
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl ${problemApp.color}`}
-            aria-hidden="true"
-          >
-            {problemApp.icon}
-          </div>
-          <div>
-            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-0.5">Problem-App heute</h3>
-            <p className="font-semibold text-zinc-200">
-              {problemApp.name} ({blockedByApp[mostBlockedAppId]}x blockiert)
-            </p>
-          </div>
-        </section>
+      {!Capacitor.isNativePlatform() && (
+        <p className="flex items-start gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm leading-relaxed text-zinc-300">
+          <CloudOff size={17} className="mt-0.5 shrink-0 text-zinc-400" aria-hidden="true" />
+          Im Browser kannst du Pausen üben und Fokuszeit planen. Andere Apps werden hier nicht automatisch gesperrt.
+        </p>
       )}
 
-      {/* 6. Motivation Card (Editorial Style) */}
-      <aside
-        aria-label="Motivation"
-        className="bg-zinc-900/50 backdrop-blur-sm border border-zinc-800/50 rounded-2xl p-5 my-8 flex gap-4 items-start relative overflow-hidden"
-      >
-        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-          <Target size={64} />
-        </div>
-        <div className="w-1 bg-emerald-500/50 rounded-full h-full absolute left-0 top-0 bottom-0"></div>
-        <p className="text-sm font-medium text-zinc-300 leading-relaxed italic z-10">"{randomQuote}"</p>
-      </aside>
-
-      {/* 4. Daily Overview (Timeline) */}
-      <section aria-labelledby="timeline-title">
-        <h2 id="timeline-title" className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2">
+      <section aria-labelledby="today-title" className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/50 p-5">
+        <h2 id="today-title" className="mb-1 text-lg font-bold text-zinc-100">
           Heute
         </h2>
-        <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[1.5rem] p-5">
-          {todaysHistory.length === 0 ? (
-            <div className="text-center py-6">
-              <div
-                className="w-12 h-12 bg-zinc-800/50 rounded-full flex items-center justify-center mx-auto mb-3"
-                aria-hidden="true"
-              >
-                <Shield size={20} className="text-zinc-500" />
-              </div>
-              <h3 className="font-bold text-zinc-200 mb-1">Noch keine Aktivitäten</h3>
-              <p className="text-sm text-zinc-500">
-                Dein Verlauf füllt sich automatisch, sobald ScrollShield aktiv eingreift oder du eine App öffnest.
-              </p>
-            </div>
-          ) : (
-            <ul className="space-y-4" aria-label="Aktivitätsverlauf">
-              {todaysHistory
-                .slice(-4)
-                .reverse()
-                .map((event, i) => {
-                  const time = new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                  const app = SUPPORTED_APPS.find((a) => a.id === event.appId);
-
-                  let icon = <Shield size={14} className="text-zinc-400" aria-hidden="true" />;
-                  let text = 'Aktivität';
-
-                  if (event.type === 'block') {
-                    icon = <XCircle size={14} className="text-red-400" aria-hidden="true" />;
-                    text = `${app?.name || 'App'} blockiert`;
-                  } else if (event.type === 'warning') {
-                    icon = <AlertTriangle size={14} className="text-amber-400" aria-hidden="true" />;
-                    text = `Warnung bei ${app?.name || 'App'}`;
-                  } else if (event.type === 'open') {
-                    icon = <CheckCircle2 size={14} className="text-emerald-400" aria-hidden="true" />;
-                    text = `${app?.name || 'App'} geöffnet`;
-                  }
-
-                  return (
-                    <li key={i} className="flex items-center gap-3">
-                      <div
-                        className="w-8 h-8 rounded-full bg-zinc-950 border border-zinc-800/50 flex items-center justify-center flex-shrink-0"
-                        aria-hidden="true"
-                      >
-                        {icon}
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-zinc-200">{text}</div>
-                      </div>
-                      <div className="text-xs text-zinc-500 font-mono" aria-label={`Um ${time} Uhr`}>
-                        {time}
-                      </div>
-                    </li>
-                  );
-                })}
-            </ul>
-          )}
+        <p className="text-[15px] leading-relaxed text-zinc-300">
+          {focusSessions === 0
+            ? 'Deine erste Fokuszeit wartet auf dich.'
+            : `${focusSessions} ${focusSessions === 1 ? 'Fokuszeit' : 'Fokuszeiten'} gestartet.`}
+        </p>
+        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-3 text-sm font-semibold">
+          <button onClick={tryInterruption} className="text-emerald-300 hover:text-emerald-200">
+            Unterbrechung ausprobieren
+          </button>
+          <button onClick={() => navigate('history')} className="text-zinc-300 hover:text-white">
+            Verlauf ansehen
+          </button>
         </div>
       </section>
     </motion.div>
@@ -651,12 +417,27 @@ export function History({ state, navigate: _navigate }: { state: AppState; navig
     });
   }
 
+  const rangeStart = new Date(today);
+  rangeStart.setDate(today.getDate() - (timeFilter === 'today' ? 0 : timeFilter === 'week' ? 6 : 29));
+  const rangeStartKey = getLocalDateKey(rangeStart);
+  const todayKey = getLocalDateKey(today);
+  const activeFocusSession = state.focusSessions.find((session) => session.endTime === null);
+  const activeFocusMinutes = activeFocusSession
+    ? Math.max(
+        0,
+        Math.min(
+          activeFocusSession.duration,
+          Math.floor((Date.now() - Math.max(activeFocusSession.startTime, rangeStart.getTime())) / 60_000),
+        ),
+      )
+    : 0;
+  const focusMinutesTotal =
+    Object.entries(state.dailyStats)
+      .filter(([dateKey]) => dateKey >= rangeStartKey && dateKey <= todayKey)
+      .reduce((sum, [, day]) => sum + day.focusMinutes, 0) + activeFocusMinutes;
+
   // KPIs
   const blocksCount = filteredEvents.filter((e) => e.type === 'block' || e.type === 'warning').length;
-  // Estimate 5 mins saved per block
-  const savedMinutesTotal = blocksCount * 5;
-  const savedHours = Math.floor(savedMinutesTotal / 60);
-  const savedMins = savedMinutesTotal % 60;
 
   const appBlocks = filteredEvents
     .filter((e) => e.type === 'block' || e.type === 'warning')
@@ -696,16 +477,16 @@ export function History({ state, navigate: _navigate }: { state: AppState; navig
       <section aria-label="Kennzahlen" className="grid grid-cols-2 gap-3 mb-6">
         <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[1.5rem] p-5">
           <h3 className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5">
-            <Shield size={12} /> Erfolgreich blockiert
+            <Shield size={12} /> Schutzereignisse
           </h3>
           <div className="text-3xl font-bold font-mono tracking-tighter mt-2 text-zinc-100">{blocksCount}</div>
         </div>
         <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[1.5rem] p-5">
           <h3 className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5">
-            <Clock size={12} /> Gesparte Zeit
+            <Clock size={12} /> Fokuszeit
           </h3>
-          <div className="text-3xl font-bold font-mono tracking-tighter mt-2 text-emerald-400">
-            {savedHours > 0 ? `${savedHours}h ${savedMins}m` : `${savedMins}m`}
+          <div className="mt-2 whitespace-nowrap font-mono text-2xl font-bold tracking-tighter text-emerald-400">
+            {formatFocusMinutes(focusMinutesTotal)}
           </div>
         </div>
 
@@ -717,9 +498,11 @@ export function History({ state, navigate: _navigate }: { state: AppState; navig
               {topApp.icon}
             </div>
             <div>
-              <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-0.5">Größter Zeitfresser</h3>
+              <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-0.5">
+                Meiste Schutzereignisse
+              </h3>
               <p className="font-semibold text-zinc-200">
-                {topApp.name} ({appBlocks[topBlockedAppId]}x blockiert)
+                {topApp.name} ({appBlocks[topBlockedAppId]} Ereignisse)
               </p>
             </div>
           </div>
@@ -733,7 +516,7 @@ export function History({ state, navigate: _navigate }: { state: AppState; navig
                 Alles im grünen Bereich
               </h3>
               <p className="font-semibold text-emerald-100">
-                Wir mussten in diesem Zeitraum keine Apps für dich blockieren. Das ist wirklich stark!
+                In diesem Zeitraum wurden keine Schutzereignisse erfasst.
               </p>
             </div>
           </div>
@@ -766,7 +549,7 @@ export function History({ state, navigate: _navigate }: { state: AppState; navig
                     style={{ height }}
                   />
                   <div className="pointer-events-none absolute bottom-full mb-2 hidden group-hover:block w-max max-w-40 rounded-lg bg-zinc-950 border border-zinc-800 px-2 py-1 text-center text-[10px] font-bold text-zinc-200 shadow-xl">
-                    {entry.blocks} blockiert
+                    {entry.blocks} Ereignisse
                   </div>
                 </div>
                 <span className="max-w-full break-words text-center text-[10px] font-semibold text-zinc-500">
@@ -792,7 +575,7 @@ export function History({ state, navigate: _navigate }: { state: AppState; navig
           aria-pressed={typeFilter === 'block'}
           className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[44px] ${typeFilter === 'block' ? 'bg-emerald-500 text-emerald-950' : 'bg-zinc-900/80 text-zinc-400 border border-zinc-800/50'}`}
         >
-          Blockiert
+          Schutz
         </button>
         <button
           onClick={() => setTypeFilter('emergency')}

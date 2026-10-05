@@ -6,12 +6,29 @@ import { StorageService } from './storage';
 class LocalStorageMock {
   [key: string]: unknown;
   private store: Record<string, string> = {};
-  get length() { return Object.keys(this.store).length; }
-  key(index: number) { return Object.keys(this.store)[index] ?? null; }
-  getItem(key: string) { return this.store[key] ?? null; }
-  setItem(key: string, value: string) { this.store[key] = value; this[key] = value; }
-  removeItem(key: string) { delete this.store[key]; delete this[key]; }
-  clear() { Object.keys(this.store).forEach((k) => { delete this[k]; }); this.store = {}; }
+  get length() {
+    return Object.keys(this.store).length;
+  }
+  key(index: number) {
+    return Object.keys(this.store)[index] ?? null;
+  }
+  getItem(key: string) {
+    return this.store[key] ?? null;
+  }
+  setItem(key: string, value: string) {
+    this.store[key] = value;
+    this[key] = value;
+  }
+  removeItem(key: string) {
+    delete this.store[key];
+    delete this[key];
+  }
+  clear() {
+    Object.keys(this.store).forEach((k) => {
+      delete this[k];
+    });
+    this.store = {};
+  }
 }
 
 // ── Web Crypto stub (JSDOM doesn't ship crypto.subtle) ────────────────────────
@@ -29,14 +46,28 @@ const cryptoSubtleStub = {
   importKey: vi.fn().mockResolvedValue(stubKey),
   encrypt: vi.fn().mockImplementation(async (_algo: unknown, _key: unknown, data: BufferSource) => {
     // Prepend 12 zero bytes to simulate IV, then copy plaintext bytes
-    const src = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array((data as ArrayBufferView).buffer, (data as ArrayBufferView).byteOffset, (data as ArrayBufferView).byteLength);
+    const src =
+      data instanceof ArrayBuffer
+        ? new Uint8Array(data)
+        : new Uint8Array(
+            (data as ArrayBufferView).buffer,
+            (data as ArrayBufferView).byteOffset,
+            (data as ArrayBufferView).byteLength,
+          );
     const out = new Uint8Array(12 + src.byteLength);
     out.set(src, 12);
     return out.buffer;
   }),
   decrypt: vi.fn().mockImplementation(async (_algo: unknown, _key: unknown, data: BufferSource) => {
     // Strip the first 12 bytes (stub IV)
-    const src = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array((data as ArrayBufferView).buffer, (data as ArrayBufferView).byteOffset, (data as ArrayBufferView).byteLength);
+    const src =
+      data instanceof ArrayBuffer
+        ? new Uint8Array(data)
+        : new Uint8Array(
+            (data as ArrayBufferView).buffer,
+            (data as ArrayBufferView).byteOffset,
+            (data as ArrayBufferView).byteLength,
+          );
     return src.slice(12).buffer;
   }),
 };
@@ -65,6 +96,7 @@ describe('StorageService', () => {
       activeProtectionLevel: 'strict' as const,
       isFocusModeActive: true,
       focusTimeRemaining: 12,
+      focusSchedules: [{ ...DEFAULT_STATE.focusSchedules[0], active: true, startTime: '10:30' }],
       activeSession: {
         appId: 'instagram',
         startTime: 1_000,
@@ -81,6 +113,7 @@ describe('StorageService', () => {
     expect(loaded?.activeProtectionLevel).toBe('strict');
     expect(loaded?.isFocusModeActive).toBe(true);
     expect(loaded?.focusTimeRemaining).toBe(12);
+    expect(loaded?.focusSchedules?.[0]).toMatchObject({ active: true, startTime: '10:30' });
     expect(loaded?.activeSession?.appId).toBe('instagram');
     expect(loaded?.history).toHaveLength(1);
     expect(loaded?.history?.[0].appId).toBe('instagram');

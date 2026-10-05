@@ -40,7 +40,7 @@ export function BottomNav({ currentScreen, navigate }: { currentScreen: Screen; 
     { id: 'dashboard', icon: Home, label: 'Home' },
     { id: 'apps', icon: List, label: 'Apps' },
     { id: 'focus', icon: Clock, label: 'Fokus' },
-    { id: 'settings', icon: Settings, label: 'Menü' },
+    { id: 'settings', icon: Settings, label: 'Optionen' },
   ];
 
   const isActive = (id: string) => {
@@ -56,7 +56,7 @@ export function BottomNav({ currentScreen, navigate }: { currentScreen: Screen; 
       aria-label="Hauptnavigation"
       className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-sm z-50"
     >
-      <div className="bg-zinc-900/90 backdrop-blur-2xl border border-zinc-800/50 rounded-3xl p-2 flex justify-between items-center shadow-2xl shadow-black/50">
+      <div className="flex items-center justify-between rounded-3xl border border-[#34473c] bg-[#1b2621]/95 p-2 shadow-2xl shadow-black/50 backdrop-blur-2xl">
         {navItems.map((item) => {
           const active = isActive(item.id);
           return (
@@ -65,21 +65,17 @@ export function BottomNav({ currentScreen, navigate }: { currentScreen: Screen; 
               onClick={() => navigate(item.id as Screen)}
               aria-current={active ? 'page' : undefined}
               aria-label={item.label}
-              className={`relative flex flex-col items-center justify-center min-h-[48px] min-w-[48px] p-2.5 rounded-2xl transition-all duration-300 flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${active ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+              className={`relative flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center rounded-2xl p-2.5 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9e5c9] ${active ? 'text-[#eaf5e9]' : 'text-[#aab9af] hover:text-[#eaf5e9]'}`}
             >
               {active && (
                 <motion.div
                   layoutId="nav-pill"
-                  className="absolute inset-0 bg-zinc-800/80 rounded-2xl -z-10"
+                  className="absolute inset-0 -z-10 rounded-2xl bg-[#344c3e]"
                   transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                 />
               )}
               <item.icon size={22} strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
-              <span
-                className={`text-[10px] mt-1 font-medium tracking-wide ${active ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}
-              >
-                {item.label}
-              </span>
+              <span className="mt-1 text-[11px] font-medium tracking-wide">{item.label}</span>
             </button>
           );
         })}

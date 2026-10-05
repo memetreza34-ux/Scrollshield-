@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { expectNoA11yViolations } from '../test/a11y';
 import { DEFAULT_STATE } from '../types';
-import { AppList, PrivacyScreen, Rules, Settings } from './ConfigScreens';
+import { AppDetail, AppList, PrivacyScreen, Rules, Settings } from './ConfigScreens';
 
 describe('Rules', () => {
   it('keeps custom profile selection and editing as separate accessible actions', () => {
@@ -38,8 +38,21 @@ describe('AppList', () => {
       <AppList state={{ ...DEFAULT_STATE, hasCompletedOnboarding: true }} updateState={vi.fn()} navigate={vi.fn()} />,
     );
 
-    expect(screen.getByRole('button', { name: 'Instagram Details. Status: Inaktiv' })).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Instagram Schutz umschalten' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Instagram Details. Status: Nicht ausgewählt' })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Regel für Instagram umschalten' })).toBeInTheDocument();
+    await expectNoA11yViolations(container);
+  });
+});
+
+describe('AppDetail in the browser', () => {
+  it('presents an app as a personal goal and explains the technical limit', async () => {
+    const { container } = render(
+      <AppDetail state={{ ...DEFAULT_STATE, selectedAppId: 'instagram' }} updateState={vi.fn()} navigate={vi.fn()} />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Instagram als Ziel' })).toBeInTheDocument();
+    expect(screen.getByText(/weder erkennen noch sperren/)).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Instagram als Ziel auswählen' })).toBeInTheDocument();
     await expectNoA11yViolations(container);
   });
 });

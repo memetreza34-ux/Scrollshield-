@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Capacitor } from '@capacitor/core';
 import {
   Database,
   Globe,
@@ -53,43 +54,10 @@ export function AppList({
   updateState: (u: Partial<AppState>) => void;
   navigate: (s: Screen) => void;
 }) {
-  const [connectingAppId, setConnectingAppId] = useState<string | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'checking' | 'success'>('idle');
-
   const toggleApp = (id: string) => {
     const appsConfig = { ...state.appsConfig };
     const config = appsConfig[id];
-    
-    // Wenn inaktiv und noch NICHT "verbunden", starte Connection-Flow
-    if ((!config || !config.active) && (!config?.connected)) {
-      setConnectingAppId(id);
-      setConnectionStatus('checking');
-      setTimeout(() => {
-        setConnectionStatus('success');
-        setTimeout(() => {
-          setConnectingAppId(null);
-          setConnectionStatus('idle');
-          // Nach Verbindung direkt aktivieren
-          const updatedAppsConfig = { ...state.appsConfig };
-          updatedAppsConfig[id] = { 
-            ...(updatedAppsConfig[id] || { id, ...DEFAULT_APP_CONFIG }), 
-            active: true,
-            connected: true 
-          };
-          updateState({ appsConfig: updatedAppsConfig });
-        }, 1200);
-      }, 2000);
-      return;
-    }
-
-    if (appsConfig[id]) {
-      appsConfig[id] = {
-        ...appsConfig[id],
-        active: !appsConfig[id].active,
-      };
-    } else {
-      appsConfig[id] = { id, ...DEFAULT_APP_CONFIG, active: true, connected: true };
-    }
+    appsConfig[id] = { ...DEFAULT_APP_CONFIG, ...config, id, active: !config?.active, connected: false };
     updateState({ appsConfig });
   };
 
@@ -103,21 +71,20 @@ export function AppList({
     navigate('app_detail');
   };
 
-  const connectingAppDef = connectingAppId ? SUPPORTED_APPS.find(a => a.id === connectingAppId) : null;
-
   return (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="p-6 pb-32 flex flex-col h-full relative"
+      className="p-6 pb-32"
     >
-      <Header title="Geschützte Apps" onBack={() => navigate('dashboard')} />
-      <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
-        Wähle die Apps aus, bei denen du endloses Scrollen einschränken möchtest. Tippe auf eine App für Details.
+      <Header title="Apps für deine Ziele" onBack={() => navigate('dashboard')} />
+      <p className="mb-5 text-[15px] leading-relaxed text-zinc-300">
+        Wähle Apps für bewusste Pausen und Ziele.
+        {!Capacitor.isNativePlatform() && ' Die Webapp erkennt oder sperrt andere Apps nicht automatisch.'}
       </p>
 
-      <ul className="space-y-3 flex-1 overflow-y-auto scrollbar-hide" aria-label="Liste der unterstützten Apps">
+      <ul className="space-y-2" aria-label="Liste der unterstützten Apps">
         {[...SUPPORTED_APPS]
           .sort((a, b) => {
             const aActive = state.appsConfig[a.id]?.active ? 1 : 0;
@@ -131,12 +98,12 @@ export function AppList({
             return (
               <li key={app.id}>
                 <div
-                  className={`w-full flex items-center gap-3 p-4 rounded-[1.5rem] border transition-all min-h-[48px] ${isActive ? 'bg-zinc-900/80 border-zinc-700 shadow-lg' : 'bg-zinc-950/50 border-zinc-800/50 opacity-80 hover:opacity-100'}`}
+                  className={`w-full flex items-center gap-3 p-3 rounded-[1.5rem] border transition-all min-h-[48px] ${isActive ? 'bg-zinc-900/80 border-zinc-700 shadow-lg' : 'bg-zinc-950/50 border-zinc-800/50 opacity-80 hover:opacity-100'}`}
                 >
                   <button
                     onClick={() => openDetail(app.id)}
                     className="min-w-0 flex flex-1 items-center gap-4 text-left rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[48px]"
-                    aria-label={`${app.name} Details. Status: ${isActive ? 'Aktiv' : 'Inaktiv'}`}
+                    aria-label={`${app.name} Details. Status: ${isActive ? 'Ausgewählt' : 'Nicht ausgewählt'}`}
                   >
                     <div
                       className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-inner ${app.color}`}
@@ -146,8 +113,8 @@ export function AppList({
                     </div>
                     <div className="text-left">
                       <div className="font-semibold">{app.name}</div>
-                      <div className="text-xs text-zinc-500 mt-0.5 font-medium">
-                        {isActive ? `Modus: ${config.mode}` : (config?.connected ? 'Verbunden, Inaktiv' : 'Nicht verbunden')}
+                      <div className="mt-0.5 text-sm font-medium text-zinc-400">
+                        {isActive ? 'Als Ziel ausgewählt' : 'Noch nicht ausgewählt'}
                       </div>
                     </div>
                     <ChevronRight size={18} className="text-zinc-600" aria-hidden="true" />
@@ -155,49 +122,13 @@ export function AppList({
                   <Switch
                     checked={isActive}
                     onChange={() => toggleApp(app.id)}
-                    ariaLabel={`${app.name} Schutz umschalten`}
+                    ariaLabel={`Regel für ${app.name} umschalten`}
                   />
                 </div>
               </li>
             );
           })}
       </ul>
-
-      <AnimatePresence>
-        {connectingAppId && connectingAppDef && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-zinc-950/90 backdrop-blur-sm rounded-[2.5rem]"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-sm rounded-[2rem] border border-zinc-800 bg-zinc-900/95 p-8 text-center shadow-2xl flex flex-col items-center"
-            >
-              <div className={`w-20 h-20 rounded-3xl mb-6 flex items-center justify-center text-3xl shadow-lg relative ${connectingAppDef.color}`}>
-                {connectionStatus === 'checking' && (
-                  <RefreshCw size={24} className="absolute -top-2 -right-2 text-white bg-blue-500 rounded-full p-1 animate-spin shadow-md" />
-                )}
-                {connectionStatus === 'success' && (
-                  <Check size={24} className="absolute -top-2 -right-2 text-white bg-emerald-500 rounded-full p-1 shadow-md" />
-                )}
-                {connectingAppDef.icon}
-              </div>
-              <h3 className="text-2xl font-bold text-white mb-3">
-                {connectionStatus === 'checking' ? `${connectingAppDef.name} autorisieren` : 'Erfolgreich verbunden'}
-              </h3>
-              <p className="text-zinc-400 text-sm leading-relaxed max-w-[250px]">
-                {connectionStatus === 'checking' 
-                  ? `ScrollShield verknüpft sich lokal mit ${connectingAppDef.name}, um den Zugriffs-Status und die Nutzungszeit auslesen zu können...` 
-                  : `Der native Filter-Hook für ${connectingAppDef.name} wurde erfolgreich aktiviert.`}
-              </p>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }
@@ -223,6 +154,51 @@ export function AppDetail({
     });
   };
 
+  if (!Capacitor.isNativePlatform()) {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6 pb-32">
+        <Header title={appInfo.name} onBack={() => navigate('apps')} />
+        <section className="mt-5 rounded-[1.75rem] border border-zinc-800 bg-zinc-900/70 p-6">
+          <div className="mb-5 flex items-center gap-4">
+            <span
+              className={`flex h-14 w-14 items-center justify-center rounded-2xl text-2xl ${appInfo.color}`}
+              aria-hidden="true"
+            >
+              {appInfo.icon}
+            </span>
+            <div>
+              <h2 className="text-xl font-bold text-zinc-100">{appInfo.name} als Ziel</h2>
+              <p className="text-sm text-zinc-400">Für bewusste Pausen vormerken</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-4 border-t border-zinc-700/60 pt-5">
+            <div>
+              <p className="font-semibold text-zinc-100">In meine Ziele aufnehmen</p>
+              <p className="text-sm text-zinc-400">{config.active ? 'Ausgewählt' : 'Nicht ausgewählt'}</p>
+            </div>
+            <Switch
+              checked={config.active}
+              onChange={(active) => updateConfig({ active, connected: false })}
+              ariaLabel={`${appInfo.name} als Ziel auswählen`}
+            />
+          </div>
+        </section>
+        <p className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4 text-sm leading-relaxed text-zinc-300">
+          Diese Auswahl speichert ein persönliches Ziel. Der Browser kann {appInfo.name} weder erkennen noch sperren.
+        </p>
+        <button
+          onClick={() => {
+            updateState({ simulatedAppToOpen: appId });
+            navigate('protection_flow');
+          }}
+          className="mt-5 w-full rounded-2xl bg-emerald-400 px-5 py-4 font-bold text-zinc-950"
+        >
+          Unterbrechung ausprobieren
+        </button>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
@@ -234,14 +210,14 @@ export function AppDetail({
 
       <div className="space-y-6 flex-1 overflow-y-auto scrollbar-hide">
         <section
-          aria-label="Schutz aktivieren"
+          aria-label="Regel aktivieren"
           className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[2rem] p-6 flex justify-between items-center shadow-lg"
         >
-          <h2 className="font-semibold text-lg">Schutz aktivieren</h2>
+          <h2 className="font-semibold text-lg">Regel aktivieren</h2>
           <Switch
             checked={config.active}
             onChange={(c) => updateConfig({ active: c })}
-            ariaLabel={`${appInfo.name} Schutz aktivieren`}
+            ariaLabel={`${appInfo.name} Regel aktivieren`}
           />
         </section>
 
@@ -254,7 +230,7 @@ export function AppDetail({
               id="protection-mode-title"
               className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2"
             >
-              Schutzmodus
+              Regelmodus
             </h2>
             <div
               className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[1.5rem] p-1.5 flex shadow-inner"
@@ -280,20 +256,21 @@ export function AppDetail({
               id="reels-protection-title"
               className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2"
             >
-              Reels- & Shorts-Schutz
+              Reels- & Shorts-Regel
             </h2>
             <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-[2rem] overflow-hidden">
               <div className="p-6 border-b border-zinc-800/50 flex justify-between items-center">
                 <div className="pr-4">
-                  <h3 className="font-semibold mb-1 text-emerald-400">Reels-/Shorts-Modus</h3>
+                  <h3 className="font-semibold mb-1 text-emerald-400">Reels-/Shorts-Ziel</h3>
                   <p className="text-zinc-400 text-xs leading-relaxed">
-                    Begrenzt endlose Kurzvideo-Feeds. Normale Nutzung bleibt uneingeschränkt.
+                    Lege dein Ziel für Kurzvideo-Feeds fest.
+                    {!Capacitor.isNativePlatform() && ' Im Browser wird der Feed nicht automatisch begrenzt.'}
                   </p>
                 </div>
                 <Switch
                   checked={config.reelsProtection?.enabled ?? false}
                   onChange={(c) => updateConfig({ reelsProtection: { ...config.reelsProtection, enabled: c } })}
-                  ariaLabel="Reels-Schutz aktivieren"
+                  ariaLabel="Reels-Ziel aktivieren"
                 />
               </div>
 
@@ -317,7 +294,7 @@ export function AppDetail({
                       }
                       options={[1, 3, 5, 10, 15, 30]}
                       allowDisabled={true}
-                      disabledLabel="Blockiert"
+                      disabledLabel="Kein Limit"
                     />
                   </div>
                   <div className="p-6 border-b border-zinc-800/50 flex items-center justify-between">
@@ -342,7 +319,7 @@ export function AppDetail({
                     <div className="pr-4">
                       <h3 className="font-semibold mb-1">Swipe-Unterbrecher</h3>
                       <p className="text-zinc-400 text-xs leading-relaxed">
-                        Pausiert den Bildschirm nach anhaltendem Swipen (alle X Swipes).
+                        Ziel für bewusste Pausen nach mehreren Swipes.
                       </p>
                     </div>
                     <Switch
@@ -1251,6 +1228,35 @@ export function Help({ navigate }: { navigate: (s: Screen) => void }) {
     );
   };
 
+  if (!Capacitor.isNativePlatform()) {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6 pb-32">
+        <Header title="Hilfe & FAQ" onBack={() => navigate('support')} />
+        <div className="mt-5 space-y-4">
+          <section className="rounded-[1.5rem] border border-emerald-400/20 bg-emerald-500/10 p-5">
+            <h1 className="mb-2 text-xl font-bold text-zinc-100">Was die Webapp kann</h1>
+            <p className="text-[15px] leading-relaxed text-zinc-300">
+              Plane Fokuszeiten, wähle Apps als persönliche Ziele und probiere eine bewusste Unterbrechung aus.
+            </p>
+          </section>
+          <section className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/70 p-5">
+            <h2 className="mb-2 text-lg font-bold text-zinc-100">Grenzen im Browser</h2>
+            <p className="text-[15px] leading-relaxed text-zinc-300">
+              Der Browser erkennt weder das Öffnen anderer Apps noch deren Nutzungszeit. Automatische Sperren,
+              Kurzvideo-Limits und Systemberechtigungen stehen hier nicht zur Verfügung.
+            </p>
+          </section>
+          <button
+            onClick={() => navigate('focus')}
+            className="w-full rounded-2xl bg-emerald-400 px-5 py-4 font-bold text-zinc-950"
+          >
+            Fokuszeit starten
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
@@ -1428,6 +1434,39 @@ export function PrivacyScreen({
     }
   };
 
+  if (showDetailedPolicy && !Capacitor.isNativePlatform()) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 z-50 overflow-y-auto bg-zinc-950 p-6 pb-32"
+      >
+        <Header title="Datenschutzerklärung" onBack={() => setShowDetailedPolicy(false)} />
+        <div className="mt-5 space-y-5 text-[15px] leading-relaxed text-zinc-300">
+          <section>
+            <h1 className="mb-2 text-xl font-bold text-zinc-100">Daten in der Webapp</h1>
+            <p>
+              Deine Auswahl, Fokuszeiten und der innerhalb von ScrollShield erzeugte Verlauf werden lokal in diesem
+              Browser gespeichert.
+            </p>
+          </section>
+          <section>
+            <h2 className="mb-2 text-lg font-bold text-zinc-100">Kein Zugriff auf andere Apps</h2>
+            <p>
+              Die Webapp erhält keine Bildschirmzeit- oder Nutzungsdaten anderer Apps. Sie kann deren Öffnen nicht
+              erkennen und sie nicht sperren.
+            </p>
+          </section>
+          <section>
+            <h2 className="mb-2 text-lg font-bold text-zinc-100">Deine Kontrolle</h2>
+            <p>Unter Datenschutz & Transparenz kannst du lokale Daten exportieren, importieren oder löschen.</p>
+          </section>
+        </div>
+      </motion.div>
+    );
+  }
+
   if (showDetailedPolicy) {
     return (
       <motion.div
@@ -1450,9 +1489,9 @@ export function PrivacyScreen({
           <div>
             <h3 className="text-lg font-bold text-zinc-100 mb-2">1. Lokale Daten</h3>
             <p className="text-sm text-zinc-400">
-              ScrollShield speichert, wie oft du Apps öffnest, wie oft du blockiert wurdest und wie viel Zeit du gespart
-              hast. Diese Daten werden <strong>ausschließlich lokal</strong> in der sicheren Sandbox deines Smartphones
-              gespeichert.
+              ScrollShield speichert deine Fokuszeiten und Aktionen in der App. Auf unterstützten Geräten können auch
+              Schutzereignisse erfasst werden. Diese Daten bleiben <strong>ausschließlich lokal</strong> auf deinem
+              Gerät.
             </p>
           </div>
 
@@ -1522,7 +1561,9 @@ export function PrivacyScreen({
           </div>
           <h2 className="text-xl font-bold text-zinc-100 mb-2">Deine Daten gehören dir.</h2>
           <p className="text-sm text-zinc-400 leading-relaxed max-w-[280px] mx-auto">
-            ScrollShield arbeitet mit sensiblen Nutzungsdaten. Wir glauben an absolute Transparenz und lokale Kontrolle.
+            {Capacitor.isNativePlatform()
+              ? 'ScrollShield arbeitet mit sensiblen Nutzungsdaten. Wir glauben an absolute Transparenz und lokale Kontrolle.'
+              : 'Deine Einstellungen und der Verlauf dieser Webapp bleiben in deinem Browser gespeichert.'}
           </p>
         </div>
 
@@ -1540,7 +1581,7 @@ export function PrivacyScreen({
               <div>
                 <h3 className="font-semibold text-zinc-200 text-sm mb-1">Lokal auf deinem Gerät</h3>
                 <p className="text-xs text-zinc-400 leading-relaxed">
-                  Dein Nutzungsverlauf, deine Statistiken und deine App-Regeln werden ausschließlich auf diesem Gerät
+                  Deine Einstellungen und der innerhalb von ScrollShield erzeugte Verlauf werden lokal in diesem Browser
                   gespeichert.
                 </p>
               </div>
@@ -1565,10 +1606,9 @@ export function PrivacyScreen({
           </h2>
           <div className="bg-zinc-900/80 border border-zinc-800/50 rounded-[2rem] p-5 space-y-4">
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Um dich vor impulsivem Öffnen zu schützen, muss ScrollShield erkennen können, wann du eine bestimmte App
-              startest. Dafür benötigen wir Systemberechtigungen (wie Screen Time oder Nutzungsdatenzugriff). Diese
-              Rechte werden <strong className="text-zinc-300">ausschließlich</strong> für die Blockier-Logik verwendet,
-              nicht um dich auszuspionieren.
+              {Capacitor.isNativePlatform()
+                ? 'Für Gerätefunktionen können Systemberechtigungen nötig sein. Prüfe den Status in den Einstellungen.'
+                : 'Im Browser fordert ScrollShield keine Bildschirmzeit-Berechtigung an und erkennt keine Nutzung anderer Apps.'}
             </p>
           </div>
         </section>
@@ -1709,7 +1749,7 @@ export function PrivacyScreen({
               >
                 <div>
                   <div className="font-semibold text-zinc-200 text-sm">Statistiken zurücksetzen</div>
-                  <div className="text-xs text-zinc-500 mt-1">Setzt Streaks und gesparte Zeit auf null.</div>
+                  <div className="text-xs text-zinc-500 mt-1">Löscht Tagesstatistiken und setzt Streaks zurück.</div>
                 </div>
                 <RefreshCw size={18} className="text-zinc-500" aria-hidden="true" />
               </button>

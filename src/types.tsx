@@ -8,6 +8,7 @@ export type Screen =
   | 'app_detail'
   | 'rules'
   | 'focus'
+  | 'focus_result'
   | 'history'
   | 'settings'
   | 'help'
@@ -45,7 +46,7 @@ export interface AppConfig {
   id: string;
   // 0. System-Integration
   connected?: boolean; // whether the app's native accessibility hook is established
-  
+
   // 1. Allgemeiner App-Schutz
   active: boolean;
   mode: 'soft' | 'standard' | 'strict';
@@ -143,6 +144,16 @@ export interface FocusSession {
   blocksTriggered: number;
 }
 
+export interface FocusSchedule {
+  id: string;
+  name: string;
+  days: number[]; // local weekdays, 0 = Sunday
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm; earlier end means next day
+  active: boolean;
+  lastStartedOn?: string; // local date of the schedule's start
+}
+
 export interface DailyStats {
   date: string; // YYYY-MM-DD
   usageMinutes: Record<string, number>; // appId -> minutes
@@ -162,6 +173,8 @@ export interface AppState {
   selectedAppId: string | null;
   history: HistoryEvent[];
   focusSessions: FocusSession[];
+  focusSchedules: FocusSchedule[];
+  pendingFocusResultId: string | null;
   dailyStats: Record<string, DailyStats>;
   simulatedAppToOpen: string | null;
   activeSession: {
@@ -208,14 +221,13 @@ export interface AppState {
   };
 }
 
-
-export type PlatformCategory = 
-  | 'social' 
-  | 'short_video' 
-  | 'news' 
-  | 'entertainment' 
-  | 'messaging' 
-  | 'productivity' 
+export type PlatformCategory =
+  | 'social'
+  | 'short_video'
+  | 'news'
+  | 'entertainment'
+  | 'messaging'
+  | 'productivity'
   | 'custom';
 
 export interface PlatformSurfaceDefinition {
@@ -302,7 +314,12 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = [
     androidPackages: ['com.facebook.katana', 'com.facebook.lite'],
     iosBundleIds: ['com.facebook.Facebook'],
     hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'facebook_reels', name: 'Facebook Reels', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+    shortVideoSurface: {
+      id: 'facebook_reels',
+      name: 'Facebook Reels',
+      defaultMode: 'limit',
+      defaultDailyLimitMinutes: 15,
+    },
     detectionKeywords: ['facebook.com/reel'],
   },
   {
@@ -318,7 +335,12 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = [
     androidPackages: ['com.twitter.android', 'com.twitter.android.lite'],
     iosBundleIds: ['com.atebits.Tweetie2'],
     hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'immersive_video', name: 'Immersive Video', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+    shortVideoSurface: {
+      id: 'immersive_video',
+      name: 'Immersive Video',
+      defaultMode: 'limit',
+      defaultDailyLimitMinutes: 15,
+    },
     detectionKeywords: ['x.com', 'twitter.com'],
   },
   {
@@ -334,7 +356,12 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = [
     androidPackages: ['com.snapchat.android'],
     iosBundleIds: ['com.toyopagroup.picaboo'],
     hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'spotlight', name: 'Snapchat Spotlight', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+    shortVideoSurface: {
+      id: 'spotlight',
+      name: 'Snapchat Spotlight',
+      defaultMode: 'limit',
+      defaultDailyLimitMinutes: 15,
+    },
     detectionKeywords: ['snapchat.com', 'spotlight'],
   },
   {
@@ -350,7 +377,12 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = [
     androidPackages: ['com.reddit.frontpage', 'com.reddit.frontpage.lite'],
     iosBundleIds: ['com.reddit.Reddit'],
     hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'reddit_watch', name: 'Reddit Video Feed', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+    shortVideoSurface: {
+      id: 'reddit_watch',
+      name: 'Reddit Video Feed',
+      defaultMode: 'limit',
+      defaultDailyLimitMinutes: 15,
+    },
     detectionKeywords: ['reddit.com', 'v.redd.it'],
   },
   {
@@ -368,11 +400,10 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = [
     hasShortVideoFeed: true,
     shortVideoSurface: { id: 'watch', name: 'Pinterest Watch', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
     detectionKeywords: ['pinterest.com/watch'],
-  }
+  },
 ];
 
 export const SUPPORTED_APPS = BUILTIN_PLATFORMS;
-
 
 export const DEFAULT_APP_CONFIG: Omit<AppConfig, 'id'> = {
   connected: false,
@@ -468,7 +499,7 @@ export const DEFAULT_PROFILES: Profile[] = [
   {
     id: 'gentle',
     name: 'Sanft',
-    description: 'Kurze Öffnungsverzögerung, moderates Tageslimit. Kurzvideos: Warnung nach 15 Min.',
+    description: 'Kurze Pausen und ein moderates Tagesziel für Kurzvideos.',
     icon: 'Coffee',
     color: 'text-emerald-400',
     appsConfig: createAppsConfig({
@@ -487,7 +518,7 @@ export const DEFAULT_PROFILES: Profile[] = [
   {
     id: 'balance',
     name: 'Balance',
-    description: 'Dein Alltag in Balance. Normale App-Nutzung erlaubt, Kurzvideos auf 15 Min/Tag limitiert.',
+    description: 'Ein ausgewogener Plan mit einem 15-Minuten-Ziel für Kurzvideos.',
     icon: 'Briefcase',
     color: 'text-blue-400',
     appsConfig: createAppsConfig({
@@ -506,8 +537,7 @@ export const DEFAULT_PROFILES: Profile[] = [
   {
     id: 'strict',
     name: 'Streng',
-    description:
-      'Sehr strenge Limits. Kurzvideos werden mit den verfügbaren Systemfunktionen auf max. 5 Min/Tag begrenzt.',
+    description: 'Deutlichere Pausen und ein 5-Minuten-Ziel für Kurzvideos.',
     icon: 'Shield',
     color: 'text-indigo-400',
     appsConfig: createAppsConfig({
@@ -534,7 +564,7 @@ export const DEFAULT_PROFILES: Profile[] = [
   {
     id: 'noscroll',
     name: 'Kein Endlos-Swipe',
-    description: 'Fokus auf normale Nutzung. Endlos-Feeds erhalten die strengste verfügbare Unterbrechung.',
+    description: 'Ein klares Ziel gegen Endlos-Feeds mit besonders deutlichen Pausen.',
     icon: 'Target',
     color: 'text-red-500',
     appsConfig: createAppsConfig({
@@ -564,6 +594,25 @@ export const DEFAULT_STATE: AppState = {
   selectedAppId: null,
   history: [],
   focusSessions: [],
+  focusSchedules: [
+    {
+      id: 'work',
+      name: 'Arbeit / Deep Work',
+      days: [1, 2, 3, 4, 5],
+      startTime: '09:00',
+      endTime: '12:00',
+      active: false,
+    },
+    {
+      id: 'evening',
+      name: 'Digital Detox / Schlaf',
+      days: [0, 1, 2, 3, 4, 5, 6],
+      startTime: '22:30',
+      endTime: '07:00',
+      active: false,
+    },
+  ],
+  pendingFocusResultId: null,
   dailyStats: {},
   simulatedAppToOpen: null,
   activeSession: null,

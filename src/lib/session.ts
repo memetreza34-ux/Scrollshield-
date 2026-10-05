@@ -70,7 +70,7 @@ export const recordProtectionEventStats = (
     [dateKey]: {
       ...existing,
       blockedOpens: existing.blockedOpens + (isBlockLike ? 1 : 0),
-      savedTimeMinutes: existing.savedTimeMinutes + (isBlockLike ? 5 : 0),
+      savedTimeMinutes: existing.savedTimeMinutes,
       emergencyUnlocks: existing.emergencyUnlocks + (isEmergency ? 1 : 0),
     },
   };

@@ -73,13 +73,13 @@ describe('recordSessionUsage', () => {
 });
 
 describe('recordProtectionEventStats', () => {
-  it('counts block-like events and saved time', () => {
+  it('counts block-like events without inventing saved time', () => {
     const timestamp = new Date(2026, 5, 14, 12).getTime();
     const afterBlock = recordProtectionEventStats({}, 'block', timestamp);
     const afterWarning = recordProtectionEventStats(afterBlock, 'warning', timestamp);
 
     expect(afterWarning['2026-06-14'].blockedOpens).toBe(2);
-    expect(afterWarning['2026-06-14'].savedTimeMinutes).toBe(10);
+    expect(afterWarning['2026-06-14'].savedTimeMinutes).toBe(0);
   });
 
   it('counts emergency unlocks separately', () => {

@@ -11,13 +11,27 @@ const cryptoSubtleStub = {
   exportKey: vi.fn().mockResolvedValue(new Uint8Array(32).buffer),
   importKey: vi.fn().mockResolvedValue({} as CryptoKey),
   encrypt: vi.fn().mockImplementation(async (_a: unknown, _k: unknown, data: BufferSource) => {
-    const src = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array((data as ArrayBufferView).buffer, (data as ArrayBufferView).byteOffset, (data as ArrayBufferView).byteLength);
+    const src =
+      data instanceof ArrayBuffer
+        ? new Uint8Array(data)
+        : new Uint8Array(
+            (data as ArrayBufferView).buffer,
+            (data as ArrayBufferView).byteOffset,
+            (data as ArrayBufferView).byteLength,
+          );
     const out = new Uint8Array(12 + src.byteLength);
     out.set(src, 12);
     return out.buffer;
   }),
   decrypt: vi.fn().mockImplementation(async (_a: unknown, _k: unknown, data: BufferSource) => {
-    const src = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array((data as ArrayBufferView).buffer, (data as ArrayBufferView).byteOffset, (data as ArrayBufferView).byteLength);
+    const src =
+      data instanceof ArrayBuffer
+        ? new Uint8Array(data)
+        : new Uint8Array(
+            (data as ArrayBufferView).buffer,
+            (data as ArrayBufferView).byteOffset,
+            (data as ArrayBufferView).byteLength,
+          );
     return src.slice(12).buffer;
   }),
 };
@@ -49,7 +63,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Loslegen' }));
 
-    expect(await screen.findByRole('heading', { name: 'Ziele auswaehlen' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Ziele auswählen' })).toBeInTheDocument();
     await waitFor(() => expect(scrollArea.scrollTop).toBe(0));
   });
 
@@ -83,8 +97,60 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Fokusmodus Aktiv' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Fokus läuft.' })).toBeInTheDocument();
     expect(screen.getByLabelText('Noch 15 Minuten')).toBeInTheDocument();
+  });
+
+  it('opens a pending focus result after reloading', async () => {
+    await StorageService.saveState({
+      ...DEFAULT_STATE,
+      hasCompletedOnboarding: true,
+      pendingFocusResultId: 'finished',
+      focusSessions: [
+        {
+          id: 'finished',
+          startTime: 1_000,
+          endTime: 1_000 + 25 * 60_000,
+          duration: 25,
+          successful: true,
+          protectedApps: [],
+          blocksTriggered: 0,
+        },
+      ],
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Fokus geschafft.' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Zum Dashboard' }));
+    expect(await screen.findByRole('heading', { name: 'Zeit für das, was zählt.' })).toBeInTheDocument();
+  });
+
+  it('shows the result when an expired timer is restored', async () => {
+    const now = new Date(2030, 0, 1, 12).getTime();
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+    await StorageService.saveState({
+      ...DEFAULT_STATE,
+      hasCompletedOnboarding: true,
+      isFocusModeActive: true,
+      focusTimeRemaining: 25,
+      focusSessions: [
+        {
+          id: 'expired',
+          startTime: now - 30 * 60_000,
+          endTime: null,
+          duration: 25,
+          successful: false,
+          protectedApps: [],
+          blocksTriggered: 0,
+        },
+      ],
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Fokus geschafft.' })).toBeInTheDocument();
+    expect(screen.getByText('25 Min')).toBeInTheDocument();
   });
 
   it('clears persisted data and returns to onboarding after a confirmed reset', async () => {

@@ -82,11 +82,11 @@
   </head>
   <body>
     <main>
-      <p class="muted">Stand: 17. Juni 2026</p>
+      <p class="muted">Stand: 4. Oktober 2026</p>
       <h1>Datenschutzerklärung</h1>
       <p class="lead">
-        ScrollShield ist als Offline-First-App konzipiert. Regeln, Verlauf und Statistiken bleiben auf deinem Gerät,
-        solange du keine zukünftige Online-Funktion ausdrücklich aktivierst.
+        Die Webversion von ScrollShield ist Offline-First: Sie speichert deine Einstellungen und den innerhalb von
+        ScrollShield erzeugten Verlauf lokal in deinem Browser. Sie hat keinen Zugriff auf die Nutzung anderer Apps.
       </p>
 
       <div class="notice">
@@ -105,34 +105,31 @@
       <h2>2. Welche Daten lokal verarbeitet werden</h2>
       <p>ScrollShield kann auf deinem Gerät folgende Daten speichern:</p>
       <ul>
-        <li>ausgewählte geschützte Apps und Schutzregeln,</li>
-        <li>lokale Nutzungs- und Blockierhistorie,</li>
-        <li>Statistiken wie gesparte Zeit, Streaks und Fokus-Sitzungen,</li>
-        <li>lokale App-Einstellungen, Berechtigungsstatus und Profilkonfiguration.</li>
+        <li>ausgewählte Apps als persönliche Ziele und deine Einstellungen,</li>
+        <li>innerhalb von ScrollShield erzeugte Verlaufsereignisse,</li>
+        <li>Fokus-Sitzungen und daraus berechnete Statistiken,</li>
+        <li>Profilkonfiguration.</li>
       </ul>
       <p>
-        Diese Daten dienen ausschließlich dazu, deine gewählten Schutzregeln auszuführen und dir lokale Auswertungen zu
-        zeigen.
+        Diese Daten dienen dazu, deine gewählten Einstellungen wiederherzustellen und dir lokale Auswertungen zu zeigen.
       </p>
 
       <h2>3. Keine Serverübertragung in Version 1.0</h2>
       <p>
         In der aktuellen Version gibt es keinen Account, keinen Cloud-Sync und keine Entwickler-Server, an die deine
-        Nutzungsdaten übertragen werden. Deine Daten bleiben in der lokalen App-Sandbox deines Geräts.
+        Nutzungsdaten übertragen werden. In der Webversion bleiben diese Daten im lokalen Speicher deines Browsers.
       </p>
 
       <h2>4. Systemberechtigungen</h2>
       <p>
-        ScrollShield benötigt je nach Plattform Systemberechtigungen, um den Start geschützter Apps zu erkennen und den
-        Schutzbildschirm oder Systemhinweis auszulösen.
+        Die Webversion fordert keine Systemberechtigungen für Bildschirmzeit oder die Nutzung anderer Apps an. Sie kann
+        andere Apps weder erkennen noch sperren.
       </p>
       <ul>
+        <li><strong>iOS:</strong> Systemfunktionen erfordern eine gesonderte native Implementierung und Freigabe.</li>
         <li>
-          <strong>iOS:</strong> Screen-Time- beziehungsweise Family-Controls-Funktionen, sofern von Apple freigegeben.
-        </li>
-        <li>
-          <strong>Android:</strong> Nutzungsdatenzugriff zur Erkennung der Vordergrund-App und optional Overlay-Rechte
-          zur Anzeige des Schutzbildschirms.
+          <strong>Android:</strong> Gerätefunktionen hängen von der nativen Implementierung und erteilten Berechtigungen
+          ab.
         </li>
       </ul>
       <p>ScrollShield nutzt diese Berechtigungen nicht, um Chats, Passwörter oder Bildschirminhalte auszulesen.</p>
@@ -145,9 +142,8 @@
 
       <h2>6. Schutz jüngerer Nutzer</h2>
       <p>
-        Solange keine Altersgruppe bekannt ist, verwendet ScrollShield die strengere Datenschutz-Voreinstellung. Für als
-        unter 16 gekennzeichnete Nutzung bleibt dieser Modus aktiv. Version 1.0 verarbeitet Daten unabhängig davon
-        ausschließlich lokal.
+        Die Webversion fragt kein Alter ab. Ihre Fokus- und Ziel-Funktionen verarbeiten die oben genannten Daten lokal
+        im Browser.
       </p>
 
       <h2>7. Löschung lokaler Daten</h2>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Capacitor } from '@capacitor/core';
 import { ShieldCheck, Eye, Layers, Bell, Activity, CheckCircle2, Settings, AlertTriangle, Info } from 'lucide-react';
 import { AppState, Screen, AppPermissions } from '../types';
 import { Header } from '../components/ui';
@@ -155,6 +156,33 @@ export function PermissionsScreen({
       </section>
     );
   };
+
+  if (!Capacitor.isNativePlatform()) {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6 pb-32">
+        <Header title="Berechtigungen" onBack={() => navigate(isOnboarding ? 'onboarding' : 'settings')} />
+        <section className="mt-5 rounded-[2rem] border border-zinc-700 bg-zinc-900/80 p-6">
+          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
+            <ShieldCheck size={25} aria-hidden="true" />
+          </div>
+          <h1 className="mb-3 text-2xl font-bold text-zinc-100">Im Browser ohne Gerätezugriff</h1>
+          <p className="text-[15px] leading-relaxed text-zinc-300">
+            ScrollShield kann hier weder Bildschirmzeit-Berechtigungen anfordern noch andere Apps erkennen oder sperren.
+            Fokuszeit, Ziele und bewusste Pausen kannst du trotzdem nutzen.
+          </p>
+        </section>
+        <button
+          onClick={() => {
+            if (isOnboarding) updateState({ hasCompletedOnboarding: true });
+            navigate(isOnboarding ? 'dashboard' : 'settings');
+          }}
+          className="mt-6 w-full rounded-2xl bg-emerald-400 px-5 py-4 font-bold text-zinc-950"
+        >
+          {isOnboarding ? 'App einrichten' : 'Zurück zu Einstellungen'}
+        </button>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6 pb-32">

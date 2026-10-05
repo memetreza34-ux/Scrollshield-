@@ -8,15 +8,11 @@
  * 4. Storage Resilience & Cryptographic Security (WebCrypto AES-GCM, XOR migration, Tamper detection, Corrupted recovery)
  */
 
-import {
-  AppState,
-  AppConfig,
-  DEFAULT_PROFILES,
-  DEFAULT_STATE,
-} from '../src/types';
+import { AppState, AppConfig, DEFAULT_PROFILES, DEFAULT_STATE } from '../src/types';
 import { normalizeAppConfig, normalizeAppState } from '../src/lib/state';
 import { StorageService } from '../src/lib/storage';
 import { webcrypto } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 
 const crypto = webcrypto as unknown as Crypto;
 
@@ -85,7 +81,12 @@ export const BUILTIN_12_PLATFORMS: PlatformDefinition[] = [
     androidPackages: ['com.snapchat.android'],
     iosBundleIds: ['com.toyopagroup.picaboo'],
     hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'spotlight', name: 'Snapchat Spotlight', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+    shortVideoSurface: {
+      id: 'spotlight',
+      name: 'Snapchat Spotlight',
+      defaultMode: 'limit',
+      defaultDailyLimitMinutes: 15,
+    },
   },
   {
     id: 'reddit',
@@ -96,7 +97,12 @@ export const BUILTIN_12_PLATFORMS: PlatformDefinition[] = [
     androidPackages: ['com.reddit.frontpage', 'com.reddit.frontpage.lite'],
     iosBundleIds: ['com.reddit.Reddit'],
     hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'reddit_watch', name: 'Reddit Video Feed', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+    shortVideoSurface: {
+      id: 'reddit_watch',
+      name: 'Reddit Video Feed',
+      defaultMode: 'limit',
+      defaultDailyLimitMinutes: 15,
+    },
   },
   {
     id: 'twitter',
@@ -107,7 +113,12 @@ export const BUILTIN_12_PLATFORMS: PlatformDefinition[] = [
     androidPackages: ['com.twitter.android', 'com.twitter.android.lite'],
     iosBundleIds: ['com.atebits.Tweetie2'],
     hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'immersive_video', name: 'Immersive Video', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+    shortVideoSurface: {
+      id: 'immersive_video',
+      name: 'Immersive Video',
+      defaultMode: 'limit',
+      defaultDailyLimitMinutes: 15,
+    },
   },
   {
     id: 'facebook',
@@ -118,7 +129,12 @@ export const BUILTIN_12_PLATFORMS: PlatformDefinition[] = [
     androidPackages: ['com.facebook.katana', 'com.facebook.lite'],
     iosBundleIds: ['com.facebook.Facebook'],
     hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'facebook_reels', name: 'Facebook Reels', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+    shortVideoSurface: {
+      id: 'facebook_reels',
+      name: 'Facebook Reels',
+      defaultMode: 'limit',
+      defaultDailyLimitMinutes: 15,
+    },
   },
   {
     id: 'pinterest',
@@ -150,7 +166,12 @@ export const BUILTIN_12_PLATFORMS: PlatformDefinition[] = [
     androidPackages: ['com.linkedin.android'],
     iosBundleIds: ['com.linkedin.LinkedIn'],
     hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'linkedin_video', name: 'LinkedIn Video', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+    shortVideoSurface: {
+      id: 'linkedin_video',
+      name: 'LinkedIn Video',
+      defaultMode: 'limit',
+      defaultDailyLimitMinutes: 15,
+    },
   },
   {
     id: 'twitch',
@@ -161,7 +182,12 @@ export const BUILTIN_12_PLATFORMS: PlatformDefinition[] = [
     androidPackages: ['tv.twitch.android.app'],
     iosBundleIds: ['tv.twitch'],
     hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'discovery_feed', name: 'Twitch Discovery', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+    shortVideoSurface: {
+      id: 'discovery_feed',
+      name: 'Twitch Discovery',
+      defaultMode: 'limit',
+      defaultDailyLimitMinutes: 15,
+    },
   },
   {
     id: 'bluesky',
@@ -190,7 +216,7 @@ export function runPlatformExpansionStressTest(): { success: boolean; results: s
 
   const requiredFields = ['id', 'name', 'category', 'icon', 'color', 'androidPackages', 'hasShortVideoFeed'];
   const allValid = BUILTIN_12_PLATFORMS.every((p) =>
-    requiredFields.every((f) => (p as unknown as Record<string, unknown>)[f] !== undefined)
+    requiredFields.every((f) => (p as unknown as Record<string, unknown>)[f] !== undefined),
   );
   logResult('All 12 platforms satisfy strict schema requirements', allValid);
 
@@ -212,7 +238,7 @@ export function runPlatformExpansionStressTest(): { success: boolean; results: s
   // 3. Normalizer function adapted for dynamic registry
   const normalizeDynamicAppsConfig = (
     existing: Partial<AppState['appsConfig']> = {},
-    catalog: PlatformDefinition[] = BUILTIN_12_PLATFORMS
+    catalog: PlatformDefinition[] = BUILTIN_12_PLATFORMS,
   ): Record<string, AppConfig> => {
     const normalized: Record<string, AppConfig> = {};
     catalog.forEach((app) => {
@@ -247,22 +273,26 @@ export function runPlatformExpansionStressTest(): { success: boolean; results: s
     expandedConfig['custom_legacy_app'].active === true &&
     expandedConfig['custom_legacy_app'].openDelay === 10;
 
-  logResult('Existing user overrides are strictly preserved across platform expansion', preservedInstagram && preservedLegacy);
+  logResult(
+    'Existing user overrides are strictly preserved across platform expansion',
+    preservedInstagram && preservedLegacy,
+  );
 
   // 5. Short video platform derivation
   const videoPlatforms = allPlatforms.filter((p) => p.hasShortVideoFeed);
   const expectedVideoCount = BUILTIN_12_PLATFORMS.filter((p) => p.hasShortVideoFeed).length + 15; // 9 builtin + 15 custom
-  logResult('Short video platforms correctly derived', videoPlatforms.length === expectedVideoCount, `Found ${videoPlatforms.length} video platforms`);
+  logResult(
+    'Short video platforms correctly derived',
+    videoPlatforms.length === expectedVideoCount,
+    `Found ${videoPlatforms.length} video platforms`,
+  );
 
   // 6. UI Token compliance: Check that all color tokens use valid Tailwind classes without raw inline hex colors in cards
-  const validColors = BUILTIN_12_PLATFORMS.every(
-    (p) => typeof p.color === 'string' && p.color.includes('bg-')
-  );
+  const validColors = BUILTIN_12_PLATFORMS.every((p) => typeof p.color === 'string' && p.color.includes('bg-'));
   logResult('All platform color tokens follow Tailwind theme conventions', validColors);
 
   return { success: allPassed, results };
 }
-
 
 // ============================================================================
 // DIMENSION 2: PRIVACY & SENSITIVE FIELD INTERCEPTION HARNESS
@@ -337,7 +367,10 @@ export class SecureAccessibilityFilterEngine {
   /**
    * Root event filter with strict pre-extraction privacy guard
    */
-  public inspectEvent(eventPackage: string, rootNode: MockAccessibilityNode): { shouldBlock: boolean; reason?: string } {
+  public inspectEvent(
+    eventPackage: string,
+    rootNode: MockAccessibilityNode,
+  ): { shouldBlock: boolean; reason?: string } {
     const pkg = eventPackage.trim().toLowerCase();
 
     // 1. Guard against non-target packages
@@ -413,7 +446,11 @@ export function runPrivacyFieldInterceptionStressTest(): { success: boolean; res
       bankingRejected = false;
     }
   }
-  logResult('All banking apps are 100% excluded from node inspection', bankingRejected, `Tested ${BANKING_PACKAGES.length} banking packages`);
+  logResult(
+    'All banking apps are 100% excluded from node inspection',
+    bankingRejected,
+    `Tested ${BANKING_PACKAGES.length} banking packages`,
+  );
 
   // 2. Test rejection of system & non-target messaging apps
   let systemRejected = true;
@@ -439,25 +476,31 @@ export function runPrivacyFieldInterceptionStressTest(): { success: boolean; res
   };
 
   const loginRes = engine.inspectEvent('com.instagram.android', instagramLoginNode);
-  logResult('Password fields inside target apps are strictly bypassed from text matching', loginRes.shouldBlock === false && engine.rejectedSensitiveCount > 0);
+  logResult(
+    'Password fields inside target apps are strictly bypassed from text matching',
+    loginRes.shouldBlock === false && engine.rejectedSensitiveCount > 0,
+  );
 
   // 4. Test accurate toxic detection in target apps for non-password nodes
   const toxicReelNode: MockAccessibilityNode = {
     text: 'Check out this wild clip',
-    children: [
-      { text: 'Explicit NSFW video content #porn #gore' },
-      { text: 'Comments (1.2k)' },
-    ],
+    children: [{ text: 'Explicit NSFW video content #porn #gore' }, { text: 'Comments (1.2k)' }],
   };
   const toxicRes = engine.inspectEvent('com.instagram.android', toxicReelNode);
-  logResult('Toxic content in target apps triggers block correctly', toxicRes.shouldBlock === true && toxicRes.reason === 'TOXIC_CONTENT_DETECTED');
+  logResult(
+    'Toxic content in target apps triggers block correctly',
+    toxicRes.shouldBlock === true && toxicRes.reason === 'TOXIC_CONTENT_DETECTED',
+  );
 
   // 5. Zero memory retention verification: ensure engine instance holds no extracted strings
-  logResult('Engine state retains zero user strings in heap memory', true, `Inspected: ${engine.inspectedCount}, Sensitive Bypassed: ${engine.rejectedSensitiveCount}`);
+  logResult(
+    'Engine state retains zero user strings in heap memory',
+    true,
+    `Inspected: ${engine.inspectedCount}, Sensitive Bypassed: ${engine.rejectedSensitiveCount}`,
+  );
 
   return { success: allPassed, results };
 }
-
 
 // ============================================================================
 // DIMENSION 3: ON-DEVICE AI PRIVACY & OFFLINE EXECUTION HARNESS
@@ -497,7 +540,10 @@ export function runOnDeviceAIPrivacyStressTest(): { success: boolean; results: s
     };
 
     const summary = generateOnDeviceSummary(localSessionHistory);
-    logResult('On-device summary generated locally without network calls', summary.includes('Social Media genutzt') && networkCallsAttempted === 0);
+    logResult(
+      'On-device summary generated locally without network calls',
+      summary.includes('Social Media genutzt') && networkCallsAttempted === 0,
+    );
 
     // 3. Simulate On-Device Semantic Scoring (Simulated TFLite MobileBERT INT8 Inference)
     const computeSemanticToxicity = (text: string): { score: number; label: string; offlineLatencyMs: number } => {
@@ -514,11 +560,17 @@ export function runOnDeviceAIPrivacyStressTest(): { success: boolean; results: s
     };
 
     const scoreRes = computeSemanticToxicity('Normal academic discussion about anatomy and biology');
-    logResult('On-device semantic scoring completes in memory with zero network calls', networkCallsAttempted === 0, `Inference latency: ${scoreRes.offlineLatencyMs.toFixed(3)}ms`);
+    logResult(
+      'On-device semantic scoring completes in memory with zero network calls',
+      networkCallsAttempted === 0,
+      `Inference latency: ${scoreRes.offlineLatencyMs.toFixed(3)}ms`,
+    );
 
     // 4. Verify telemetry policy compliance
-    logResult('Zero analytics or telemetry sent to cloud endpoints (100% GDPR/SECURITY.md compliance)', networkCallsAttempted === 0);
-
+    logResult(
+      'Zero analytics or telemetry sent to cloud endpoints (100% GDPR/SECURITY.md compliance)',
+      networkCallsAttempted === 0,
+    );
   } finally {
     // Restore original fetch
     globalThis.fetch = originalFetch;
@@ -526,7 +578,6 @@ export function runOnDeviceAIPrivacyStressTest(): { success: boolean; results: s
 
   return { success: allPassed, results };
 }
-
 
 // ============================================================================
 // DIMENSION 4: STORAGE RESILIENCE & CRYPTOGRAPHIC SECURITY HARNESS
@@ -538,13 +589,9 @@ export class WebCryptoStorageEngine {
 
   public async initialize(passphrase = 'device-hardware-bound-salt-scrollshield'): Promise<void> {
     const enc = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      enc.encode(passphrase),
-      { name: 'PBKDF2' },
-      false,
-      ['deriveKey']
-    );
+    const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(passphrase), { name: 'PBKDF2' }, false, [
+      'deriveKey',
+    ]);
 
     this.cryptoKey = await crypto.subtle.deriveKey(
       {
@@ -556,7 +603,7 @@ export class WebCryptoStorageEngine {
       keyMaterial,
       { name: this.algorithm, length: 256 },
       false,
-      ['encrypt', 'decrypt']
+      ['encrypt', 'decrypt'],
     );
   }
 
@@ -565,11 +612,7 @@ export class WebCryptoStorageEngine {
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const encoded = new TextEncoder().encode(plaintext);
 
-    const ciphertext = await crypto.subtle.encrypt(
-      { name: this.algorithm, iv },
-      this.cryptoKey!,
-      encoded
-    );
+    const ciphertext = await crypto.subtle.encrypt({ name: this.algorithm, iv }, this.cryptoKey!, encoded);
 
     const combined = new Uint8Array(iv.length + ciphertext.byteLength);
     combined.set(iv, 0);
@@ -586,11 +629,7 @@ export class WebCryptoStorageEngine {
     const iv = combined.subarray(0, 12);
     const ciphertext = combined.subarray(12);
 
-    const decrypted = await crypto.subtle.decrypt(
-      { name: this.algorithm, iv },
-      this.cryptoKey!,
-      ciphertext
-    );
+    const decrypted = await crypto.subtle.decrypt({ name: this.algorithm, iv }, this.cryptoKey!, ciphertext);
 
     return new TextDecoder().decode(decrypted);
   }
@@ -638,9 +677,15 @@ export async function runStorageResilienceStressTest(): Promise<{ success: boole
   const memoryStore: Record<string, string> = {};
   const mockLocalStorage = {
     getItem: (k: string) => memoryStore[k] || null,
-    setItem: (k: string, v: string) => { memoryStore[k] = v; },
-    removeItem: (k: string) => { delete memoryStore[k]; },
-    clear: () => { Object.keys(memoryStore).forEach((k) => delete memoryStore[k]); },
+    setItem: (k: string, v: string) => {
+      memoryStore[k] = v;
+    },
+    removeItem: (k: string) => {
+      delete memoryStore[k];
+    },
+    clear: () => {
+      Object.keys(memoryStore).forEach((k) => delete memoryStore[k]);
+    },
   };
 
   const origLocalStorage = globalThis.localStorage;
@@ -648,37 +693,47 @@ export async function runStorageResilienceStressTest(): Promise<{ success: boole
 
   try {
     // Save valid state
-    StorageService.saveState(DEFAULT_STATE);
-    const loadedValid = StorageService.loadState();
-    logResult('StorageService saves and loads baseline state successfully', loadedValid !== null && loadedValid.activeProtectionLevel === 'standard');
+    await StorageService.saveState(DEFAULT_STATE);
+    const loadedValid = await StorageService.loadState();
+    logResult(
+      'StorageService saves and loads baseline state successfully',
+      loadedValid !== null && loadedValid.activeProtectionLevel === 'standard',
+    );
 
     // Corrupt the settings chunk with garbage
-    mockLocalStorage.setItem('scrollshield_settings_v3', 'NOT_VALID_BASE64_GARBAGE!@@#$');
-    const loadedCorruptSettings = StorageService.loadState();
+    mockLocalStorage.setItem('scrollshield_settings_v4', 'NOT_VALID_BASE64_GARBAGE!@@#$');
+    const loadedCorruptSettings = await StorageService.loadState();
     const normalizedAfterCorruption = normalizeAppState(loadedCorruptSettings);
-    logResult('Corrupted settings chunk falls back to defaults without unhandled crash', normalizedAfterCorruption.activeProtectionLevel === 'standard');
+    logResult(
+      'Corrupted settings chunk falls back to defaults without unhandled crash',
+      normalizedAfterCorruption.activeProtectionLevel === 'standard',
+    );
 
     // Test Complete OS Cache Eviction (all keys deleted)
     mockLocalStorage.clear();
-    const loadedAfterEviction = StorageService.loadState();
+    const loadedAfterEviction = await StorageService.loadState();
     const recoveredState = normalizeAppState(loadedAfterEviction);
-    logResult('Complete OS storage purge recovers cleanly to default configuration', recoveredState.hasCompletedOnboarding === false && recoveredState.profiles?.length === 4);
+    logResult(
+      'Complete OS storage purge recovers cleanly to default configuration',
+      recoveredState.hasCompletedOnboarding === false && recoveredState.profiles?.length === 4,
+    );
 
     // Test Migration from v2 plaintext monolithic format
     mockLocalStorage.clear();
     const v2State = { ...DEFAULT_STATE, activeProtectionLevel: 'strict', goals: ['Stop Reels'] };
     mockLocalStorage.setItem('scrollshield_state_v2', JSON.stringify(v2State));
 
-    const migrated = StorageService.migrateFromV2();
-    logResult('Legacy v2 plaintext state migrates to v3/v4 separated storage with 100% data fidelity', migrated !== null && migrated.activeProtectionLevel === 'strict' && migrated.goals?.[0] === 'Stop Reels');
-
+    const migrated = await StorageService.migrateFromV2();
+    logResult(
+      'Legacy v2 plaintext state migrates to v3/v4 separated storage with 100% data fidelity',
+      migrated !== null && migrated.activeProtectionLevel === 'strict' && migrated.goals?.[0] === 'Stop Reels',
+    );
   } finally {
     Object.defineProperty(globalThis, 'localStorage', { value: origLocalStorage, configurable: true });
   }
 
   return { success: allPassed, results };
 }
-
 
 // ============================================================================
 // MAIN RUNNER
@@ -719,7 +774,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error('Fatal execution error:', err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error('Fatal execution error:', err);
+    process.exit(1);
+  });
+}

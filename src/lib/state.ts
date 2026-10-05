@@ -105,9 +105,39 @@ export const normalizePrivacySettings = (
 export const normalizeAppState = (saved: Partial<AppState> | null | undefined): AppState => {
   if (!saved) return DEFAULT_STATE;
 
+  const savedSchedules = Array.isArray(saved.focusSchedules) ? saved.focusSchedules : [];
+  const focusSchedules = DEFAULT_STATE.focusSchedules.map((defaultSchedule) => {
+    const savedSchedule = savedSchedules.find((schedule) => schedule?.id === defaultSchedule.id);
+    const validTime = (value: unknown) => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+    const days = Array.isArray(savedSchedule?.days)
+      ? [...new Set(savedSchedule.days.filter((day): day is number => Number.isInteger(day) && day >= 0 && day <= 6))]
+      : defaultSchedule.days;
+    const validStart = validTime(savedSchedule?.startTime);
+    const validEnd = validTime(savedSchedule?.endTime);
+    const startTime = validStart ? savedSchedule.startTime : defaultSchedule.startTime;
+    const endTime = validEnd ? savedSchedule.endTime : defaultSchedule.endTime;
+    return {
+      ...defaultSchedule,
+      days,
+      startTime,
+      endTime,
+      active: savedSchedule?.active === true && validStart && validEnd && days.length > 0 && startTime !== endTime,
+      lastStartedOn: typeof savedSchedule?.lastStartedOn === 'string' ? savedSchedule.lastStartedOn : undefined,
+    };
+  });
+  const focusSessions = Array.isArray(saved.focusSessions) ? saved.focusSessions : DEFAULT_STATE.focusSessions;
+  const pendingFocusResultId =
+    typeof saved.pendingFocusResultId === 'string' &&
+    focusSessions.some((session) => session.id === saved.pendingFocusResultId && session.endTime !== null)
+      ? saved.pendingFocusResultId
+      : null;
+
   return {
     ...DEFAULT_STATE,
     ...saved,
+    focusSchedules,
+    focusSessions,
+    pendingFocusResultId,
     appsConfig: normalizeAppsConfig(saved.appsConfig),
     profiles: normalizeProfiles(saved.profiles),
     activeProfileId: saved.activeProfileId || DEFAULT_STATE.activeProfileId,

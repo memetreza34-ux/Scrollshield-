@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
+import { Capacitor } from '@capacitor/core';
 import { AlertTriangle, Clock, Lock, Shield } from 'lucide-react';
-import { AppState, HistoryEvent, Screen, SUPPORTED_APPS } from '../types';
+import { AppState, DEFAULT_APP_CONFIG, HistoryEvent, Screen, SUPPORTED_APPS } from '../types';
 import { createEventId } from '../lib/appUtils';
 import { countEmergencyUnlocksToday, evaluateProtectionAttempt, ProtectionFlowStep } from '../lib/protectionRules';
 import { recordProtectionEventStats } from '../lib/session';
@@ -19,7 +20,11 @@ export function ProtectionFlow({
 }) {
   const appId = state.simulatedAppToOpen;
   const appInfo = SUPPORTED_APPS.find((app) => app.id === appId);
-  const config = state.appsConfig[appId || ''];
+  const appConfig = state.appsConfig[appId || ''];
+  const config = useMemo(
+    () => (Capacitor.isNativePlatform() ? appConfig : { ...DEFAULT_APP_CONFIG, ...appConfig, id: appId, active: true }),
+    [appConfig, appId],
+  );
 
   const [step, setStep] = useState<ProtectionFlowStep>('init');
   const [delayRemaining, setDelayRemaining] = useState(0);
@@ -29,7 +34,7 @@ export function ProtectionFlow({
 
   const logEvent = useCallback(
     (type: HistoryEvent['type'], desc: string) => {
-      if (!appId) return;
+      if (!appId || !Capacitor.isNativePlatform()) return;
 
       const newEvent: HistoryEvent = {
         id: createEventId(),
@@ -121,7 +126,7 @@ export function ProtectionFlow({
   );
 
   const renderIosFallbackInfo = () => {
-    if (state.operatingSystem !== 'ios') return null;
+    if (!Capacitor.isNativePlatform() || state.operatingSystem !== 'ios') return null;
 
     return (
       <div className="absolute top-6 left-6 right-6 bg-blue-500/10 border border-blue-500/20 rounded-[1.5rem] p-4 flex gap-3 text-left backdrop-blur-md z-10">
@@ -139,6 +144,11 @@ export function ProtectionFlow({
 
   return (
     <div className="absolute inset-0 z-50 bg-zinc-950 flex flex-col items-center justify-center p-6 text-center">
+      {!Capacitor.isNativePlatform() && (
+        <p className="absolute left-6 right-6 top-7 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm leading-relaxed text-emerald-100">
+          Demo: Dieser Ablauf öffnet oder sperrt keine andere App.
+        </p>
+      )}
       {renderIosFallbackInfo()}
 
       {step === 'soft_intent' && (
@@ -450,13 +460,19 @@ export function ProtectionFlow({
       {step === 'app_opened' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-sm">
           <div className="mb-10">{renderAppIcon('w-32 h-32', 'text-6xl')}</div>
-          <h2 className="text-3xl font-bold mb-3 tracking-tight">{appInfo.name} ist offen</h2>
+          <h2 className="text-3xl font-bold mb-3 tracking-tight">
+            {Capacitor.isNativePlatform() ? `${appInfo.name} ist offen` : 'Simulation abgeschlossen'}
+          </h2>
           <div className="text-zinc-400 mb-10 text-lg leading-relaxed space-y-2">
-            <p>Dein Zeitlimit laeuft.</p>
+            <p>{Capacitor.isNativePlatform() ? 'Dein Zeitlimit läuft.' : 'Du hast den bewussten Check ausprobiert.'}</p>
           </div>
 
           <button
             onClick={() => {
+              if (!Capacitor.isNativePlatform()) {
+                cancel();
+                return;
+              }
               updateState({
                 simulatedAppToOpen: null,
                 activeSession: {
@@ -471,7 +487,7 @@ export function ProtectionFlow({
             }}
             className="w-full py-4 rounded-[1.5rem] font-bold bg-zinc-100 text-zinc-950 shadow-lg shadow-zinc-100/10 active:scale-[0.98] transition-transform mb-4"
           >
-            Zur App wechseln
+            {Capacitor.isNativePlatform() ? 'Zur App wechseln' : 'Zur Übersicht'}
           </button>
 
           <button
