@@ -72,7 +72,7 @@ export const PRESETS: PresetDefinition[] = [
     id: 'stark',
     label: 'Stark',
     summary:
-      '10 Sekunden Pause, bei jedem Wiederöffnen 20 Sekunden mehr. Beim dritten Öffnen in 30 Minuten folgt eine Abkühlzeit. Nach 10 Minuten am Stück fragt ScrollShield nach.',
+      '10 Sekunden Pause, bei jedem Wiederöffnen 20 Sekunden mehr. Nach drei Öffnungen in 30 Minuten folgt beim nächsten Versuch eine Abkühlzeit. Nach 10 Minuten am Stück fragt ScrollShield nach.',
     pro: true,
     values: {
       mode: 'standard',
