@@ -2,6 +2,7 @@ import { Check } from 'lucide-react';
 import { AppState, Screen } from '../types';
 import { Header, List, Page, PrimaryButton, Row, SecondaryButton, Section, Switch } from '../components/ui';
 import { hasPro, PRO_BENEFITS } from '../lib/entitlements';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 import {
   EVENING_REMINDER_HOUR,
   RELAPSE_BLOCK_THRESHOLD,
@@ -38,11 +39,13 @@ export function SettingsScreen({ state, navigate }: ScreenProps) {
             value={state.operatingSystem === 'web' ? 'Browser' : permissionsOk ? 'Alles da' : 'Fehlt etwas'}
             onClick={() => navigate('permissions')}
           />
-          <Row
-            label="Kurzvideo-Erkennung prüfen"
-            description="Zeigt, ob Reels und Shorts erkannt werden"
-            onClick={() => navigate('diagnostics')}
-          />
+          {FEATURE_FLAGS.enableShortVideoResearch && (
+            <Row
+              label="Kurzvideo-Erkennung prüfen"
+              description="Post-V1 Forschung"
+              onClick={() => navigate('diagnostics')}
+            />
+          )}
           <Row label="Benachrichtigungen" onClick={() => navigate('notifications')} />
         </List>
       </Section>
@@ -137,7 +140,7 @@ export function PaywallScreen({ state, updateState, navigate }: ScreenProps) {
           ))}
         </ul>
         <p className="mt-3 px-1 text-sm text-zinc-500">
-          Kostenlos bleiben: 2 Apps, Kurzvideo-Schutz, Pause und Wiederöffnungs-Schutz, 1 Zeitplan, Fokus,
+          Kostenlos bleiben: 2 Apps, Pause und Wiederöffnungs-Schutz, 1 Zeitplan, Fokus,
           Notfallfreigabe und die Zahlen von heute. Keine Werbung.
         </p>
       </Section>
@@ -147,12 +150,12 @@ export function PaywallScreen({ state, updateState, navigate }: ScreenProps) {
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-2xl border border-emerald-500 p-4">
               <p className="text-sm text-zinc-400">Jährlich</p>
-              <p className="mt-1 text-xl font-semibold text-zinc-50">19,99 €</p>
+              <p className="mt-1 text-xl font-semibold text-zinc-50">24,99 €</p>
               <p className="mt-1 text-xs text-zinc-500">7 Tage gratis testen</p>
             </div>
             <div className="rounded-2xl border border-zinc-800 p-4">
               <p className="text-sm text-zinc-400">Monatlich</p>
-              <p className="mt-1 text-xl font-semibold text-zinc-50">3,49 €</p>
+              <p className="mt-1 text-xl font-semibold text-zinc-50">3,99 €</p>
             </div>
           </div>
           <p className="px-1 text-xs text-zinc-500">
