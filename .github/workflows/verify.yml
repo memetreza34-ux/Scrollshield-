@@ -30,3 +30,22 @@ jobs:
 
       - name: Verify
         run: npm run verify
+
+
+  android-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Verify Android
+        working-directory: android
+        run: ./gradlew testDebugUnitTest assembleDebug --stacktrace
