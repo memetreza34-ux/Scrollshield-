@@ -16,6 +16,7 @@ type ScreenProps = {
   updateState: (u: Partial<AppState>) => void;
   navigate: (s: Screen) => void;
   settingsReturnScreen?: Screen;
+  paywallReturnScreen?: Screen;
 };
 
 /** Einstellungen (docs/V1_MASTER_PLAN.md, 4.9), reached through the gear on every tab. */
@@ -118,11 +119,11 @@ export function NotificationsScreen({ state, updateState, navigate }: ScreenProp
  * phase 4; until then the development build can switch Pro on as a preview so
  * every screen can be seen.
  */
-export function PaywallScreen({ state, updateState, navigate }: ScreenProps) {
+export function PaywallScreen({ state, updateState, navigate, paywallReturnScreen = 'today' }: ScreenProps) {
   const pro = hasPro(state);
   const close = () => {
     updateState({ paywallReason: null });
-    navigate('today');
+    navigate(paywallReturnScreen);
   };
 
   return (
