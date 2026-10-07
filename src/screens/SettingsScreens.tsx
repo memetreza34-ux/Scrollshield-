@@ -15,16 +15,17 @@ type ScreenProps = {
   state: AppState;
   updateState: (u: Partial<AppState>) => void;
   navigate: (s: Screen) => void;
+  settingsReturnScreen?: Screen;
 };
 
 /** Einstellungen (docs/V1_MASTER_PLAN.md, 4.9), reached through the gear on every tab. */
-export function SettingsScreen({ state, navigate }: ScreenProps) {
+export function SettingsScreen({ state, navigate, settingsReturnScreen = 'today' }: ScreenProps) {
   const pro = hasPro(state);
   const permissionsOk = state.permissions.usageAccess && state.permissions.overlay;
 
   return (
     <Page>
-      <Header title="Einstellungen" onBack={() => navigate('today')} />
+      <Header title="Einstellungen" onBack={() => navigate(settingsReturnScreen)} />
 
       <Section>
         <List>
