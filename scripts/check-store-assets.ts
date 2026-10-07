@@ -41,7 +41,9 @@ requireText(
 
 // Production V1 intentionally ships without AccessibilityService/feed-level blocking.
 // The store listing must not accidentally advertise the post-V1 research capability.
-if (/Bedienungshilfe|AccessibilityService|Reels\s*(?:sperren|blockieren)|Shorts\s*(?:sperren|blockieren)/i.test(listing)) {
+if (
+  /Bedienungshilfe|AccessibilityService|Reels\s*(?:sperren|blockieren)|Shorts\s*(?:sperren|blockieren)/i.test(listing)
+) {
   findings.push({
     file: listingPath,
     text: 'V1 store copy advertises or depends on post-V1 Accessibility/feed-level functionality.',
