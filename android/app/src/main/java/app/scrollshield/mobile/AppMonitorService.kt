@@ -87,9 +87,6 @@ class AppMonitorService : Service() {
         /** Fallback delay when a rule carries no explicit openDelay. */
         const val DEFAULT_DELAY_SECONDS = 5
 
-        /** How long an app stays unblocked after the user chose to continue. */
-        const val GRACE_PERIOD_MS = 5 * 60_000L
-
         /** Longest pause the reopen protection builds up (MAX_ESCALATED_DELAY_SECONDS in protectionRules.ts). */
         const val MAX_ESCALATED_DELAY_SECONDS = 120
 
@@ -263,7 +260,6 @@ class AppMonitorService : Service() {
 
     private var lastForegroundPackage: String? = null
     /** Written by the overlay buttons on the main thread, read by the poll worker. */
-    private val allowedUntil = ConcurrentHashMap<String, Long>()
 
     /** Emergency unlocks per app id: until then the app is completely free. */
     private val emergencyUntil = ConcurrentHashMap<String, Long>()
@@ -506,19 +502,6 @@ class AppMonitorService : Service() {
 
         val verdict = evaluate(foreground, rule, now)
 
-        // The grace period only suppresses a duplicate plain opening pause while
-        // the same accepted session settles. It must NEVER suppress a detected
-        // reopen: Adaptive Reopen Protection is specifically about returning
-        // shortly after leaving the app. Locks and reopen friction always win.
-        if (
-            verdict.lockReason == null &&
-            verdict.reopenText == null &&
-            now < (allowedUntil[foreground] ?: 0L)
-        ) {
-            openLog.record(rule.appId, now)
-            return
-        }
-
         showInterruptionOverlay(foreground, rule, verdict)
     }
 
@@ -658,7 +641,6 @@ class AppMonitorService : Service() {
                 val now = System.currentTimeMillis()
                 recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_CONTINUED, reason)
                 openLog.record(rule.appId, now)
-                allowedUntil[blockedPackage] = now + GRACE_PERIOD_MS
                 sessionStartedAt[blockedPackage] = now
                 dismissOverlay()
             },
