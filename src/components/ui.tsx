@@ -231,7 +231,7 @@ export function PrimaryButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="flex min-h-[52px] w-full items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-emerald-500 px-3 font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+      className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-center leading-snug bg-emerald-500 px-3 font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
     >
       {children}
     </button>
@@ -251,7 +251,7 @@ export function SecondaryButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="flex min-h-[52px] w-full items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-zinc-800 px-3 font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+      className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-center leading-snug bg-zinc-800 px-3 font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
     >
       {children}
     </button>
