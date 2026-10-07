@@ -26,6 +26,8 @@ import { TimeWindowRule } from './schedules';
 
 // ── Type definitions ──────────────────────────────────────────────────────────
 
+export const NATIVE_PROTECTION_CONTRACT_VERSION = 1 as const;
+
 export type NativeProtectionMode = 'soft' | 'standard' | 'strict';
 
 export interface PermissionStatus {
@@ -215,6 +217,10 @@ export interface CalibrationResult {
 }
 
 export interface SyncBlockedAppsOptions {
+  /** Explicit schema version so Android can reject incompatible payloads safely. */
+  contractVersion: typeof NATIVE_PROTECTION_CONTRACT_VERSION;
+  /** When this contract snapshot was generated (epoch ms). */
+  generatedAt: number;
   /** One entry per protected Android package */
   rules: NativeProtectionRule[];
   /** Master switch – if false the service won't intervene */
@@ -223,6 +229,7 @@ export interface SyncBlockedAppsOptions {
 
 export interface SyncResult {
   synced: boolean;
+  contractVersion: number;
   ruleCount: number;
 }
 
@@ -288,6 +295,7 @@ const ScrollShieldBridgeNative = registerPlugin<ScrollShieldBridgePlugin>('Scrol
     getForegroundApp: async () => ({ packageName: null, hasPermission: false }),
     syncBlockedApps: async (options: SyncBlockedAppsOptions) => ({
       synced: false,
+      contractVersion: options.contractVersion,
       ruleCount: options.rules.length,
     }),
     startMonitoring: async () => ({ started: false, overlayGranted: false }),
@@ -396,6 +404,7 @@ function buildShortVideoRule(
   config: AppConfigSlice,
   focusBlocked: boolean,
 ): NativeShortVideoRule | undefined {
+  if (!FEATURE_FLAGS.enableShortVideoResearch) return undefined;
   const surface = platform.shortVideoSurface;
   const feed = config.reelsProtection;
   if (!surface || !feed?.enabled) return undefined;
@@ -531,7 +540,12 @@ export async function syncNativeBlockList(
   const monitoringEnabled = rules.length > 0;
 
   try {
-    await ScrollShieldBridgeNative.syncBlockedApps({ rules, monitoringEnabled });
+    await ScrollShieldBridgeNative.syncBlockedApps({
+      contractVersion: NATIVE_PROTECTION_CONTRACT_VERSION,
+      generatedAt: Date.now(),
+      rules,
+      monitoringEnabled,
+    });
     if (monitoringEnabled) {
       await ScrollShieldBridgeNative.startMonitoring();
     } else {

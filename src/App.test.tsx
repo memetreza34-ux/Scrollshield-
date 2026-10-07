@@ -198,6 +198,22 @@ describe('App', () => {
     expect(await runFocusSessionPastItsEnd(false)).toEqual([]);
   });
 
+  it('uses exactly three persistent V1 tabs and keeps Focus out of bottom navigation', async () => {
+    await StorageService.saveState({
+      ...DEFAULT_STATE,
+      hasCompletedOnboarding: true,
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole('navigation', { name: 'Hauptnavigation' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Heute' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Schutz' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Einblicke' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Fokus' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fokus starten' })).toBeInTheDocument();
+  });
+
   it('counts interruptions from the phone on the dashboard and acknowledges them', async () => {
     const now = Date.now();
     nativeEvents.read.mockResolvedValue([
