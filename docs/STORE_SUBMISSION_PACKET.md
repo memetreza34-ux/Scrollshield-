@@ -21,7 +21,8 @@ All declarations below are drafts until checked against the exact release binary
 
 - Data collected: **No**
 - Data shared: **No**
-- Tracking or advertising: **No**
+- Tracking: **No**
+- Advertising: **No**
 - Account creation: **No**
 - Deletion mechanism: local app reset and uninstall
 
