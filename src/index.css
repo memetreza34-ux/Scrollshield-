@@ -35,95 +35,9 @@
 }
 
 @layer utilities {
+  /* Calm Control: the shell stays neutral; emerald is reserved for real actions and state. */
   .app-stage {
-    background:
-      radial-gradient(circle at 20% 0%, rgba(20, 184, 166, 0.18), transparent 28rem),
-      radial-gradient(circle at 80% 10%, rgba(59, 130, 246, 0.14), transparent 26rem),
-      linear-gradient(135deg, #020617 0%, #050505 42%, #08111f 100%);
-  }
-
-  .app-device::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background:
-      linear-gradient(120deg, rgba(255, 255, 255, 0.08), transparent 26%, transparent 72%, rgba(20, 184, 166, 0.08)),
-      radial-gradient(circle at 50% -12%, rgba(34, 197, 94, 0.16), transparent 20rem);
-    z-index: 0;
-  }
-
-  .app-device > * {
-    position: relative;
-    z-index: 1;
-  }
-
-  .shield-aura {
-    background:
-      radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.36), transparent 0.35rem),
-      conic-gradient(
-        from 210deg,
-        rgba(16, 185, 129, 0.95),
-        rgba(59, 130, 246, 0.9),
-        rgba(244, 63, 94, 0.78),
-        rgba(16, 185, 129, 0.95)
-      );
-    animation: shield-aura-spin 9s linear infinite;
-  }
-
-  .shield-aura::after {
-    content: '';
-    position: absolute;
-    inset: 0.4rem;
-    border-radius: 1.85rem;
-    background: linear-gradient(145deg, rgba(9, 9, 11, 0.92), rgba(24, 24, 27, 0.98));
-    border: 1px solid rgba(255, 255, 255, 0.12);
-  }
-
-  .signal-ring {
-    animation: signal-ring 2.7s ease-out infinite;
-  }
-
-  .signal-ring:nth-child(2) {
-    animation-delay: 0.9s;
-  }
-
-  .signal-ring:nth-child(3) {
-    animation-delay: 1.8s;
-  }
-
-  .scanline {
-    animation: scanline 4.8s ease-in-out infinite;
-  }
-
-  @keyframes shield-aura-spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  @keyframes signal-ring {
-    0% {
-      opacity: 0.8;
-      transform: scale(0.72);
-    }
-    75%,
-    100% {
-      opacity: 0;
-      transform: scale(1.28);
-    }
-  }
-
-  @keyframes scanline {
-    0%,
-    100% {
-      transform: translateY(-34%);
-      opacity: 0.18;
-    }
-    50% {
-      transform: translateY(34%);
-      opacity: 0.42;
-    }
+    background: #050505;
   }
 
   /* Keep secondary copy readable on the zinc-950/zinc-900 app surfaces. */
