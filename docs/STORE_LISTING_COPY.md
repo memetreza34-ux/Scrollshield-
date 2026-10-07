@@ -66,7 +66,7 @@ Fokus, Bildschirmzeit, Digital Wellbeing, Selbstkontrolle, Social Media, App-Lim
 - Verstehe deine echten Nutzungsdaten
 - Deine Schutzdaten bleiben lokal
 
-## Review Notes — Google Play
+## Review Notes - Google Play
 
 ScrollShield V1 schützt vom Nutzer ausgewählte Apps über Usage Access und eine native Overlay-Intervention.
 
