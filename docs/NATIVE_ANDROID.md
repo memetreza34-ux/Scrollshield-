@@ -1,139 +1,226 @@
 # Native Android Status
 
-ScrollShield has a Capacitor Android wrapper under `android/`. The native interruption layer is **implemented but not
-yet verified on a device** — it has never been compiled in CI, and no Play Console declaration has been filed. Treat it
-as an alpha that is separate from the web/PWA launch described in `README.md`.
+ScrollShield V1 is Android-first. This document describes the current native implementation and its verification status.
+
+The authoritative product scope is [V1_MASTER_PLAN.md](V1_MASTER_PLAN.md).
+
+## Verification Levels
+
+Use these terms consistently:
+
+- **CONTRACT DEFINED** — represented in the web/native payload
+- **PARSED NATIVELY** — Android reads and normalizes it
+- **ENFORCED NATIVELY** — Android uses it in runtime decisions
+- **CI COMPILED** — Kotlin/Android project compiles in GitHub Actions
+- **DEVICE VERIFIED** — behavior confirmed on a physical Android device
+- **RELEASE READY** — device matrix + policy + lifecycle checks complete
+
+Source code alone is never “device verified”.
 
 ## Project Setup
 
 - Capacitor app id: `app.scrollshield.mobile`
-- Android `versionName` aligned with `package.json` version `1.0.0`
-- Kotlin (`org.jetbrains.kotlin.android`, JVM target 21) alongside the generated Java sources
-- Cleartext HTTP disabled in the Android manifest
-- Android app backup disabled so local wellbeing data is not copied into device backups
-- Android release builds use R8 minification and resource shrinking
-- Release signing is configured through ignored local files only: start from `android/signing.properties.example`
+- Kotlin Android project under `android/`
+- JVM target: 21
+- compile/target SDK values from `android/variables.gradle`
+- local encrypted native preferences via `SecurePrefs`
+- cleartext HTTP disabled
+- Android app backup disabled
+- release builds use R8/resource shrinking
 
-`npm run check:android` guards these invariants, including the declared permission list and the presence of the Kotlin
-toolchain whenever Kotlin sources exist.
+## Native Protection Contract
 
-## Implemented Native Behaviour
+React builds the native rule snapshot in `src/lib/nativeBridge.ts`.
 
-`ScrollShieldBridgePlugin.kt` exposes to the web layer:
+The payload is explicitly versioned:
 
-| Method                            | Purpose                                                                  |
-| --------------------------------- | ------------------------------------------------------------------------ |
-| `getPermissionStatus`             | Usage Access, overlay, notifications, battery exemption, service state   |
-| `requestUsageStatsPermission`     | Opens the system Usage Access screen                                     |
-| `requestOverlayPermission`        | Opens the system overlay screen                                          |
-| `openBatteryOptimizationSettings` | Opens the battery-optimisation list (no `REQUEST_IGNORE_…` permission)   |
-| `getForegroundApp`                | Current foreground package (diagnostics)                                 |
-| `syncBlockedApps`                 | Writes the per-app rule set                                              |
-| `startMonitoring`                 | Starts `AppMonitorService`                                               |
-| `stopMonitoring`                  | Stops it and clears the master switch                                    |
-| `getInterruptionEvents`           | Interruptions the overlay showed, not yet in the history                 |
-| `getAppUsage`                     | Today's foreground minutes of the protected packages                     |
-| `acknowledgeInterruptionEvents`   | Drops the ones the web layer took over                                   |
-| `clearNativeData`                 | Deletes all native data and stops the monitor ("App zurücksetzen")       |
-| `saveTextFile`                    | Writes the data export through the system "save as" dialog               |
-| `minimizeApp`, `backButton` event | Android back button: the web layer navigates, or the app goes background |
-
-`AppMonitorService.kt` runs as a foreground service, reads the foreground app from the `UsageStatsManager` **event**
-stream every 1.5 s, and shows a full-screen overlay when a protected package appears:
-
-| Rule mode  | Overlay behaviour                                               |
-| ---------- | --------------------------------------------------------------- |
-| `soft`     | Reminder, "continue" available immediately                      |
-| `standard` | Countdown of the app's own `openDelay`, then "continue" unlocks |
-| `strict`   | No "continue"; only "back to home screen"                       |
-
-Rules are synced from `src/lib/nativeBridge.ts` (`buildNativeProtectionRules`), which also escalates an app to `strict`
-while a focus session is running. Choosing "continue" grants a five-minute grace period so the overlay does not
-immediately reappear.
-
-Time windows travel down as a schedule (hours from `TIME_WINDOWS` in `src/lib/timeWindows.ts`) and are evaluated by the
-service on every app switch, because the web layer may not be running when a window starts. A window set to `strict` or
-`block` locks the app like `strict` mode and overrides the grace period; the native side has no emergency unlock that
-would tell the two apart.
-
-The short-video minutes measured by the accessibility service are read back by the web layer once a minute and on every
-return to the app, and flow into the daily stats (dashboard, insights, in-app feed limit).
-
-Reminders use `@capacitor/local-notifications`. Two have a fixed text and are scheduled with the system, so they arrive
-even when the app is closed: the focus-end reminder (when a session starts, withdrawn if it is stopped early) and the
-evening reminder at 22:00 (a daily alarm, rescheduled on every app start). The daily summary (from 20:00), the weekly
-review (Sundays from 20:00, instead of the daily summary) and the relapse warning depend on the day's data and need the
-running app. Alarms are inexact: `SCHEDULE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED` and `WAKE_LOCK`, which the plugin
-declares, are removed from the merged manifest.
-
-Every interruption is recorded (`InterruptionLog.kt`: package, outcome, reason, time – nothing from the screen) until
-the web layer takes it into its history and acknowledges it (`src/lib/nativeEvents.ts`). Dashboard, statistics, stop
-rate, relapse warning and summaries therefore count what happens on the phone. `BootReceiver` restarts the monitor after
-a reboot or an app update if monitoring was on; the accessibility service is rebound by the system on its own.
-
-## Short-Video Detection
-
-`ShortVideoWatchService` (accessibility) recognises whether a protected app's short-video feed is on screen, counts
-scroll events in it, and triggers the overlay when a feed rule is hit. It reads view ids and class names only — never
-text. Detection signatures live in `src/lib/shortVideoSignatures.ts` and are synced down with the rules, so a renamed
-view id is a TypeScript fix rather than a Kotlin one.
-
-Full mechanism, privacy boundary, calibration procedure and Play Console requirements: `docs/SHORT_VIDEO_DETECTION.md`.
-
-## Known Limits
-
-- **Checked on opening only.** Daily limit, anti-binge and time windows are evaluated when a protected app comes to the
-  front, in the same order as `src/lib/protectionRules.ts`. Someone who stays in the app past the limit or into a
-  locking window is not thrown out until the next opening.
-- **Emergency unlocks exist only in the web layer.** On the phone, a lock cannot be lifted early.
-- **Anti-binge counts openings on the phone only** (continue on the overlay, or a return during the grace period), not
-  openings inside ScrollShield's own protection flow.
-- A focus session is folded into the synced mode. If it ends while the app is not running, the native rules stay `strict`
-  until ScrollShield is opened again and re-syncs.
-- Scheduled reminders may arrive a few minutes late (inexact alarms).
-- Feed detection is heuristic and breaks silently when a host app renames its view ids. Re-verify per platform before
-  each release.
-- Detection lags an app switch by up to one poll interval (1.5 s).
-- The overlay does not prevent the user from leaving through system gestures. It reappears on the next foreground
-  transition of the protected app.
-- Background reliability under Doze and OEM battery managers (Xiaomi, Samsung, Huawei) is **untested**.
-- `EncryptedSharedPreferences` comes from Jetpack Security, which is in maintenance mode. Revisit before extending its
-  use.
-- **iOS cannot do feed-level rules at all.** Screen Time blocks whole apps or categories; no API exposes a surface
-  inside another app. The UI must not offer Reels rules on iOS.
-
-## Still Open Before a Store Release
-
-- Compile and run the Android build on a real device; nothing here has been executed yet
-- Verify service survival after reboot, battery optimisation and OEM task killers
-- Record the Play Console permission demonstration videos (`PACKAGE_USAGE_STATS`, `SYSTEM_ALERT_WINDOW`)
-- File the `FOREGROUND_SERVICE_SPECIAL_USE` declaration (see `docs/STORE_SUBMISSION_PACKET.md`)
-- Confirm the final package id before the first Play Console upload
-- Decide whether daily limits should move into the native layer or stay web-only
-
-## Commands
-
-```bash
-npm run android:configure
-npm run android:doctor
-npm run android:sync
-npm run android:open
-npm run android:build
-npm run android:release
-npm run android:bundle
+```
+contractVersion
+generatedAt
+monitoringEnabled
+rules[]
 ```
 
-## Local Tooling
+Current contract version: **1**.
 
-The project requires free local tooling for Android builds:
+Android rejects unknown incoming non-matching contract versions. Persisted legacy version `0` remains readable for migration; unknown future persisted versions fail closed instead of executing rules with unknown semantics.
 
-- Java 21 or newer
-- Android Studio or Android command-line tools with Android SDK Platform 36
-- A configured `android/local.properties` pointing at the Android SDK. Start from `android/local.properties.example`.
-- For release signing, copy `android/signing.properties.example` to `android/signing.properties` and point it at a
-  local keystore. Do not commit `signing.properties`, `.jks`, or `.keystore` files.
+Per-package rules can include:
 
-Run `npm run android:configure` after installing Android tooling to auto-create `android/local.properties` when the SDK
-is in a standard location. Run `npm run android:doctor` after that; it reports missing Java, SDK, and
-`local.properties` setup before Gradle is started. If `android/signing.properties` exists, it also validates the
-required signing fields and keystore path.
+- app id
+- mode
+- opening delay
+- daily budget
+- Adaptive Reopen / anti-binge thresholds
+- schedules
+- focus end timestamp
+- Session Guard duration
+- Emergency Unlock policy
+- emergency-lock timestamp for strict focus / commitment
+
+Post-V1 short-video fields remain in research code but are not emitted by the production V1 path.
+
+## Bridge
+
+`ScrollShieldBridgePlugin.kt` currently exposes:
+
+| Method | Purpose |
+| --- | --- |
+| `getPermissionStatus` | Usage Access, overlay, notifications and runtime service state |
+| `requestUsageStatsPermission` | Opens Android Usage Access settings |
+| `requestOverlayPermission` | Opens Android overlay permission settings |
+| `getForegroundApp` | Diagnostic foreground-package lookup |
+| `syncBlockedApps` | Validates and stores the versioned protection contract |
+| `startMonitoring` | Starts `AppMonitorService` |
+| `stopMonitoring` | Stops monitoring |
+| `getInterruptionEvents` | Returns native intervention events not yet imported into web state |
+| `getAppUsage` | Returns measured foreground minutes for protected packages |
+| `getScreenTime` | Returns measured screen-time data when available |
+| `acknowledgeInterruptionEvents` | Removes imported native events |
+| `clearNativeData` | Clears native state and stops monitoring |
+| `getAppIcons` | Reads installed launcher icons for supported packages |
+| `saveTextFile` | Uses Android save dialog for text export |
+| `minimizeApp` / back event | Native back handling for the Capacitor shell |
+
+Research-only methods related to Accessibility/short-video calibration are not part of the V1 release contract.
+
+## AppMonitorService
+
+The monitor runs as a foreground service and evaluates the current protected foreground package.
+
+### Main intervention order
+
+For a protected app, Android evaluates roughly:
+
+1. daily budget
+2. Reopen cooldown
+3. schedule lock
+4. active Focus / Rescue
+5. strict mode
+6. Adaptive Reopen delay
+7. normal opening delay
+
+Hard locks override ordinary grace behavior.
+
+### Adaptive Reopen Protection
+
+A successful Continue action records an opening.
+
+If the user leaves the app and reopens it within the configured Reopen window, the next intervention can use a longer delay or cooldown.
+
+Important V1 invariant:
+
+**The post-Continue grace period must never suppress a detected reopen.**
+
+The grace period only suppresses duplicate plain opening friction; Reopen friction and hard locks win.
+
+### Session Guard
+
+When enabled, the service tracks the start of the accepted foreground session and can interrupt again after the configured number of minutes even if the user never leaves the app.
+
+### Focus / Rescue
+
+Running Focus or Rescue sessions sync an absolute end timestamp to Android. The native layer therefore does not require the React webview to stay alive merely to know when the lock should expire.
+
+Strict Focus / Commitment can also suppress Emergency Unlock until a specific timestamp.
+
+### Emergency Unlock
+
+For rules that allow it:
+
+- bounded number per day
+- countdown before activation
+- temporary unlock duration
+- disabled while strict Focus/Commitment forbids it
+- native event is recorded
+
+Emergency Unlock is part of the native rule engine, not merely a web-only flow.
+
+## Metrics
+
+Native events are imported into the app state and used for trustworthy metrics.
+
+Allowed metric quality:
+
+- **MEASURED**
+- **DERIVED**
+- **UNAVAILABLE**
+
+Do not derive “saved time” from arbitrary multipliers.
+
+## Permissions
+
+### V1 production
+
+Core Android V1 uses:
+
+- Usage Access
+- display-over-other-apps permission
+- foreground service
+- notifications when the user enables notification features
+
+### Not a V1 dependency
+
+AccessibilityService is **not** registered/requested as a production V1 requirement.
+
+Battery-optimization exemption is also not a default V1 permission flow. Device-specific guidance may be revisited only if real-device reliability testing proves it necessary.
+
+## Short-Video Research
+
+`ShortVideoWatchService.kt`, signatures and calibration code may remain for research.
+
+They are explicitly **Post-V1** because feed-level detection is brittle and likely introduces additional AccessibilityService / Play-policy burden.
+
+Production V1 feature flags keep this path disabled.
+
+## Current Known Limits
+
+- foreground detection can lag by the polling interval
+- overlay permission can be revoked externally
+- OEM process management may affect long-running reliability
+- daily budget accuracy depends on Android UsageStats behavior
+- rapid app switching needs physical-device validation
+- reboot/update/process-kill behavior still requires full device-matrix verification
+- `EncryptedSharedPreferences`/Jetpack Security is maintenance-mode technology and should not be expanded casually
+- Android policy acceptance cannot be inferred from local code alone
+
+## CI
+
+GitHub Actions runs:
+
+- repository `npm run verify`
+- Android `testDebugUnitTest`
+- Android `assembleDebug`
+
+A green CI build proves compilation/tests, not physical-device behavior.
+
+## Required Device Matrix Before Release
+
+At minimum verify on representative:
+
+- Pixel / AOSP-like Android
+- Samsung One UI
+- Xiaomi / HyperOS-class aggressive background management
+
+Scenarios:
+
+- first permission grant
+- permission revoke/regrant
+- protected app switch
+- immediate reopen
+- repeated reopen escalation
+- Session Guard
+- Emergency Unlock
+- Focus expiration while ScrollShield UI is closed
+- reboot
+- process kill
+- screen lock/unlock
+- app update
+- 12–24 hour background reliability
+- battery consumption
+
+## Release Boundary
+
+Do not market any native behavior that has not passed the relevant device checks.
+
+Feed-level Reels/Shorts blocking, AccessibilityService-based inspection, iOS parity, cloud sync and family/partner controls remain outside V1.
