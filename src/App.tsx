@@ -73,6 +73,7 @@ export default function App() {
   const [appState, setAppState] = useState<AppState>(DEFAULT_STATE);
   const [isLoaded, setIsLoaded] = useState(false);
   const [appIcons, setAppIcons] = useState<ReadonlyMap<string, string>>(() => new Map());
+  const settingsReturnScreenRef = useRef<Screen>('today');
   const skipNextSaveRef = useRef(false);
   const screenScrollRef = useRef<HTMLDivElement>(null);
   // Notifications are deliberately not persisted: a reminder missed because the
@@ -348,7 +349,7 @@ export default function App() {
     if (!isLoaded) return;
     return onHardwareBack(() => {
       const { screen, onboarded } = backStateRef.current;
-      const target = getBackTarget(screen, onboarded);
+      const target = screen === 'settings' ? settingsReturnScreenRef.current : getBackTarget(screen, onboarded);
       if (!target) {
         void minimizeApp();
         return;
@@ -426,6 +427,9 @@ export default function App() {
   };
 
   const navigate = (screen: Screen) => {
+    if (screen === 'settings' && ['today', 'protect', 'insights'].includes(currentScreen)) {
+      settingsReturnScreenRef.current = currentScreen;
+    }
     setCurrentScreen(screen);
   };
 
@@ -483,7 +487,13 @@ export default function App() {
                   <InsightsScreen key="insights" state={appState} updateState={updateState} navigate={navigate} />
                 )}
                 {currentScreen === 'settings' && (
-                  <SettingsScreen key="settings" state={appState} updateState={updateState} navigate={navigate} />
+                  <SettingsScreen
+                    key="settings"
+                    state={appState}
+                    updateState={updateState}
+                    navigate={navigate}
+                    settingsReturnScreen={settingsReturnScreenRef.current}
+                  />
                 )}
                 {currentScreen === 'notifications' && (
                   <NotificationsScreen
