@@ -74,6 +74,7 @@ export default function App() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [appIcons, setAppIcons] = useState<ReadonlyMap<string, string>>(() => new Map());
   const settingsReturnScreenRef = useRef<Screen>('today');
+  const paywallReturnScreenRef = useRef<Screen>('today');
   const skipNextSaveRef = useRef(false);
   const screenScrollRef = useRef<HTMLDivElement>(null);
   // Notifications are deliberately not persisted: a reminder missed because the
@@ -349,7 +350,12 @@ export default function App() {
     if (!isLoaded) return;
     return onHardwareBack(() => {
       const { screen, onboarded } = backStateRef.current;
-      const target = screen === 'settings' ? settingsReturnScreenRef.current : getBackTarget(screen, onboarded);
+      const target =
+        screen === 'settings'
+          ? settingsReturnScreenRef.current
+          : screen === 'paywall'
+            ? paywallReturnScreenRef.current
+            : getBackTarget(screen, onboarded);
       if (!target) {
         void minimizeApp();
         return;
@@ -430,6 +436,9 @@ export default function App() {
     if (screen === 'settings' && ['today', 'protect', 'insights'].includes(currentScreen)) {
       settingsReturnScreenRef.current = currentScreen;
     }
+    if (screen === 'paywall' && currentScreen !== 'paywall') {
+      paywallReturnScreenRef.current = currentScreen;
+    }
     setCurrentScreen(screen);
   };
 
@@ -504,7 +513,13 @@ export default function App() {
                   />
                 )}
                 {currentScreen === 'paywall' && (
-                  <PaywallScreen key="paywall" state={appState} updateState={updateState} navigate={navigate} />
+                  <PaywallScreen
+                    key="paywall"
+                    state={appState}
+                    updateState={updateState}
+                    navigate={navigate}
+                    paywallReturnScreen={paywallReturnScreenRef.current}
+                  />
                 )}
                 {currentScreen === 'privacy' && (
                   <PrivacyScreen
