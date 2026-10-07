@@ -167,6 +167,8 @@ class AppMonitorService : Service() {
         fun startIfEnabled(context: Context) {
             val prefs = SecurePrefs.open(context)
             if (!prefs.getBoolean(ScrollShieldBridgePlugin.KEY_MONITORING_ENABLED, false)) return
+            val contractVersion = prefs.getInt(ScrollShieldBridgePlugin.KEY_CONTRACT_VERSION, 0)
+            if (contractVersion != 0 && !ProtectionContract.isSupported(contractVersion)) return
             val rules = prefs.getString(ScrollShieldBridgePlugin.KEY_BLOCKED_RULES, "[]") ?: "[]"
             if (rules.isBlank() || rules.trim() == "[]") return
             if (!hasUsageAccess(context)) return
@@ -299,6 +301,10 @@ class AppMonitorService : Service() {
 
         startInForeground()
         loadRules()
+        if (!hasActiveRules()) {
+            stopSelf()
+            return
+        }
         workerHandler.post(pollRunnable)
     }
 
@@ -308,7 +314,13 @@ class AppMonitorService : Service() {
         startInForeground()
 
         when (intent?.action) {
-            ACTION_CONFIG_UPDATE -> loadRules()
+            ACTION_CONFIG_UPDATE -> {
+                loadRules()
+                if (!hasActiveRules()) {
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+            }
 
             ACTION_SHORT_VIDEO_INTERRUPT -> {
                 val packageName = intent.getStringExtra(EXTRA_PACKAGE_NAME)
@@ -347,6 +359,8 @@ class AppMonitorService : Service() {
     }
 
     // ── Rules ─────────────────────────────────────────────────────────────────
+
+    private fun hasActiveRules(): Boolean = monitoringEnabled && rules.isNotEmpty()
 
     private fun loadRules() {
         monitoringEnabled = prefs.getBoolean(ScrollShieldBridgePlugin.KEY_MONITORING_ENABLED, false)
