@@ -100,7 +100,7 @@ For a protected app, Android evaluates roughly:
 6. Adaptive Reopen delay
 7. normal opening delay
 
-Hard locks override ordinary grace behavior.
+Hard locks override ordinary opening friction.
 
 ### Adaptive Reopen Protection
 
@@ -110,9 +110,9 @@ If the user leaves the app and reopens it within the configured Reopen window, t
 
 Important V1 invariant:
 
-**The post-Continue grace period must never suppress a detected reopen.**
+**Every real foreground return to a protected app is evaluated again.**
 
-The grace period only suppresses duplicate plain opening friction; Reopen friction and hard locks win.
+The service already distinguishes a continuously running foreground session from a real app switch through `lastForegroundPackage`, so V1 does not use a multi-minute post-Continue grace window that could accidentally bypass opening friction.
 
 ### Session Guard
 
