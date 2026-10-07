@@ -82,7 +82,7 @@ Prüfflow:
 8. App verlassen und innerhalb des Reopen-Fensters erneut öffnen, um die adaptive Reibung zu prüfen.
 9. In ScrollShield unter „Heute“ die lokal erfassten Interventionen/Nutzungswerte prüfen.
 
-V1 registriert **keinen AccessibilityService**. Research-Code für mögliche spätere Feed-Erkennung ist nicht Teil des Production-Manifests und nicht Teil dieser Store-Zusage.
+V1 registriert **keinen Feed-Erkennungsdienst**. Research-Code für mögliche spätere Feed-Erkennung ist nicht Teil des Production-Manifests und nicht Teil dieser Store-Zusage.
 
 ## Vor Einreichung manuell ergänzen
 
