@@ -491,9 +491,15 @@ class AppMonitorService : Service() {
 
         val verdict = evaluate(foreground, rule, now)
 
-        // Inside the grace period after "continue" nothing is shown, but it is
-        // an opening. A lock always wins over the grace period.
-        if (verdict.lockReason == null && now < (allowedUntil[foreground] ?: 0L)) {
+        // The grace period only suppresses a duplicate plain opening pause while
+        // the same accepted session settles. It must NEVER suppress a detected
+        // reopen: Adaptive Reopen Protection is specifically about returning
+        // shortly after leaving the app. Locks and reopen friction always win.
+        if (
+            verdict.lockReason == null &&
+            verdict.reopenText == null &&
+            now < (allowedUntil[foreground] ?: 0L)
+        ) {
             openLog.record(rule.appId, now)
             return
         }
