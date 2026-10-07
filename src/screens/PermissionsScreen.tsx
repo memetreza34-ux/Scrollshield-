@@ -354,10 +354,11 @@ export function PermissionsScreen({
             true,
           )}
 
-          {FEATURE_FLAGS.enableShortVideoResearch && renderPermissionCard(
-            'accessibility',
-            <Film size={24} />,
-            'Kurzvideo-Erkennung (Bedienungshilfe)',
+          {FEATURE_FLAGS.enableShortVideoResearch &&
+            renderPermissionCard(
+              'accessibility',
+              <Film size={24} />,
+              'Kurzvideo-Erkennung (Bedienungshilfe)',
             [
               'Erkennen, ob gerade Reels, Shorts oder der TikTok-Feed offen ist',
               'Deine Wischbewegungen im Feed zählen',
@@ -367,8 +368,8 @@ export function PermissionsScreen({
             true,
             false,
             true,
-            'Was der Dienst liest:\nNur technische Kennungen der angezeigten Oberfläche (Bezeichner von Bildschirmelementen). Daran erkennt ScrollShield, ob ein Kurzvideo-Feed offen ist.\n\nWas der Dienst NICHT liest:\nKeine Texte, keine Nachrichten, keine Passwörter, keine Sucheingaben, keine Bildschirminhalte. Diese Funktionen sind im Code nicht vorhanden.\n\nWohin die Daten gehen:\nNirgendwohin. Zähler und Zeiten bleiben verschlüsselt auf deinem Gerät. ScrollShield hat keinen Server.\n\nDu kannst den Dienst jederzeit in den Android-Einstellungen wieder abschalten.',
-          )}
+              'Was der Dienst liest:\nNur technische Kennungen der angezeigten Oberfläche (Bezeichner von Bildschirmelementen). Daran erkennt ScrollShield, ob ein Kurzvideo-Feed offen ist.\n\nWas der Dienst NICHT liest:\nKeine Texte, keine Nachrichten, keine Passwörter, keine Sucheingaben, keine Bildschirminhalte. Diese Funktionen sind im Code nicht vorhanden.\n\nWohin die Daten gehen:\nNirgendwohin. Zähler und Zeiten bleiben verschlüsselt auf deinem Gerät. ScrollShield hat keinen Server.\n\nDu kannst den Dienst jederzeit in den Android-Einstellungen wieder abschalten.',
+            )}
 
           {renderPermissionCard(
             'screenTime',
@@ -382,9 +383,10 @@ export function PermissionsScreen({
             'Apple stellt dafür die Bildschirmzeit-Schnittstelle bereit. ScrollShield erhält nur die für Auswahl und Limits nötigen Informationen, nicht den Inhalt anderer Apps.',
           )}
 
-          {FEATURE_FLAGS.enableBatteryOptimizationResearch && renderPermissionCard(
-            'backgroundActivity',
-            <Activity size={24} />,
+          {FEATURE_FLAGS.enableBatteryOptimizationResearch &&
+            renderPermissionCard(
+              'backgroundActivity',
+              <Activity size={24} />,
             'Zuverlässiger Schutz im Hintergrund',
             [
               'Timer für App-Nutzung stabil weiterführen',
@@ -395,8 +397,8 @@ export function PermissionsScreen({
             true, // optional
             false,
             true,
-            'Einige Geräte beenden Apps im Hintergrund besonders schnell, um Akku zu sparen. Eine Ausnahme in den Akku-Einstellungen sorgt dafür, dass Timer und Schutzregeln zuverlässig weiterlaufen.',
-          )}
+              'Einige Geräte beenden Apps im Hintergrund besonders schnell, um Akku zu sparen. Eine Ausnahme in den Akku-Einstellungen sorgt dafür, dass Timer und Schutzregeln zuverlässig weiterlaufen.',
+            )}
         </div>
 
         {isOnboarding && (
