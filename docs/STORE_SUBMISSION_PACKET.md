@@ -1,22 +1,8 @@
-# ScrollShield Web Launch and Native Store Packet
+# ScrollShield Android V1 Store Submission Packet
 
-This packet separates the first public web/PWA launch from the later native App Store / Play Store submission. Version
-1.0 should launch as a web app first. The native store answers below are retained as prepared drafts for the later
-Android/iOS phase and must be verified against the final native binary before submission.
+This packet is for the **Android-first V1** release. The browser/PWA remains a development/demo surface and is not the paid protection product.
 
-## Web/PWA Launch Packet
-
-- Public app URL: `https://[FINAL-DOMAIN]/`
-- Public privacy URL: `https://[FINAL-DOMAIN]/privacy.html`
-- Support address pending verification: `support@scrollshield.app`
-- Legal name/entity: `[REQUIRED]`
-- Address: `[REQUIRED]`
-- Responsible person: `[REQUIRED]`
-- Hosting provider: `[REQUIRED]`
-- No account, login, cloud sync, advertising, analytics, tracking, or developer backend
-- App rules, history, and statistics remain in local browser storage
-- Local data can be exported, imported, or deleted with the in-app reset
-- Web/PWA limitation: the browser version cannot physically block other installed apps
+All declarations below are drafts until checked against the exact release binary and the current Google Play Console forms.
 
 ## Shared Facts
 
@@ -27,46 +13,7 @@ Android/iOS phase and must be verified against the final native binary before su
 - Support address pending verification: `support@scrollshield.app`
 - Store screenshots: `docs/store-assets/`
 
-## Later Native Store Submission
-
-The following sections are not required for the first web/PWA launch. Use them when Android/iOS binaries are ready.
-
-## Apple App Store Connect
-
-### App Privacy
-
-- Data collected: **No**
-- Tracking: **No**
-- Privacy-policy URL: `https://[FINAL-DOMAIN]/privacy.html`
-
-### Rating Target
-
-- Target: **4+**
-- Confirm the questionnaire contains no user-generated content, gambling, violence, sexual content, or unrestricted web
-  access.
-
-### Family Controls Entitlement Request
-
-> ScrollShield is a digital-wellbeing and productivity app that helps users interrupt impulsive app opening. Users
-> explicitly select apps and configure their own limits. Family Controls is used only to apply those user-selected
-> restrictions through Apple's supported Screen Time mechanisms. ScrollShield does not read content from other apps,
-> does not provide covert monitoring, and does not transmit usage history to developer servers.
-
-### Review Notes
-
-> Version 1.0 requires no account or test credentials. Complete onboarding, select one or more apps, and open the
-> permission screen to review the Screen Time explanation. The dashboard remains usable when permission is declined and
-> clearly reports reduced protection. Rules, history, and statistics are processed locally. Short-video protection is a
-> best-effort interruption and is not presented as a guaranteed system block.
-
-### Review Video Shot List
-
-1. Launch and complete onboarding without granting permission.
-2. Show the reduced-protection dashboard warning.
-3. Return to Permissions and grant Screen Time access in the native build.
-4. Select Instagram and configure an opening delay.
-5. Trigger the native shield/interruption.
-6. Show local history, data export, and app reset.
+## Android V1 Store Submission
 
 ## Google Play Console
 
@@ -104,48 +51,29 @@ The following sections are not required for the first web/PWA launch. Use them w
 Play Console requires this declaration to be reviewed manually. Submit it together with the permission videos below;
 without an approved declaration the upload is rejected.
 
-### Accessibility API Declaration (`ShortVideoWatchService`)
+### Accessibility API — Not part of V1 submission
 
-`IsAccessibilityTool`: **false**. ScrollShield is not an accessibility tool; it uses the API for a purpose the user
-explicitly enables, which requires the declaration below plus the in-app prominent disclosure.
+Production V1 does not register `ShortVideoWatchService` and does not request Accessibility access.
 
-> ScrollShield uses the accessibility API for one purpose the user explicitly enables: recognising whether a
-> short-video feed (Instagram Reels, YouTube Shorts, TikTok, Facebook Reels …) is currently on screen inside an app the
-> user selected for protection, and counting the scroll events within it. This is what makes the user's own feed rules
-> possible — "15 minutes of Reels per day", "pause after 10 swipes" — which cannot be implemented with Usage Access,
-> since that reports package names only and not the surface inside an app.
->
-> The service reads only technical identifiers of the displayed interface (`viewIdResourceName`) and window class
-> names. It never reads text, content descriptions, messages, credentials or search input; those API calls are absent
-> from the source. It does not request `canPerformGestures` and cannot tap or swipe inside another app. The single
-> global action used is BACK, to leave the feed when the user configured a hard interruption.
->
-> All counters remain in encrypted on-device storage. ScrollShield has no backend and performs no network requests.
-> The service is inactive until the user enables it in Android settings after reading the in-app disclosure, and every
-> other feature of the app works without it.
+The V1 Play submission must not:
 
-**Prominent disclosure:** a dialog of its own (`src/components/AccessibilityDisclosure.tsx`), opened by "Aktivieren" on
-the "Kurzvideo-Erkennung" card of the setup/permissions screen – part of the onboarding, not hidden in a menu. It
-names what is read, what is not read, what is stored, that nothing leaves the device and that BACK is the only action,
-and ends in "Ablehnen" / "Zustimmen". Only "Zustimmen" opens the system settings; "Ablehnen", Escape or Back do not.
-The store description mentions the accessibility use as well (`docs/STORE_LISTING_COPY.md`).
+- claim feed-level Reels/Shorts/TikTok blocking,
+- include Accessibility as a required V1 permission,
+- submit an Accessibility declaration for a service that is not packaged in the Production manifest.
 
-**Autonomous actions:** Google Play prohibits accessibility use that lets an app "autonomously initiate, plan, and
-execute actions". The only action is GLOBAL_ACTION_BACK, and only when the user configured a hard interruption or
-blocked a feed. Should review object, the fallback is to drop the BACK action and keep the overlay alone.
+The research implementation remains documented in `docs/SHORT_VIDEO_DETECTION.md`. Any future activation requires a fresh policy review, disclosure/consent flow and real-device evidence.
 
 ### Permission Video Shot List
 
-1. Show onboarding before any permission request.
-2. Open the permission explanation and show purpose and fallback text.
-3. Grant Usage Access from Android settings and return to ScrollShield.
-4. Grant display-over-apps permission and return.
-5. Select a protected app and trigger the branded interruption.
-6. Tap "Aktivieren" on the accessibility card, scroll through the full disclosure, tap "Ablehnen" and show that no
-   settings screen opens (non-consent case).
-7. Tap "Aktivieren" again, tap "Zustimmen", enable the service, open a protected app's short-video feed, and show the
-   swipe-based interruption.
-8. Disable each permission and show that ScrollShield remains usable with a warning.
+1. Complete onboarding and choose a protected app.
+2. Show the Usage Access explanation and grant Usage Access.
+3. Show the overlay explanation and grant display-over-other-apps.
+4. Activate protection and show the persistent foreground-service notification.
+5. Open the protected app and record the native Return / Continue intervention.
+6. Return to ScrollShield and show that the event appears in Today/Insights.
+7. Stop protection and show that the service/notification stops.
+
+Do not demonstrate Accessibility or feed-level blocking in the V1 submission because they are not part of V1 production.
 
 ### Rating Target
 
@@ -166,6 +94,5 @@ blocked a feed. Should review object, the fallback is to drop the BACK action an
 - Responsible person: `[REQUIRED]`
 - Verified support mailbox: `[REQUIRED]`
 - Final privacy-policy domain: `[REQUIRED]`
-- Apple entitlement approval: `[REQUIRED]`
-- Apple and Google questionnaire confirmations: `[REQUIRED]`
+- Google Play questionnaire confirmations: `[REQUIRED]`
 - Native permission demonstration videos: `[REQUIRED]`

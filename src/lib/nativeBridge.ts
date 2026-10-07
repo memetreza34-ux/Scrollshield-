@@ -5,8 +5,8 @@
  * On web/non-Android platforms all calls return graceful fallbacks.
  *
  * The native layer sees the per-app rule (mode, delay, daily limit,
- * anti-binge), the time-window schedule and the short-video rule, and
- * evaluates them itself when an app is opened. Emergency unlocks stay in the
+ * anti-binge) and the time-window schedule. Experimental short-video rules are
+ * only included when the explicit research flag is enabled. Emergency unlocks stay in the
  * web layer; see src/lib/protectionRules.ts.
  *
  * Usage:
@@ -23,6 +23,7 @@ import type { Schedule } from '../types';
 import { getShortVideoSignature } from './shortVideoSignatures';
 import { isShortVideoFeedBlockedByConfig } from './stats';
 import { TimeWindowRule } from './schedules';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 
 // ── Type definitions ──────────────────────────────────────────────────────────
 
@@ -214,16 +215,24 @@ export interface CalibrationResult {
   available: boolean;
 }
 
-export interface SyncBlockedAppsOptions {
+export const NATIVE_PROTECTION_CONTRACT_VERSION = 1 as const;
+
+export interface NativeProtectionConfig {
+  contractVersion: typeof NATIVE_PROTECTION_CONTRACT_VERSION;
+  generatedAt: number;
   /** One entry per protected Android package */
   rules: NativeProtectionRule[];
   /** Master switch – if false the service won't intervene */
   monitoringEnabled: boolean;
 }
 
+/** @deprecated Method name is legacy; payload is the versioned protection config. */
+export type SyncBlockedAppsOptions = NativeProtectionConfig;
+
 export interface SyncResult {
   synced: boolean;
   ruleCount: number;
+  contractVersion: number;
 }
 
 export interface OpenedResult {
@@ -289,6 +298,7 @@ const ScrollShieldBridgeNative = registerPlugin<ScrollShieldBridgePlugin>('Scrol
     syncBlockedApps: async (options: SyncBlockedAppsOptions) => ({
       synced: false,
       ruleCount: options.rules.length,
+      contractVersion: options.contractVersion,
     }),
     startMonitoring: async () => ({ started: false, overlayGranted: false }),
     stopMonitoring: async () => ({ stopped: false }),
@@ -475,7 +485,9 @@ export function buildNativeProtectionRules(
         }
       : undefined;
     const sessionLimitMinutes = nonNegativeInt(config.sessionLimit);
-    const shortVideo = buildShortVideoRule(platform, config, focusBlocked);
+    const shortVideo = FEATURE_FLAGS.enableShortVideoResearch
+      ? buildShortVideoRule(platform, config, focusBlocked)
+      : undefined;
     const timeWindows = buildTimeWindows(platform.id, options.schedules ?? []);
     const dailyLimitMinutes = nonNegativeInt(config.dailyLimit);
     const antiBinge = config.antiBinge?.enabled
@@ -513,6 +525,20 @@ export function buildNativeProtectionRules(
   return rules;
 }
 
+export function buildNativeProtectionConfig(
+  appsConfig: Record<string, AppConfigSlice | undefined>,
+  allPlatforms: PlatformSlice[],
+  options: NativeProtectionOptions = {},
+): NativeProtectionConfig {
+  const rules = buildNativeProtectionRules(appsConfig, allPlatforms, options);
+  return {
+    contractVersion: NATIVE_PROTECTION_CONTRACT_VERSION,
+    generatedAt: options.now ?? Date.now(),
+    monitoringEnabled: rules.length > 0,
+    rules,
+  };
+}
+
 /** True when at least one rule needs the accessibility service to work. */
 export function requiresAccessibilityService(rules: NativeProtectionRule[]): boolean {
   return rules.some((rule) => rule.shortVideo !== undefined);
@@ -527,12 +553,11 @@ export async function syncNativeBlockList(
   allPlatforms: PlatformSlice[],
   options: NativeProtectionOptions = {},
 ): Promise<void> {
-  const rules = buildNativeProtectionRules(appsConfig, allPlatforms, options);
-  const monitoringEnabled = rules.length > 0;
+  const config = buildNativeProtectionConfig(appsConfig, allPlatforms, options);
 
   try {
-    await ScrollShieldBridgeNative.syncBlockedApps({ rules, monitoringEnabled });
-    if (monitoringEnabled) {
+    await ScrollShieldBridgeNative.syncBlockedApps(config);
+    if (config.monitoringEnabled) {
       await ScrollShieldBridgeNative.startMonitoring();
     } else {
       await ScrollShieldBridgeNative.stopMonitoring();

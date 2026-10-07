@@ -42,9 +42,8 @@ const checks = [
       /100%\s*(?:unumgehbar|offline)|unumgehbar|unüberwind|kompromisslos|komplett\s+blockier|blockiert\s+alles|garantiert\s+block|sofort\s+(?:und\s+)?(?:strikt\s+)?block|ohne\s+Ausnahme\s+block|nichts\s+wird\s+je|social media addiction/i,
     files: [...releaseScreenFiles, 'src/types.tsx', 'docs/STORE_LISTING_COPY.md', 'metadata.json', 'README.md'],
   },
-  // Note: the accessibility API used to be forbidden in the release UI. It is
-  // now a shipped feature, so the inverse is checked further down: when the
-  // service is in the manifest, the UI must carry the prominent disclosure.
+  // Production V1 intentionally ships without AccessibilityService. Research
+  // source may remain in the repository, but it must not become a release dependency.
   {
     label: 'Obsolete EU ODR platform link',
     pattern: /ec\.europa\.eu\/consumers\/odr|Online-Streitbeilegung/i,
@@ -101,12 +100,11 @@ if (!existsSync(storeCopyPath)) {
   const storeCopy = readFileSync(storeCopyPath, 'utf-8');
   const requiredStoreSignals = [
     { label: 'self-control positioning', pattern: /Werkzeug zur Selbstkontrolle/i },
-    { label: 'best-effort disclosure', pattern: /Best-Effort-Unterbrecher/i },
+    { label: 'adaptive reopen positioning', pattern: /Wiederöffnungs-Schutz|wieder zurückkehr/i },
     { label: 'focus keyword', pattern: /\bFokus\b/i },
     { label: 'screen-time keyword', pattern: /\bBildschirmzeit\b/i },
     { label: 'digital-wellbeing keyword', pattern: /\bDigital Wellbeing\b/i },
-    { label: 'ADHD keyword', pattern: /\bADHS\b/i },
-    { label: 'procrastination keyword', pattern: /\bProkrastination\b/i },
+    { label: 'short-video V1 boundary', pattern: /kein Bestandteil der V1-Produktzusage/i },
   ];
 
   for (const signal of requiredStoreSignals) {
@@ -116,16 +114,6 @@ if (!existsSync(storeCopyPath)) {
       line: 1,
       label: 'Incomplete store listing copy',
       text: `Missing ${signal.label}.`,
-    });
-  }
-
-  const appleReviewCopy = storeCopy.match(/## Review Notes - Apple([\s\S]*?)(?=## Review Notes - Google Play|$)/i)?.[1];
-  if (!appleReviewCopy || /\b(?:Android|Overlay|SYSTEM_ALERT_WINDOW|Android-Blocker)\b/i.test(appleReviewCopy)) {
-    findings.push({
-      file: 'docs/STORE_LISTING_COPY.md',
-      line: 1,
-      label: 'Unsafe Apple review wording',
-      text: 'Apple review notes must exist and remain free of Android-only terminology.',
     });
   }
 }
@@ -141,10 +129,15 @@ if (existsSync(androidManifestPath)) {
     'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
   ];
 
-  // The accessibility service is intentional (short-video detection), but it is
-  // the single most likely reason for a Play rejection. Verify the boundaries
-  // that make it declarable rather than banning it outright.
+  // V1 must not register an AccessibilityService. If this appears in the
+  // production manifest, scope has drifted into post-V1 research.
   if (/BIND_ACCESSIBILITY_SERVICE/i.test(androidManifest)) {
+    findings.push({
+      file: 'android/app/src/main/AndroidManifest.xml',
+      line: 1,
+      label: 'Post-V1 Accessibility service leaked into V1',
+      text: 'Production V1 must not register an AccessibilityService or advertise feed-level blocking.',
+    });
     const accessibilityConfigPath = path.join(
       repoRoot,
       'android/app/src/main/res/xml/accessibility_service_config.xml',

@@ -7,7 +7,7 @@ import org.json.JSONObject
 /**
  * When protected apps were opened, per app id, for the anti-binge rule. An
  * opening is what the web layer logs as 'open': the user chose "continue", or
- * came back during the grace period that followed. Kept for a day.
+ * received a native emergency grant. Kept for a day.
  *
  * Called from the monitor's worker thread and from overlay buttons on the main
  * thread, hence the lock.

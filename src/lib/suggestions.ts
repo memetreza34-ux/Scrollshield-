@@ -3,6 +3,7 @@ import { getLocalDateKey } from './appUtils';
 import { countReopens, eventsOnDay } from './metrics';
 import { getPresetId } from './presets';
 import { getShortVideoUsageKey } from './stats';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 
 /**
  * Suggestions on Heute (docs/V1_MASTER_PLAN.md, 4.2)
@@ -60,20 +61,22 @@ export function getSuggestion(state: AppState, now = new Date()): Suggestion | n
     }
   }
 
-  // 2. Much short-video time today while the feed is not limited.
+  // 2. Experimental only: short-video suggestions remain outside the V1 production surface.
   const stats = state.dailyStats[today];
-  for (const app of apps) {
-    if (!app.shortVideoSurface) continue;
-    const minutes = stats?.usageMinutes[getShortVideoUsageKey(app.id)] ?? 0;
-    const feed = state.appsConfig[app.id]?.reelsProtection;
-    const limited = feed?.enabled && feed.mode !== 'allow' && feed.mode !== 'warn';
-    if (minutes >= FEED_MINUTES_FOR_LIMIT && !limited) {
-      candidates.push({
-        id: `feed-${app.id}`,
-        text: `${app.shortVideoSurface.name} heute schon ${minutes} Min.`,
-        actionLabel: 'Auf 15 Min. begrenzen',
-        action: { kind: 'feed_limit', appId: app.id, minutes: 15 },
-      });
+  if (FEATURE_FLAGS.enableShortVideoResearch) {
+    for (const app of apps) {
+      if (!app.shortVideoSurface) continue;
+      const minutes = stats?.usageMinutes[getShortVideoUsageKey(app.id)] ?? 0;
+      const feed = state.appsConfig[app.id]?.reelsProtection;
+      const limited = feed?.enabled && feed.mode !== 'allow' && feed.mode !== 'warn';
+      if (minutes >= FEED_MINUTES_FOR_LIMIT && !limited) {
+        candidates.push({
+          id: `feed-${app.id}`,
+          text: `${app.shortVideoSurface.name} heute schon ${minutes} Min.`,
+          actionLabel: 'Auf 15 Min. begrenzen',
+          action: { kind: 'feed_limit', appId: app.id, minutes: 15 },
+        });
+      }
     }
   }
 

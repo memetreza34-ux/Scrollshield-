@@ -532,9 +532,15 @@ export default function App() {
             </div>
 
             {appState.hasCompletedOnboarding &&
-              !['welcome', 'onboarding', 'protection_flow', 'active_session', 'permissions'].includes(
-                currentScreen,
-              ) && <BottomNav currentScreen={currentScreen} navigate={navigate} />}
+              ![
+                'welcome',
+                'onboarding',
+                'protection_flow',
+                'active_session',
+                'permissions',
+                'focus',
+                'rescue',
+              ].includes(currentScreen) && <BottomNav currentScreen={currentScreen} navigate={navigate} />}
           </div>
         </div>
       </AppIconsContext.Provider>

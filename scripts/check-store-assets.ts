@@ -29,28 +29,23 @@ requireText(listingPath, listing, /## Kurzbeschreibung/i, 'Missing short descrip
 requireText(listingPath, listing, /## Lange Beschreibung/i, 'Missing long description.');
 requireText(listingPath, listing, /## (?:Keywords|Suchbegriffe)/i, 'Missing keyword section.');
 requireText(listingPath, listing, /## Screenshot-Texte/i, 'Missing screenshot text section.');
-requireText(listingPath, listing, /## Review Notes - Apple/i, 'Missing Apple review notes.');
 requireText(listingPath, listing, /## Review Notes - Google Play/i, 'Missing Google Play review notes.');
 requireText(listingPath, listing, /Werkzeug zur Selbstkontrolle/i, 'Missing self-control positioning.');
-requireText(listingPath, listing, /Best-Effort-Unterbrecher/i, 'Missing best-effort short-video disclosure.');
+requireText(listingPath, listing, /kein Bestandteil der V1-Produktzusage/i, 'Missing V1 short-video scope boundary.');
 requireText(
   listingPath,
   listing,
-  /keinen Cloud-Sync, keine Werbung(?:, keine Käufe)? und kein Tracking/i,
+  /keinen (?:ScrollShield-Account und keinen )?Cloud-Sync[\s\S]*keine Werbung[\s\S]*(?:kein Tracking|keine Tracking-SDKs)/i,
   'Missing privacy promise.',
 );
 
-// Google Play: an app using the accessibility API without being an
-// accessibility tool has to say so in its store description. The review notes
-// once claimed the opposite ("verwendet keinen Bedienungshilfen-Dienst").
-requireText(
-  listingPath,
-  listing,
-  /## Lange Beschreibung[\s\S]*Bedienungshilfe[\s\S]*## (?:Keywords|Suchbegriffe)/i,
-  'Long description must mention the accessibility service.',
-);
-if (/keinen\s+Bedienungshilfen?-?Dienst/i.test(listing)) {
-  findings.push({ file: listingPath, text: 'Store copy denies the accessibility service the app ships.' });
+// Production V1 intentionally ships without AccessibilityService/feed-level blocking.
+// The store listing must not accidentally advertise the post-V1 research capability.
+if (/Bedienungshilfe|AccessibilityService|Reels\s*(?:sperren|blockieren)|Shorts\s*(?:sperren|blockieren)/i.test(listing)) {
+  findings.push({
+    file: listingPath,
+    text: 'V1 store copy advertises or depends on post-V1 Accessibility/feed-level functionality.',
+  });
 }
 requireText(listingPath, listing, /ab 16 Jahren/i, 'Store copy must state the minimum age (16).');
 
@@ -68,19 +63,17 @@ if (riskyClaimPattern.test(listing)) {
   });
 }
 
-requireText(packetPath, packet, /Data collected:\s+\*\*No\*\*/i, 'Missing App Store data collection answer.');
 requireText(packetPath, packet, /Data shared:\s+\*\*No\*\*/i, 'Missing Play Console data sharing answer.');
 requireText(packetPath, packet, /Tracking:\s+\*\*No\*\*/i, 'Missing tracking answer.');
 requireText(packetPath, packet, /PACKAGE_USAGE_STATS/i, 'Missing Usage Access declaration draft.');
 requireText(packetPath, packet, /SYSTEM_ALERT_WINDOW/i, 'Missing overlay declaration draft.');
 requireText(packetPath, packet, /USK 0 \/ PEGI 3/i, 'Missing Google rating target.');
-requireText(packetPath, packet, /Target:\s+\*\*4\+\*\*/i, 'Missing Apple rating target.');
 
 requireText(
   privacyLabelsPath,
   privacyLabels,
   /Daten werden vom Entwickler erhoben:\s+\*\*Nein\*\*/i,
-  'Missing Apple no-data guidance.',
+  'Missing no-data guidance.',
 );
 requireText(
   privacyLabelsPath,

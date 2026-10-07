@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { BarChart3, ChevronRight, Settings, Shield, Sun, Timer } from 'lucide-react';
+import { BarChart3, ChevronRight, Settings, Shield, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { PlatformDefinition, Screen } from '../types';
 
@@ -36,7 +36,7 @@ export function Switch({
   );
 }
 
-const TAB_SCREENS: Record<'today' | 'protect' | 'focus' | 'insights', Screen[]> = {
+const TAB_SCREENS: Record<'today' | 'protect' | 'insights', Screen[]> = {
   today: [
     'today',
     'rescue',
@@ -50,7 +50,6 @@ const TAB_SCREENS: Record<'today' | 'protect' | 'focus' | 'insights', Screen[]> 
     'paywall',
   ],
   protect: ['protect', 'app_detail', 'schedule_edit', 'commitment'],
-  focus: ['focus'],
   insights: ['insights'],
 };
 
@@ -58,7 +57,6 @@ export function BottomNav({ currentScreen, navigate }: { currentScreen: Screen; 
   const navItems: { id: keyof typeof TAB_SCREENS; icon: LucideIcon; label: string }[] = [
     { id: 'today', icon: Sun, label: 'Heute' },
     { id: 'protect', icon: Shield, label: 'Schutz' },
-    { id: 'focus', icon: Timer, label: 'Fokus' },
     { id: 'insights', icon: BarChart3, label: 'Einblicke' },
   ];
 

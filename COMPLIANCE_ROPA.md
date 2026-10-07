@@ -14,9 +14,8 @@ In der aktuellen Version (v1.0 Offline-MVP) verarbeitet ScrollShield folgende Da
 - **Konfigurationsdaten:** Vom Nutzer erstellte Regeln, Profile und Limits.
 - **Freitext „Grund“:** Was der Nutzer vor dem Öffnen einer App als Grund eintippt, gespeichert im Verlauf (letzte 100
   Ereignisse). Kann beliebige, auch sensible Inhalte enthalten.
-- **Kurzvideo-Nutzung (nur Android, nur mit Bedienungshilfe):** Minuten im Feed pro App und Tag; die letzten 20
-  Beobachtungen technischer Oberflächenkennungen (View-IDs, Klassennamen, Paketname, Zeitpunkt) für die Diagnose. Keine
-  Texte.
+- **Post-V1-Forschung:** Der Repository-Quellstand enthält experimentelle Kurzvideo-/Accessibility-Komponenten. Sie
+  sind im Production-V1-Manifest nicht registriert und werden in V1 nicht als Datenquelle verwendet.
 - **Benachrichtigungen:** Lokal erzeugte Erinnerungen; auf Android teils beim System eingeplant.
 - **Unterbrechungsprotokoll (nur Android):** Paketname, Zeitpunkt, Grund und Entscheidung jeder Unterbrechung durch den
   Schutzbildschirm, verschlüsselt, bis die App sie in den Verlauf übernimmt (höchstens 300 Einträge).
@@ -39,7 +38,7 @@ Die Datenverarbeitung erfolgt **ausschließlich zur Bereitstellung der App-Funkt
 
 - **Aktuell (v1.0):** 100 % lokal auf dem Endgerät des Nutzers. Einstellungen und Profile AES-GCM-verschlüsselt im
   LocalStorage (Schlüssel liegt daneben – kein Schutz bei Gerätezugriff); Verlauf und Statistiken unverschlüsselt im
-  LocalStorage; native Regeln und Kurzvideo-Daten in EncryptedSharedPreferences.
+  LocalStorage; native Schutzregeln und Ereignisprotokolle in app-internem Android-Speicher.
 - **Webversion:** Der Hosting-Anbieter verarbeitet beim Abruf Server-Logs (IP-Adresse, Zeitpunkt, Datei, Browser).
   Anbieter noch nicht gewählt.
 - **Zukunft (v2.0+):** Bei Opt-in für Cloud-Sync erfolgt die Speicherung in Google Firebase (Firestore). _Compliance-Ziel:_ Server-Standort Europa (z. B. `europe-west3` / Frankfurt) zwingend festlegen.
@@ -64,8 +63,8 @@ Der Nutzer hat jederzeit die volle Kontrolle über seine Daten. Folgende Routine
 Die App arbeitet nach dem Prinzip der Datenminimierung (Data Minimization). Details siehe `PERMISSION_MATRIX.md`.
 
 - **iOS:** Screen Time API (Family Controls).
-- **Android:** Nutzungsdatenzugriff (`PACKAGE_USAGE_STATS`), Überlagerung (`SYSTEM_ALERT_WINDOW`),
-  Vordergrunddienst, Benachrichtigungen (`POST_NOTIFICATIONS`), optional Bedienungshilfe (Kurzvideo-Erkennung).
+- **Android V1:** Nutzungsdatenzugriff (`PACKAGE_USAGE_STATS`), Überlagerung (`SYSTEM_ALERT_WINDOW`),
+  Vordergrunddienst und optional Benachrichtigungen (`POST_NOTIFICATIONS`). Die Bedienungshilfe ist nur Post-V1-Forschung und im Production-V1-Manifest nicht registriert.
 - _Zweckbindung:_ Diese Rechte werden ausschließlich lokal ausgewertet, um den Blockier-Screen zu triggern.
 
 ## 7. Drittanbieter-Abhängigkeiten (Third-Party)

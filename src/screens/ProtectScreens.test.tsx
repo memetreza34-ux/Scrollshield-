@@ -71,14 +71,13 @@ describe('AppDetailScreen', () => {
     expect(navigate).toHaveBeenCalledWith('paywall');
   });
 
-  it('offers the feed rule for Instagram but not for Facebook', () => {
-    const { unmount } = render(
+  it('does not expose research-only feed controls in the production V1 app detail', () => {
+    const { rerender } = render(
       <AppDetailScreen state={state({ selectedAppId: 'instagram' })} updateState={vi.fn()} navigate={vi.fn()} />,
     );
-    expect(screen.getByText('Instagram Reels')).toBeInTheDocument();
-    unmount();
+    expect(screen.queryByText('Instagram Reels')).toBeNull();
 
-    render(
+    rerender(
       <AppDetailScreen
         state={state({
           selectedAppId: 'facebook',

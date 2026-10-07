@@ -6,7 +6,7 @@ import { PlatformBadge } from './components/PlatformBadge';
 export type Screen =
   | 'welcome'
   | 'onboarding'
-  // The four tabs (docs/V1_MASTER_PLAN.md, section 3)
+  // Three persistent tabs; Focus is a full-screen action launched primarily from Heute.
   | 'today'
   | 'protect'
   | 'focus'
@@ -179,6 +179,7 @@ export interface DailyStats {
   date: string; // YYYY-MM-DD
   usageMinutes: Record<string, number>; // appId -> minutes
   blockedOpens: number;
+  /** @deprecated Legacy persisted field only. Never calculate or display estimated "saved time". */
   savedTimeMinutes: number;
   emergencyUnlocks: number;
   focusMinutes: number;
@@ -209,7 +210,8 @@ export interface AppState {
   stats: {
     currentStreak: number;
     bestStreak: number;
-    totalSavedTime: number; // in minutes
+    /** @deprecated Legacy persisted field only; kept so old local state migrates without loss. */
+    totalSavedTime: number;
     focusStreak: number;
     cleanDaysStreak: number;
   };

@@ -114,12 +114,8 @@
           lokale Nutzungs- und Blockierhistorie (die letzten 100 Ereignisse) – dazu gehört auch der Grund, den du vor
           dem Öffnen einer App eintippen kannst, genau so, wie du ihn geschrieben hast,
         </li>
-        <li>Statistiken wie gesparte Zeit, Streaks, Nutzungsminuten und Fokus-Sitzungen,</li>
+        <li>Statistiken wie Öffnungen, Unterbrechungen, Wiederöffnungen, Nutzungsminuten und Fokus-Sitzungen,</li>
         <li>lokale App-Einstellungen, Berechtigungsstatus und Profilkonfiguration,</li>
-        <li>
-          nur in der Android-App mit aktivierter Bedienungshilfe: die im Kurzvideo-Feed verbrachte Zeit pro App und Tag
-          sowie die letzten 20 Beobachtungen technischer Oberflächenkennungen für die Diagnose (siehe 4a),
-        </li>
         <li>
           nur in der Android-App: die Unterbrechungen durch den Schutzbildschirm (welche App, wann, aus welchem Grund
           und wie du entschieden hast), bis ScrollShield sie in den Verlauf übernimmt.
@@ -192,46 +188,14 @@
           Abend-Erinnerung. Sie entstehen auf deinem Gerät; in der Android-App werden einige beim System zur Anzeige
           eingeplant. Ihr Inhalt verlässt das Gerät nicht.
         </li>
-        <li>
-          <strong>Android, optionale Bedienungshilfe:</strong> Wenn du Regeln für Kurzvideo-Feeds (Reels, Shorts,
-          TikTok) nutzen möchtest, kannst du zusätzlich den ScrollShield-Bedienungshilfedienst aktivieren. Er erkennt,
-          ob ein solcher Feed gerade auf dem Bildschirm ist, und zählt deine Wischbewegungen darin. Ohne diesen Dienst
-          funktionieren alle übrigen Schutzregeln unverändert.
-        </li>
       </ul>
       <p>ScrollShield nutzt diese Berechtigungen nicht, um Chats, Passwörter oder Bildschirminhalte auszulesen.</p>
 
-      <h2>4a. Was die Bedienungshilfe genau verarbeitet</h2>
+      <h2>4a. Nicht Bestandteil von V1</h2>
       <p>
-        Der Bedienungshilfedienst ist standardmäßig ausgeschaltet und wird ausschließlich von dir in den
-        Android-Systemeinstellungen aktiviert. Er ist die einzige technische Möglichkeit, eine Regel wie „15 Minuten
-        Reels pro Tag“ umzusetzen, weil der Nutzungsdatenzugriff nur Paketnamen meldet und nicht die Oberfläche
-        innerhalb einer App.
-      </p>
-      <ul>
-        <li>
-          <strong>Was gelesen wird:</strong> ausschließlich technische Kennungen der angezeigten Oberfläche (Bezeichner
-          von Bildschirmelementen und Fensterklassennamen) sowie das Auftreten von Scroll-Ereignissen.
-        </li>
-        <li>
-          <strong>Was nicht gelesen wird:</strong> keine Texte, Nachrichten, Chatinhalte, Passwörter, Sucheingaben,
-          Kontaktdaten oder Bildschirminhalte. Die entsprechenden Systemaufrufe sind im Quelltext nicht enthalten.
-        </li>
-        <li>
-          <strong>Was gespeichert wird:</strong> die im Feed verbrachte Zeit pro App und Tag sowie für die Diagnose die
-          letzten 20 beobachteten Oberflächenkennungen mit App-Name und Zeitpunkt, ausschließlich lokal und
-          verschlüsselt auf deinem Gerät. Wischbewegungen werden nur während einer laufenden Feed-Sitzung gezählt und
-          nicht dauerhaft gespeichert.
-        </li>
-        <li>
-          <strong>Steuerung fremder Apps:</strong> Der Dienst kann keine Eingaben in anderen Apps simulieren. Die
-          einzige ausgelöste Systemaktion ist „Zurück“, wenn du eine harte Unterbrechung konfiguriert oder einen Feed
-          gesperrt hast.
-        </li>
-      </ul>
-      <p>
-        Du kannst den Dienst jederzeit in den Android-Einstellungen wieder deaktivieren. Es findet keine Übertragung an
-        ScrollShield oder Dritte statt.
+        Die Produktionsversion V1 verwendet keinen Android-Bedienungshilfedienst. Experimenteller Quellcode für eine
+        mögliche spätere Kurzvideo-Erkennung ist nicht im V1-Manifest registriert, wird von V1 nicht angefordert und
+        gehört nicht zum veröffentlichten Funktionsumfang.
       </p>
 
       <h2>5. Kein Tracking und keine Werbung</h2>
@@ -249,8 +213,8 @@
       <h2>7. Löschung lokaler Daten</h2>
       <p>
         Du kannst Verlauf und Statistiken in der App löschen. „App zurücksetzen“ löscht alle ScrollShield-Daten auf dem
-        Gerät, in der Android-App auch die Daten des Schutzdienstes und der Bedienungshilfe, und beendet den Schutz.
-        Wenn du ScrollShield deinstallierst, löscht das Betriebssystem die lokal gespeicherten App-Daten.
+        Gerät, in der Android-App auch die Daten des Schutzdienstes, und beendet den Schutz. Wenn du ScrollShield
+        deinstallierst, löscht das Betriebssystem die lokal gespeicherten App-Daten.
       </p>
 
       <h2>8. Export lokaler Daten</h2>
@@ -267,11 +231,9 @@
         Anbieter oder an Dritte statt, und der Anbieter hat zu keinem Zeitpunkt Zugriff auf diese Daten.
       </p>
       <p>
-        Soweit die Verarbeitung auf deinem Gerät dem Datenschutzrecht unterfällt, erfolgt sie zur Erfüllung des mit dir
-        geschlossenen Nutzungsvertrags, also zur Bereitstellung der von dir eingerichteten Schutzregeln (Art. 6 Abs. 1
-        lit. b DSGVO). Die optionale Bedienungshilfe für Kurzvideo-Feeds aktivierst du gesondert und freiwillig; die
-        Verarbeitung stützt sich insoweit auf deine Einwilligung (Art. 6 Abs. 1 lit. a DSGVO), die du durch Deaktivieren
-        des Dienstes jederzeit mit Wirkung für die Zukunft widerrufen kannst.
+        Soweit die lokale Verarbeitung auf deinem Gerät dem Datenschutzrecht unterfällt, dient sie der Bereitstellung
+        der von dir eingerichteten Schutzregeln und Funktionen. Vor Veröffentlichung werden die endgültigen
+        Rechtsgrundlagen und Anbieterangaben rechtlich geprüft und vervollständigt.
       </p>
 
       <h2>8b. Deine Rechte</h2>

@@ -87,9 +87,6 @@ class AppMonitorService : Service() {
         /** Fallback delay when a rule carries no explicit openDelay. */
         const val DEFAULT_DELAY_SECONDS = 5
 
-        /** How long an app stays unblocked after the user chose to continue. */
-        const val GRACE_PERIOD_MS = 5 * 60_000L
-
         /** Longest pause the reopen protection builds up (MAX_ESCALATED_DELAY_SECONDS in protectionRules.ts). */
         const val MAX_ESCALATED_DELAY_SECONDS = 120
 
@@ -262,9 +259,6 @@ class AppMonitorService : Service() {
     private var monitoringEnabled = false
 
     private var lastForegroundPackage: String? = null
-    /** Written by the overlay buttons on the main thread, read by the poll worker. */
-    private val allowedUntil = ConcurrentHashMap<String, Long>()
-
     /** Emergency unlocks per app id: until then the app is completely free. */
     private val emergencyUntil = ConcurrentHashMap<String, Long>()
 
@@ -356,6 +350,15 @@ class AppMonitorService : Service() {
 
     private fun loadRules() {
         monitoringEnabled = prefs.getBoolean(ScrollShieldBridgePlugin.KEY_MONITORING_ENABLED, false)
+
+        // Version 0 is the pre-contract legacy format. It remains readable so
+        // existing local installs are not silently reset. Every new sync writes v1.
+        val contractVersion = prefs.getInt(ScrollShieldBridgePlugin.KEY_CONTRACT_VERSION, 0)
+        if (contractVersion != 0 && !ProtectionContract.isSupported(contractVersion)) {
+            monitoringEnabled = false
+            dismissOverlay()
+            return
+        }
 
         val raw = prefs.getString(ScrollShieldBridgePlugin.KEY_BLOCKED_RULES, "[]") ?: "[]"
         val parsed = mutableMapOf<String, BlockRule>()
@@ -491,13 +494,9 @@ class AppMonitorService : Service() {
 
         val verdict = evaluate(foreground, rule, now)
 
-        // Inside the grace period after "continue" nothing is shown, but it is
-        // an opening. A lock always wins over the grace period.
-        if (verdict.lockReason == null && now < (allowedUntil[foreground] ?: 0L)) {
-            openLog.record(rule.appId, now)
-            return
-        }
-
+        // A genuine package transition back into the app is always evaluated.
+        // Staying inside the same app is already suppressed by lastForegroundPackage,
+        // so a multi-minute grace period would incorrectly bypass Reopen Protection.
         showInterruptionOverlay(foreground, rule, verdict)
     }
 
@@ -540,14 +539,28 @@ class AppMonitorService : Service() {
             }
         }
 
-        rule.antiBinge?.let { antiBinge ->
-            val opens = openLog.count(rule.appId, now, antiBinge.blockTimeframe)
-            if (opens >= antiBinge.blockThreshold) {
-                return Verdict(
-                    lockReason = "ANTI_BINGE",
-                    statusText = getString(R.string.overlay_anti_binge_block_hint, opens, antiBinge.blockTimeframe),
-                )
-            }
+        val reopenDecision = rule.antiBinge?.let { antiBinge ->
+            ReopenPolicy.decide(
+                warningOpenCount = openLog.count(rule.appId, now, antiBinge.warningTimeframe),
+                blockOpenCount = openLog.count(rule.appId, now, antiBinge.blockTimeframe),
+                warningThreshold = antiBinge.warningThreshold,
+                blockThreshold = antiBinge.blockThreshold,
+                baseDelaySeconds = rule.delaySeconds,
+                escalationSeconds = antiBinge.escalationSeconds,
+                maxDelaySeconds = MAX_ESCALATED_DELAY_SECONDS,
+            )
+        }
+
+        if (reopenDecision?.blocked == true) {
+            val opens = rule.antiBinge?.let { openLog.count(rule.appId, now, it.blockTimeframe) } ?: 0
+            return Verdict(
+                lockReason = "ANTI_BINGE",
+                statusText = getString(
+                    R.string.overlay_anti_binge_block_hint,
+                    opens,
+                    rule.antiBinge?.blockTimeframe ?: 0,
+                ),
+            )
         }
 
         if (isLockedByTimeWindow(rule)) {
@@ -565,15 +578,11 @@ class AppMonitorService : Service() {
             return Verdict(lockReason = "STRICT", statusText = getString(R.string.overlay_strict_hint, appName))
         }
 
-        rule.antiBinge?.let { antiBinge ->
-            val opens = openLog.count(rule.appId, now, antiBinge.warningTimeframe)
-            if (opens >= antiBinge.warningThreshold) {
-                return Verdict(
-                    reopenText = getString(R.string.overlay_reopen_body, appName),
-                    delaySeconds = (rule.delaySeconds + opens * antiBinge.escalationSeconds)
-                        .coerceAtMost(MAX_ESCALATED_DELAY_SECONDS),
-                )
-            }
+        if (reopenDecision?.warning == true) {
+            return Verdict(
+                reopenText = getString(R.string.overlay_reopen_body, appName),
+                delaySeconds = reopenDecision.delaySeconds,
+            )
         }
 
         return Verdict()
@@ -637,7 +646,6 @@ class AppMonitorService : Service() {
                 val now = System.currentTimeMillis()
                 recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_CONTINUED, reason)
                 openLog.record(rule.appId, now)
-                allowedUntil[blockedPackage] = now + GRACE_PERIOD_MS
                 sessionStartedAt[blockedPackage] = now
                 dismissOverlay()
             },

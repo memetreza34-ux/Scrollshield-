@@ -1,85 +1,93 @@
-# ScrollShield - Store Listing Copy
+# ScrollShield — Google Play Store Copy (V1 Draft)
 
-Diese Texte sind bewusst vorsichtig formuliert: ScrollShield wird als Werkzeug zur Selbstkontrolle beschrieben, nicht
-als technische Blockier-Garantie und nicht als Hilfe bei Krankheiten oder Abhängigkeit.
+This file describes only the production V1 contract. Research-only capabilities must not be advertised.
 
 ## Kurzbeschreibung
 
-ScrollShield hilft dir, impulsives App-Öffnen und endloses Kurzvideo-Scrollen bewusster zu unterbrechen.
+ScrollShield bremst impulsives App-Öffnen und erhöht die Pause, wenn du immer wieder zurückkehrst.
 
 ## Lange Beschreibung
 
-ScrollShield unterstützt dich dabei, ablenkende Apps bewusster zu nutzen. Du wählst Apps aus, setzt Verzögerungen,
-Tageslimits und Fokus-Sitzungen und bekommst eine kurze Unterbrechung, bevor du dich bewusst für die weitere Nutzung
-entscheidest.
+ScrollShield hilft dir, ablenkende Apps bewusster zu nutzen, ohne sie komplett aus deinem Alltag zu verbannen.
 
-Die App ist für Menschen gedacht, die weniger Zeit in Social Media, Kurzvideos oder Prokrastination verlieren möchten,
-ohne ihr Smartphone komplett unbrauchbar zu machen.
+Du entscheidest selbst, welche Apps geschützt werden. Beim Öffnen unterbricht ScrollShield den Autopiloten mit einer kurzen Pause und einer klaren Wahl: zurück oder bewusst weiter. Wenn du eine App kurz danach wieder öffnest, kann der Wiederöffnungs-Schutz mehr Reibung aufbauen.
 
-Funktionen:
+### Funktionen
 
-- App-spezifische Schutzregeln und Profile
-- Öffnungsverzögerung gegen Autopilot-Nutzung
-- Tageslimits und Anti-Binge-Sperre
-- Fokus-Sitzungen für Arbeit, Lernen und Schlafenszeit
-- Kurzvideo-/Reels-Schutz mit bewussten Unterbrechungen
-- Lokale Statistiken und Verlauf
-- Offline-First: keine Serverübertragung deiner Nutzungsdaten in Version 1.0
+- Schutzregeln pro App
+- bewusste Pause vor dem Öffnen
+- Wiederöffnungs-Schutz gegen reflexartiges Zurückkehren
+- Zeitpläne
+- Fokus-Sitzungen
+- Session Guard und erweiterte Regeln in Pro
+- sichere Notfallfreigabe
+- lokale Heute-/Trenddaten aus tatsächlichen Ereignissen und Nutzungswerten
+- Local-first-Verarbeitung der Schutz- und Nutzungsdaten
+- keine Werbung
 
-Berechtigungen:
+ScrollShield zeigt keine geschätzte „gesparte Lebenszeit“ und keinen künstlichen Produktivitätsscore.
 
-- Nutzungsdatenzugriff: erkennt, wann du eine geschützte App öffnest.
-- Über anderen Apps einblenden: zeigt den Schutzbildschirm über dieser App.
-- Bedienungshilfe (optional): ScrollShield nutzt die Bedienungshilfe-Schnittstelle von Android (Accessibility-API), um
-  zu erkennen, ob in einer von dir geschützten App gerade ein Kurzvideo-Feed wie Reels, Shorts oder TikTok offen ist,
-  und um deine Wischbewegungen darin zu zählen. Gelesen werden nur technische Kennungen der Oberfläche – keine Texte,
-  Nachrichten oder Eingaben. Nichts verlässt dein Gerät. Du schaltest den Dienst selbst ein, nachdem die App dir erklärt
-  hat, was er tut, und kannst ihn jederzeit abschalten. Alle anderen Funktionen laufen auch ohne ihn.
+### Berechtigungen auf Android
 
-Wichtig: ScrollShield ist ein Werkzeug zur Selbstkontrolle. Je nach erteilten Berechtigungen kann die Schutzwirkung
-unterschiedlich stark sein. Der Kurzvideo-Schutz arbeitet als Best-Effort-Unterbrecher: Er kann Scroll-Muster
-unterbrechen, aber nicht garantieren, jeden Reels-, Shorts- oder TikTok-Feed technisch zu erkennen oder zu blockieren.
+**Nutzungsdatenzugriff:** ScrollShield benötigt diesen Zugriff, um zu erkennen, wann eine von dir geschützte App in den Vordergrund kommt und um Nutzungszeiten geschützter Apps zu messen.
 
-ScrollShield ist für Nutzer ab 16 Jahren gedacht. ScrollShield steht in keiner Verbindung zu Instagram, TikTok,
-YouTube, Facebook, X, Snapchat, Reddit oder Pinterest; die Namen gehören ihren Inhabern und dienen nur zur Beschreibung,
-welche Apps sich schützen lassen.
+**Über anderen Apps einblenden:** Damit kann ScrollShield den Schutzbildschirm über einer geschützten App anzeigen.
 
-## Suchbegriffe
+**Benachrichtigungen (optional):** Für Fokus-Ende und andere von dir aktivierte Erinnerungen.
 
-Google Play hat kein eigenes Stichwortfeld; diese Begriffe sollen in der Beschreibung natürlich vorkommen. Keine
-Begriffe zu Krankheiten, Störungen oder Abhängigkeit: Sie klingen nach einem Gesundheitsversprechen
-(`npm run check:store` prüft das).
+Der aktive Schutz verwendet einen sichtbaren Android-Vordergrunddienst mit dauerhafter Benachrichtigung. Du kannst den Schutz in ScrollShield beenden.
 
-Fokus, Bildschirmzeit, Digital Wellbeing, Selbstkontrolle, Social Media, Prokrastination, Kurzvideos, Reels, Shorts,
-Konzentration, App-Limits
+### Datenschutz
+
+V1 benötigt keinen ScrollShield-Account und keinen Cloud-Sync für deine Schutzdaten. Regeln, Ereignisse und Statistiken werden lokal auf deinem Gerät verarbeitet.
+
+ScrollShield enthält keine Werbung und keine Tracking-SDKs. Nutzungsdaten werden nicht an ScrollShield-Server übertragen oder verkauft.
+
+### Wichtige Grenze
+
+ScrollShield ist ein Werkzeug zur Selbstkontrolle und richtet sich in V1 an Nutzer ab 16 Jahren. Die genaue Zuverlässigkeit kann je nach Android-Version, Gerätehersteller und erteilten Systemberechtigungen variieren.
+
+Feed-spezifisches Blockieren von Instagram Reels, YouTube Shorts oder ähnlichen Oberflächen ist **kein Bestandteil der V1-Produktzusage**.
+
+### Marken
+
+ScrollShield steht in keiner Verbindung zu Instagram, TikTok, YouTube, Facebook, X, Snapchat, Reddit oder Pinterest. Namen dienen ausschließlich dazu, Apps zu beschreiben, die Nutzer selbst zum Schutz auswählen können.
+
+## Suchbegriffe / Themen
+
+Fokus, Bildschirmzeit, Digital Wellbeing, Selbstkontrolle, Social Media, App-Limits, App-Öffnen, Fokusmodus, Zeitplan
 
 ## Screenshot-Texte
 
 - Stoppe den Autopiloten
-- Setze klare App-Limits
-- Schütze Fokuszeiten
-- Unterbrich Kurzvideo-Schleifen
-- Deine Daten bleiben lokal
+- Mehr Reibung bei wiederholtem Öffnen
+- Setze klare App-Regeln
+- Starte Fokus in einem Tap
+- Verstehe deine echten Nutzungsdaten
+- Deine Schutzdaten bleiben lokal
 
-## Review Notes - Apple
+## Review Notes — Google Play
 
-Entfällt: Es gibt keine iOS-App. Siehe `OFFENE_PUNKTE.md`, Abschnitt 5.
+ScrollShield V1 schützt vom Nutzer ausgewählte Apps über Usage Access und eine native Overlay-Intervention.
 
-## Review Notes - Google Play
+Prüfflow:
 
-ScrollShield verarbeitet App-Regeln, Verlauf und Statistiken lokal auf dem Gerät. Version 1.0 enthält keinen Account,
-keinen Cloud-Sync, keine Werbung, keine Käufe und kein Tracking; zum Testen sind keine Zugangsdaten nötig.
+1. Onboarding durchlaufen und eine installierte unterstützte App schützen.
+2. Nutzungsdatenzugriff erteilen.
+3. „Über anderen Apps einblenden“ erteilen.
+4. Schutz aktivieren.
+5. Die geschützte App öffnen.
+6. Der native ScrollShield-Unterbrechungsbildschirm erscheint.
+7. „Zurück“ beendet den Öffnungsversuch; nach Ablauf der Pause kann der Nutzer bewusst fortfahren.
+8. App verlassen und innerhalb des Reopen-Fensters erneut öffnen, um die adaptive Reibung zu prüfen.
+9. In ScrollShield unter „Heute“ die lokal erfassten Interventionen/Nutzungswerte prüfen.
 
-So lässt sich die App prüfen:
+V1 registriert **keinen AccessibilityService**. Research-Code für mögliche spätere Feed-Erkennung ist nicht Teil des Production-Manifests und nicht Teil dieser Store-Zusage.
 
-1. Onboarding durchlaufen, Instagram (oder eine andere installierte App) auswählen.
-2. Auf der Seite „Setup“ den Nutzungsdatenzugriff und „Über anderen Apps einblenden“ erteilen.
-3. Die geschützte App öffnen: Der ScrollShield-Schutzbildschirm erscheint.
-4. Optional: Auf der Karte „Kurzvideo-Erkennung (Bedienungshilfe)“ auf „Aktivieren“ tippen. Vor den
-   Android-Einstellungen erscheint der Hinweis zur Bedienungshilfe mit „Ablehnen“ und „Zustimmen“; erst nach „Zustimmen“
-   öffnen sich die Einstellungen. Danach den Reels-Feed öffnen und wischen: Nach der eingestellten Zahl von Wischern
-   unterbricht ScrollShield.
+## Vor Einreichung manuell ergänzen
 
-Die Bedienungshilfe liest nur technische Kennungen der Oberfläche (`viewIdResourceName`) und Fensterklassen, nie Texte.
-Die einzige Aktion, die sie auslöst, ist „Zurück“, wenn der Nutzer für einen Feed eine harte Unterbrechung eingestellt
-oder den Feed gesperrt hat. Details: `docs/STORE_SUBMISSION_PACKET.md`, Abschnitt „Accessibility API Declaration“.
+- finaler Supportkontakt
+- finale Datenschutz-URL
+- finaler Preis/Trial direkt aus Play Billing
+- echte Geräte-Screenshots
+- Foreground-Service- und sonstige Play-Console-Erklärungen gemäß aktuellem Formular

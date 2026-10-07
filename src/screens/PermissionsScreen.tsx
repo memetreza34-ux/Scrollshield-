@@ -18,6 +18,7 @@ import { Header } from '../components/ui';
 import { AccessibilityDisclosure } from '../components/AccessibilityDisclosure';
 import { ScrollShieldBridge } from '../lib/nativeBridge';
 import { requestNotificationPermission } from '../lib/notifications';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 
 export function PermissionsScreen({
   state,
@@ -353,21 +354,22 @@ export function PermissionsScreen({
             true,
           )}
 
-          {renderPermissionCard(
-            'accessibility',
-            <Film size={24} />,
-            'Kurzvideo-Erkennung (Bedienungshilfe)',
-            [
-              'Erkennen, ob gerade Reels, Shorts oder der TikTok-Feed offen ist',
-              'Deine Wischbewegungen im Feed zählen',
-              'Feed-Limits und Wisch-Unterbrechungen ermöglichen',
-            ],
-            'App-Limits und Verzögerungen funktionieren weiter. Regeln, die sich nur auf den Kurzvideo-Feed beziehen (Tageslimit für Reels, Stopp nach X Wischern), bleiben wirkungslos.',
-            true,
-            false,
-            true,
-            'Was der Dienst liest:\nNur technische Kennungen der angezeigten Oberfläche (Bezeichner von Bildschirmelementen). Daran erkennt ScrollShield, ob ein Kurzvideo-Feed offen ist.\n\nWas der Dienst NICHT liest:\nKeine Texte, keine Nachrichten, keine Passwörter, keine Sucheingaben, keine Bildschirminhalte. Diese Funktionen sind im Code nicht vorhanden.\n\nWohin die Daten gehen:\nNirgendwohin. Zähler und Zeiten bleiben verschlüsselt auf deinem Gerät. ScrollShield hat keinen Server.\n\nDu kannst den Dienst jederzeit in den Android-Einstellungen wieder abschalten.',
-          )}
+          {FEATURE_FLAGS.enableShortVideoResearch &&
+            renderPermissionCard(
+              'accessibility',
+              <Film size={24} />,
+              'Kurzvideo-Erkennung (Bedienungshilfe)',
+              [
+                'Erkennen, ob gerade Reels, Shorts oder der TikTok-Feed offen ist',
+                'Deine Wischbewegungen im Feed zählen',
+                'Feed-Limits und Wisch-Unterbrechungen ermöglichen',
+              ],
+              'App-Limits und Verzögerungen funktionieren weiter. Regeln, die sich nur auf den Kurzvideo-Feed beziehen (Tageslimit für Reels, Stopp nach X Wischern), bleiben wirkungslos.',
+              true,
+              false,
+              true,
+              'Was der Dienst liest:\nNur technische Kennungen der angezeigten Oberfläche (Bezeichner von Bildschirmelementen). Daran erkennt ScrollShield, ob ein Kurzvideo-Feed offen ist.\n\nWas der Dienst NICHT liest:\nKeine Texte, keine Nachrichten, keine Passwörter, keine Sucheingaben, keine Bildschirminhalte. Diese Funktionen sind im Code nicht vorhanden.\n\nWohin die Daten gehen:\nNirgendwohin. Zähler und Zeiten bleiben verschlüsselt auf deinem Gerät. ScrollShield hat keinen Server.\n\nDu kannst den Dienst jederzeit in den Android-Einstellungen wieder abschalten.',
+            )}
 
           {renderPermissionCard(
             'screenTime',
@@ -381,21 +383,22 @@ export function PermissionsScreen({
             'Apple stellt dafür die Bildschirmzeit-Schnittstelle bereit. ScrollShield erhält nur die für Auswahl und Limits nötigen Informationen, nicht den Inhalt anderer Apps.',
           )}
 
-          {renderPermissionCard(
-            'backgroundActivity',
-            <Activity size={24} />,
-            'Zuverlässiger Schutz im Hintergrund',
-            [
-              'Timer für App-Nutzung stabil weiterführen',
-              'Limits sauber überwachen, auch wenn das Display zwischendurch aus (oder im Hintergrund) war',
-              'Verhindert, dass das Handy die App "schlafen" legt',
-            ],
-            'Timer können ungenau werden oder pausieren, wenn das Gerät ScrollShield im Hintergrund beendet.',
-            true, // optional
-            false,
-            true,
-            'Einige Geräte beenden Apps im Hintergrund besonders schnell, um Akku zu sparen. Eine Ausnahme in den Akku-Einstellungen sorgt dafür, dass Timer und Schutzregeln zuverlässig weiterlaufen.',
-          )}
+          {!isOnboarding &&
+            renderPermissionCard(
+              'backgroundActivity',
+              <Activity size={24} />,
+              'Zuverlässiger Schutz im Hintergrund',
+              [
+                'Timer für App-Nutzung stabil weiterführen',
+                'Limits sauber überwachen, auch wenn das Display zwischendurch aus (oder im Hintergrund) war',
+                'Verhindert, dass das Handy die App "schlafen" legt',
+              ],
+              'Timer können ungenau werden oder pausieren, wenn das Gerät ScrollShield im Hintergrund beendet.',
+              true, // optional
+              false,
+              true,
+              'Einige Geräte beenden Apps im Hintergrund besonders schnell, um Akku zu sparen. Prüfe diese Einstellung nur, wenn ScrollShield auf deinem Gerät unerwartet stoppt; sie ist für die Ersteinrichtung nicht erforderlich.',
+            )}
         </div>
 
         {isOnboarding && (

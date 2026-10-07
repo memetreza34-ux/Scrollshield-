@@ -1,3 +1,9 @@
+> [!IMPORTANT]
+> **POST-V1 RESEARCH ONLY.** This capability is not part of the ScrollShield V1 production contract. The production
+> manifest does not register `ShortVideoWatchService`, the V1 UI/native serializer keep it behind
+> `enableShortVideoResearch=false`, and the V1 store listing must not promise feed-level blocking.
+> Any future promotion requires current Play-policy review plus real-device reliability validation for each supported app.
+
 # Short-Video Detection
 
 How ScrollShield recognises a Reels/Shorts/TikTok feed, what it is allowed to see, and how to fix detection when a host

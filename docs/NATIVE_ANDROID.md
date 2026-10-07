@@ -69,16 +69,15 @@ declares, are removed from the merged manifest.
 Every interruption is recorded (`InterruptionLog.kt`: package, outcome, reason, time – nothing from the screen) until
 the web layer takes it into its history and acknowledges it (`src/lib/nativeEvents.ts`). Dashboard, statistics, stop
 rate, relapse warning and summaries therefore count what happens on the phone. `BootReceiver` restarts the monitor after
-a reboot or an app update if monitoring was on; the accessibility service is rebound by the system on its own.
+a reboot or an app update if monitoring was on.
 
-## Short-Video Detection
+## Short-Video Detection — Research Only
 
-`ShortVideoWatchService` (accessibility) recognises whether a protected app's short-video feed is on screen, counts
-scroll events in it, and triggers the overlay when a feed rule is hit. It reads view ids and class names only — never
-text. Detection signatures live in `src/lib/shortVideoSignatures.ts` and are synced down with the rules, so a renamed
-view id is a TypeScript fix rather than a Kotlin one.
+`ShortVideoWatchService.kt`, signatures and calibration tooling remain in source as **Post-V1 research**.
 
-Full mechanism, privacy boundary, calibration procedure and Play Console requirements: `docs/SHORT_VIDEO_DETECTION.md`.
+Production V1 deliberately does not register this AccessibilityService, does not request the permission and does not send short-video rules while `enableShortVideoResearch=false`.
+
+See `docs/SHORT_VIDEO_DETECTION.md` for the research mechanism. Nothing in that document is a V1 release guarantee.
 
 ## Known Limits
 
@@ -91,16 +90,13 @@ Full mechanism, privacy boundary, calibration procedure and Play Console require
 - A focus session is folded into the synced mode. If it ends while the app is not running, the native rules stay `strict`
   until ScrollShield is opened again and re-syncs.
 - Scheduled reminders may arrive a few minutes late (inexact alarms).
-- Feed detection is heuristic and breaks silently when a host app renames its view ids. Re-verify per platform before
-  each release.
 - Detection lags an app switch by up to one poll interval (1.5 s).
 - The overlay does not prevent the user from leaving through system gestures. It reappears on the next foreground
   transition of the protected app.
 - Background reliability under Doze and OEM battery managers (Xiaomi, Samsung, Huawei) is **untested**.
 - `EncryptedSharedPreferences` comes from Jetpack Security, which is in maintenance mode. Revisit before extending its
   use.
-- **iOS cannot do feed-level rules at all.** Screen Time blocks whole apps or categories; no API exposes a surface
-  inside another app. The UI must not offer Reels rules on iOS.
+- Feed-level rules are outside the V1 contract on every platform.
 
 ## Still Open Before a Store Release
 
