@@ -396,6 +396,7 @@ function buildShortVideoRule(
   config: AppConfigSlice,
   focusBlocked: boolean,
 ): NativeShortVideoRule | undefined {
+  if (!FEATURE_FLAGS.enableShortVideoResearch) return undefined;
   const surface = platform.shortVideoSurface;
   const feed = config.reelsProtection;
   if (!surface || !feed?.enabled) return undefined;
