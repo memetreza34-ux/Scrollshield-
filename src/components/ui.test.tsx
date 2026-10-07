@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { expectNoA11yViolations } from '../test/a11y';
-import { Switch, TimeSelector } from './ui';
+import { BottomNav, Switch, TimeSelector } from './ui';
 
 describe('Switch', () => {
   it('announces state and toggles on click', () => {
@@ -45,5 +45,25 @@ describe('TimeSelector', () => {
     const { container } = render(<TimeSelector value={5} onChange={vi.fn()} options={[5, 10, 15]} />);
 
     await expectNoA11yViolations(container);
+  });
+});
+
+
+describe('BottomNav', () => {
+  it('keeps the V1 navigation to exactly Heute, Schutz and Einblicke', () => {
+    render(<BottomNav currentScreen="today" navigate={vi.fn()} />);
+
+    const nav = screen.getByRole('navigation', { name: 'Hauptnavigation' });
+    expect(nav.querySelectorAll('button')).toHaveLength(3);
+    expect(screen.getByRole('button', { name: 'Heute' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Schutz' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Einblicke' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Fokus' })).not.toBeInTheDocument();
+  });
+
+  it('maps nested protection screens to the Schutz tab', () => {
+    render(<BottomNav currentScreen="app_detail" navigate={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Schutz' })).toHaveAttribute('aria-current', 'page');
   });
 });
