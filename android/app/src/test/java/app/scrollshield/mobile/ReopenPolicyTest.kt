@@ -64,6 +64,23 @@ class ReopenPolicyTest {
     }
 
     @Test
+    fun reopenNeverReducesLongBaseDelay() {
+        val result = ReopenPolicy.decide(
+            warningOpenCount = 2,
+            blockOpenCount = 2,
+            warningThreshold = 1,
+            blockThreshold = 5,
+            baseDelaySeconds = 180,
+            escalationSeconds = 10,
+            maxDelaySeconds = 120,
+        )
+
+        assertFalse(result.blocked)
+        assertTrue(result.warning)
+        assertEquals(180, result.delaySeconds)
+    }
+
+    @Test
     fun blockThresholdWinsOverWarning() {
         val result = ReopenPolicy.decide(
             warningOpenCount = 5,
