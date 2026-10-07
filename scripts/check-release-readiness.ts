@@ -116,8 +116,7 @@ if (!existsSync(storeCopyPath)) {
       text: `Missing ${signal.label}.`,
     });
   }
-
-
+}
 
 const androidManifestPath = path.join(repoRoot, 'android/app/src/main/AndroidManifest.xml');
 if (existsSync(androidManifestPath)) {
