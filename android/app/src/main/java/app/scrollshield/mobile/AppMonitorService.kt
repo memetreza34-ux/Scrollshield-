@@ -357,6 +357,21 @@ class AppMonitorService : Service() {
     private fun loadRules() {
         monitoringEnabled = prefs.getBoolean(ScrollShieldBridgePlugin.KEY_MONITORING_ENABLED, false)
 
+        // Version 0 means data from the pre-versioned bridge and remains
+        // intentionally readable for migration. Any unknown non-zero version
+        // may have different semantics, so fail closed instead of enforcing
+        // rules we do not understand.
+        val storedContractVersion = prefs.getInt(ScrollShieldBridgePlugin.KEY_CONTRACT_VERSION, 0)
+        if (
+            storedContractVersion != 0 &&
+            storedContractVersion != ScrollShieldBridgePlugin.CONTRACT_VERSION
+        ) {
+            monitoringEnabled = false
+            rules = emptyMap()
+            dismissOverlay()
+            return
+        }
+
         val raw = prefs.getString(ScrollShieldBridgePlugin.KEY_BLOCKED_RULES, "[]") ?: "[]"
         val parsed = mutableMapOf<String, BlockRule>()
         try {
