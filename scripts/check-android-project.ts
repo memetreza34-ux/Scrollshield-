@@ -84,7 +84,6 @@ requireMatch(manifestPath, manifest, /android:exported="true"/, 'Launcher activi
 // docs/STORE_SUBMISSION_PACKET.md. Adding a permission without updating this
 // list (and that document) must fail the build.
 const allowedPermissions = new Set([
-  'android.permission.INTERNET',
   'android.permission.PACKAGE_USAGE_STATS',
   'android.permission.SYSTEM_ALERT_WINDOW',
   'android.permission.FOREGROUND_SERVICE',
