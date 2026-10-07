@@ -109,11 +109,7 @@ describe('production short-video boundary', () => {
 
 describe('versioned native config', () => {
   it('wraps rules in contract v1 with a deterministic generatedAt when now is supplied', () => {
-    const config = buildNativeProtectionConfig(
-      { instagram: activeApp() },
-      platforms,
-      { now: 123456789 },
-    );
+    const config = buildNativeProtectionConfig({ instagram: activeApp() }, platforms, { now: 123456789 });
 
     expect(config.contractVersion).toBe(NATIVE_PROTECTION_CONTRACT_VERSION);
     expect(config.generatedAt).toBe(123456789);

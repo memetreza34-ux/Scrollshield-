@@ -26,7 +26,10 @@ export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
         <ul className="space-y-5">
           {[
             ['Bewusst öffnen', 'Eine kurze Pause gibt dir eine echte Wahl: zurück oder bewusst weiter.'],
-            ['Wiederöffnen erkennen', 'Wer kurz danach erneut zurückkehrt, bekommt mehr Reibung statt derselben Warnung.'],
+            [
+              'Wiederöffnen erkennen',
+              'Wer kurz danach erneut zurückkehrt, bekommt mehr Reibung statt derselben Warnung.',
+            ],
             ['Kein Konto', 'Deine Schutzdaten bleiben auf deinem Handy.'],
           ].map(([title, text]) => (
             <li key={title}>
@@ -129,8 +132,14 @@ export function Onboarding({
               {[
                 ['Du öffnest eine geschützte App', 'ScrollShield zeigt eine kurze Pause.'],
                 ['Du entscheidest', '„Zurück“ oder nach der Pause „Weiter“.'],
-                ['Du öffnest sie gleich wieder', 'ScrollShield erkennt den Reopen und kann die Pause schrittweise erhöhen.'],
-                ['Du bleibst bewusst', 'Mit Fokus und später Session Guard begrenzt du nicht nur den Einstieg, sondern auch die Nutzung.'],
+                [
+                  'Du öffnest sie gleich wieder',
+                  'ScrollShield erkennt den Reopen und kann die Pause schrittweise erhöhen.',
+                ],
+                [
+                  'Du bleibst bewusst',
+                  'Mit Fokus und später Session Guard begrenzt du nicht nur den Einstieg, sondern auch die Nutzung.',
+                ],
               ].map(([title, text], index) => (
                 <li key={title} className="flex gap-4">
                   <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-zinc-800 text-sm font-semibold text-zinc-200">

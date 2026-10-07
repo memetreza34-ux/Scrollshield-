@@ -65,18 +65,18 @@ export function getSuggestion(state: AppState, now = new Date()): Suggestion | n
   const stats = state.dailyStats[today];
   if (FEATURE_FLAGS.enableShortVideoResearch) {
     for (const app of apps) {
-    if (!app.shortVideoSurface) continue;
-    const minutes = stats?.usageMinutes[getShortVideoUsageKey(app.id)] ?? 0;
-    const feed = state.appsConfig[app.id]?.reelsProtection;
-    const limited = feed?.enabled && feed.mode !== 'allow' && feed.mode !== 'warn';
-    if (minutes >= FEED_MINUTES_FOR_LIMIT && !limited) {
-      candidates.push({
-        id: `feed-${app.id}`,
-        text: `${app.shortVideoSurface.name} heute schon ${minutes} Min.`,
-        actionLabel: 'Auf 15 Min. begrenzen',
-        action: { kind: 'feed_limit', appId: app.id, minutes: 15 },
-      });
-    }
+      if (!app.shortVideoSurface) continue;
+      const minutes = stats?.usageMinutes[getShortVideoUsageKey(app.id)] ?? 0;
+      const feed = state.appsConfig[app.id]?.reelsProtection;
+      const limited = feed?.enabled && feed.mode !== 'allow' && feed.mode !== 'warn';
+      if (minutes >= FEED_MINUTES_FOR_LIMIT && !limited) {
+        candidates.push({
+          id: `feed-${app.id}`,
+          text: `${app.shortVideoSurface.name} heute schon ${minutes} Min.`,
+          actionLabel: 'Auf 15 Min. begrenzen',
+          action: { kind: 'feed_limit', appId: app.id, minutes: 15 },
+        });
+      }
     }
   }
 

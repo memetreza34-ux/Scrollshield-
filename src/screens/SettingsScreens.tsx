@@ -140,8 +140,8 @@ export function PaywallScreen({ state, updateState, navigate }: ScreenProps) {
           ))}
         </ul>
         <p className="mt-3 px-1 text-sm text-zinc-500">
-          Kostenlos bleiben: 2 Apps, Pause und Basis-Wiederöffnungs-Schutz, 1 Zeitplan, Fokus,
-          Notfallfreigabe und die Zahlen von heute. Keine Werbung.
+          Kostenlos bleiben: 2 Apps, Pause und Basis-Wiederöffnungs-Schutz, 1 Zeitplan, Fokus, Notfallfreigabe und die
+          Zahlen von heute. Keine Werbung.
         </p>
       </Section>
 
