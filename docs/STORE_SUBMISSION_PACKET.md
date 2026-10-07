@@ -1,22 +1,8 @@
 # ScrollShield Android V1 Store Submission Packet
 
-This packet separates the first public web/PWA launch from the later native App Store / Play Store submission. Version
-1.0 should launch as a web app first. The native store answers below are retained as prepared drafts for the later
-Android/iOS phase and must be verified against the final native binary before submission.
+This packet is for the **Android-first V1** release. The browser/PWA remains a development/demo surface and is not the paid protection product.
 
-## Web/PWA Preview Packet
-
-- Public app URL: `https://[FINAL-DOMAIN]/`
-- Public privacy URL: `https://[FINAL-DOMAIN]/privacy.html`
-- Support address pending verification: `support@scrollshield.app`
-- Legal name/entity: `[REQUIRED]`
-- Address: `[REQUIRED]`
-- Responsible person: `[REQUIRED]`
-- Hosting provider: `[REQUIRED]`
-- No account, login, cloud sync, advertising, analytics, tracking, or developer backend
-- App rules, history, and statistics remain in local browser storage
-- Local data can be exported, imported, or deleted with the in-app reset
-- Web/PWA limitation: the browser version cannot physically block other installed apps
+All declarations below are drafts until checked against the exact release binary and the current Google Play Console forms.
 
 ## Shared Facts
 
@@ -28,45 +14,6 @@ Android/iOS phase and must be verified against the final native binary before su
 - Store screenshots: `docs/store-assets/`
 
 ## Android V1 Store Submission
-
-The following sections are not required for the first web/PWA launch. Use them when Android/iOS binaries are ready.
-
-## Apple App Store Connect
-
-### App Privacy
-
-- Data collected: **No**
-- Tracking: **No**
-- Privacy-policy URL: `https://[FINAL-DOMAIN]/privacy.html`
-
-### Rating Target
-
-- Target: **4+**
-- Confirm the questionnaire contains no user-generated content, gambling, violence, sexual content, or unrestricted web
-  access.
-
-### Family Controls Entitlement Request
-
-> ScrollShield is a digital-wellbeing and productivity app that helps users interrupt impulsive app opening. Users
-> explicitly select apps and configure their own limits. Family Controls is used only to apply those user-selected
-> restrictions through Apple's supported Screen Time mechanisms. ScrollShield does not read content from other apps,
-> does not provide covert monitoring, and does not transmit usage history to developer servers.
-
-### Review Notes
-
-> Version 1.0 requires no account or test credentials. Complete onboarding, select one or more apps, and open the
-> permission screen to review the Screen Time explanation. The dashboard remains usable when permission is declined and
-> clearly reports reduced protection. Rules, history, and statistics are processed locally. Short-video protection is a
-> best-effort interruption and is not presented as a guaranteed system block.
-
-### Review Video Shot List
-
-1. Launch and complete onboarding without granting permission.
-2. Show the reduced-protection dashboard warning.
-3. Return to Permissions and grant Screen Time access in the native build.
-4. Select Instagram and configure an opening delay.
-5. Trigger the native shield/interruption.
-6. Show local history, data export, and app reset.
 
 ## Google Play Console
 
@@ -147,6 +94,5 @@ Do not demonstrate Accessibility or feed-level blocking in the V1 submission bec
 - Responsible person: `[REQUIRED]`
 - Verified support mailbox: `[REQUIRED]`
 - Final privacy-policy domain: `[REQUIRED]`
-- Apple entitlement approval: `[REQUIRED]`
-- Apple and Google questionnaire confirmations: `[REQUIRED]`
+- Google Play questionnaire confirmations: `[REQUIRED]`
 - Native permission demonstration videos: `[REQUIRED]`
