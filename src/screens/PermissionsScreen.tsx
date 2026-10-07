@@ -18,6 +18,7 @@ import { Header } from '../components/ui';
 import { AccessibilityDisclosure } from '../components/AccessibilityDisclosure';
 import { ScrollShieldBridge } from '../lib/nativeBridge';
 import { requestNotificationPermission } from '../lib/notifications';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 
 export function PermissionsScreen({
   state,
@@ -353,8 +354,9 @@ export function PermissionsScreen({
             true,
           )}
 
-          {renderPermissionCard(
-            'accessibility',
+          {FEATURE_FLAGS.enableShortVideoResearch &&
+            renderPermissionCard(
+              'accessibility',
             <Film size={24} />,
             'Kurzvideo-Erkennung (Bedienungshilfe)',
             [
@@ -381,8 +383,9 @@ export function PermissionsScreen({
             'Apple stellt dafür die Bildschirmzeit-Schnittstelle bereit. ScrollShield erhält nur die für Auswahl und Limits nötigen Informationen, nicht den Inhalt anderer Apps.',
           )}
 
-          {renderPermissionCard(
-            'backgroundActivity',
+          {!isOnboarding &&
+            renderPermissionCard(
+              'backgroundActivity',
             <Activity size={24} />,
             'Zuverlässiger Schutz im Hintergrund',
             [
@@ -394,7 +397,7 @@ export function PermissionsScreen({
             true, // optional
             false,
             true,
-            'Einige Geräte beenden Apps im Hintergrund besonders schnell, um Akku zu sparen. Eine Ausnahme in den Akku-Einstellungen sorgt dafür, dass Timer und Schutzregeln zuverlässig weiterlaufen.',
+            'Einige Geräte beenden Apps im Hintergrund besonders schnell, um Akku zu sparen. Prüfe diese Einstellung nur, wenn ScrollShield auf deinem Gerät unerwartet stoppt; sie ist für die Ersteinrichtung nicht erforderlich.',
           )}
         </div>
 
