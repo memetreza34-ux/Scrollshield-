@@ -5,8 +5,8 @@
  * On web/non-Android platforms all calls return graceful fallbacks.
  *
  * The native layer sees the per-app rule (mode, delay, daily limit,
- * anti-binge), the time-window schedule and the short-video rule, and
- * evaluates them itself when an app is opened. Emergency unlocks stay in the
+ * anti-binge) and the time-window schedule. Experimental short-video rules are
+ * only included when the explicit research flag is enabled. Emergency unlocks stay in the
  * web layer; see src/lib/protectionRules.ts.
  *
  * Usage:
@@ -23,6 +23,7 @@ import type { Schedule } from '../types';
 import { getShortVideoSignature } from './shortVideoSignatures';
 import { isShortVideoFeedBlockedByConfig } from './stats';
 import { TimeWindowRule } from './schedules';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 
 // ── Type definitions ──────────────────────────────────────────────────────────
 
@@ -475,7 +476,9 @@ export function buildNativeProtectionRules(
         }
       : undefined;
     const sessionLimitMinutes = nonNegativeInt(config.sessionLimit);
-    const shortVideo = buildShortVideoRule(platform, config, focusBlocked);
+    const shortVideo = FEATURE_FLAGS.enableShortVideoResearch
+      ? buildShortVideoRule(platform, config, focusBlocked)
+      : undefined;
     const timeWindows = buildTimeWindows(platform.id, options.schedules ?? []);
     const dailyLimitMinutes = nonNegativeInt(config.dailyLimit);
     const antiBinge = config.antiBinge?.enabled

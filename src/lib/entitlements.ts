@@ -50,7 +50,6 @@ export const PRO_BENEFITS = [
   'Unbegrenzt viele Zeitpläne',
   'Rescue und Selbstverpflichtung',
   'Eigene Fokus-Dauer und strenger Fokus',
-  'Wisch-Unterbrecher für Kurzvideos',
   'Woche, Wiederöffnungs-Muster und App-Trends',
 ];
 

@@ -1,6 +1,7 @@
 import type { AppState, HistoryEvent } from '../types';
 import { getLocalDateKey } from './appUtils';
 import { getShortVideoUsageKey } from './stats';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 
 /**
  * Metrics (docs/V1_MASTER_PLAN.md, section 9)
@@ -73,7 +74,9 @@ export function getDayMetrics(
   const perApp = appIds.map((appId): AppDayMetrics => {
     const appEvents = events.filter((event) => event.appId === appId);
     const usage = stats?.usageMinutes[appId];
-    const shortVideo = stats?.usageMinutes[getShortVideoUsageKey(appId)];
+    const shortVideo = FEATURE_FLAGS.enableShortVideoResearch
+      ? stats?.usageMinutes[getShortVideoUsageKey(appId)]
+      : undefined;
     return {
       appId,
       opens: appEvents.filter((event) => event.type === 'open').length,

@@ -2,6 +2,7 @@ import { Check } from 'lucide-react';
 import { AppState, Screen } from '../types';
 import { Header, List, Page, PrimaryButton, Row, SecondaryButton, Section, Switch } from '../components/ui';
 import { hasPro, PRO_BENEFITS } from '../lib/entitlements';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 import {
   EVENING_REMINDER_HOUR,
   RELAPSE_BLOCK_THRESHOLD,
@@ -38,11 +39,13 @@ export function SettingsScreen({ state, navigate }: ScreenProps) {
             value={state.operatingSystem === 'web' ? 'Browser' : permissionsOk ? 'Alles da' : 'Fehlt etwas'}
             onClick={() => navigate('permissions')}
           />
-          <Row
-            label="Kurzvideo-Erkennung prüfen"
-            description="Zeigt, ob Reels und Shorts erkannt werden"
-            onClick={() => navigate('diagnostics')}
-          />
+          {FEATURE_FLAGS.enableShortVideoResearch && (
+            <Row
+              label="Kurzvideo-Erkennung prüfen"
+              description="Experimenteller Forschungsmodus"
+              onClick={() => navigate('diagnostics')}
+            />
+          )}
           <Row label="Benachrichtigungen" onClick={() => navigate('notifications')} />
         </List>
       </Section>
@@ -137,29 +140,22 @@ export function PaywallScreen({ state, updateState, navigate }: ScreenProps) {
           ))}
         </ul>
         <p className="mt-3 px-1 text-sm text-zinc-500">
-          Kostenlos bleiben: 2 Apps, Kurzvideo-Schutz, Pause und Wiederöffnungs-Schutz, 1 Zeitplan, Fokus,
+          Kostenlos bleiben: 2 Apps, Pause und Basis-Wiederöffnungs-Schutz, 1 Zeitplan, Fokus,
           Notfallfreigabe und die Zahlen von heute. Keine Werbung.
         </p>
       </Section>
 
       {!pro && (
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-emerald-500 p-4">
-              <p className="text-sm text-zinc-400">Jährlich</p>
-              <p className="mt-1 text-xl font-semibold text-zinc-50">19,99 €</p>
-              <p className="mt-1 text-xs text-zinc-500">7 Tage gratis testen</p>
-            </div>
-            <div className="rounded-2xl border border-zinc-800 p-4">
-              <p className="text-sm text-zinc-400">Monatlich</p>
-              <p className="mt-1 text-xl font-semibold text-zinc-50">3,49 €</p>
-            </div>
+          <div className="rounded-2xl border border-zinc-800 p-4">
+            <p className="text-sm font-medium text-zinc-200">Preis über Google Play</p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+              Preis, Testphase und Verlängerung werden in der Kaufversion direkt aus Google Play geladen und vor dem
+              Kauf vollständig angezeigt. ScrollShield verwendet hier keine veralteten Platzhalterpreise.
+            </p>
           </div>
-          <p className="px-1 text-xs text-zinc-500">
-            Preise als Vorschau. Kaufen über Google Play kommt mit der Abrechnung (Roadmap Phase 4).
-          </p>
           <PrimaryButton onClick={() => undefined} disabled>
-            7 Tage gratis testen
+            Abrechnung noch nicht aktiviert
           </PrimaryButton>
           <SecondaryButton onClick={close}>Später</SecondaryButton>
         </div>
