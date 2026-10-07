@@ -63,8 +63,8 @@ Der Nutzer hat jederzeit die volle Kontrolle über seine Daten. Folgende Routine
 Die App arbeitet nach dem Prinzip der Datenminimierung (Data Minimization). Details siehe `PERMISSION_MATRIX.md`.
 
 - **iOS:** Screen Time API (Family Controls).
-- **Android:** Nutzungsdatenzugriff (`PACKAGE_USAGE_STATS`), Überlagerung (`SYSTEM_ALERT_WINDOW`),
-  Vordergrunddienst, Benachrichtigungen (`POST_NOTIFICATIONS`), optional Bedienungshilfe (Kurzvideo-Erkennung).
+- **Android V1:** Nutzungsdatenzugriff (`PACKAGE_USAGE_STATS`), Überlagerung (`SYSTEM_ALERT_WINDOW`),
+  Vordergrunddienst und optional Benachrichtigungen (`POST_NOTIFICATIONS`). Die Bedienungshilfe ist nur Post-V1-Forschung und im Production-V1-Manifest nicht registriert.
 - _Zweckbindung:_ Diese Rechte werden ausschließlich lokal ausgewertet, um den Blockier-Screen zu triggern.
 
 ## 7. Drittanbieter-Abhängigkeiten (Third-Party)
