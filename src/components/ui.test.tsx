@@ -48,7 +48,6 @@ describe('TimeSelector', () => {
   });
 });
 
-
 describe('BottomNav', () => {
   it('keeps the V1 navigation to exactly Heute, Schutz and Einblicke', () => {
     render(<BottomNav currentScreen="today" navigate={vi.fn()} />);
