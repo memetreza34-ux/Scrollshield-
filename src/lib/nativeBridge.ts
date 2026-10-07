@@ -19,6 +19,7 @@
  */
 
 import { Capacitor, PluginListenerHandle, registerPlugin } from '@capacitor/core';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 import type { Schedule } from '../types';
 import { getShortVideoSignature } from './shortVideoSignatures';
 import { isShortVideoFeedBlockedByConfig } from './stats';
