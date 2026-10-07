@@ -79,8 +79,8 @@ const activeApp = (feed?: Partial<Parameters<typeof buildNativeProtectionRules>[
   ...feed,
 });
 
-describe('short-video rules', () => {
-  it('attaches a feed rule with the detection hints', () => {
+describe('short-video V1 gate', () => {
+  it('never emits feed-level rules while the post-V1 research flag is disabled', () => {
     const rules = buildNativeProtectionRules(
       {
         instagram: activeApp({
@@ -97,118 +97,8 @@ describe('short-video rules', () => {
       feedPlatforms,
     );
 
-    const feed = rules[0].shortVideo;
-    expect(feed?.surfaceId).toBe('reels');
-    expect(feed?.stopAfterSwipes).toBe(10);
-    expect(feed?.hardInterrupt).toBe(true);
-    expect(feed?.viewIdHints.length).toBeGreaterThan(0);
-  });
-
-  it('omits the feed rule when the user disabled it', () => {
-    const rules = buildNativeProtectionRules(
-      {
-        instagram: activeApp({
-          reelsProtection: { enabled: false, mode: 'block', dailyLimitMinutes: 5 },
-        }),
-      },
-      feedPlatforms,
-    );
-
     expect(rules[0].shortVideo).toBeUndefined();
-  });
-
-  it('omits the feed rule in allow mode so the service can skip the app', () => {
-    const rules = buildNativeProtectionRules(
-      { instagram: activeApp({ reelsProtection: { enabled: true, mode: 'allow' } }) },
-      feedPlatforms,
-    );
-
-    expect(rules[0].shortVideo).toBeUndefined();
-  });
-
-  it('marks TikTok as always short video', () => {
-    const rules = buildNativeProtectionRules(
-      { tiktok: activeApp({ reelsProtection: { enabled: true, mode: 'limit', dailyLimitMinutes: 10 } }) },
-      feedPlatforms,
-    );
-
-    expect(rules[0].shortVideo?.alwaysShortVideo).toBe(true);
-  });
-
-  it('blocks the feed too while a focus session blocks the app', () => {
-    const appsConfig = {
-      youtube: activeApp({
-        focusModeBehavior: 'block' as const,
-        reelsProtection: { enabled: true, mode: 'warn' as const, dailyLimitMinutes: 20 },
-      }),
-    };
-
-    expect(buildNativeProtectionRules(appsConfig, feedPlatforms, { isFocusModeActive: true })[0].shortVideo?.mode).toBe(
-      'block',
-    );
-    expect(
-      buildNativeProtectionRules(appsConfig, feedPlatforms, { isFocusModeActive: false })[0].shortVideo?.mode,
-    ).toBe('warn');
-  });
-
-  it('normalizes missing limits to zero rather than undefined', () => {
-    const rules = buildNativeProtectionRules(
-      { instagram: activeApp({ reelsProtection: { enabled: true, mode: 'warn' } }) },
-      feedPlatforms,
-    );
-
-    expect(rules[0].shortVideo).toMatchObject({
-      dailyLimitMinutes: 0,
-      sessionLimitMinutes: 0,
-      stopAfterSwipes: 0,
-      hardInterrupt: false,
-    });
-  });
-
-  it('reports whether the accessibility service is needed', () => {
-    const withFeed = buildNativeProtectionRules(
-      { instagram: activeApp({ reelsProtection: { enabled: true, mode: 'limit', dailyLimitMinutes: 5 } }) },
-      feedPlatforms,
-    );
-    const withoutFeed = buildNativeProtectionRules({ instagram: activeApp() }, feedPlatforms);
-
-    expect(requiresAccessibilityService(withFeed)).toBe(true);
-    expect(requiresAccessibilityService(withoutFeed)).toBe(false);
-  });
-
-  it('hands a feed limit of 0 ("Blockiert") down as a blocked feed', () => {
-    const daily = buildNativeProtectionRules(
-      {
-        instagram: activeApp({
-          reelsProtection: { enabled: true, mode: 'limit', dailyLimitMinutes: 0, sessionLimitMinutes: 5 },
-        }),
-      },
-      feedPlatforms,
-    );
-    const session = buildNativeProtectionRules(
-      {
-        instagram: activeApp({
-          reelsProtection: { enabled: true, mode: 'warn', dailyLimitMinutes: 15, sessionLimitMinutes: 0 },
-        }),
-      },
-      feedPlatforms,
-    );
-
-    expect(daily[0].shortVideo?.mode).toBe('block');
-    expect(session[0].shortVideo?.mode).toBe('block');
-  });
-
-  it('never lets a blocked feed be continued', () => {
-    const rules = buildNativeProtectionRules(
-      {
-        instagram: activeApp({
-          reelsProtection: { enabled: true, mode: 'block', dailyLimitMinutes: 15, hardInterrupt: false },
-        }),
-      },
-      feedPlatforms,
-    );
-
-    expect(rules[0].shortVideo).toMatchObject({ mode: 'block', hardInterrupt: true });
+    expect(requiresAccessibilityService(rules)).toBe(false);
   });
 });
 
