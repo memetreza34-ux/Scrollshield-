@@ -57,6 +57,7 @@ class ScrollShieldBridgePlugin : Plugin() {
         /** JSON array of { packageName, mode, delaySeconds } objects. */
         const val KEY_BLOCKED_RULES = "blocked_rules"
         const val KEY_MONITORING_ENABLED = "monitoring_enabled"
+        const val KEY_CONTRACT_VERSION = "protection_contract_version"
 
         /** Sent to the web layer when the user presses Android's back button. */
         const val EVENT_BACK_BUTTON = "backButton"
@@ -250,14 +251,20 @@ class ScrollShieldBridgePlugin : Plugin() {
      * Syncs the per-app protection rules from React state to the native layer.
      * The AppMonitorService reads them to decide how to intervene.
      *
-     * JS call: ScrollShieldBridge.syncBlockedApps({
-     *   rules: [{ packageName, appId, mode, delaySeconds, dailyLimitMinutes?, antiBinge?, timeWindows?, shortVideo?,
-     *             focusUntil?, sessionLimitMinutes?, emergencyUnlock?, emergencyLockedUntil? }],
-     *   monitoringEnabled: boolean,
-     * })
+     * The method name is kept for Capacitor compatibility; the payload itself is
+     * a versioned protection contract.
      */
     @PluginMethod
     fun syncBlockedApps(call: PluginCall) {
+        val contractVersion = call.getInt("contractVersion")
+        if (contractVersion == null || !ProtectionContract.isSupported(contractVersion)) {
+            call.reject(
+                "Unsupported or missing protection contract version.",
+                "UNSUPPORTED_PROTECTION_CONTRACT"
+            )
+            return
+        }
+
         val incoming = call.getArray("rules") ?: JSONArray()
         val monitoringEnabled = call.getBoolean("monitoringEnabled", false) ?: false
 
@@ -296,18 +303,19 @@ class ScrollShieldBridgePlugin : Plugin() {
         }
 
         encryptedPrefs.edit()
+            .putInt(KEY_CONTRACT_VERSION, contractVersion)
             .putString(KEY_BLOCKED_RULES, normalized.toString())
             .putBoolean(KEY_MONITORING_ENABLED, monitoringEnabled)
             .apply()
 
-        // Let running services pick the change up without a restart. The
-        // accessibility service runs independently of the monitor, so this is
-        // not gated on the monitor.
+        // Let the running monitor pick the change up without a restart.
+        // Research-only accessibility code is not part of the V1 production manifest.
         AppMonitorService.notifyConfigUpdate(context)
 
         val result = JSObject()
         result.put("synced", true)
         result.put("ruleCount", normalized.length())
+        result.put("contractVersion", contractVersion)
         call.resolve(result)
     }
 
