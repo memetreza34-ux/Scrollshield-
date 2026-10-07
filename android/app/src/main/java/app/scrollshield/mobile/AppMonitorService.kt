@@ -14,24 +14,30 @@ import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
+import android.text.format.DateFormat
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
+import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -44,17 +50,21 @@ import java.util.concurrent.ConcurrentHashMap
  * The behaviour per app comes from the rules the web layer syncs down
  * (see ScrollShieldBridgePlugin.syncBlockedApps):
  *  - soft     → reminder that can be dismissed right away
- *  - standard → countdown of the app's own openDelay, then "continue" unlocks
- *  - strict   → no continue button; only "back to home screen"
+ *  - standard → countdown of the app's own openDelay, then "continue" unlocks;
+ *               every reopen inside the anti-binge window makes it longer
+ *  - strict   → no continue button; only "back"
+ *
+ * On top of that: locks by daily budget, cooldown, schedule and focus (each
+ * with an emergency unlock when the rule allows one), and the session guard,
+ * which interrupts after a set time in the app without a break.
  *
  * Known limits (documented in docs/NATIVE_ANDROID.md):
  *  - Detection is event based and lags an app switch by up to POLL_INTERVAL_MS.
  *  - The overlay cannot prevent the user from leaving via gestures; it
  *    reappears the next time the protected app comes to the foreground.
- *  - Daily limit, anti-binge and time windows are evaluated here when a
- *    protected app comes to the front (see evaluate()), because the web layer
- *    is not guaranteed to run at that moment. They are not re-checked while
- *    the app stays open. Emergency unlocks exist only in the web layer.
+ *  - Daily budget, cooldown, schedules and focus are evaluated when a
+ *    protected app comes to the front (see evaluate()); only the session
+ *    guard is checked while the app stays open.
  *
  * Lifecycle:
  *  - Started by ScrollShieldBridgePlugin.startMonitoring()
@@ -79,6 +89,12 @@ class AppMonitorService : Service() {
 
         /** How long an app stays unblocked after the user chose to continue. */
         const val GRACE_PERIOD_MS = 5 * 60_000L
+
+        /** Longest pause the reopen protection builds up (MAX_ESCALATED_DELAY_SECONDS in protectionRules.ts). */
+        const val MAX_ESCALATED_DELAY_SECONDS = 120
+
+        /** Waiting time before an emergency unlock takes effect. */
+        const val EMERGENCY_WAIT_SECONDS = 10
 
         /** Sent by ShortVideoWatchService when a feed limit is reached. */
         const val ACTION_SHORT_VIDEO_INTERRUPT = "app.scrollshield.ACTION_SHORT_VIDEO_INTERRUPT"
@@ -179,7 +195,11 @@ class AppMonitorService : Service() {
         val warningTimeframe: Int,
         val blockThreshold: Int,
         val blockTimeframe: Int,
+        /** Seconds the pause grows with every opening inside warningTimeframe. */
+        val escalationSeconds: Int = 0,
     )
+
+    private data class EmergencyUnlock(val maxPerDay: Int, val durationMinutes: Int)
 
     private data class BlockRule(
         val mode: String,
@@ -191,18 +211,33 @@ class AppMonitorService : Service() {
         /** Minutes per day across all packages of the app; 0 = no limit. */
         val dailyLimitMinutes: Int = 0,
         val antiBinge: AntiBinge? = null,
+        /** Locked by a focus or rescue session until this time; 0 = none. */
+        val focusUntil: Long = 0L,
+        /** Session guard: interrupt after this many minutes without a break; 0 = off. */
+        val sessionLimitMinutes: Int = 0,
+        val emergencyUnlock: EmergencyUnlock? = null,
+        /** No emergency unlock before this time (self-commitment, strict focus). */
+        val emergencyLockedUntil: Long = 0L,
     )
 
     /**
      * What happens when a protected app comes to the front. `lockReason` set:
      * the app is locked and `statusText` says why. Otherwise the rule's normal
-     * interruption runs, with `warningText` in place of the usual body when the
-     * anti-binge warning applies.
+     * interruption runs; a reopen brings its own text and a longer pause.
      */
     private data class Verdict(
         val lockReason: String? = null,
         val statusText: String? = null,
-        val warningText: String? = null,
+        val reopenText: String? = null,
+        val delaySeconds: Int? = null,
+    )
+
+    /** The parts of the overlay its callers drive. */
+    private class OverlayViews(
+        val status: TextView,
+        val countdown: TextView,
+        val continueButton: Button,
+        val emergencyButton: Button,
     )
 
     // ── State ─────────────────────────────────────────────────────────────────
@@ -212,7 +247,12 @@ class AppMonitorService : Service() {
     private lateinit var workerHandler: Handler
 
     private var windowManager: WindowManager? = null
+
+    /** Set on the main thread, also read by the poll worker. */
+    @Volatile
     private var overlayView: View? = null
+
+    @Volatile
     private var overlayPackage: String? = null
 
     @Volatile
@@ -224,6 +264,19 @@ class AppMonitorService : Service() {
     private var lastForegroundPackage: String? = null
     /** Written by the overlay buttons on the main thread, read by the poll worker. */
     private val allowedUntil = ConcurrentHashMap<String, Long>()
+
+    /** Emergency unlocks per app id: until then the app is completely free. */
+    private val emergencyUntil = ConcurrentHashMap<String, Long>()
+
+    /** When the current session without a break began, per protected package. */
+    private val sessionStartedAt = ConcurrentHashMap<String, Long>()
+
+    private val colorBackground = Color.parseColor("#F70A0A0A")
+    private val colorText = Color.parseColor("#FAFAFA")
+    private val colorBody = Color.parseColor("#D4D4D8")
+    private val colorMuted = Color.parseColor("#A1A1AA")
+    private val colorAccent = Color.parseColor("#10B981")
+    private val colorOnAccent = Color.parseColor("#052E1F")
 
     private val prefs: SharedPreferences by lazy { SecurePrefs.open(this) }
     private val openLog: OpenLog by lazy { OpenLog(prefs) }
@@ -322,6 +375,10 @@ class AppMonitorService : Service() {
                             weekendRule = schedule?.optString("weekendRule", "normal") ?: "normal",
                             dailyLimitMinutes = entry.optInt("dailyLimitMinutes", 0),
                             antiBinge = parseAntiBinge(entry.optJSONObject("antiBinge")),
+                            focusUntil = entry.optLong("focusUntil", 0L),
+                            sessionLimitMinutes = entry.optInt("sessionLimitMinutes", 0),
+                            emergencyUnlock = parseEmergencyUnlock(entry.optJSONObject("emergencyUnlock")),
+                            emergencyLockedUntil = entry.optLong("emergencyLockedUntil", 0L),
                         )
                     }
                 } else {
@@ -350,7 +407,16 @@ class AppMonitorService : Service() {
             warningTimeframe = config.optInt("warningTimeframe"),
             blockThreshold = config.optInt("blockThreshold"),
             blockTimeframe = config.optInt("blockTimeframe"),
+            escalationSeconds = config.optInt("escalationSeconds", 0),
         ).takeIf { it.warningThreshold > 0 && it.blockThreshold > 0 }
+    }
+
+    private fun parseEmergencyUnlock(config: JSONObject?): EmergencyUnlock? {
+        if (config == null) return null
+        return EmergencyUnlock(
+            maxPerDay = config.optInt("maxPerDay", 0),
+            durationMinutes = config.optInt("durationMinutes", 5),
+        ).takeIf { it.maxPerDay > 0 && it.durationMinutes > 0 }
     }
 
     private fun parseTimeWindows(schedule: JSONObject?): List<TimeWindow> {
@@ -362,11 +428,8 @@ class AppMonitorService : Service() {
     }
 
     /**
-     * Mirrors getActiveTimeWindowRule() in src/lib/timeWindows.ts: a window of
-     * the current hour, or on a weekend the weekend rule, tightens the mode.
-     * Only windows set to "strict" or "block" are synced, and the native side
-     * has no emergency unlock that would tell the two apart, so both lock the
-     * app like strict mode.
+     * Mirrors getActiveScheduleForApp() in src/lib/schedules.ts: a schedule
+     * covering the current hour, or on a weekend a weekend rule, locks the app.
      */
     private fun isLockedByTimeWindow(rule: BlockRule, now: Calendar = Calendar.getInstance()): Boolean {
         val hour = now.get(Calendar.HOUR_OF_DAY)
@@ -389,7 +452,16 @@ class AppMonitorService : Service() {
     private fun checkForegroundApp() {
         if (!monitoringEnabled || rules.isEmpty()) return
 
-        val foreground = queryForegroundPackage() ?: return
+        // With the screen off nobody is using an app: no session runs.
+        if (!isScreenInteractive()) {
+            sessionStartedAt.clear()
+            return
+        }
+
+        // The event stream only reports switches. While an app stays in front
+        // there may be no new event for minutes; then the last switch holds.
+        val foreground = queryForegroundPackage() ?: lastForegroundPackage ?: return
+        val now = System.currentTimeMillis()
 
         if (foreground == packageName) {
             dismissOverlay()
@@ -402,11 +474,21 @@ class AppMonitorService : Service() {
             dismissOverlay()
         }
 
-        if (foreground == lastForegroundPackage) return
+        if (foreground == lastForegroundPackage) {
+            checkSessionLimit(foreground, now)
+            return
+        }
         lastForegroundPackage = foreground
 
         val rule = rules[foreground] ?: return
-        val now = System.currentTimeMillis()
+        sessionStartedAt[foreground] = now
+
+        // An emergency unlock frees the app completely for its duration.
+        if (now < (emergencyUntil[rule.appId] ?: 0L)) {
+            openLog.record(rule.appId, now)
+            return
+        }
+
         val verdict = evaluate(foreground, rule, now)
 
         // Inside the grace period after "continue" nothing is shown, but it is
@@ -419,20 +501,41 @@ class AppMonitorService : Service() {
         showInterruptionOverlay(foreground, rule, verdict)
     }
 
+    /** The session guard: interrupts after the rule's minutes in the app without a break. */
+    private fun checkSessionLimit(packageName: String, now: Long) {
+        val rule = rules[packageName] ?: return
+        if (rule.sessionLimitMinutes <= 0 || overlayView != null) return
+        if (now < (emergencyUntil[rule.appId] ?: 0L)) return
+
+        val startedAt = sessionStartedAt[packageName]
+        if (startedAt == null) {
+            sessionStartedAt[packageName] = now
+            return
+        }
+        if (now - startedAt < rule.sessionLimitMinutes * 60_000L) return
+
+        sessionStartedAt[packageName] = now
+        showSessionOverlay(packageName, rule)
+    }
+
+    private fun isScreenInteractive(): Boolean =
+        (getSystemService(POWER_SERVICE) as? PowerManager)?.isInteractive ?: true
+
     /**
      * Mirrors evaluateProtectionAttempt() in src/lib/protectionRules.ts, in the
-     * same order: daily limit, anti-binge block, time window, strict mode,
-     * then the anti-binge warning in front of the normal interruption.
-     * Emergency unlocks stay in the web layer.
+     * same order: daily budget, cooldown, schedule, focus, strict mode, then
+     * the reopen protection in front of the normal pause.
      */
     private fun evaluate(packageName: String, rule: BlockRule, now: Long): Verdict {
+        val appName = getAppName(packageName)
+
         if (rule.dailyLimitMinutes > 0) {
             val packages = rules.filterValues { it.appId == rule.appId }.keys
             val usedMinutes = ForegroundUsage.minutesToday(this, packages).values.sum()
             if (usedMinutes >= rule.dailyLimitMinutes) {
                 return Verdict(
                     lockReason = "DAILY_LIMIT",
-                    statusText = getString(R.string.overlay_daily_limit_hint, usedMinutes, rule.dailyLimitMinutes),
+                    statusText = getString(R.string.overlay_daily_limit_hint, usedMinutes, rule.dailyLimitMinutes, appName),
                 )
             }
         }
@@ -448,29 +551,35 @@ class AppMonitorService : Service() {
         }
 
         if (isLockedByTimeWindow(rule)) {
-            return Verdict(lockReason = "TIME_WINDOW", statusText = getString(R.string.overlay_time_window_hint))
+            return Verdict(lockReason = "TIME_WINDOW", statusText = getString(R.string.overlay_time_window_hint, appName))
+        }
+
+        if (now < rule.focusUntil) {
+            return Verdict(
+                lockReason = "FOCUS",
+                statusText = getString(R.string.overlay_focus_hint, formatTime(rule.focusUntil), appName),
+            )
         }
 
         if (rule.mode == "strict") {
-            return Verdict(lockReason = "STRICT", statusText = getString(R.string.overlay_strict_hint))
+            return Verdict(lockReason = "STRICT", statusText = getString(R.string.overlay_strict_hint, appName))
         }
 
         rule.antiBinge?.let { antiBinge ->
             val opens = openLog.count(rule.appId, now, antiBinge.warningTimeframe)
             if (opens >= antiBinge.warningThreshold) {
                 return Verdict(
-                    warningText = getString(
-                        R.string.overlay_anti_binge_warning,
-                        getAppName(packageName),
-                        opens,
-                        antiBinge.warningTimeframe,
-                    ),
+                    reopenText = getString(R.string.overlay_reopen_body, appName),
+                    delaySeconds = (rule.delaySeconds + opens * antiBinge.escalationSeconds)
+                        .coerceAtMost(MAX_ESCALATED_DELAY_SECONDS),
                 )
             }
         }
 
         return Verdict()
     }
+
+    private fun formatTime(millis: Long): String = DateFormat.getTimeFormat(this).format(Date(millis))
 
     /**
      * Returns the package of the most recent foreground transition.
@@ -504,23 +613,23 @@ class AppMonitorService : Service() {
     private fun showInterruptionOverlay(blockedPackage: String, rule: BlockRule, verdict: Verdict) {
         val appName = getAppName(blockedPackage)
         val locked = verdict.lockReason != null
-        val warned = verdict.warningText != null
+        val reopened = verdict.reopenText != null
         val reason = verdict.lockReason ?: when {
-            warned -> "ANTI_BINGE_WARNING"
+            reopened -> "ANTI_BINGE_WARNING"
             rule.mode == "soft" -> "SOFT"
             else -> "STANDARD"
         }
         presentOverlay(
             blockedPackage = blockedPackage,
-            bodyText = verdict.warningText ?: getString(R.string.overlay_body, appName),
+            bodyText = verdict.statusText ?: verdict.reopenText ?: getString(R.string.overlay_body, appName),
+            continueText = getString(R.string.overlay_continue_to, appName),
             showContinue = !locked,
             onShown = {
-                // A lock and an anti-binge warning count the moment they are
-                // shown, as in the in-app flow; a plain interruption only once
-                // the user decides.
+                // A lock and a reopen count the moment they are shown, as in
+                // the in-app flow; a plain pause only once the user decides.
                 when {
                     locked -> recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_BLOCKED, reason)
-                    warned -> recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_WARNED, reason)
+                    reopened -> recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_WARNED, reason)
                     else -> Unit
                 }
             },
@@ -529,20 +638,93 @@ class AppMonitorService : Service() {
                 recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_CONTINUED, reason)
                 openLog.record(rule.appId, now)
                 allowedUntil[blockedPackage] = now + GRACE_PERIOD_MS
+                sessionStartedAt[blockedPackage] = now
                 dismissOverlay()
             },
             onGoHome = {
-                // Already counted when a lock or a warning was shown.
-                if (!locked && !warned) {
+                // Already counted when a lock or a reopen was shown.
+                if (!locked && !reopened) {
                     recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_STOPPED, reason)
                 }
             },
-        ) { statusView, continueButton ->
+        ) { views ->
             if (locked) {
-                statusView.text = verdict.statusText
+                offerEmergencyUnlock(views, blockedPackage, rule, appName)
             } else {
-                startCountdown(statusView, continueButton, rule)
+                val seconds = if (rule.mode == "soft") 0 else (verdict.delaySeconds ?: rule.delaySeconds)
+                startCountdown(views, seconds.coerceAtLeast(0))
             }
+        }
+    }
+
+    /** The session guard's interruption: the same pause, then go on or stop. */
+    private fun showSessionOverlay(packageName: String, rule: BlockRule) {
+        val appName = getAppName(packageName)
+        presentOverlay(
+            blockedPackage = packageName,
+            bodyText = getString(R.string.overlay_session_body, rule.sessionLimitMinutes, appName),
+            continueText = getString(R.string.overlay_continue),
+            showContinue = true,
+            onShown = {
+                recordInterruption(packageName, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_WARNED, "SESSION_LIMIT")
+            },
+            onContinue = {
+                sessionStartedAt[packageName] = System.currentTimeMillis()
+                dismissOverlay()
+            },
+        ) { views ->
+            startCountdown(views, rule.delaySeconds.coerceAtLeast(0))
+        }
+    }
+
+    /**
+     * Offers an emergency unlock on a lock screen when the rule allows one,
+     * none is blocked by a self-commitment or strict focus, and today's
+     * maximum is not used up. After a wait the app is free for the rule's
+     * minutes.
+     */
+    private fun offerEmergencyUnlock(views: OverlayViews, packageName: String, rule: BlockRule, appName: String) {
+        val unlock = rule.emergencyUnlock ?: return
+        if (System.currentTimeMillis() < rule.emergencyLockedUntil) return
+        val remaining = unlock.maxPerDay - EmergencyLog.countToday(prefs, rule.appId)
+        if (remaining <= 0) return
+
+        views.emergencyButton.text = getString(R.string.overlay_emergency, remaining)
+        views.emergencyButton.visibility = View.VISIBLE
+        views.emergencyButton.setOnClickListener {
+            views.emergencyButton.visibility = View.GONE
+            val owner = overlayView
+            var wait = EMERGENCY_WAIT_SECONDS
+            val tick = object : Runnable {
+                override fun run() {
+                    if (overlayView == null || overlayView !== owner) return
+                    if (wait <= 0) {
+                        views.status.text = ""
+                        views.continueButton.text =
+                            getString(R.string.overlay_emergency_confirm, appName, unlock.durationMinutes)
+                        views.continueButton.visibility = View.VISIBLE
+                        setButtonEnabled(views.continueButton, true)
+                        views.continueButton.setOnClickListener {
+                            val now = System.currentTimeMillis()
+                            EmergencyLog.record(prefs, rule.appId)
+                            emergencyUntil[rule.appId] = now + unlock.durationMinutes * 60_000L
+                            sessionStartedAt[packageName] = now
+                            recordInterruption(
+                                packageName,
+                                InterruptionLog.KIND_APP,
+                                InterruptionLog.OUTCOME_EMERGENCY,
+                                "EMERGENCY",
+                            )
+                            dismissOverlay()
+                        }
+                        return
+                    }
+                    views.status.text = resources.getQuantityString(R.plurals.overlay_emergency_wait, wait, wait)
+                    wait--
+                    mainHandler.postDelayed(this, 1000L)
+                }
+            }
+            mainHandler.post(tick)
         }
     }
 
@@ -568,6 +750,7 @@ class AppMonitorService : Service() {
         presentOverlay(
             blockedPackage = packageName,
             bodyText = body,
+            continueText = getString(R.string.overlay_continue),
             showContinue = !hardInterrupt,
             onShown = {
                 recordInterruption(
@@ -582,13 +765,13 @@ class AppMonitorService : Service() {
                 // The feed itself stays protected; this only dismisses the screen.
                 dismissOverlay()
             },
-        ) { statusView, continueButton ->
-            statusView.text = if (hardInterrupt) {
+        ) { views ->
+            views.status.text = if (hardInterrupt) {
                 getString(R.string.overlay_feed_hard_hint)
             } else {
                 getString(R.string.overlay_feed_soft_hint)
             }
-            continueButton.isEnabled = true
+            setButtonEnabled(views.continueButton, true)
         }
     }
 
@@ -597,19 +780,21 @@ class AppMonitorService : Service() {
     }
 
     /**
-     * Shared overlay scaffold. `configure` receives the status line and the
-     * continue button so each caller can drive its own countdown or hint.
-     * `onShown` runs only when the overlay really appeared; `onGoHome` when
-     * the user leaves through "back to home screen" or the back key.
+     * Shared overlay: the app's icon and name, one sentence why, a countdown
+     * when there is a pause, "back" as the main button, "continue" below it
+     * and, on a lock, the emergency unlock. `configure` drives the countdown
+     * or hint; `onShown` runs only when the overlay really appeared;
+     * `onGoHome` when the user leaves through "back" or the back key.
      */
     private fun presentOverlay(
         blockedPackage: String,
         bodyText: String,
+        continueText: String,
         showContinue: Boolean,
         onShown: () -> Unit = {},
         onContinue: () -> Unit,
         onGoHome: () -> Unit = {},
-        configure: (TextView, Button) -> Unit,
+        configure: (OverlayViews) -> Unit,
     ) {
         if (!Settings.canDrawOverlays(this)) return
 
@@ -631,51 +816,83 @@ class AppMonitorService : Service() {
                 gravity = Gravity.CENTER
             }
 
-            val statusView = TextView(this).apply {
-                textSize = 16f
+            val icon = ImageView(this).apply {
+                val drawable = try {
+                    packageManager.getApplicationIcon(blockedPackage)
+                } catch (_: Exception) {
+                    null
+                }
+                if (drawable != null) setImageDrawable(drawable) else visibility = View.GONE
+            }
+
+            val nameView = TextView(this).apply {
+                text = getAppName(blockedPackage)
+                textSize = 22f
+                typeface = Typeface.DEFAULT_BOLD
                 gravity = Gravity.CENTER
-                setTextColor(Color.parseColor("#A1A1AA"))
-                setPadding(0, dp(16), 0, dp(28))
+                setTextColor(colorText)
+                setPadding(0, dp(16), 0, 0)
             }
 
-            val continueButton = Button(this).apply {
-                text = getString(R.string.overlay_continue)
-                isEnabled = false
-                visibility = if (showContinue) View.VISIBLE else View.GONE
-                setOnClickListener { onContinue() }
+            val bodyView = TextView(this).apply {
+                text = bodyText
+                textSize = 17f
+                gravity = Gravity.CENTER
+                setTextColor(colorBody)
+                setLineSpacing(0f, 1.15f)
+                setPadding(0, dp(12), 0, 0)
             }
 
-            val homeButton = Button(this).apply {
-                text = getString(R.string.overlay_go_home)
+            val countdownView = TextView(this).apply {
+                textSize = 56f
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                setTextColor(colorText)
+                setPadding(0, dp(24), 0, 0)
+                visibility = View.GONE
+            }
+
+            val statusView = TextView(this).apply {
+                textSize = 15f
+                gravity = Gravity.CENTER
+                setTextColor(colorMuted)
+                setPadding(0, dp(12), 0, dp(32))
+            }
+
+            val homeButton = overlayButton(getString(R.string.overlay_go_home), primary = true).apply {
                 setOnClickListener {
                     onGoHome()
                     goHome()
                 }
             }
 
+            val continueButton = overlayButton(continueText, primary = false).apply {
+                visibility = if (showContinue) View.VISIBLE else View.GONE
+                setOnClickListener { onContinue() }
+            }
+            setButtonEnabled(continueButton, false)
+
+            val emergencyButton = overlayButton("", primary = false).apply {
+                textSize = 14f
+                setTextColor(colorMuted)
+                visibility = View.GONE
+            }
+
             val root = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setBackgroundColor(Color.parseColor("#F2050505"))
-                setPadding(dp(32), dp(48), dp(32), dp(48))
+                setBackgroundColor(colorBackground)
+                setPadding(dp(28), dp(48), dp(28), dp(48))
                 isFocusableInTouchMode = true
 
-                addView(TextView(context).apply {
-                    text = getString(R.string.overlay_title)
-                    textSize = 24f
-                    gravity = Gravity.CENTER
-                    setTextColor(Color.WHITE)
-                })
-                addView(TextView(context).apply {
-                    text = bodyText
-                    textSize = 18f
-                    gravity = Gravity.CENTER
-                    setTextColor(Color.parseColor("#E4E4E7"))
-                    setPadding(0, dp(20), 0, 0)
-                })
-                addView(statusView)
-                addView(continueButton)
-                addView(homeButton)
+                addView(icon, LinearLayout.LayoutParams(dp(72), dp(72)))
+                addView(nameView, fullWidth())
+                addView(bodyView, fullWidth())
+                addView(countdownView, fullWidth())
+                addView(statusView, fullWidth())
+                addView(homeButton, fullWidth())
+                addView(continueButton, fullWidth(top = dp(8)))
+                addView(emergencyButton, fullWidth(top = dp(16)))
 
                 setOnKeyListener { _, keyCode, event ->
                     if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
@@ -693,7 +910,7 @@ class AppMonitorService : Service() {
                 overlayView = root
                 overlayPackage = blockedPackage
                 root.requestFocus()
-                configure(statusView, continueButton)
+                configure(OverlayViews(statusView, countdownView, continueButton, emergencyButton))
                 onShown()
             } catch (_: Exception) {
                 overlayView = null
@@ -702,20 +919,45 @@ class AppMonitorService : Service() {
         }
     }
 
-    /** Countdown of a soft (none) or standard interruption; locks never get here. */
-    private fun startCountdown(statusView: TextView, continueButton: Button, rule: BlockRule) {
+    private fun overlayButton(label: String, primary: Boolean): Button = Button(this).apply {
+        text = label
+        isAllCaps = false
+        textSize = 16f
+        stateListAnimator = null
+        minHeight = dp(56)
+        setTextColor(if (primary) colorOnAccent else colorText)
+        background = GradientDrawable().apply {
+            cornerRadius = dp(16).toFloat()
+            setColor(if (primary) colorAccent else Color.TRANSPARENT)
+        }
+    }
 
-        val totalSeconds = if (rule.mode == "soft") 0 else rule.delaySeconds.coerceAtLeast(0)
+    private fun fullWidth(top: Int = 0) = LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT,
+        LinearLayout.LayoutParams.WRAP_CONTENT,
+    ).apply { topMargin = top }
+
+    private fun setButtonEnabled(button: Button, enabled: Boolean) {
+        button.isEnabled = enabled
+        button.alpha = if (enabled) 1f else 0.4f
+    }
+
+    /** The pause before "continue"; locks never get here. */
+    private fun startCountdown(views: OverlayViews, totalSeconds: Int) {
+        val owner = overlayView
         var remaining = totalSeconds
         val tick = object : Runnable {
             override fun run() {
-                if (overlayView == null) return
+                if (overlayView == null || overlayView !== owner) return
                 if (remaining <= 0) {
-                    statusView.text = getString(R.string.overlay_ready_hint)
-                    continueButton.isEnabled = true
+                    views.countdown.visibility = View.GONE
+                    views.status.text = getString(R.string.overlay_ready_hint)
+                    setButtonEnabled(views.continueButton, true)
                     return
                 }
-                statusView.text = resources.getQuantityString(R.plurals.overlay_countdown, remaining, remaining)
+                views.countdown.visibility = View.VISIBLE
+                views.countdown.text = remaining.toString()
+                views.status.text = resources.getQuantityString(R.plurals.overlay_countdown, remaining, remaining)
                 remaining--
                 mainHandler.postDelayed(this, 1000L)
             }

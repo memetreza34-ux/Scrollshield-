@@ -54,7 +54,7 @@ describe('PermissionsScreen', () => {
 
     expect(updateState).toHaveBeenCalledWith({ hasCompletedOnboarding: true });
     expect(updateState).not.toHaveBeenCalledWith(expect.objectContaining({ permissions: expect.anything() }));
-    expect(navigate).toHaveBeenCalledWith('dashboard');
+    expect(navigate).toHaveBeenCalledWith('today');
   });
 
   it('keeps a skipped permission disabled', () => {

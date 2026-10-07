@@ -123,3 +123,32 @@ export const mergeNativeAppUsage = (
   usage: NativeUsage,
   platforms: PlatformPackages[],
 ): AppState['dailyStats'] => mergeNativeMinutes(dailyStats, usage, platforms, (appId) => appId);
+
+/** Stores the device's measured screen time for today and yesterday in the daily stats. */
+export const mergeScreenTime = (
+  dailyStats: AppState['dailyStats'],
+  screenTime: { date: string; todayMinutes?: number; yesterdayMinutes?: number },
+): AppState['dailyStats'] => {
+  const today = new Date(`${screenTime.date}T12:00:00`);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  let next = dailyStats;
+  const put = (date: Date, minutes: number | undefined) => {
+    if (minutes === undefined || !Number.isFinite(minutes)) return;
+    const key = getLocalDateKey(date);
+    const existing: DailyStats = next[key] ?? {
+      date: key,
+      usageMinutes: {},
+      blockedOpens: 0,
+      savedTimeMinutes: 0,
+      emergencyUnlocks: 0,
+      focusMinutes: 0,
+    };
+    if (existing.screenTimeMinutes === minutes) return;
+    next = { ...next, [key]: { ...existing, screenTimeMinutes: Math.max(0, Math.round(minutes)) } };
+  };
+  put(today, screenTime.todayMinutes);
+  put(yesterday, screenTime.yesterdayMinutes);
+  return next;
+};

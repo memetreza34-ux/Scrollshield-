@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Home, Settings, Clock, List } from 'lucide-react';
-import { Screen } from '../types';
+import { BarChart3, ChevronRight, Settings, Shield, Sun, Timer } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { PlatformDefinition, Screen } from '../types';
 
 export function Switch({
   checked,
@@ -35,56 +36,277 @@ export function Switch({
   );
 }
 
-export function BottomNav({ currentScreen, navigate }: { currentScreen: Screen; navigate: (s: Screen) => void }) {
-  const navItems = [
-    { id: 'dashboard', icon: Home, label: 'Home' },
-    { id: 'apps', icon: List, label: 'Apps' },
-    { id: 'focus', icon: Clock, label: 'Fokus' },
-    { id: 'settings', icon: Settings, label: 'Menü' },
-  ];
+const TAB_SCREENS: Record<'today' | 'protect' | 'focus' | 'insights', Screen[]> = {
+  today: [
+    'today',
+    'rescue',
+    'settings',
+    'notifications',
+    'privacy',
+    'support',
+    'help',
+    'imprint',
+    'diagnostics',
+    'paywall',
+  ],
+  protect: ['protect', 'app_detail', 'schedule_edit', 'commitment'],
+  focus: ['focus'],
+  insights: ['insights'],
+};
 
-  const isActive = (id: string) => {
-    if (currentScreen === id) return true;
-    if (id === 'dashboard' && ['history'].includes(currentScreen)) return true;
-    if (id === 'apps' && ['app_detail', 'rules'].includes(currentScreen)) return true;
-    if (id === 'settings' && ['help', 'privacy'].includes(currentScreen)) return true;
-    return false;
-  };
+export function BottomNav({ currentScreen, navigate }: { currentScreen: Screen; navigate: (s: Screen) => void }) {
+  const navItems: { id: keyof typeof TAB_SCREENS; icon: LucideIcon; label: string }[] = [
+    { id: 'today', icon: Sun, label: 'Heute' },
+    { id: 'protect', icon: Shield, label: 'Schutz' },
+    { id: 'focus', icon: Timer, label: 'Fokus' },
+    { id: 'insights', icon: BarChart3, label: 'Einblicke' },
+  ];
 
   return (
     <nav
       aria-label="Hauptnavigation"
-      className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-sm z-50"
+      className="absolute bottom-0 left-0 right-0 z-50 border-t border-zinc-800 bg-zinc-950"
     >
-      <div className="bg-zinc-900/90 backdrop-blur-2xl border border-zinc-800/50 rounded-3xl p-2 flex justify-between items-center shadow-2xl shadow-black/50">
+      <div className="flex items-stretch justify-around px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2">
         {navItems.map((item) => {
-          const active = isActive(item.id);
+          const active = TAB_SCREENS[item.id].includes(currentScreen);
           return (
             <button
               key={item.id}
-              onClick={() => navigate(item.id as Screen)}
+              onClick={() => navigate(item.id)}
               aria-current={active ? 'page' : undefined}
-              aria-label={item.label}
-              className={`relative flex flex-col items-center justify-center min-h-[48px] min-w-[48px] p-2.5 rounded-2xl transition-all duration-300 flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${active ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+              className={`flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${active ? 'text-zinc-50' : 'text-zinc-500 hover:text-zinc-300'}`}
             >
-              {active && (
-                <motion.div
-                  layoutId="nav-pill"
-                  className="absolute inset-0 bg-zinc-800/80 rounded-2xl -z-10"
-                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                />
-              )}
-              <item.icon size={22} strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
-              <span
-                className={`text-[10px] mt-1 font-medium tracking-wide ${active ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}
-              >
-                {item.label}
-              </span>
+              <item.icon size={22} strokeWidth={active ? 2.4 : 1.8} aria-hidden="true" />
+              <span className={`text-[11px] ${active ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>
             </button>
           );
         })}
       </div>
     </nav>
+  );
+}
+
+/** Page frame for every screen above the tab bar. */
+export function Page({ children }: { children: React.ReactNode }) {
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-5 pb-32 pt-6">
+      {children}
+    </motion.div>
+  );
+}
+
+/** Title of a tab, with the settings gear on the right. */
+export function TabHeader({ title, navigate }: { title: string; navigate: (s: Screen) => void }) {
+  return (
+    <header className="mb-6 flex items-center justify-between">
+      <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">{title}</h1>
+      <button
+        onClick={() => navigate('settings')}
+        aria-label="Einstellungen"
+        className="flex h-11 w-11 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+      >
+        <Settings size={22} aria-hidden="true" />
+      </button>
+    </header>
+  );
+}
+
+export function Section({
+  title,
+  children,
+  action,
+}: {
+  title?: string;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  return (
+    <section className="mb-8">
+      {(title || action) && (
+        <div className="mb-2 flex items-center justify-between px-1">
+          {title && <h2 className="text-sm font-semibold text-zinc-400">{title}</h2>}
+          {action}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+/** A group of rows with dividers. */
+export function List({ children }: { children: React.ReactNode }) {
+  return <div className="divide-y divide-zinc-800/80 overflow-hidden rounded-2xl bg-zinc-900">{children}</div>;
+}
+
+export function ProBadge() {
+  return (
+    <span className="rounded-md border border-emerald-500/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-400">
+      Pro
+    </span>
+  );
+}
+
+/**
+ * A list row. `right` is a separate control (a switch) and sits next to the
+ * row's own button, never inside it; `trailing` is decoration inside it.
+ */
+export function Row({
+  label,
+  value,
+  description,
+  onClick,
+  right,
+  trailing,
+  leading,
+  pro,
+  disabled,
+}: {
+  label: string;
+  value?: string;
+  description?: string;
+  onClick?: () => void;
+  right?: React.ReactNode;
+  trailing?: React.ReactNode;
+  leading?: React.ReactNode;
+  pro?: boolean;
+  disabled?: boolean;
+}) {
+  const content = (
+    <>
+      {leading}
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2">
+          <span className="font-medium text-zinc-100">{label}</span>
+          {pro && <ProBadge />}
+        </span>
+        {description && (
+          <span className="mt-0.5 block whitespace-pre-line text-sm leading-snug text-zinc-500">{description}</span>
+        )}
+      </span>
+      {value && <span className="flex-shrink-0 text-sm text-zinc-400">{value}</span>}
+      {trailing}
+      {onClick && !right && !trailing && (
+        <ChevronRight size={18} className="flex-shrink-0 text-zinc-600" aria-hidden="true" />
+      )}
+    </>
+  );
+  const layout = 'flex min-h-[56px] items-center gap-3 py-3 text-left';
+  const dimmed = disabled ? 'opacity-50' : '';
+  const button = onClick && (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`${layout} ${dimmed} ${right ? 'min-w-0 flex-1 pl-4' : 'w-full px-4'} hover:bg-zinc-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500`}
+    >
+      {content}
+    </button>
+  );
+
+  if (button && right) {
+    return (
+      <div className="flex items-center gap-2 pr-3">
+        {button}
+        {right}
+      </div>
+    );
+  }
+  if (button) return button;
+  return (
+    <div className={`${layout} w-full px-4 ${dimmed}`}>
+      {content}
+      {right}
+    </div>
+  );
+}
+
+export function PrimaryButton({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="flex min-h-[52px] w-full items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-emerald-500 px-3 font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+    >
+      {children}
+    </button>
+  );
+}
+
+export function SecondaryButton({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="flex min-h-[52px] w-full items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-zinc-800 px-3 font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Choice chips for a single value, e.g. 15 / 30 / 60 minutes. */
+export function Choice<T extends string | number>({
+  options,
+  value,
+  onChange,
+  label,
+}: {
+  options: { value: T; label: string; pro?: boolean }[];
+  value: T;
+  onChange: (value: T) => void;
+  label: string;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={String(option.value)}
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(option.value)}
+            className={`flex min-h-[44px] items-center gap-2 rounded-xl border px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${selected ? 'border-emerald-500 bg-emerald-500/10 text-zinc-50' : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700'}`}
+          >
+            {option.label}
+            {option.pro && <ProBadge />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The app's icon in a tile: launcher icon on Android, initials elsewhere. */
+export function AppTile({ app, size = 'md' }: { app: PlatformDefinition; size?: 'sm' | 'md' | 'lg' }) {
+  const sizeClass = {
+    sm: 'h-8 w-8 rounded-lg text-[10px]',
+    md: 'h-11 w-11 rounded-xl text-xs',
+    lg: 'h-20 w-20 rounded-3xl text-lg',
+  }[size];
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex flex-shrink-0 items-center justify-center overflow-hidden ${sizeClass} ${app.color}`}
+    >
+      {app.icon}
+    </span>
   );
 }
 

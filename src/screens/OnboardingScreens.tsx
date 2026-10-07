@@ -1,81 +1,53 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Check, CloudOff, Lock, ScanLine, Shield, Smartphone, Target, UserRound } from 'lucide-react';
-import { AppState, DEFAULT_APP_CONFIG, Screen, SUPPORTED_APPS } from '../types';
+import { Check, Shield } from 'lucide-react';
+import { AppState, Screen, SUPPORTED_APPS } from '../types';
+import { AppTile, PrimaryButton, SecondaryButton } from '../components/ui';
+import { FREE_LIMITS } from '../lib/entitlements';
+import { applyPreset } from '../lib/presets';
+import { normalizeAppConfig } from '../lib/state';
 
+/** Willkommen (docs/V1_MASTER_PLAN.md, 4.1). */
 export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="relative flex min-h-full flex-col items-center justify-start pt-6 pb-7 px-7 text-center"
+      className="flex min-h-full flex-col px-6 pb-8 pt-16"
     >
-      <div className="pointer-events-none absolute inset-x-8 top-12 h-56 rounded-full bg-emerald-500/10 blur-3xl" />
-      <div className="pointer-events-none absolute -right-20 top-40 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl" />
+      <div className="flex flex-1 flex-col">
+        <Shield size={44} className="mb-8 text-emerald-400" aria-hidden="true" />
+        <h1 className="mb-3 text-4xl font-semibold tracking-tight text-zinc-50">ScrollShield</h1>
+        <p className="mb-10 text-xl leading-snug text-zinc-300">Instagram ja, Reels nein.</p>
 
-      <div className="flex flex-1 flex-col items-center justify-center pt-2">
-        <div className="relative mb-4 h-36 w-36" aria-hidden="true">
-          <div className="signal-ring absolute inset-0 rounded-[2.2rem] border border-emerald-400/20" />
-          <div className="signal-ring absolute inset-2 rounded-[2rem] border border-blue-400/20" />
-          <div className="signal-ring absolute inset-4 rounded-[1.8rem] border border-rose-400/20" />
-          <div className="shield-aura absolute inset-5 rounded-[2.2rem] shadow-2xl shadow-emerald-950/60" />
-          <div className="absolute inset-5 z-10 flex items-center justify-center">
-            <Shield size={58} className="text-zinc-50 drop-shadow-lg" />
-          </div>
-          <div className="scanline absolute left-7 right-7 top-1/2 z-20 h-10 rounded-full border-y border-emerald-300/20 bg-emerald-300/10 blur-[1px]" />
-        </div>
-
-        <h1 className="mb-3 text-4xl font-black leading-none text-zinc-50">ScrollShield</h1>
-        <p className="mb-5 max-w-sm text-base font-medium leading-relaxed text-zinc-300">
-          Ein ruhiger Schutzschirm gegen Autopilot-Scrolling und Endlos-Feeds.
-        </p>
-
-        <div className="w-full max-w-xs space-y-2.5 rounded-2xl border border-zinc-800/50 bg-zinc-950/60 p-4 text-left shadow-inner">
-          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-1">So startest du:</p>
-          <div className="flex items-start gap-3">
-            <UserRound size={16} className="mt-0.5 text-emerald-400" aria-hidden="true" />
-            <div>
-              <span className="block text-sm font-semibold text-emerald-100">Kein Konto verbinden</span>
-              <span className="text-xs text-zinc-500">Alles bleibt lokal auf deinem Gerät</span>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <Smartphone size={18} className="mt-0.5 text-blue-400" aria-hidden="true" />
-            <div>
-              <span className="block text-sm font-semibold text-blue-100">App-Zugang begrenzen</span>
-              <span className="text-xs text-zinc-500">Pausen erzwingen und App-Limits setzen</span>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <Target size={18} className="mt-0.5 text-rose-400" aria-hidden="true" />
-            <div>
-              <span className="block text-sm font-semibold text-rose-100">Kurzvideo-Sog stoppen</span>
-              <span className="text-xs text-zinc-500">Bewusste Stopps statt Endlos-Feed</span>
-            </div>
-          </div>
-        </div>
+        <ul className="space-y-5">
+          {[
+            ['Kurzvideos bremsen', 'Reels und Shorts sperren oder begrenzen. Der Rest der App bleibt frei.'],
+            ['Reflexhaftes Öffnen bremsen', 'Eine kurze Pause vor der App. Wer gleich wieder öffnet, wartet länger.'],
+            ['Kein Konto', 'Alles bleibt auf deinem Handy.'],
+          ].map(([title, text]) => (
+            <li key={title}>
+              <p className="font-medium text-zinc-100">{title}</p>
+              <p className="mt-1 text-sm leading-relaxed text-zinc-400">{text}</p>
+            </li>
+          ))}
+        </ul>
       </div>
 
-      <div className="mt-5 w-full space-y-3 pb-2">
-        <button
-          onClick={() => navigate('onboarding')}
-          className="w-full rounded-[1.5rem] bg-zinc-100 py-3.5 font-bold text-zinc-950 shadow-lg shadow-zinc-100/10 transition-transform active:scale-[0.98]"
-        >
-          Loslegen
-        </button>
-        <button
-          onClick={() => navigate('help')}
-          className="w-full rounded-[1.5rem] border border-zinc-800/50 bg-zinc-900/80 py-3.5 font-semibold text-zinc-300 backdrop-blur-md transition-transform active:scale-[0.98]"
-        >
-          Mehr erfahren
-        </button>
+      <div className="mt-10 space-y-3">
+        <PrimaryButton onClick={() => navigate('onboarding')}>Loslegen</PrimaryButton>
+        <SecondaryButton onClick={() => navigate('help')}>Mehr erfahren</SecondaryButton>
         <p className="text-center text-xs text-zinc-500">Für Nutzer ab 16 Jahren.</p>
       </div>
     </motion.div>
   );
 }
 
+/**
+ * Onboarding: choose apps, see how it works, then permissions. No paywall:
+ * the free limit shows as a sentence, not as a sales screen.
+ */
 export function Onboarding({
   state,
   updateState,
@@ -87,192 +59,126 @@ export function Onboarding({
 }) {
   const [step, setStep] = useState(1);
   const [selectedApps, setSelectedApps] = useState<string[]>([]);
-  const [selectedProfileId, setSelectedProfileId] = useState<string>(state.activeProfileId || 'gentle');
+  const limitReached = selectedApps.length >= FREE_LIMITS.protectedApps;
 
-  const nextStep = () => {
-    if (step === 2) {
+  const next = () => {
+    if (step === 1) {
       const appsConfig = { ...state.appsConfig };
-      const selectedProfile = state.profiles?.find((p) => p.id === selectedProfileId);
-
       selectedApps.forEach((id) => {
-        if (selectedProfile && selectedProfile.appsConfig[id]) {
-          appsConfig[id] = { ...selectedProfile.appsConfig[id], active: true };
-        } else {
-          appsConfig[id] = { id, ...DEFAULT_APP_CONFIG, active: true };
-        }
+        appsConfig[id] = { ...applyPreset(normalizeAppConfig(id, appsConfig[id]), 'ausgewogen'), active: true };
       });
-      updateState({ appsConfig, activeProfileId: selectedProfileId });
+      updateState({ appsConfig });
     }
-
     if (step < 3) setStep(step + 1);
     else navigate('permissions');
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      className="flex h-full flex-col justify-between p-6"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="flex h-full flex-col px-6 pb-8 pt-10"
     >
-      <div className="flex-1 overflow-y-auto pb-4 pt-8 scrollbar-hide">
+      <p className="mb-2 text-sm text-zinc-500">Schritt {step} von 3</p>
+      <div className="flex-1 overflow-y-auto pb-4 scrollbar-hide">
         {step === 1 && (
-          <div>
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-[1.5rem] border border-rose-400/30 bg-rose-500/10 shadow-lg shadow-rose-950/30">
-              <Target size={32} className="text-rose-300" aria-hidden="true" />
-            </div>
-            <h2 className="mb-3 text-center text-3xl font-bold tracking-tight">Ziele auswählen</h2>
-            <p className="mb-8 text-center text-base text-zinc-400">
-              Welche Apps ziehen dich am häufigsten in Endlos-Feeds oder rauben dir Zeit?
+          <>
+            <h2 className="mb-2 text-2xl font-semibold tracking-tight text-zinc-50">Welche Apps ziehen dich rein?</h2>
+            <p className="mb-6 text-sm text-zinc-400">
+              Kostenlos schützt ScrollShield {FREE_LIMITS.protectedApps} Apps. Mehr geht später mit Pro.
             </p>
-            <div className="space-y-3">
+            <div className="divide-y divide-zinc-800/80 overflow-hidden rounded-2xl bg-zinc-900">
               {SUPPORTED_APPS.map((app) => {
                 const selected = selectedApps.includes(app.id);
+                const disabled = !selected && limitReached;
                 return (
                   <button
                     key={app.id}
                     type="button"
-                    // The checkmark is aria-hidden, so without this a screen
-                    // reader cannot tell which apps are selected.
                     aria-pressed={selected}
+                    disabled={disabled}
                     onClick={() =>
-                      setSelectedApps((prev) => (selected ? prev.filter((id) => id !== app.id) : [...prev, app.id]))
+                      setSelectedApps((previous) =>
+                        selected ? previous.filter((id) => id !== app.id) : [...previous, app.id],
+                      )
                     }
-                    className={`w-full rounded-[1.5rem] border p-4 transition-all ${
-                      selected
-                        ? 'border-emerald-400/40 bg-emerald-500/10 shadow-md shadow-emerald-950/30'
-                        : 'border-zinc-800/50 bg-zinc-950/50 opacity-85 hover:opacity-100'
-                    }`}
+                    className={`flex min-h-[60px] w-full items-center gap-3 px-4 py-3 text-left ${disabled ? 'opacity-40' : 'hover:bg-zinc-800/60'}`}
                   >
-                    <span className="flex items-center justify-between">
-                      <span className="flex items-center gap-4">
-                        <span
-                          className={`flex h-12 w-12 items-center justify-center rounded-2xl text-xl shadow-inner ${app.color}`}
-                          aria-hidden="true"
-                        >
-                          {app.icon}
-                        </span>
-                        <span className="px-2 font-semibold">{app.name}</span>
-                      </span>
-                      <span
-                        className={`flex h-6 w-6 items-center justify-center rounded-full border ${
-                          selected ? 'border-zinc-100 bg-zinc-100 text-zinc-950' : 'border-zinc-700'
-                        }`}
-                        aria-hidden="true"
-                      >
-                        {selected && <Check size={14} strokeWidth={3} />}
-                      </span>
+                    <AppTile app={app} size="sm" />
+                    <span className="flex-1 font-medium text-zinc-100">{app.name}</span>
+                    <span
+                      className={`flex h-6 w-6 items-center justify-center rounded-full border ${selected ? 'border-emerald-500 bg-emerald-500 text-zinc-950' : 'border-zinc-700'}`}
+                      aria-hidden="true"
+                    >
+                      {selected && <Check size={14} strokeWidth={3} />}
                     </span>
                   </button>
                 );
               })}
             </div>
-          </div>
+          </>
         )}
 
         {step === 2 && (
-          <div>
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-[1.5rem] border border-emerald-400/30 bg-emerald-500/10 shadow-lg shadow-emerald-950/30">
-              <Shield size={32} className="text-emerald-300" aria-hidden="true" />
-            </div>
-            <h2 className="mb-3 text-center text-3xl font-bold tracking-tight">Start-Profil wählen</h2>
-            <p className="mb-6 text-center text-sm text-zinc-400">
-              Das ist nur dein Startpunkt. Du kannst später jede App und jeden Feed einzeln anpassen.
+          <>
+            <h2 className="mb-6 text-2xl font-semibold tracking-tight text-zinc-50">So funktioniert's</h2>
+            <ol className="space-y-5">
+              {[
+                ['Du öffnest eine geschützte App', 'ScrollShield zeigt eine kurze Pause.'],
+                ['Du entscheidest', '„Zurück“ oder nach der Pause „Weiter“.'],
+                ['Du öffnest sie gleich wieder', 'Dann kommt die Pause erneut – bei „Stark“ folgt eine Abkühlzeit.'],
+                ['Kurzvideos', 'Reels und Shorts kannst du pro App sperren oder auf Minuten begrenzen.'],
+              ].map(([title, text], index) => (
+                <li key={title} className="flex gap-4">
+                  <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-zinc-800 text-sm font-semibold text-zinc-200">
+                    {index + 1}
+                  </span>
+                  <span>
+                    <span className="block font-medium text-zinc-100">{title}</span>
+                    <span className="mt-1 block text-sm text-zinc-400">{text}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+            <p className="mt-8 rounded-xl border border-zinc-800 px-4 py-3 text-sm text-zinc-400">
+              Gestartet wird mit „Ausgewogen“. Du kannst das pro App im Tab „Schutz“ ändern.
             </p>
-            <div className="space-y-4" role="radiogroup" aria-label="Start-Profil">
-              {state.profiles?.map((profile) => {
-                const selected = selectedProfileId === profile.id;
-                return (
-                  <button
-                    key={profile.id}
-                    type="button"
-                    // Single choice, so radio semantics – matching the profile
-                    // list in ConfigScreens.
-                    role="radio"
-                    aria-checked={selected}
-                    onClick={() => setSelectedProfileId(profile.id)}
-                    className={`w-full rounded-[1.5rem] border p-5 text-left transition-all ${
-                      selected
-                        ? 'border-emerald-400/40 bg-zinc-900/90 shadow-lg'
-                        : 'border-zinc-800/50 bg-zinc-950/50 hover:bg-zinc-900/50'
-                    }`}
-                  >
-                    <span className="mb-2 flex items-center justify-between">
-                      <span className="text-lg font-bold text-zinc-100">{profile.name}</span>
-                      {selected && <Check size={16} className={profile.color} aria-hidden="true" />}
-                    </span>
-                    <span className="block text-sm leading-relaxed text-zinc-400">{profile.description}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          </>
         )}
 
         {step === 3 && (
-          <div className="mt-6 flex flex-col items-center text-center">
-            <div className="mb-8 flex h-24 w-24 items-center justify-center rounded-[2rem] border border-zinc-800/50 bg-zinc-900/80 shadow-lg backdrop-blur-md">
-              <Lock size={40} className="text-zinc-100" aria-hidden="true" />
-            </div>
-            <h2 className="mb-5 text-3xl font-bold tracking-tight">Privatsphäre & Schutz</h2>
-            <p className="mb-6 text-sm leading-relaxed text-zinc-400">
-              Du musst dich nicht mit deinen Social-Media-Konten verbinden. ScrollShield funktioniert komplett lokal und
-              ohne Account-Zwang.
-            </p>
-            <div className="mb-4 w-full rounded-[1.5rem] border border-emerald-500/30 bg-emerald-500/10 p-5 text-left text-sm text-emerald-100 shadow-inner">
-              <div className="mb-2 flex items-center gap-2 font-bold text-emerald-300">
-                <CloudOff size={16} aria-hidden="true" />
-                Offline-First
-              </div>
-              Regeln, Verlauf und Statistiken bleiben auf deinem Gerät. ScrollShield hat keinen Server und kein Konto,
-              liest keine privaten Chats und überträgt keine Nutzungsdaten.
-            </div>
-            <div className="w-full rounded-[1.5rem] border border-blue-500/30 bg-blue-500/10 p-5 text-left text-sm text-blue-200 shadow-inner">
-              <div className="mb-2 flex items-center gap-2 font-bold text-blue-300">
-                <ScanLine size={16} aria-hidden="true" />
-                Volle Kontrolle
-              </div>
-              Die App hilft dir mit bewussten Pausen, strengen Regeln, Fokuszeiten und klaren Unterbrechungen, deine
-              digitale Balance zurückzugewinnen.
-            </div>
-          </div>
+          <>
+            <h2 className="mb-6 text-2xl font-semibold tracking-tight text-zinc-50">Deine Daten</h2>
+            <ul className="space-y-5 text-sm leading-relaxed text-zinc-400">
+              <li>
+                <span className="block font-medium text-zinc-100">Kein Konto, kein Server</span>
+                Regeln, Verlauf und Zahlen bleiben auf deinem Handy.
+              </li>
+              <li>
+                <span className="block font-medium text-zinc-100">Keine Inhalte</span>
+                ScrollShield sieht, welche App offen ist – nie, was du darin liest oder schreibst.
+              </li>
+              <li>
+                <span className="block font-medium text-zinc-100">Gleich: Berechtigungen</span>
+                Android fragt nach zwei Erlaubnissen. Ohne sie kann ScrollShield keine App unterbrechen.
+              </li>
+            </ul>
+          </>
         )}
       </div>
 
-      <div className="bg-zinc-950 pt-4">
-        <div className="mb-6 flex justify-center gap-2">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className={`h-1.5 rounded-full transition-all duration-300 ${i === step ? 'w-8 bg-zinc-100' : 'w-2 bg-zinc-800'}`}
-            />
-          ))}
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => (step > 1 ? setStep(step - 1) : navigate('welcome'))}
-            className="flex w-16 items-center justify-center rounded-[1.5rem] border border-zinc-800 bg-zinc-900 py-4 text-zinc-400 shadow-lg transition-transform active:scale-[0.98]"
-            aria-label="Zurück"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-5 w-5"
-              aria-hidden="true"
-            >
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-          </button>
-          <button
-            onClick={nextStep}
-            className="flex-1 rounded-[1.5rem] bg-zinc-100 py-4 font-bold text-zinc-950 shadow-lg shadow-zinc-100/10 transition-transform active:scale-[0.98]"
-          >
-            {step < 3 ? 'Weiter' : 'Setup prüfen'}
-          </button>
+      <div className="flex gap-3 pt-4">
+        <button
+          onClick={() => (step > 1 ? setStep(step - 1) : navigate('welcome'))}
+          className="min-h-[52px] rounded-2xl bg-zinc-800 px-5 font-semibold text-zinc-200"
+        >
+          Zurück
+        </button>
+        <div className="flex-1">
+          <PrimaryButton onClick={next} disabled={step === 1 && selectedApps.length === 0}>
+            {step < 3 ? 'Weiter' : 'Berechtigungen'}
+          </PrimaryButton>
         </div>
       </div>
     </motion.div>

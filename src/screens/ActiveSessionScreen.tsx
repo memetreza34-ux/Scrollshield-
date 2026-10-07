@@ -46,7 +46,7 @@ export function ActiveSessionScreen({
 
   useEffect(() => {
     if (!session || !appInfo) {
-      navigate('dashboard');
+      navigate('today');
       return;
     }
 
@@ -151,7 +151,7 @@ export function ActiveSessionScreen({
       history: [newEvent, ...state.history],
       dailyStats,
     });
-    navigate('dashboard');
+    navigate('today');
   };
 
   const togglePause = () => {

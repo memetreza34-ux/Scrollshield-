@@ -3,6 +3,8 @@ package app.scrollshield.mobile
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import java.util.Calendar
 
@@ -104,5 +106,90 @@ object ForegroundUsage {
         }
 
         return packages.associateWith { packageName -> ((totals[packageName] ?: 0L) / 60_000L).toInt() }
+    }
+
+    /** Local midnight `daysBack` days before today. */
+    fun startOfDay(daysBack: Int): Long = Calendar.getInstance().apply {
+        timeInMillis = startOfToday()
+        add(Calendar.DAY_OF_YEAR, -daysBack)
+    }.timeInMillis
+
+    /**
+     * Total screen time between two moments: the time any app was in front,
+     * except home screens and the system UI, like Android's own Digital
+     * Wellbeing counts it. Nothing is stored; only the sum is returned.
+     */
+    @Suppress("DEPRECATION") // MOVE_TO_* equal ACTIVITY_RESUMED/PAUSED and also cover Android 9.
+    fun screenTimeMinutes(context: Context, from: Long, to: Long): Int {
+        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+            ?: return 0
+        val events = try {
+            usageStatsManager.queryEvents(from, to)
+        } catch (_: Exception) {
+            null
+        } ?: return 0
+
+        val excluded = homeScreenPackages(context) + setOf("com.android.systemui", "android")
+        var current: String? = null
+        var resumedCount = 0
+        var since = 0L
+        var total = 0L
+        val event = UsageEvents.Event()
+
+        fun close(end: Long) {
+            if (current != null) total += (end - since).coerceAtLeast(0L)
+            current = null
+            resumedCount = 0
+        }
+
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            val packageName = event.packageName ?: continue
+
+            val endsEverything = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+                (event.eventType == UsageEvents.Event.SCREEN_NON_INTERACTIVE ||
+                    event.eventType == UsageEvents.Event.DEVICE_SHUTDOWN)
+            if (endsEverything) {
+                close(event.timeStamp)
+                continue
+            }
+
+            when (event.eventType) {
+                UsageEvents.Event.MOVE_TO_FOREGROUND -> {
+                    if (packageName == current) {
+                        resumedCount++
+                    } else {
+                        close(event.timeStamp)
+                        if (packageName !in excluded) {
+                            current = packageName
+                            resumedCount = 1
+                            since = event.timeStamp
+                        }
+                    }
+                }
+
+                UsageEvents.Event.MOVE_TO_BACKGROUND -> {
+                    if (packageName == current) {
+                        resumedCount--
+                        if (resumedCount <= 0) close(event.timeStamp)
+                    }
+                }
+            }
+        }
+
+        close(to)
+        return (total / 60_000L).toInt()
+    }
+
+    /** The installed home screens; listed under <queries> so Android shows them. */
+    private fun homeScreenPackages(context: Context): Set<String> {
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        return try {
+            context.packageManager.queryIntentActivities(home, PackageManager.MATCH_DEFAULT_ONLY)
+                .mapNotNull { it.activityInfo?.packageName }
+                .toSet()
+        } catch (_: Exception) {
+            emptySet()
+        }
     }
 }

@@ -35,6 +35,9 @@ object InterruptionLog {
     /** The user chose "continue" and opened the app. */
     const val OUTCOME_CONTINUED = "continued"
 
+    /** The user lifted a lock with an emergency unlock. */
+    const val OUTCOME_EMERGENCY = "emergency"
+
     private val lock = Any()
 
     fun record(

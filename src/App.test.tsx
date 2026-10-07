@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { expectNoA11yViolations } from './test/a11y';
 import { StorageService } from './lib/storage';
-import { DEFAULT_STATE } from './types';
+import { DEFAULT_APP_CONFIG, DEFAULT_STATE } from './types';
 
 const nativeEvents = vi.hoisted(() => ({ read: vi.fn(), acknowledge: vi.fn() }));
 vi.mock('./lib/nativeBridge', async (importOriginal) => ({
@@ -73,7 +73,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Loslegen' }));
 
-    expect(await screen.findByRole('heading', { name: 'Ziele auswählen' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Welche Apps ziehen dich rein?' })).toBeInTheDocument();
     await waitFor(() => expect(scrollArea.scrollTop).toBe(0));
   });
 
@@ -115,8 +115,8 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Fokusmodus Aktiv' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Noch 15 Minuten')).toBeInTheDocument();
+    expect(await screen.findByText('Fokus läuft')).toBeInTheDocument();
+    expect(screen.getByText('noch 15 Min.')).toBeInTheDocument();
   });
 
   /**
@@ -175,14 +175,14 @@ describe('App', () => {
           <App />
         </StrictMode>,
       );
-      expect(await screen.findByRole('heading', { name: 'Fokusmodus Aktiv' })).toBeInTheDocument();
+      expect(await screen.findByText('Fokus läuft')).toBeInTheDocument();
       expect(shown).toHaveLength(0);
 
       now += 2 * 60_000;
       act(() => focusTicks.at(-1)?.());
       act(() => focusTicks.at(-1)?.());
 
-      await waitFor(() => expect(screen.queryByRole('heading', { name: 'Fokusmodus Aktiv' })).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.queryByText('Fokus läuft')).not.toBeInTheDocument());
       await act(async () => {});
       return shown;
     } finally {
@@ -220,13 +220,21 @@ describe('App', () => {
         swipes: 0,
       },
     ]);
-    await StorageService.saveState({ ...DEFAULT_STATE, hasCompletedOnboarding: true });
+    await StorageService.saveState({
+      ...DEFAULT_STATE,
+      hasCompletedOnboarding: true,
+      appsConfig: { instagram: { ...DEFAULT_APP_CONFIG, id: 'instagram', active: true } },
+    });
 
     render(<App />);
 
-    expect(
-      await screen.findByText('2 unbewusste Impulse heute gestoppt.', undefined, { timeout: 5000 }),
-    ).toBeInTheDocument();
+    // n1 locked the app, n2 was stopped: both interruptions, one not opened.
+    await waitFor(
+      () =>
+        expect(screen.getByText('Öffnungen unterbrochen').parentElement).toHaveTextContent('2 Öffnungen unterbrochen'),
+      { timeout: 5000 },
+    );
+    expect(screen.getByText('davon 1× nicht geöffnet')).toBeInTheDocument();
     await waitFor(() => expect(nativeEvents.acknowledge).toHaveBeenCalledWith(['n1', 'n2']));
   });
 
@@ -243,7 +251,7 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: 'Einstellungen' }, { timeout: 5000 })).toBeInTheDocument();
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Datenschutz & Transparenz Lokale Daten, Berechtigungen & App-Reset',
+        name: /Datenschutz & Daten/,
       }),
     );
     expect(await screen.findByRole('heading', { name: 'Datenschutz & Transparenz' })).toBeInTheDocument();

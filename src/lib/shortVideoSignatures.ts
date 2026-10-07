@@ -115,3 +115,10 @@ export function matchesShortVideoSurface(
     classNames.some((className) => className.includes(hint.toLowerCase())),
   );
 }
+
+/**
+ * Apps whose feed protection V1 offers (docs/V1_MASTER_PLAN.md, section 6).
+ * The other signatures stay for the calibration screen but are not offered
+ * until their detection is verified on real devices.
+ */
+export const V1_SHORT_VIDEO_APP_IDS = ['instagram', 'youtube', 'tiktok'];

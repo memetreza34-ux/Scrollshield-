@@ -39,7 +39,7 @@ describe('toHistoryEvent', () => {
     expect(lite).toMatchObject({
       id: 'android-e1',
       appId: 'instagram',
-      desc: 'Auf dem Handy gesperrt (Zeitfenster)',
+      desc: 'Auf dem Handy gesperrt (Zeitplan)',
       metadata: { source: 'android', reason: 'TIME_WINDOW' },
     });
   });
@@ -59,14 +59,14 @@ describe('toHistoryEvent', () => {
 
   it('names daily limit, anti-binge lock and anti-binge warning', () => {
     expect(toHistoryEvent(event({ reason: 'DAILY_LIMIT' }), platforms)?.desc).toBe(
-      'Auf dem Handy gesperrt (Tageslimit)',
+      'Auf dem Handy gesperrt (Tagesbudget)',
     );
     expect(toHistoryEvent(event({ reason: 'ANTI_BINGE' }), platforms)?.desc).toBe(
-      'Auf dem Handy gesperrt (Anti-Binge)',
+      'Auf dem Handy gesperrt (Abkühlzeit)',
     );
     expect(toHistoryEvent(event({ outcome: 'warned', reason: 'ANTI_BINGE_WARNING' }), platforms)).toMatchObject({
       type: 'warning',
-      desc: 'Anti-Binge-Warnung auf dem Handy',
+      desc: 'Wieder geöffnet: längere Pause',
     });
   });
 

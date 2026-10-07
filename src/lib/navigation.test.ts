@@ -3,7 +3,8 @@ import { getBackTarget } from './navigation';
 
 describe('getBackTarget', () => {
   it('goes one step up, like the header arrow', () => {
-    expect(getBackTarget('app_detail', true)).toBe('apps');
+    expect(getBackTarget('app_detail', true)).toBe('protect');
+    expect(getBackTarget('insights', true)).toBe('today');
     expect(getBackTarget('imprint', true)).toBe('support');
     expect(getBackTarget('privacy', true)).toBe('settings');
   });
@@ -20,7 +21,7 @@ describe('getBackTarget', () => {
   });
 
   it('sends the app to the background from a start screen', () => {
-    expect(getBackTarget('dashboard', true)).toBeNull();
+    expect(getBackTarget('today', true)).toBeNull();
     expect(getBackTarget('welcome', false)).toBeNull();
     expect(getBackTarget('active_session', true)).toBeNull();
   });

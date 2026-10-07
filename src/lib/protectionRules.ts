@@ -1,6 +1,6 @@
-import { AppConfig, AppState, HistoryEvent } from '../types';
+import { AppConfig, AppState, HistoryEvent, Schedule } from '../types';
 import { getLocalDateKey } from './appUtils';
-import { getActiveTimeWindowRule, getTimeWindowLabel } from './timeWindows';
+import { getActiveScheduleForApp } from './schedules';
 
 export type ProtectionFlowStep =
   | 'init'
@@ -41,12 +41,21 @@ export const getAppUsageMinutesToday = (dailyStats: AppState['dailyStats'], appI
   return dailyStats[dateKey]?.usageMinutes[appId] ?? 0;
 };
 
+/** Longest pause the reopen protection builds up. */
+export const MAX_ESCALATED_DELAY_SECONDS = 120;
+
+/** The opening pause after `reopens` openings inside the reopen window. */
+export const getEscalatedDelay = (config: AppConfig, reopens: number) =>
+  Math.min(MAX_ESCALATED_DELAY_SECONDS, config.openDelay + reopens * (config.antiBinge.escalationSeconds ?? 0));
+
 export const evaluateProtectionAttempt = ({
   appId,
   config,
   dailyStats = {},
   history,
   isFocusModeActive,
+  focusBlockedAppIds,
+  schedules = [],
   now = Date.now(),
 }: {
   appId: string;
@@ -54,6 +63,9 @@ export const evaluateProtectionAttempt = ({
   dailyStats?: AppState['dailyStats'];
   history: HistoryEvent[];
   isFocusModeActive: boolean;
+  /** The apps the running focus or rescue session locks; without it, `focusModeBehavior` decides. */
+  focusBlockedAppIds?: string[];
+  schedules?: Schedule[];
   now?: number;
 }): ProtectionDecision => {
   if (!config.active) {
@@ -92,24 +104,24 @@ export const evaluateProtectionAttempt = ({
     }
   }
 
-  // Time windows tighten the configured mode but never loosen it: an app set to
-  // 'strict' stays strict during a 'normal' window.
-  const { window, rule: timeWindowRule } = getActiveTimeWindowRule(config.timeWindows, new Date(now));
-
-  if (timeWindowRule === 'block') {
+  const schedule = getActiveScheduleForApp(schedules, appId, new Date(now));
+  if (schedule) {
     return {
       step: 'anti_binge_block',
       blockReason: 'time_window',
       event: {
         type: 'block',
-        desc: `Gesperrt im Zeitfenster ${getTimeWindowLabel(window)}`,
+        desc: `Gesperrt im Zeitplan „${schedule.name}“`,
       },
     };
   }
 
-  const effectiveMode = timeWindowRule === 'strict' && config.mode !== 'strict' ? 'strict' : config.mode;
+  const effectiveMode = config.mode;
+  const focusBlocked =
+    isFocusModeActive &&
+    (focusBlockedAppIds ? focusBlockedAppIds.includes(appId) : config.focusModeBehavior === 'block');
 
-  if ((isFocusModeActive && config.focusModeBehavior === 'block') || effectiveMode === 'strict') {
+  if (focusBlocked || effectiveMode === 'strict') {
     const maxEmergencyUnlocks = config.emergencyUnlock?.maxPerDay ?? 0;
     const emergencyCountToday = countEmergencyUnlocksToday(history, now);
 
@@ -128,10 +140,7 @@ export const evaluateProtectionAttempt = ({
       step: 'strict_blocked',
       event: {
         type: 'block',
-        desc:
-          effectiveMode === 'strict' && config.mode !== 'strict'
-            ? `Streng im Zeitfenster ${getTimeWindowLabel(window)}`
-            : 'Durch strikten Modus / Fokus blockiert',
+        desc: focusBlocked ? 'Während des Fokus gesperrt' : 'Durch strikten Modus gesperrt',
       },
     };
   }
@@ -150,6 +159,7 @@ export const evaluateProtectionAttempt = ({
     if (recentWarningWindowOpens.length >= config.antiBinge.warningThreshold) {
       return {
         step: 'anti_binge_warning',
+        delaySeconds: getEscalatedDelay(config, recentWarningWindowOpens.length),
         event: {
           type: 'warning',
           desc: `Anti-Binge Warnung (${recentWarningWindowOpens.length} Öffnungen in ${config.antiBinge.warningTimeframe}m)`,

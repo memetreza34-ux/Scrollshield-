@@ -31,6 +31,10 @@ gemacht hast, was passiert ist, Handy-Modell und Android-Version. Ein Screenshot
       sich (je nach Hersteller die App-Info). ScrollShield dort auf „Nicht optimieren“ stellen; nach der Rückkehr
       „AKTIV“. Ohne diesen Schritt bleibt die Karte „OPTIONAL“.
 - [ ] Instagram als geschützte App aktivieren. **Erwartet:** eine dauerhafte Benachrichtigung „ScrollShield ist aktiv“.
+- [ ] App-Liste öffnen. **Erwartet:** installierte Apps zeigen ihr Symbol wie auf dem Startbildschirm, nicht
+      installierte die Kürzel (IG, TT …). Eine der Apps installieren und zu ScrollShield zurückkehren. **Erwartet:**
+      jetzt erscheint ihr Symbol. Der Schutzbildschirm nennt die App beim Namen („Instagram“), nicht
+      „com.instagram.android“.
 
 ## 2. App-Sperre
 

@@ -9,7 +9,9 @@ import {
   ProtectionBlockReason,
   ProtectionFlowStep,
 } from '../lib/protectionRules';
-import { getActiveTimeWindowRule, getTimeWindowLabel } from '../lib/timeWindows';
+import { getActiveScheduleForApp } from '../lib/schedules';
+import { getFocusBlockedAppIds, getRunningFocusSession } from '../lib/focus';
+import { isCommitmentActive } from '../lib/commitment';
 import { recordProtectionEventStats } from '../lib/session';
 
 const EMERGENCY_REASONS = ['Dringende Nachricht', 'Wichtiger Post / Upload', 'Kurz etwas recherchieren'];
@@ -30,6 +32,8 @@ export function ProtectionFlow({
   const [step, setStep] = useState<ProtectionFlowStep>('init');
   const [blockReason, setBlockReason] = useState<ProtectionBlockReason | undefined>();
   const [delayRemaining, setDelayRemaining] = useState(0);
+  /** The longer pause of a reopen, kept for after the reopen notice. */
+  const [escalatedDelay, setEscalatedDelay] = useState<number | undefined>();
   const [intentReason, setIntentReason] = useState('');
   const [intentDuration, setIntentDuration] = useState(5);
   const [sessionLimitOverrideMinutes, setSessionLimitOverrideMinutes] = useState<number | undefined>();
@@ -74,12 +78,12 @@ export function ProtectionFlow({
 
   const cancel = () => {
     updateState({ simulatedAppToOpen: null });
-    navigate('dashboard');
+    navigate('today');
   };
 
   useEffect(() => {
     if (!appId || !appInfo || !config) {
-      navigate('dashboard');
+      navigate('today');
       return;
     }
 
@@ -91,10 +95,16 @@ export function ProtectionFlow({
       dailyStats: state.dailyStats,
       history: state.history,
       isFocusModeActive: state.isFocusModeActive,
+      focusBlockedAppIds: getFocusBlockedAppIds({
+        focusSessions: state.focusSessions,
+        isFocusModeActive: state.isFocusModeActive,
+      }),
+      schedules: state.schedules,
     });
 
     if (decision.delaySeconds !== undefined) {
       setDelayRemaining(decision.delaySeconds);
+      if (decision.step === 'anti_binge_warning') setEscalatedDelay(decision.delaySeconds);
     }
     setBlockReason(decision.blockReason);
 
@@ -118,6 +128,8 @@ export function ProtectionFlow({
     state.dailyStats,
     state.history,
     state.isFocusModeActive,
+    state.focusSessions,
+    state.schedules,
     step,
   ]);
 
@@ -138,13 +150,17 @@ export function ProtectionFlow({
     </div>
   );
 
+  const runningSession = getRunningFocusSession(state);
+  // No emergency unlock during a self-commitment or a strict focus / rescue.
+  const emergencyAllowed = !isCommitmentActive(state) && !(state.isFocusModeActive && runningSession?.strict);
+
   const describeBlock = () => {
     switch (blockReason) {
       case 'daily_limit':
         return `Dein Tageslimit für ${appInfo.name} ist für heute aufgebraucht. Morgen ist die App wieder frei.`;
       case 'time_window': {
-        const { window } = getActiveTimeWindowRule(config.timeWindows);
-        return `${appInfo.name} ist im Zeitfenster „${getTimeWindowLabel(window)}“ gesperrt. Die Zeitfenster kannst du in den App-Regeln ändern.`;
+        const schedule = getActiveScheduleForApp(state.schedules, appInfo.id);
+        return `${appInfo.name} ist im Zeitplan „${schedule?.name ?? ''}“ gesperrt. Zeitpläne findest du im Tab „Schutz“.`;
       }
       case 'emergency_limit':
         return `Du hast heute alle Notfallfreigaben genutzt. ${appInfo.name} bleibt bis morgen gesperrt.`;
@@ -281,7 +297,7 @@ export function ProtectionFlow({
           <h2 className="text-3xl font-bold mb-3 tracking-tight">Blockiert</h2>
           <p className="text-zinc-400 mb-10 text-lg leading-relaxed">
             {state.isFocusModeActive
-              ? `${appInfo.name} ist während deiner Fokus-Sitzung gesperrt.`
+              ? `${appInfo.name} ist während ${runningSession?.kind === 'rescue' ? 'Rescue' : 'deines Fokus'} gesperrt.`
               : `${appInfo.name} ist aktuell durch deine strengen Regeln gesperrt.`}
           </p>
 
@@ -292,7 +308,7 @@ export function ProtectionFlow({
             >
               Verstanden
             </button>
-            {(config.emergencyUnlock?.enabled || state.isFocusModeActive) && (
+            {emergencyAllowed && (config.emergencyUnlock?.enabled || state.isFocusModeActive) && (
               <button
                 onClick={() => {
                   setStep('emergency_countdown');
@@ -454,7 +470,7 @@ export function ProtectionFlow({
                 // standard flow has not been set yet; without it the countdown
                 // started at zero and the warning skipped the pause.
                 if (config.mode === 'standard') {
-                  setDelayRemaining(config.openDelay);
+                  setDelayRemaining(escalatedDelay ?? config.openDelay);
                   setStep('standard_delay');
                 } else {
                   setStep('soft_intent');

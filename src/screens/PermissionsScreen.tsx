@@ -403,7 +403,7 @@ export function PermissionsScreen({
             <button
               onClick={() => {
                 updateState({ hasCompletedOnboarding: true });
-                navigate('dashboard');
+                navigate('today');
               }}
               className="w-full bg-zinc-100 text-zinc-950 font-bold py-4 rounded-[1.5rem] active:scale-[0.98] transition-transform shadow-lg shadow-zinc-100/10"
             >

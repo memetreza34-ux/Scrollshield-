@@ -30,7 +30,48 @@ const recentOpens = (count: number): HistoryEvent[] =>
   }));
 
 describe('ProtectionFlow', () => {
-  it('keeps the opening delay after the anti-binge warning', () => {
+  it('names the schedule that locks the app', () => {
+    const hour = new Date().getHours();
+    renderFlow({
+      appsConfig: { instagram: instagram() },
+      schedules: [
+        { id: 's', name: 'Abend', startHour: hour, endHour: (hour + 1) % 24, appIds: ['instagram'], active: true },
+      ],
+    });
+
+    expect(screen.getByText(/im Zeitplan „Abend“ gesperrt/)).toBeInTheDocument();
+  });
+
+  it('offers no emergency unlock during a self-commitment', () => {
+    renderFlow({
+      appsConfig: { instagram: instagram({ mode: 'strict' }) },
+      commitment: { until: Date.now() + 60 * 60_000 },
+    });
+
+    expect(screen.queryByRole('button', { name: 'Notfallfreigabe anfordern' })).toBeNull();
+  });
+
+  it('locks only the apps the running focus chose', () => {
+    const session = {
+      id: 'f',
+      startTime: Date.now(),
+      endTime: null,
+      duration: 30,
+      successful: false,
+      protectedApps: ['tiktok'],
+      blocksTriggered: 0,
+    };
+    renderFlow({
+      appsConfig: { instagram: instagram({ mode: 'standard', openDelay: 7 }) },
+      isFocusModeActive: true,
+      focusSessions: [session],
+    });
+
+    expect(screen.queryByText('Blockiert')).toBeNull();
+  });
+
+  it('makes the pause longer with every reopen', () => {
+    // 12 s pause, three openings in the last 10 minutes, 10 s more each.
     renderFlow({
       appsConfig: { instagram: instagram({ mode: 'standard', openDelay: 12 }) },
       history: recentOpens(3),
@@ -38,7 +79,7 @@ describe('ProtectionFlow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Trotzdem weiter' }));
 
-    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getByText('42')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Trotzdem öffnen' })).toBeDisabled();
   });
 
@@ -63,10 +104,20 @@ describe('ProtectionFlow', () => {
 
   it('explains an anti-binge lock with the openings', () => {
     renderFlow({
-      appsConfig: { instagram: instagram() },
-      history: recentOpens(5),
+      appsConfig: {
+        instagram: instagram({
+          antiBinge: {
+            enabled: true,
+            warningThreshold: 1,
+            warningTimeframe: 10,
+            blockThreshold: 3,
+            blockTimeframe: 30,
+          },
+        }),
+      },
+      history: recentOpens(3),
     });
 
-    expect(screen.getByText(/in den letzten 20 Minuten zu oft geöffnet/)).toBeInTheDocument();
+    expect(screen.getByText(/in den letzten 30 Minuten zu oft geöffnet/)).toBeInTheDocument();
   });
 });

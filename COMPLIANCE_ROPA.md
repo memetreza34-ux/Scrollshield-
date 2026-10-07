@@ -10,7 +10,7 @@ In der aktuellen Version (v1.0 Offline-MVP) verarbeitet ScrollShield folgende Da
 
 - **App-Nutzungsdaten:** Welche Apps (App-IDs/Bundle-IDs) geöffnet werden.
 - **Zeitstempel:** Wann eine App geöffnet, blockiert oder freigegeben wurde.
-- **Statistiken:** Berechnete Fokus-Zeit, gesparte Zeit, Streaks.
+- **Statistiken:** Fokus-Minuten, Öffnungen, Unterbrechungen, Nutzungszeit (keine geschätzte „gesparte Zeit“, siehe `docs/V1_MASTER_PLAN.md`).
 - **Konfigurationsdaten:** Vom Nutzer erstellte Regeln, Profile und Limits.
 - **Freitext „Grund“:** Was der Nutzer vor dem Öffnen einer App als Grund eintippt, gespeichert im Verlauf (letzte 100
   Ereignisse). Kann beliebige, auch sensible Inhalte enthalten.

@@ -19,9 +19,10 @@
  */
 
 import { Capacitor, PluginListenerHandle, registerPlugin } from '@capacitor/core';
+import type { Schedule } from '../types';
 import { getShortVideoSignature } from './shortVideoSignatures';
 import { isShortVideoFeedBlockedByConfig } from './stats';
-import { TIME_WINDOWS, TimeWindowRule } from './timeWindows';
+import { TimeWindowRule } from './schedules';
 
 // ── Type definitions ──────────────────────────────────────────────────────────
 
@@ -86,7 +87,7 @@ export interface NativeTimeWindow {
  * Time-window rules, evaluated on the device at the moment the app is opened.
  * The web layer cannot re-sync at every window boundary – it may not be
  * running at 22:00 – so the schedule itself goes down, not today's result.
- * Hours come from TIME_WINDOWS so both sides use the same boundaries.
+ * The windows come from the user's schedules (src/lib/schedules.ts).
  */
 export interface NativeTimeWindows {
   windows: NativeTimeWindow[];
@@ -101,6 +102,17 @@ export interface NativeAntiBinge {
   blockThreshold: number;
   /** Minutes */
   blockTimeframe: number;
+  /**
+   * Seconds the opening pause grows with every opening inside
+   * warningTimeframe: the reopen protection. 0 or absent keeps it flat.
+   */
+  escalationSeconds?: number;
+}
+
+export interface NativeEmergencyUnlock {
+  maxPerDay: number;
+  /** How long the app stays free after an emergency unlock */
+  durationMinutes: number;
 }
 
 export interface NativeProtectionRule {
@@ -120,6 +132,14 @@ export interface NativeProtectionRule {
   timeWindows?: NativeTimeWindows;
   /** Short-video surface rule; absent when the app has no protected feed */
   shortVideo?: NativeShortVideoRule;
+  /** Locked by a focus or rescue session until this time (epoch ms) */
+  focusUntil?: number;
+  /** Interrupt after this many minutes in the app without a break; absent when off */
+  sessionLimitMinutes?: number;
+  /** Emergency unlock on a lock screen; absent when switched off */
+  emergencyUnlock?: NativeEmergencyUnlock;
+  /** No emergency unlock before this time: self-commitment or strict focus (epoch ms) */
+  emergencyLockedUntil?: number;
 }
 
 export interface ShortVideoUsageEntry {
@@ -148,7 +168,7 @@ export interface NativeInterruptionEvent {
   packageName: string;
   kind: 'app' | 'short_video';
   /** blocked: locked · warned: soft interruption shown · stopped: user went home · continued: user opened the app */
-  outcome: 'blocked' | 'warned' | 'stopped' | 'continued';
+  outcome: 'blocked' | 'warned' | 'stopped' | 'continued' | 'emergency';
   /** STRICT, TIME_WINDOW, SOFT, STANDARD, or for feeds SWIPES, SESSION_LIMIT, DAILY_LIMIT, BLOCKED */
   reason: string;
   swipes: number;
@@ -165,6 +185,20 @@ export interface AppUsageResult {
   available: boolean;
   /** Local day (YYYY-MM-DD) the minutes belong to */
   date?: string;
+}
+
+export interface ScreenTimeResult {
+  /** False without Usage Access, and on web */
+  available: boolean;
+  /** Local day (YYYY-MM-DD) "today" refers to */
+  date?: string;
+  todayMinutes?: number;
+  yesterdayMinutes?: number;
+}
+
+export interface AppIconsResult {
+  /** One entry per requested package that is installed; others are left out */
+  icons: { packageName: string; dataUrl: string }[];
 }
 
 export interface CalibrationSample {
@@ -227,6 +261,8 @@ export interface ScrollShieldBridgePlugin {
   getCalibrationSamples(): Promise<CalibrationResult>;
   getInterruptionEvents(): Promise<InterruptionEventsResult>;
   getAppUsage(): Promise<AppUsageResult>;
+  getAppIcons(options: { packageNames: string[] }): Promise<AppIconsResult>;
+  getScreenTime(): Promise<ScreenTimeResult>;
   acknowledgeInterruptionEvents(options: { ids: string[] }): Promise<void>;
   openBatteryOptimizationSettings(): Promise<OpenedResult>;
   clearNativeData(): Promise<{ cleared: boolean }>;
@@ -261,6 +297,8 @@ const ScrollShieldBridgeNative = registerPlugin<ScrollShieldBridgePlugin>('Scrol
     getCalibrationSamples: async () => ({ samples: [], available: false }),
     getInterruptionEvents: async () => ({ events: [] }),
     getAppUsage: async () => ({ entries: [], available: false }),
+    getAppIcons: async () => ({ icons: [] }),
+    getScreenTime: async () => ({ available: false }),
     acknowledgeInterruptionEvents: async () => undefined,
     openBatteryOptimizationSettings: async () => ({ opened: false }),
     clearNativeData: async () => ({ cleared: false }),
@@ -301,24 +339,16 @@ type ShortVideoConfigSlice = {
   hardInterrupt?: boolean;
 };
 
-type TimeWindowsConfigSlice = {
-  enabled: boolean;
-  morningRules?: TimeWindowRule;
-  workRules?: TimeWindowRule;
-  eveningRules?: TimeWindowRule;
-  nightRules?: TimeWindowRule;
-  weekendRules?: TimeWindowRule;
-};
-
 type AppConfigSlice = {
   active: boolean;
   mode: NativeProtectionMode;
   openDelay: number;
   dailyLimit?: number;
+  sessionLimit?: number;
   antiBinge?: NativeAntiBinge & { enabled: boolean };
   focusModeBehavior?: 'allow' | 'warn' | 'block';
-  timeWindows?: TimeWindowsConfigSlice;
   reelsProtection?: ShortVideoConfigSlice;
+  emergencyUnlock?: { enabled: boolean; maxPerDay: number; durationMinutes: number };
 };
 
 type PlatformSlice = {
@@ -329,6 +359,32 @@ type PlatformSlice = {
 
 const nonNegativeInt = (value: number | undefined) => Math.max(0, Math.round(value ?? 0));
 
+export interface NativeProtectionOptions {
+  isFocusModeActive?: boolean;
+  /**
+   * The apps the running focus or rescue session locks. Without it, the older
+   * per-app `focusModeBehavior` decides.
+   */
+  focusBlockedAppIds?: string[];
+  schedules?: Schedule[];
+  /**
+   * End of the running focus or rescue session. With it, the phone unlocks
+   * the apps on time by itself; without it, focus is folded into the mode
+   * and lasts until the next sync.
+   */
+  focusUntil?: number;
+  /** Strict focus or rescue: no emergency unlock while it runs. */
+  focusStrict?: boolean;
+  /** End of a self-commitment: no emergency unlock before it. */
+  commitmentUntil?: number;
+  now?: number;
+}
+
+const isBlockedByFocus = (appId: string, config: AppConfigSlice, options: NativeProtectionOptions) => {
+  if (!options.isFocusModeActive) return false;
+  return options.focusBlockedAppIds ? options.focusBlockedAppIds.includes(appId) : config.focusModeBehavior === 'block';
+};
+
 /**
  * Builds the short-video half of a rule. Returns undefined when the platform
  * has no protected feed, when the user disabled the feed protection, or when
@@ -338,7 +394,7 @@ const nonNegativeInt = (value: number | undefined) => Math.max(0, Math.round(val
 function buildShortVideoRule(
   platform: PlatformSlice,
   config: AppConfigSlice,
-  options: { isFocusModeActive?: boolean },
+  focusBlocked: boolean,
 ): NativeShortVideoRule | undefined {
   const surface = platform.shortVideoSurface;
   const feed = config.reelsProtection;
@@ -353,10 +409,7 @@ function buildShortVideoRule(
 
   // A focus session that blocks the app blocks its feed too, and so does a
   // limit set to 0 ("Blockiert").
-  const mode: ShortVideoMode =
-    (options.isFocusModeActive && config.focusModeBehavior === 'block') || isShortVideoFeedBlockedByConfig(feed)
-      ? 'block'
-      : feed.mode;
+  const mode: ShortVideoMode = focusBlocked || isShortVideoFeedBlockedByConfig(feed) ? 'block' : feed.mode;
 
   if (mode === 'allow') return undefined;
 
@@ -375,24 +428,14 @@ function buildShortVideoRule(
 }
 
 /**
- * The schedule half of a rule, mirroring getActiveTimeWindowRule(). Returns
- * undefined when nothing would ever tighten the mode.
+ * The schedule half of a rule: every active schedule that names this app
+ * locks it between its hours. Returns undefined when no schedule does.
  */
-function buildTimeWindows(config: AppConfigSlice): NativeTimeWindows | undefined {
-  const timeWindows = config.timeWindows;
-  if (!timeWindows?.enabled) return undefined;
-
-  const windows: NativeTimeWindow[] = [];
-  for (const window of TIME_WINDOWS) {
-    const rule = timeWindows[`${window.id}Rules`] ?? 'normal';
-    if (rule === 'normal') continue;
-    windows.push({ startHour: window.startHour, endHour: window.endHour, rule });
-  }
-
-  const weekendRule = timeWindows.weekendRules ?? 'normal';
-  if (windows.length === 0 && weekendRule === 'normal') return undefined;
-
-  return { windows, weekendRule };
+function buildTimeWindows(appId: string, schedules: Schedule[]): NativeTimeWindows | undefined {
+  const windows: NativeTimeWindow[] = schedules
+    .filter((schedule) => schedule.active && schedule.appIds.includes(appId) && schedule.startHour !== schedule.endHour)
+    .map((schedule) => ({ startHour: schedule.startHour, endHour: schedule.endHour, rule: 'block' }));
+  return windows.length > 0 ? { windows, weekendRule: 'normal' } : undefined;
 }
 
 /**
@@ -407,7 +450,7 @@ function buildTimeWindows(config: AppConfigSlice): NativeTimeWindows | undefined
 export function buildNativeProtectionRules(
   appsConfig: Record<string, AppConfigSlice | undefined>,
   platforms: PlatformSlice[],
-  options: { isFocusModeActive?: boolean } = {},
+  options: NativeProtectionOptions = {},
 ): NativeProtectionRule[] {
   const rules: NativeProtectionRule[] = [];
   const seen = new Set<string>();
@@ -416,10 +459,24 @@ export function buildNativeProtectionRules(
     const config = appsConfig[platform.id];
     if (!config?.active) continue;
 
-    const mode: NativeProtectionMode =
-      options.isFocusModeActive && config.focusModeBehavior === 'block' ? 'strict' : config.mode;
-    const shortVideo = buildShortVideoRule(platform, config, options);
-    const timeWindows = buildTimeWindows(config);
+    const focusBlocked = isBlockedByFocus(platform.id, config, options);
+    const focusUntil = focusBlocked ? options.focusUntil : undefined;
+    // Without an end time the phone cannot unlock by itself: fold focus into the mode.
+    const mode: NativeProtectionMode = focusBlocked && focusUntil === undefined ? 'strict' : config.mode;
+    const now = options.now ?? Date.now();
+    const emergencyLockedUntil = Math.max(
+      options.commitmentUntil ?? 0,
+      focusBlocked && options.focusStrict ? (options.focusUntil ?? 0) : 0,
+    );
+    const emergencyUnlock = config.emergencyUnlock?.enabled
+      ? {
+          maxPerDay: nonNegativeInt(config.emergencyUnlock.maxPerDay),
+          durationMinutes: nonNegativeInt(config.emergencyUnlock.durationMinutes),
+        }
+      : undefined;
+    const sessionLimitMinutes = nonNegativeInt(config.sessionLimit);
+    const shortVideo = buildShortVideoRule(platform, config, focusBlocked);
+    const timeWindows = buildTimeWindows(platform.id, options.schedules ?? []);
     const dailyLimitMinutes = nonNegativeInt(config.dailyLimit);
     const antiBinge = config.antiBinge?.enabled
       ? {
@@ -427,6 +484,9 @@ export function buildNativeProtectionRules(
           warningTimeframe: nonNegativeInt(config.antiBinge.warningTimeframe),
           blockThreshold: nonNegativeInt(config.antiBinge.blockThreshold),
           blockTimeframe: nonNegativeInt(config.antiBinge.blockTimeframe),
+          ...(config.antiBinge.escalationSeconds
+            ? { escalationSeconds: nonNegativeInt(config.antiBinge.escalationSeconds) }
+            : {}),
         }
       : undefined;
 
@@ -442,6 +502,10 @@ export function buildNativeProtectionRules(
         ...(antiBinge ? { antiBinge } : {}),
         ...(timeWindows ? { timeWindows } : {}),
         ...(shortVideo ? { shortVideo } : {}),
+        ...(focusUntil !== undefined ? { focusUntil } : {}),
+        ...(sessionLimitMinutes > 0 ? { sessionLimitMinutes } : {}),
+        ...(emergencyUnlock && emergencyUnlock.maxPerDay > 0 ? { emergencyUnlock } : {}),
+        ...(emergencyLockedUntil > now ? { emergencyLockedUntil } : {}),
       });
     }
   }
@@ -461,7 +525,7 @@ export function requiresAccessibilityService(rules: NativeProtectionRule[]): boo
 export async function syncNativeBlockList(
   appsConfig: Record<string, AppConfigSlice | undefined>,
   allPlatforms: PlatformSlice[],
-  options: { isFocusModeActive?: boolean } = {},
+  options: NativeProtectionOptions = {},
 ): Promise<void> {
   const rules = buildNativeProtectionRules(appsConfig, allPlatforms, options);
   const monitoringEnabled = rules.length > 0;
@@ -497,6 +561,28 @@ export async function readAppUsage(): Promise<AppUsageResult> {
     return await ScrollShieldBridgeNative.getAppUsage();
   } catch {
     return { entries: [], available: false };
+  }
+}
+
+/** Reads today's and yesterday's total screen time from the device. */
+export async function readScreenTime(): Promise<ScreenTimeResult> {
+  try {
+    return await ScrollShieldBridgeNative.getScreenTime();
+  } catch {
+    return { available: false };
+  }
+}
+
+/**
+ * Reads the launcher icons of the given packages from the device, as PNG data
+ * URLs keyed by package. Empty on web and for packages that are not installed.
+ */
+export async function readAppIcons(packageNames: string[]): Promise<Map<string, string>> {
+  try {
+    const { icons } = await ScrollShieldBridgeNative.getAppIcons({ packageNames });
+    return new Map((icons ?? []).map((icon) => [icon.packageName, icon.dataUrl]));
+  } catch {
+    return new Map();
   }
 }
 

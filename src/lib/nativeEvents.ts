@@ -17,6 +17,7 @@ import { recordProtectionEventStats } from './session';
  *  - warned    → 'warning' (anti-binge warning, soft feed interrupt)
  *  - stopped   → 'warning' (interrupted, the user went back to the home screen)
  *  - continued → 'open'    (the user opened the app after the interruption)
+ *  - emergency → 'emergency' (emergency unlock on the phone's lock screen)
  */
 
 type PlatformSlice = { id: string; androidPackages: string[] };
@@ -28,12 +29,14 @@ const APP_DESCRIPTIONS: Record<NativeInterruptionEvent['outcome'], string> = {
   warned: 'Auf dem Handy unterbrochen',
   stopped: 'Unterbrochen und nicht geöffnet',
   continued: 'Nach der Unterbrechung geöffnet',
+  emergency: 'Notfallfreigabe auf dem Handy',
 };
 
 const LOCK_REASONS: Record<string, string> = {
-  TIME_WINDOW: 'Zeitfenster',
-  DAILY_LIMIT: 'Tageslimit',
-  ANTI_BINGE: 'Anti-Binge',
+  TIME_WINDOW: 'Zeitplan',
+  DAILY_LIMIT: 'Tagesbudget',
+  ANTI_BINGE: 'Abkühlzeit',
+  FOCUS: 'Fokus',
   STRICT: 'strenger Modus',
 };
 
@@ -51,7 +54,8 @@ const describe = (event: NativeInterruptionEvent): string => {
     }
   }
 
-  if (event.outcome === 'warned' && event.reason === 'ANTI_BINGE_WARNING') return 'Anti-Binge-Warnung auf dem Handy';
+  if (event.outcome === 'warned' && event.reason === 'ANTI_BINGE_WARNING') return 'Wieder geöffnet: längere Pause';
+  if (event.outcome === 'warned' && event.reason === 'SESSION_LIMIT') return 'Sitzungs-Wächter: Zeit am Stück erreicht';
 
   const base = APP_DESCRIPTIONS[event.outcome];
   if (event.outcome !== 'blocked') return base;
@@ -61,6 +65,7 @@ const describe = (event: NativeInterruptionEvent): string => {
 const typeFor = (outcome: NativeInterruptionEvent['outcome']): HistoryEvent['type'] => {
   if (outcome === 'blocked') return 'block';
   if (outcome === 'continued') return 'open';
+  if (outcome === 'emergency') return 'emergency';
   return 'warning';
 };
 
@@ -81,6 +86,7 @@ export function toHistoryEvent(event: NativeInterruptionEvent, platforms: Platfo
     metadata: {
       source: 'android',
       reason: event.reason,
+      outcome: event.outcome,
       ...(isFeed
         ? {
             surface: 'reels',

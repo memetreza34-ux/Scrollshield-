@@ -1,17 +1,24 @@
 import React from 'react';
 import type { OperatingSystem } from './lib/platform';
+import type { PresetId } from './lib/presets';
 import { PlatformBadge } from './components/PlatformBadge';
 
 export type Screen =
   | 'welcome'
   | 'onboarding'
-  | 'dashboard'
-  | 'apps'
-  | 'app_detail'
-  | 'rules'
+  // The four tabs (docs/V1_MASTER_PLAN.md, section 3)
+  | 'today'
+  | 'protect'
   | 'focus'
-  | 'history'
+  | 'insights'
+  // Reached from the tabs
+  | 'app_detail'
+  | 'schedule_edit'
+  | 'commitment'
+  | 'rescue'
+  | 'paywall'
   | 'settings'
+  | 'notifications'
   | 'help'
   | 'protection_flow'
   | 'permissions'
@@ -20,7 +27,6 @@ export type Screen =
   | 'active_session'
   | 'privacy'
   | 'support'
-  | 'reels_protection'
   | 'imprint';
 
 export type SubscriptionPlanId = string;
@@ -54,6 +60,8 @@ export interface AppConfig {
 
   // 1. Allgemeiner App-Schutz
   active: boolean;
+  /** Which preset the values below came from; 'eigene' once one was changed by hand. */
+  preset?: PresetId;
   mode: 'soft' | 'standard' | 'strict';
   openDelay: number; // seconds
   dailyLimit: number; // minutes
@@ -104,6 +112,8 @@ export interface AppConfig {
     warningTimeframe: number; // minutes
     blockThreshold: number; // opens
     blockTimeframe: number; // minutes
+    /** Seconds the pause grows with every reopen inside warningTimeframe. */
+    escalationSeconds?: number;
   };
   updatedAt?: number; // For future sync conflict resolution
 }
@@ -147,6 +157,22 @@ export interface FocusSession {
   successful: boolean;
   protectedApps: string[]; // App IDs that were protected
   blocksTriggered: number;
+  /** Rescue is an emergency brake: all protected apps, no early end. */
+  kind?: 'focus' | 'rescue';
+  /** Strict focus: cannot be ended early, no emergency unlock. */
+  strict?: boolean;
+}
+
+/** A time range in which the chosen apps are locked, every day. */
+export interface Schedule {
+  id: string;
+  name: string;
+  /** Inclusive start hour, local time */
+  startHour: number;
+  /** Exclusive end hour; smaller than startHour for a range past midnight */
+  endHour: number;
+  appIds: string[];
+  active: boolean;
 }
 
 export interface DailyStats {
@@ -156,6 +182,8 @@ export interface DailyStats {
   savedTimeMinutes: number;
   emergencyUnlocks: number;
   focusMinutes: number;
+  /** Total screen time of the device that day, measured by Android; absent on web. */
+  screenTimeMinutes?: number;
 }
 
 export interface AppState {
@@ -187,6 +215,19 @@ export interface AppState {
   };
   profiles?: Profile[];
   activeProfileId?: string;
+  schedules: Schedule[];
+  selectedScheduleId: string | null;
+  /**
+   * Pro status. Until Google Play billing exists (roadmap phase 4) only the
+   * development build can switch it on, as a preview.
+   */
+  pro: { active: boolean };
+  /** Self-commitment: until this time, protection cannot be loosened. */
+  commitment: { until: number } | null;
+  /** The sentence the paywall opens with, set by whoever sent the user there. */
+  paywallReason: string | null;
+  /** Suggestions on Heute the user hid, by id, with the day they were hidden. */
+  dismissedSuggestions: Record<string, string>;
   operatingSystem: OperatingSystem;
   permissions: AppPermissions;
   settings: {
@@ -245,133 +286,146 @@ export interface PlatformDefinition {
   detectionKeywords?: string[];
 }
 
-export const BUILTIN_PLATFORMS: PlatformDefinition[] = [
-  {
-    id: 'instagram',
-    name: 'Instagram',
-    category: 'social',
-    icon: <PlatformBadge label="IG" />,
-    color: 'bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 text-white shadow-lg',
-    androidPackages: ['com.instagram.android', 'com.instagram.lite'],
-    iosBundleIds: ['com.burbn.instagram'],
-    hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'reels', name: 'Instagram Reels', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
-    detectionKeywords: ['instagram.com', 'reels'],
-  },
-  {
-    id: 'tiktok',
-    name: 'TikTok',
-    category: 'short_video',
-    icon: <PlatformBadge label="TT" />,
-    color: 'bg-black text-white border border-zinc-800 shadow-md',
-    androidPackages: ['com.zhiliaoapp.musically', 'com.ss.android.ugc.trill', 'com.zhiliaoapp.musically.go'],
-    iosBundleIds: ['com.zhiliaoapp.musically'],
-    hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'tiktok_feed', name: 'TikTok Feed', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
-    detectionKeywords: ['tiktok.com'],
-  },
-  {
-    id: 'youtube',
-    name: 'YouTube',
-    category: 'entertainment',
-    icon: <PlatformBadge label="YT" />,
-    color: 'bg-[#FF0000] text-white shadow-md',
-    androidPackages: ['com.google.android.youtube', 'com.google.android.apps.youtube.mango'],
-    iosBundleIds: ['com.google.ios.youtube'],
-    hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'shorts', name: 'YouTube Shorts', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
-    detectionKeywords: ['youtube.com/shorts', 'shorts'],
-  },
-  {
-    id: 'facebook',
-    name: 'Facebook',
-    category: 'social',
-    icon: <PlatformBadge label="FB" />,
-    color: 'bg-[#1877F2] text-white shadow-md',
-    androidPackages: ['com.facebook.katana', 'com.facebook.lite'],
-    iosBundleIds: ['com.facebook.Facebook'],
-    hasShortVideoFeed: true,
-    shortVideoSurface: {
-      id: 'facebook_reels',
-      name: 'Facebook Reels',
-      defaultMode: 'limit',
-      defaultDailyLimitMinutes: 15,
+/** A built-in platform as written below; `badge` holds the initials for its tile. */
+type BuiltinPlatform = Omit<PlatformDefinition, 'icon'> & { badge: string };
+
+/** Adds the tile icon: the installed app's launcher icon on Android, else the initials. */
+const withIcon = ({ badge, ...platform }: BuiltinPlatform): PlatformDefinition => ({
+  ...platform,
+  icon: <PlatformBadge label={badge} packages={platform.androidPackages} />,
+});
+
+export const BUILTIN_PLATFORMS: PlatformDefinition[] = (
+  [
+    {
+      id: 'instagram',
+      name: 'Instagram',
+      category: 'social',
+      badge: 'IG',
+      color: 'bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 text-white shadow-lg',
+      androidPackages: ['com.instagram.android', 'com.instagram.lite'],
+      iosBundleIds: ['com.burbn.instagram'],
+      hasShortVideoFeed: true,
+      shortVideoSurface: { id: 'reels', name: 'Instagram Reels', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+      detectionKeywords: ['instagram.com', 'reels'],
     },
-    detectionKeywords: ['facebook.com/reel'],
-  },
-  {
-    id: 'twitter',
-    name: 'X',
-    category: 'social',
-    icon: <PlatformBadge label="X" />,
-    color: 'bg-black text-white border border-zinc-800 shadow-md',
-    androidPackages: ['com.twitter.android', 'com.twitter.android.lite'],
-    iosBundleIds: ['com.atebits.Tweetie2'],
-    hasShortVideoFeed: true,
-    shortVideoSurface: {
-      id: 'immersive_video',
-      name: 'Immersive Video',
-      defaultMode: 'limit',
-      defaultDailyLimitMinutes: 15,
+    {
+      id: 'tiktok',
+      name: 'TikTok',
+      category: 'short_video',
+      badge: 'TT',
+      color: 'bg-black text-white border border-zinc-800 shadow-md',
+      androidPackages: ['com.zhiliaoapp.musically', 'com.ss.android.ugc.trill', 'com.zhiliaoapp.musically.go'],
+      iosBundleIds: ['com.zhiliaoapp.musically'],
+      hasShortVideoFeed: true,
+      shortVideoSurface: { id: 'tiktok_feed', name: 'TikTok Feed', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+      detectionKeywords: ['tiktok.com'],
     },
-    detectionKeywords: ['x.com', 'twitter.com'],
-  },
-  {
-    id: 'snapchat',
-    name: 'Snapchat',
-    category: 'social',
-    icon: <PlatformBadge label="SC" />,
-    color: 'bg-[#FFFC00] text-black shadow-md',
-    androidPackages: ['com.snapchat.android'],
-    iosBundleIds: ['com.toyopagroup.picaboo'],
-    hasShortVideoFeed: true,
-    shortVideoSurface: {
-      id: 'spotlight',
-      name: 'Snapchat Spotlight',
-      defaultMode: 'limit',
-      defaultDailyLimitMinutes: 15,
+    {
+      id: 'youtube',
+      name: 'YouTube',
+      category: 'entertainment',
+      badge: 'YT',
+      color: 'bg-[#FF0000] text-white shadow-md',
+      androidPackages: ['com.google.android.youtube', 'com.google.android.apps.youtube.mango'],
+      iosBundleIds: ['com.google.ios.youtube'],
+      hasShortVideoFeed: true,
+      shortVideoSurface: { id: 'shorts', name: 'YouTube Shorts', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+      detectionKeywords: ['youtube.com/shorts', 'shorts'],
     },
-    detectionKeywords: ['snapchat.com', 'spotlight'],
-  },
-  {
-    id: 'reddit',
-    name: 'Reddit',
-    category: 'social',
-    icon: <PlatformBadge label="R" />,
-    color: 'bg-[#FF4500] text-white shadow-md',
-    androidPackages: ['com.reddit.frontpage', 'com.reddit.frontpage.lite'],
-    iosBundleIds: ['com.reddit.Reddit'],
-    hasShortVideoFeed: true,
-    shortVideoSurface: {
-      id: 'reddit_watch',
-      name: 'Reddit Video Feed',
-      defaultMode: 'limit',
-      defaultDailyLimitMinutes: 15,
+    {
+      id: 'facebook',
+      name: 'Facebook',
+      category: 'social',
+      badge: 'FB',
+      color: 'bg-[#1877F2] text-white shadow-md',
+      androidPackages: ['com.facebook.katana', 'com.facebook.lite'],
+      iosBundleIds: ['com.facebook.Facebook'],
+      hasShortVideoFeed: true,
+      shortVideoSurface: {
+        id: 'facebook_reels',
+        name: 'Facebook Reels',
+        defaultMode: 'limit',
+        defaultDailyLimitMinutes: 15,
+      },
+      detectionKeywords: ['facebook.com/reel'],
     },
-    detectionKeywords: ['reddit.com', 'v.redd.it'],
-  },
-  {
-    id: 'pinterest',
-    name: 'Pinterest',
-    category: 'social',
-    icon: <PlatformBadge label="P" />,
-    color: 'bg-[#E60023] text-white shadow-md',
-    androidPackages: ['com.pinterest'],
-    iosBundleIds: ['pinterest'],
-    hasShortVideoFeed: true,
-    shortVideoSurface: { id: 'watch', name: 'Pinterest Watch', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
-    detectionKeywords: ['pinterest.com/watch'],
-  },
-];
+    {
+      id: 'twitter',
+      name: 'X',
+      category: 'social',
+      badge: 'X',
+      color: 'bg-black text-white border border-zinc-800 shadow-md',
+      androidPackages: ['com.twitter.android', 'com.twitter.android.lite'],
+      iosBundleIds: ['com.atebits.Tweetie2'],
+      hasShortVideoFeed: true,
+      shortVideoSurface: {
+        id: 'immersive_video',
+        name: 'Immersive Video',
+        defaultMode: 'limit',
+        defaultDailyLimitMinutes: 15,
+      },
+      detectionKeywords: ['x.com', 'twitter.com'],
+    },
+    {
+      id: 'snapchat',
+      name: 'Snapchat',
+      category: 'social',
+      badge: 'SC',
+      color: 'bg-[#FFFC00] text-black shadow-md',
+      androidPackages: ['com.snapchat.android'],
+      iosBundleIds: ['com.toyopagroup.picaboo'],
+      hasShortVideoFeed: true,
+      shortVideoSurface: {
+        id: 'spotlight',
+        name: 'Snapchat Spotlight',
+        defaultMode: 'limit',
+        defaultDailyLimitMinutes: 15,
+      },
+      detectionKeywords: ['snapchat.com', 'spotlight'],
+    },
+    {
+      id: 'reddit',
+      name: 'Reddit',
+      category: 'social',
+      badge: 'R',
+      color: 'bg-[#FF4500] text-white shadow-md',
+      androidPackages: ['com.reddit.frontpage', 'com.reddit.frontpage.lite'],
+      iosBundleIds: ['com.reddit.Reddit'],
+      hasShortVideoFeed: true,
+      shortVideoSurface: {
+        id: 'reddit_watch',
+        name: 'Reddit Video Feed',
+        defaultMode: 'limit',
+        defaultDailyLimitMinutes: 15,
+      },
+      detectionKeywords: ['reddit.com', 'v.redd.it'],
+    },
+    {
+      id: 'pinterest',
+      name: 'Pinterest',
+      category: 'social',
+      badge: 'P',
+      color: 'bg-[#E60023] text-white shadow-md',
+      androidPackages: ['com.pinterest'],
+      iosBundleIds: ['pinterest'],
+      hasShortVideoFeed: true,
+      shortVideoSurface: { id: 'watch', name: 'Pinterest Watch', defaultMode: 'limit', defaultDailyLimitMinutes: 15 },
+      detectionKeywords: ['pinterest.com/watch'],
+    },
+  ] satisfies BuiltinPlatform[]
+).map(withIcon);
 
 export const SUPPORTED_APPS = BUILTIN_PLATFORMS;
 
+// The values of the "Ausgewogen" preset (src/lib/presets.ts), the default.
 export const DEFAULT_APP_CONFIG: Omit<AppConfig, 'id'> = {
   active: false,
+  preset: 'ausgewogen',
   mode: 'standard',
   openDelay: 5,
-  dailyLimit: 60,
-  sessionLimit: 15,
+  dailyLimit: 0,
+  sessionLimit: 0,
   focusModeBehavior: 'warn',
   reelsProtection: {
     enabled: true,
@@ -401,10 +455,11 @@ export const DEFAULT_APP_CONFIG: Omit<AppConfig, 'id'> = {
   },
   antiBinge: {
     enabled: true,
-    warningThreshold: 3,
+    warningThreshold: 1,
     warningTimeframe: 10,
-    blockThreshold: 5,
-    blockTimeframe: 20,
+    blockThreshold: 99,
+    blockTimeframe: 30,
+    escalationSeconds: 10,
   },
 };
 
@@ -559,6 +614,12 @@ export const DEFAULT_STATE: AppState = {
   },
   profiles: DEFAULT_PROFILES,
   activeProfileId: 'gentle',
+  schedules: [],
+  selectedScheduleId: null,
+  pro: { active: false },
+  commitment: null,
+  paywallReason: null,
+  dismissedSuggestions: {},
   // Replaced at startup by detectOperatingSystem(); 'web' is the honest
   // default because a browser has neither Screen Time nor Usage Access.
   operatingSystem: 'web',
@@ -574,7 +635,7 @@ export const DEFAULT_STATE: AppState = {
   settings: {
     language: 'de',
     theme: 'dark',
-    startScreen: 'dashboard',
+    startScreen: 'today',
     internalAppName: 'ScrollShield',
     defaultProtectionLevel: 'standard',
     defaultFocusDuration: 25,

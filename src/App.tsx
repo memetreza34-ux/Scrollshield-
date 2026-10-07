@@ -3,22 +3,25 @@ import { AnimatePresence } from 'motion/react';
 import { AppState, Screen, DEFAULT_STATE, SUPPORTED_APPS } from './types';
 import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
-import { reconcileFocusRuntime } from './lib/focus';
+import { getFocusBlockedAppIds, getRunningFocusSession, reconcileFocusRuntime } from './lib/focus';
 import {
   acknowledgeInterruptionEvents,
   clearNativeData,
   minimizeApp,
   onHardwareBack,
+  readAppIcons,
   readAppUsage,
+  readScreenTime,
   readInterruptionEvents,
   readShortVideoUsage,
   syncNativeBlockList,
 } from './lib/nativeBridge';
 import { getBackTarget, isAllowedBeforeOnboarding } from './lib/navigation';
 import { mergeNativeInterruptions } from './lib/nativeEvents';
-import { mergeNativeAppUsage, mergeNativeShortVideoUsage } from './lib/stats';
+import { mergeNativeAppUsage, mergeNativeShortVideoUsage, mergeScreenTime } from './lib/stats';
 import { getLocalDateKey } from './lib/appUtils';
 import { detectOperatingSystem } from './lib/platform';
+import { AppIconsContext } from './lib/appIcons';
 import {
   EVENING_REMINDER_HOUR,
   EVENING_REMINDER_TAG,
@@ -42,10 +45,13 @@ import {
 } from './lib/notifications';
 import { BottomNav } from './components/ui';
 import { Welcome, Onboarding } from './screens/OnboardingScreens';
-import { Dashboard, History } from './screens/MainScreens';
-import { AppList, AppDetail, Rules, Settings, Help, PrivacyScreen } from './screens/ConfigScreens';
-import { ReelsProtectionScreen } from './screens/ReelsProtectionScreen';
+import { Help, PrivacyScreen } from './screens/ConfigScreens';
+import { TodayScreen } from './screens/TodayScreen';
+import { AppDetailScreen, CommitmentScreen, ProtectScreen, ScheduleEditScreen } from './screens/ProtectScreens';
 import { Focus } from './screens/FocusScreens';
+import { RescueScreen } from './screens/RescueScreen';
+import { InsightsScreen } from './screens/InsightsScreen';
+import { NotificationsScreen, PaywallScreen, SettingsScreen } from './screens/SettingsScreens';
 import { ProtectionFlow } from './screens/ProtectionFlow';
 import { PermissionsScreen } from './screens/PermissionsScreen';
 import { DebugScreen } from './screens/DebugScreen';
@@ -66,6 +72,7 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
   const [appState, setAppState] = useState<AppState>(DEFAULT_STATE);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [appIcons, setAppIcons] = useState<ReadonlyMap<string, string>>(() => new Map());
   const skipNextSaveRef = useRef(false);
   const screenScrollRef = useRef<HTMLDivElement>(null);
   // Notifications are deliberately not persisted: a reminder missed because the
@@ -91,7 +98,7 @@ export default function App() {
           const restoredState = focusUpdate ? { ...normalizedState, ...focusUpdate } : normalizedState;
           setAppState(restoredState);
           if (saved.hasCompletedOnboarding) {
-            setCurrentScreen(restoredState.activeSession ? 'active_session' : 'dashboard');
+            setCurrentScreen(restoredState.activeSession ? 'active_session' : 'today');
           } else {
             setCurrentScreen('welcome');
           }
@@ -180,10 +187,11 @@ export default function App() {
 
     let cancelled = false;
     const pull = async () => {
-      const [usage, appUsage, interruptions] = await Promise.all([
+      const [usage, appUsage, interruptions, screenTime] = await Promise.all([
         readShortVideoUsage(),
         readAppUsage(),
         readInterruptionEvents(),
+        readScreenTime(),
       ]);
       if (cancelled) return;
       const today = getLocalDateKey(new Date());
@@ -204,6 +212,10 @@ export default function App() {
             { date: appUsage.date ?? today, entries: appUsage.entries },
             SUPPORTED_APPS,
           );
+          if (dailyStats !== next.dailyStats) next = { ...next, dailyStats };
+        }
+        if (screenTime.available) {
+          const dailyStats = mergeScreenTime(next.dailyStats, { ...screenTime, date: screenTime.date ?? today });
           if (dailyStats !== next.dailyStats) next = { ...next, dailyStats };
         }
         if (interruptions.length > 0) {
@@ -231,6 +243,28 @@ export default function App() {
       document.removeEventListener('visibilitychange', pullWhenVisible);
     };
   }, [isLoaded]);
+
+  // Launcher icons of the installed protected apps for the app tiles. Read on
+  // start and on return to the app, which is where a new app gets installed.
+  useEffect(() => {
+    if (detectOperatingSystem() !== 'android') return;
+
+    let cancelled = false;
+    const packages = SUPPORTED_APPS.flatMap((app) => app.androidPackages);
+    const read = () => {
+      if (document.visibilityState !== 'visible') return;
+      void readAppIcons(packages).then((icons) => {
+        if (!cancelled) setAppIcons(icons);
+      });
+    };
+
+    read();
+    document.addEventListener('visibilitychange', read);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', read);
+    };
+  }, []);
 
   // The evening reminder has a fixed text, so the native app hands it to the
   // system as a daily alarm. Re-done on every start (an alarm does not survive
@@ -328,11 +362,11 @@ export default function App() {
   useEffect(() => {
     if (isLoaded) {
       if (import.meta.env.PROD && currentScreen === 'debug') {
-        setCurrentScreen('dashboard');
+        setCurrentScreen('today');
       } else if (!appState.hasCompletedOnboarding && !isAllowedBeforeOnboarding(currentScreen)) {
         setCurrentScreen('welcome');
       } else if (appState.hasCompletedOnboarding && ['welcome', 'onboarding'].includes(currentScreen)) {
-        setCurrentScreen('dashboard');
+        setCurrentScreen('today');
       }
     }
   }, [isLoaded, currentScreen, appState.hasCompletedOnboarding]);
@@ -348,13 +382,31 @@ export default function App() {
     }
   }, [appState, isLoaded]);
 
-  // Sync protection rules to the native layer whenever they change
+  // Sync protection rules to the native layer whenever they change. Focus
+  // and rescue go down with their end time, so the phone unlocks on time even
+  // when ScrollShield is closed.
   useEffect(() => {
     if (!isLoaded) return;
+    const running = getRunningFocusSession({ focusSessions: appState.focusSessions });
     void syncNativeBlockList(appState.appsConfig, SUPPORTED_APPS, {
       isFocusModeActive: appState.isFocusModeActive,
+      focusBlockedAppIds: getFocusBlockedAppIds({
+        focusSessions: appState.focusSessions,
+        isFocusModeActive: appState.isFocusModeActive,
+      }),
+      focusUntil: running ? running.startTime + running.duration * 60_000 : undefined,
+      focusStrict: running?.strict === true,
+      commitmentUntil: appState.commitment?.until,
+      schedules: appState.schedules,
     });
-  }, [appState.appsConfig, appState.isFocusModeActive, isLoaded]);
+  }, [
+    appState.appsConfig,
+    appState.isFocusModeActive,
+    appState.focusSessions,
+    appState.schedules,
+    appState.commitment,
+    isLoaded,
+  ]);
 
   // Stable, and accepts an updater for callers that must merge into the latest
   // state rather than the one they rendered with.
@@ -379,96 +431,113 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="app-stage min-h-screen text-zinc-100 font-sans selection:bg-zinc-800 flex justify-center items-center p-0 sm:p-4">
-        <div className="app-device w-full max-w-md bg-zinc-950 h-[100dvh] sm:h-[850px] sm:max-h-[90vh] relative overflow-hidden flex flex-col sm:rounded-[2.5rem] shadow-2xl shadow-black/80 sm:border border-zinc-800/50">
-          <div
-            ref={screenScrollRef}
-            data-testid="screen-scroll"
-            className="flex-1 overflow-y-auto overflow-x-hidden relative scrollbar-hide"
-          >
-            <AnimatePresence mode="wait">
-              {currentScreen === 'welcome' && <Welcome key="welcome" navigate={navigate} />}
-              {currentScreen === 'onboarding' && (
-                <Onboarding key="onboarding" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-              {currentScreen === 'permissions' && (
-                <PermissionsScreen
-                  key="permissions"
-                  state={appState}
-                  updateState={updateState}
-                  navigate={navigate}
-                  isOnboarding={!appState.hasCompletedOnboarding}
-                />
-              )}
-              {currentScreen === 'dashboard' && (
-                <Dashboard key="dashboard" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-              {currentScreen === 'apps' && (
-                <AppList key="apps" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-              {currentScreen === 'app_detail' && (
-                <AppDetail key="app_detail" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-              {currentScreen === 'rules' && (
-                <Rules key="rules" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-              {currentScreen === 'reels_protection' && (
-                <ReelsProtectionScreen
-                  key="reels_protection"
-                  state={appState}
-                  updateState={updateState}
-                  navigate={navigate}
-                />
-              )}
-              {currentScreen === 'focus' && (
-                <Focus key="focus" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-              {currentScreen === 'history' && <History key="history" state={appState} navigate={navigate} />}
-              {currentScreen === 'settings' && (
-                <Settings
-                  key="settings"
-                  state={appState}
-                  updateState={updateState}
-                  resetApp={resetApp}
-                  navigate={navigate}
-                />
-              )}
-              {currentScreen === 'privacy' && (
-                <PrivacyScreen
-                  key="privacy"
-                  state={appState}
-                  updateState={updateState}
-                  resetApp={resetApp}
-                  navigate={navigate}
-                />
-              )}
-              {currentScreen === 'help' && <Help key="help" navigate={navigate} />}
-              {currentScreen === 'protection_flow' && (
-                <ProtectionFlow key="protection_flow" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-              {currentScreen === 'active_session' && (
-                <ActiveSessionScreen
-                  key="active_session"
-                  state={appState}
-                  updateState={updateState}
-                  navigate={navigate}
-                />
-              )}
-              {currentScreen === 'diagnostics' && <DiagnosticsScreen key="diagnostics" navigate={navigate} />}
-              {currentScreen === 'support' && <SupportScreen key="support" navigate={navigate} />}
-              {currentScreen === 'imprint' && <ImprintScreen key="imprint" navigate={navigate} />}
-              {currentScreen === 'debug' && !import.meta.env.PROD && (
-                <DebugScreen key="debug" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-            </AnimatePresence>
-          </div>
+      <AppIconsContext.Provider value={appIcons}>
+        <div className="app-stage min-h-screen text-zinc-100 font-sans selection:bg-zinc-800 flex justify-center items-center p-0 sm:p-4">
+          <div className="app-device w-full max-w-md bg-zinc-950 h-[100dvh] sm:h-[850px] sm:max-h-[90vh] relative overflow-hidden flex flex-col sm:rounded-[2.5rem] shadow-2xl shadow-black/80 sm:border border-zinc-800/50">
+            <div
+              ref={screenScrollRef}
+              data-testid="screen-scroll"
+              className="flex-1 overflow-y-auto overflow-x-hidden relative scrollbar-hide"
+            >
+              <AnimatePresence mode="wait">
+                {currentScreen === 'welcome' && <Welcome key="welcome" navigate={navigate} />}
+                {currentScreen === 'onboarding' && (
+                  <Onboarding key="onboarding" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'permissions' && (
+                  <PermissionsScreen
+                    key="permissions"
+                    state={appState}
+                    updateState={updateState}
+                    navigate={navigate}
+                    isOnboarding={!appState.hasCompletedOnboarding}
+                  />
+                )}
+                {currentScreen === 'today' && (
+                  <TodayScreen key="today" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'protect' && (
+                  <ProtectScreen key="protect" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'app_detail' && (
+                  <AppDetailScreen key="app_detail" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'schedule_edit' && (
+                  <ScheduleEditScreen
+                    key="schedule_edit"
+                    state={appState}
+                    updateState={updateState}
+                    navigate={navigate}
+                  />
+                )}
+                {currentScreen === 'commitment' && (
+                  <CommitmentScreen key="commitment" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'focus' && (
+                  <Focus key="focus" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'rescue' && (
+                  <RescueScreen key="rescue" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'insights' && (
+                  <InsightsScreen key="insights" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'settings' && (
+                  <SettingsScreen key="settings" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'notifications' && (
+                  <NotificationsScreen
+                    key="notifications"
+                    state={appState}
+                    updateState={updateState}
+                    navigate={navigate}
+                  />
+                )}
+                {currentScreen === 'paywall' && (
+                  <PaywallScreen key="paywall" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'privacy' && (
+                  <PrivacyScreen
+                    key="privacy"
+                    state={appState}
+                    updateState={updateState}
+                    resetApp={resetApp}
+                    navigate={navigate}
+                  />
+                )}
+                {currentScreen === 'help' && <Help key="help" navigate={navigate} />}
+                {currentScreen === 'protection_flow' && (
+                  <ProtectionFlow
+                    key="protection_flow"
+                    state={appState}
+                    updateState={updateState}
+                    navigate={navigate}
+                  />
+                )}
+                {currentScreen === 'active_session' && (
+                  <ActiveSessionScreen
+                    key="active_session"
+                    state={appState}
+                    updateState={updateState}
+                    navigate={navigate}
+                  />
+                )}
+                {currentScreen === 'diagnostics' && <DiagnosticsScreen key="diagnostics" navigate={navigate} />}
+                {currentScreen === 'support' && <SupportScreen key="support" navigate={navigate} />}
+                {currentScreen === 'imprint' && <ImprintScreen key="imprint" navigate={navigate} />}
+                {currentScreen === 'debug' && !import.meta.env.PROD && (
+                  <DebugScreen key="debug" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+              </AnimatePresence>
+            </div>
 
-          {appState.hasCompletedOnboarding &&
-            !['welcome', 'onboarding', 'protection_flow', 'active_session', 'permissions'].includes(currentScreen) && (
-              <BottomNav currentScreen={currentScreen} navigate={navigate} />
-            )}
+            {appState.hasCompletedOnboarding &&
+              !['welcome', 'onboarding', 'protection_flow', 'active_session', 'permissions'].includes(
+                currentScreen,
+              ) && <BottomNav currentScreen={currentScreen} navigate={navigate} />}
+          </div>
         </div>
-      </div>
+      </AppIconsContext.Provider>
     </ErrorBoundary>
   );
 }

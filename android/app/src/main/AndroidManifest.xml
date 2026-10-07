@@ -125,4 +125,35 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />
     <uses-permission android:name="android.permission.WAKE_LOCK" tools:node="remove" />
 
+    <!-- ── Package visibility ───────────────────────────────────────────────
+         Since Android 11 other apps are invisible unless listed here. These
+         are the androidPackages of BUILTIN_PLATFORMS in src/types.tsx, so the
+         app tiles can show the icon from the user's own launcher and the
+         interruption screen the real app name. No QUERY_ALL_PACKAGES: a fixed
+         list needs no Play Console declaration. npm run check:android keeps
+         both lists in step.
+    -->
+    <queries>
+        <package android:name="com.instagram.android" />
+        <package android:name="com.instagram.lite" />
+        <package android:name="com.zhiliaoapp.musically" />
+        <package android:name="com.ss.android.ugc.trill" />
+        <package android:name="com.zhiliaoapp.musically.go" />
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.google.android.apps.youtube.mango" />
+        <package android:name="com.facebook.katana" />
+        <package android:name="com.facebook.lite" />
+        <package android:name="com.twitter.android" />
+        <package android:name="com.twitter.android.lite" />
+        <package android:name="com.snapchat.android" />
+        <package android:name="com.reddit.frontpage" />
+        <package android:name="com.reddit.frontpage.lite" />
+        <package android:name="com.pinterest" />
+        <!-- Home screens, so their time does not count as screen time (ForegroundUsage). -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+    </queries>
+
 </manifest>

@@ -212,57 +212,40 @@ describe('short-video rules', () => {
   });
 });
 
-describe('time-window rules', () => {
-  const schedule = {
-    enabled: true,
-    morningRules: 'normal' as const,
-    workRules: 'strict' as const,
-    eveningRules: 'normal' as const,
-    nightRules: 'block' as const,
-    weekendRules: 'normal' as const,
-  };
+describe('schedules', () => {
+  const evening = { id: 's1', name: 'Abend', startHour: 21, endHour: 7, appIds: ['tiktok'], active: true };
 
-  it('hands the tightening windows down with the shared hour boundaries', () => {
-    const rules = buildNativeProtectionRules({ tiktok: activeApp({ timeWindows: schedule }) }, platforms);
+  it('hands the schedules naming an app down as locking windows', () => {
+    const rules = buildNativeProtectionRules({ tiktok: activeApp() }, platforms, { schedules: [evening] });
 
     expect(rules[0].timeWindows).toEqual({
-      windows: [
-        { startHour: 9, endHour: 18, rule: 'strict' },
-        { startHour: 22, endHour: 6, rule: 'block' },
-      ],
+      windows: [{ startHour: 21, endHour: 7, rule: 'block' }],
       weekendRule: 'normal',
     });
   });
 
-  it('sends nothing while time windows are off or never tighten the mode', () => {
-    const off = buildNativeProtectionRules(
-      { tiktok: activeApp({ timeWindows: { ...schedule, enabled: false } }) },
-      platforms,
-    );
-    const allNormal = buildNativeProtectionRules(
-      {
-        tiktok: activeApp({
-          timeWindows: { ...schedule, workRules: 'normal', nightRules: 'normal' },
-        }),
-      },
-      platforms,
-    );
+  it('sends nothing for paused schedules or schedules for other apps', () => {
+    const paused = buildNativeProtectionRules({ tiktok: activeApp() }, platforms, {
+      schedules: [{ ...evening, active: false }],
+    });
+    const other = buildNativeProtectionRules({ tiktok: activeApp() }, platforms, {
+      schedules: [{ ...evening, appIds: ['instagram'] }],
+    });
 
-    expect(off[0].timeWindows).toBeUndefined();
-    expect(allNormal[0].timeWindows).toBeUndefined();
+    expect(paused[0].timeWindows).toBeUndefined();
+    expect(other[0].timeWindows).toBeUndefined();
   });
+});
 
-  it('keeps a weekend rule even without a stricter time of day', () => {
-    const rules = buildNativeProtectionRules(
-      {
-        tiktok: activeApp({
-          timeWindows: { ...schedule, workRules: 'normal', nightRules: 'normal', weekendRules: 'block' },
-        }),
-      },
-      platforms,
-    );
+describe('focus apps', () => {
+  it('locks only the apps the running session chose', () => {
+    const rules = buildNativeProtectionRules({ instagram: activeApp(), tiktok: activeApp() }, platforms, {
+      isFocusModeActive: true,
+      focusBlockedAppIds: ['tiktok'],
+    });
 
-    expect(rules[0].timeWindows).toEqual({ windows: [], weekendRule: 'block' });
+    expect(rules.find((rule) => rule.appId === 'tiktok')?.mode).toBe('strict');
+    expect(rules.find((rule) => rule.appId === 'instagram')?.mode).not.toBe('strict');
   });
 });
 

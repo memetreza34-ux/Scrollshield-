@@ -5,11 +5,17 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.AdaptiveIconDrawable
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import android.text.TextUtils
+import android.util.Base64
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResult
 import com.getcapacitor.JSArray
@@ -21,6 +27,7 @@ import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -53,6 +60,10 @@ class ScrollShieldBridgePlugin : Plugin() {
 
         /** Sent to the web layer when the user presses Android's back button. */
         const val EVENT_BACK_BUTTON = "backButton"
+
+        /** Largest tile that shows an app icon (the interruption screen) is 96 dp. */
+        const val APP_ICON_SIZE_DP = 96
+        const val MAX_APP_ICONS = 32
     }
 
     // ── Encrypted SharedPreferences ───────────────────────────────────────────
@@ -240,7 +251,8 @@ class ScrollShieldBridgePlugin : Plugin() {
      * The AppMonitorService reads them to decide how to intervene.
      *
      * JS call: ScrollShieldBridge.syncBlockedApps({
-     *   rules: [{ packageName, appId, mode, delaySeconds, dailyLimitMinutes?, antiBinge?, timeWindows?, shortVideo? }],
+     *   rules: [{ packageName, appId, mode, delaySeconds, dailyLimitMinutes?, antiBinge?, timeWindows?, shortVideo?,
+     *             focusUntil?, sessionLimitMinutes?, emergencyUnlock?, emergencyLockedUntil? }],
      *   monitoringEnabled: boolean,
      * })
      */
@@ -274,6 +286,12 @@ class ScrollShieldBridgePlugin : Plugin() {
             normalizeAntiBinge(entry.optJSONObject("antiBinge"))?.let { rule.put("antiBinge", it) }
             normalizeTimeWindows(entry.optJSONObject("timeWindows"))?.let { rule.put("timeWindows", it) }
             normalizeShortVideo(entry.optJSONObject("shortVideo"))?.let { rule.put("shortVideo", it) }
+            entry.optLong("focusUntil", 0L).takeIf { it > 0L }?.let { rule.put("focusUntil", it) }
+            entry.optInt("sessionLimitMinutes", 0).coerceIn(0, 24 * 60).takeIf { it > 0 }?.let {
+                rule.put("sessionLimitMinutes", it)
+            }
+            normalizeEmergencyUnlock(entry.optJSONObject("emergencyUnlock"))?.let { rule.put("emergencyUnlock", it) }
+            entry.optLong("emergencyLockedUntil", 0L).takeIf { it > 0L }?.let { rule.put("emergencyLockedUntil", it) }
             normalized.put(rule)
         }
 
@@ -440,6 +458,17 @@ class ScrollShieldBridgePlugin : Plugin() {
             .put("warningTimeframe", config.optInt("warningTimeframe", 0).coerceIn(1, 24 * 60))
             .put("blockThreshold", blockThreshold)
             .put("blockTimeframe", config.optInt("blockTimeframe", 0).coerceIn(1, 24 * 60))
+            .put("escalationSeconds", config.optInt("escalationSeconds", 0).coerceIn(0, 120))
+    }
+
+    /** Validates the emergency unlock; absent when switched off. */
+    private fun normalizeEmergencyUnlock(config: JSONObject?): JSONObject? {
+        if (config == null) return null
+        val maxPerDay = config.optInt("maxPerDay", 0)
+        if (maxPerDay !in 1..20) return null
+        return JSONObject()
+            .put("maxPerDay", maxPerDay)
+            .put("durationMinutes", config.optInt("durationMinutes", 5).coerceIn(1, 60))
     }
 
     /**
@@ -544,6 +573,87 @@ class ScrollShieldBridgePlugin : Plugin() {
         result.put("date", SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date()))
         result.put("entries", entries)
         call.resolve(result)
+    }
+
+    /**
+     * Returns today's and yesterday's total screen time in minutes, for the
+     * "Heute" tab. Needs Usage Access; only the two sums leave this method.
+     */
+    @PluginMethod
+    fun getScreenTime(call: PluginCall) {
+        val result = JSObject()
+        if (!hasUsageStatsPermission()) {
+            call.resolve(result.put("available", false))
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        val today = ForegroundUsage.startOfToday()
+        result.put("available", true)
+        result.put("date", SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date()))
+        result.put("todayMinutes", ForegroundUsage.screenTimeMinutes(context, today, now))
+        result.put("yesterdayMinutes", ForegroundUsage.screenTimeMinutes(context, ForegroundUsage.startOfDay(1), today))
+        call.resolve(result)
+    }
+
+    /**
+     * Returns the launcher icons of the requested packages that are installed,
+     * as PNG data URLs. ScrollShield ships no third-party logos; Android hands
+     * out the icon the user already sees on the home screen. Only packages
+     * listed under <queries> in the manifest are visible, the rest are skipped.
+     */
+    @PluginMethod
+    fun getAppIcons(call: PluginCall) {
+        val requested = call.getArray("packageNames") ?: JSArray()
+        val icons = JSArray()
+        val sizePx = (APP_ICON_SIZE_DP * context.resources.displayMetrics.density).toInt()
+
+        for (index in 0 until minOf(requested.length(), MAX_APP_ICONS)) {
+            val packageName = requested.optString(index).takeIf { it.isNotEmpty() } ?: continue
+            val drawable = try {
+                context.packageManager.getApplicationIcon(packageName)
+            } catch (_: PackageManager.NameNotFoundException) {
+                continue
+            }
+            icons.put(
+                JSObject()
+                    .put("packageName", packageName)
+                    .put("dataUrl", toPngDataUrl(renderIcon(drawable, sizePx)))
+            )
+        }
+
+        call.resolve(JSObject().put("icons", icons))
+    }
+
+    /**
+     * Adaptive icon layers are 108 dp with the visible 72 dp in the middle.
+     * Drawing them unmasked at 1.5 times the size gives the full square; the
+     * web layer rounds the corners to match its own tiles instead of showing
+     * the launcher's circle or squircle.
+     */
+    private fun renderIcon(drawable: Drawable, sizePx: Int): Bitmap {
+        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && drawable is AdaptiveIconDrawable) {
+            val inset = sizePx / 4
+            listOfNotNull(drawable.background, drawable.foreground).forEach { layer ->
+                layer.setBounds(-inset, -inset, sizePx + inset, sizePx + inset)
+                layer.draw(canvas)
+            }
+        } else {
+            drawable.setBounds(0, 0, sizePx, sizePx)
+            drawable.draw(canvas)
+        }
+        return bitmap
+    }
+
+    private fun toPngDataUrl(bitmap: Bitmap): String {
+        val bytes = ByteArrayOutputStream().use { stream ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+            stream.toByteArray()
+        }
+        bitmap.recycle()
+        return "data:image/png;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
     }
 
     /**

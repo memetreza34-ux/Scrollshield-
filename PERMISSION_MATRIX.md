@@ -77,6 +77,16 @@ Diese Matrix definiert die strikte Berechtigungsstrategie für ScrollShield. Das
 
 ---
 
+## 7. Sichtbarkeit anderer Apps (`<queries>` im Manifest)
+
+- **Plattform:** Android (ab Android 11 nötig)
+- **Wofür gebraucht:** Ab Android 11 sieht eine App andere Apps nur, wenn sie im Manifest stehen. ScrollShield listet genau die 15 Paketnamen der unterstützten Plattformen (`androidPackages` in `src/types.tsx`). Damit zeigen die App-Kacheln das Symbol der installierten App und der Schutzbildschirm ihren Namen statt des Paketnamens.
+- **Status:** **Keine Berechtigung, keine Nutzerfreigabe, keine Play-Console-Deklaration.** Bewusst kein `QUERY_ALL_PACKAGES`: das bräuchte eine Deklaration und sähe alle Apps des Nutzers.
+- **Was ohne funktioniert:** Alles bis auf die Symbole (dann Kürzel) und den App-Namen auf dem Schutzbildschirm (dann Paketname).
+- **Datenschutz-Grenze:** Ob eine der 15 Apps installiert ist, wird nur auf dem Gerät ausgewertet und nirgends gespeichert oder gesendet. `npm run check:android` prüft, dass die Liste im Manifest genau den Plattformen entspricht.
+
+---
+
 ## App Store & Google Play Review Strategie
 
 Um die App problemlos durch den Review-Prozess zu bekommen, gelten folgende Regeln:

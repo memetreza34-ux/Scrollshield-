@@ -238,9 +238,10 @@ describe('evaluateProtectionAttempt', () => {
 
     const windowBlocked = evaluateProtectionAttempt({
       appId: 'instagram',
-      config: makeConfig({ mode: 'soft', antiBinge, timeWindows: { enabled: true, workRules: 'block' } }),
+      config: makeConfig({ mode: 'soft', antiBinge }),
       history,
       isFocusModeActive: false,
+      schedules: [{ id: 's', name: 'Arbeit', startHour: 9, endHour: 18, appIds: ['instagram'], active: true }],
       now,
     });
     const strict = evaluateProtectionAttempt({
@@ -253,7 +254,7 @@ describe('evaluateProtectionAttempt', () => {
 
     expect(windowBlocked.step).toBe('anti_binge_block');
     expect(windowBlocked.blockReason).toBe('time_window');
-    expect(windowBlocked.event?.desc).toContain('Zeitfenster');
+    expect(windowBlocked.event?.desc).toContain('Zeitplan „Arbeit“');
     expect(strict.step).toBe('strict_blocked');
   });
 

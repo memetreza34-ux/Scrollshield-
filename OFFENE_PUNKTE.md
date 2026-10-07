@@ -60,9 +60,12 @@ technische Einschätzung; Details und Fragen für eine Prüfung stehen in `docs/
       Einstufung als Medizinprodukt. Als Produktivitäts- bzw. Selbstkontroll-App beschreiben. Der Release-Check blockt
       schon einige Formulierungen.
 - [x] **Fremde Logos:** Die App zeigte die echten Logos von Instagram, TikTok, YouTube usw. Ersetzt durch neutrale
-      Kürzel (IG, TT, YT …); der App-Name steht daneben.
+      Kürzel (IG, TT, YT …); der App-Name steht daneben. Seit 03.10. zeigt die Android-App für installierte Apps das
+      Symbol, das Android selbst liefert (wie auf dem Startbildschirm); die App enthält weiterhin keine fremden Logos.
 - [ ] **[Du] Screenshots neu aufnehmen** (`docs/store-assets`): Die alten zeigen noch die Logos und den alten Namen.
-      Am besten nach der Umbenennung.
+      Am besten nach der Umbenennung. Wichtig: Auf einem Handy mit Instagram & Co. zeigen die Screenshots jetzt deren
+      echte Symbole. Für den Store ein Testhandy ohne diese Apps nehmen oder die Webversion, sonst stehen fremde
+      Marken in deinem Store-Eintrag.
 - [ ] **[Du] Zielgruppe festlegen.** Mit Zielgruppe unter 13 gelten Googles strenge Familien-Richtlinien. Einfachster
       Weg für Version 1: 16+ oder 18+. Mit Anwalt klären, ob Jugendliche die Bedienungshilfe selbst erlauben dürfen.
 - [ ] **[Du] Rechtstexte prüfen lassen** (Generator einer Kanzlei oder Erstberatung), vor allem Bedienungshilfe,

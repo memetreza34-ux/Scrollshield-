@@ -145,6 +145,32 @@ if (/<service[^>]+android:name="\.AppMonitorService"/.test(manifest)) {
   );
 }
 
+// Android 11+ hides other apps unless the manifest lists them. The app tiles
+// read icons and the interruption screen reads names for exactly the built-in
+// platform packages, so <queries> must match them – no more, no less.
+const platformsPath = path.join('src', 'types.tsx');
+const platformPackages = new Set(
+  [...(await readFile(platformsPath, 'utf8')).matchAll(/androidPackages:\s*\[([^\]]*)\]/g)].flatMap((match) =>
+    [...match[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1]),
+  ),
+);
+const queriedPackages = new Set(
+  [...(manifest.match(/<queries>([\s\S]*?)<\/queries>/)?.[1] ?? '').matchAll(/<package\s+android:name="([^"]+)"/g)].map(
+    (match) => match[1],
+  ),
+);
+for (const packageName of platformPackages) {
+  if (queriedPackages.has(packageName)) continue;
+  findings.push({ file: manifestPath, text: `${packageName} from ${platformsPath} is missing under <queries>.` });
+}
+for (const packageName of queriedPackages) {
+  if (platformPackages.has(packageName)) continue;
+  findings.push({
+    file: manifestPath,
+    text: `<queries> lists ${packageName}, which no platform in ${platformsPath} uses.`,
+  });
+}
+
 // Kotlin sources only compile when the Kotlin plugin is applied. Without this
 // check a Kotlin file can be added that silently never reaches the APK.
 const kotlinSources = (await readdir(path.join(androidDir, 'app', 'src', 'main', 'java'), { recursive: true }))
