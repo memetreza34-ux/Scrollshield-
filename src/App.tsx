@@ -189,7 +189,9 @@ export default function App() {
     let cancelled = false;
     const pull = async () => {
       const [usage, appUsage, interruptions, screenTime] = await Promise.all([
-        FEATURE_FLAGS.enableShortVideoResearch ? readShortVideoUsage() : Promise.resolve({ entries: [], available: false }),
+        FEATURE_FLAGS.enableShortVideoResearch
+          ? readShortVideoUsage()
+          : Promise.resolve({ entries: [], available: false, date: undefined }),
         readAppUsage(),
         readInterruptionEvents(),
         readScreenTime(),
