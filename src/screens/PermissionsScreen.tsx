@@ -18,6 +18,7 @@ import { Header } from '../components/ui';
 import { AccessibilityDisclosure } from '../components/AccessibilityDisclosure';
 import { ScrollShieldBridge } from '../lib/nativeBridge';
 import { requestNotificationPermission } from '../lib/notifications';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 
 export function PermissionsScreen({
   state,
@@ -353,7 +354,7 @@ export function PermissionsScreen({
             true,
           )}
 
-          {renderPermissionCard(
+          {FEATURE_FLAGS.enableShortVideoResearch && renderPermissionCard(
             'accessibility',
             <Film size={24} />,
             'Kurzvideo-Erkennung (Bedienungshilfe)',
@@ -381,7 +382,7 @@ export function PermissionsScreen({
             'Apple stellt dafür die Bildschirmzeit-Schnittstelle bereit. ScrollShield erhält nur die für Auswahl und Limits nötigen Informationen, nicht den Inhalt anderer Apps.',
           )}
 
-          {renderPermissionCard(
+          {FEATURE_FLAGS.enableBatteryOptimizationResearch && renderPermissionCard(
             'backgroundActivity',
             <Activity size={24} />,
             'Zuverlässiger Schutz im Hintergrund',
