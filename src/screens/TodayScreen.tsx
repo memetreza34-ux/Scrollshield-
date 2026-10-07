@@ -231,13 +231,13 @@ export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button
                 onClick={() => applySuggestion(suggestion)}
-                className="min-h-[44px] whitespace-nowrap rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-zinc-950 hover:bg-emerald-400"
+                className="min-h-[44px] rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-zinc-950 hover:bg-emerald-400"
               >
                 {suggestion.actionLabel}
               </button>
               <button
                 onClick={() => hideSuggestion(suggestion.id)}
-                className="min-h-[44px] whitespace-nowrap px-2 text-sm text-zinc-500 hover:text-zinc-300"
+                className="min-h-[44px] px-2 text-sm text-zinc-500 hover:text-zinc-300"
               >
                 Ausblenden
               </button>
