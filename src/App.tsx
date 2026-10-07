@@ -59,6 +59,7 @@ import { DiagnosticsScreen } from './screens/DiagnosticsScreen';
 import { ActiveSessionScreen } from './screens/ActiveSessionScreen';
 import { SupportScreen, ImprintScreen } from './screens/SupportScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { FEATURE_FLAGS } from './config/featureFlags';
 
 /** When each best-effort notification was last sent, per session of the app. */
 type SentNotifications = {
@@ -188,7 +189,7 @@ export default function App() {
     let cancelled = false;
     const pull = async () => {
       const [usage, appUsage, interruptions, screenTime] = await Promise.all([
-        readShortVideoUsage(),
+        FEATURE_FLAGS.enableShortVideoResearch ? readShortVideoUsage() : Promise.resolve({ entries: [], available: false }),
         readAppUsage(),
         readInterruptionEvents(),
         readScreenTime(),
@@ -532,9 +533,9 @@ export default function App() {
             </div>
 
             {appState.hasCompletedOnboarding &&
-              !['welcome', 'onboarding', 'protection_flow', 'active_session', 'permissions'].includes(
-                currentScreen,
-              ) && <BottomNav currentScreen={currentScreen} navigate={navigate} />}
+              ['today', 'protect', 'app_detail', 'schedule_edit', 'commitment', 'insights'].includes(currentScreen) && (
+                <BottomNav currentScreen={currentScreen} navigate={navigate} />
+              )}
           </div>
         </div>
       </AppIconsContext.Provider>
