@@ -198,6 +198,24 @@ describe('App', () => {
     expect(await runFocusSessionPastItsEnd(false)).toEqual([]);
   });
 
+  it('returns from Settings to the tab that opened it', async () => {
+    await StorageService.saveState({
+      ...DEFAULT_STATE,
+      hasCompletedOnboarding: true,
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Schutz' }));
+    expect(await screen.findByRole('heading', { name: 'Schutz' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Einstellungen' }));
+    expect(await screen.findByRole('heading', { name: 'Einstellungen' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zurück' }));
+    expect(await screen.findByRole('heading', { name: 'Schutz' })).toBeInTheDocument();
+  });
+
   it('counts interruptions from the phone on the dashboard and acknowledges them', async () => {
     const now = Date.now();
     nativeEvents.read.mockResolvedValue([
