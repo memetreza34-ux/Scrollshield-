@@ -41,11 +41,11 @@ Der aktive Schutz verwendet einen sichtbaren Android-Vordergrunddienst mit dauer
 
 V1 benötigt keinen ScrollShield-Account und keinen Cloud-Sync für deine Schutzdaten. Regeln, Ereignisse und Statistiken werden lokal auf deinem Gerät verarbeitet.
 
-ScrollShield verkauft keine Nutzungsdaten und enthält keine Werbung.
+ScrollShield enthält keine Werbung und keine Tracking-SDKs. Nutzungsdaten werden nicht an ScrollShield-Server übertragen oder verkauft.
 
 ### Wichtige Grenze
 
-ScrollShield ist ein Werkzeug zur Selbstkontrolle. Die genaue Zuverlässigkeit kann je nach Android-Version, Gerätehersteller und erteilten Systemberechtigungen variieren.
+ScrollShield ist ein Werkzeug zur Selbstkontrolle und richtet sich in V1 an Nutzer ab 16 Jahren. Die genaue Zuverlässigkeit kann je nach Android-Version, Gerätehersteller und erteilten Systemberechtigungen variieren.
 
 Feed-spezifisches Blockieren von Instagram Reels, YouTube Shorts oder ähnlichen Oberflächen ist **kein Bestandteil der V1-Produktzusage**.
 
