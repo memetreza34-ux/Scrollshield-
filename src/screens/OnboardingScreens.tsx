@@ -19,11 +19,11 @@ export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
       <div className="flex flex-1 flex-col">
         <Shield size={44} className="mb-8 text-emerald-400" aria-hidden="true" />
         <h1 className="mb-3 text-4xl font-semibold tracking-tight text-zinc-50">ScrollShield</h1>
-        <p className="mb-10 text-xl leading-snug text-zinc-300">Instagram ja, Reels nein.</p>
+        <p className="mb-10 text-xl leading-snug text-zinc-300">Öffne bewusst. Nicht reflexartig.</p>
 
         <ul className="space-y-5">
           {[
-            ['Kurzvideos bremsen', 'Reels und Shorts sperren oder begrenzen. Der Rest der App bleibt frei.'],
+            ['Wiederöffnen erkennen', 'Wenn du reflexartig zurückkehrst, erhöht ScrollShield die Reibung.'],
             ['Reflexhaftes Öffnen bremsen', 'Eine kurze Pause vor der App. Wer gleich wieder öffnet, wartet länger.'],
             ['Kein Konto', 'Alles bleibt auf deinem Handy.'],
           ].map(([title, text]) => (
@@ -128,7 +128,7 @@ export function Onboarding({
                 ['Du öffnest eine geschützte App', 'ScrollShield zeigt eine kurze Pause.'],
                 ['Du entscheidest', '„Zurück“ oder nach der Pause „Weiter“.'],
                 ['Du öffnest sie gleich wieder', 'Dann kommt die Pause erneut – bei „Stark“ folgt eine Abkühlzeit.'],
-                ['Kurzvideos', 'Reels und Shorts kannst du pro App sperren oder auf Minuten begrenzen.'],
+                ['Sitzungen begrenzen', 'Mit Pro kannst du lange Scroll-Sitzungen gezielt unterbrechen.'],
               ].map(([title, text], index) => (
                 <li key={title} className="flex gap-4">
                   <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-zinc-800 text-sm font-semibold text-zinc-200">
