@@ -88,7 +88,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- Optional: Internet (Capacitor needs this) -->
-    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Optional: Notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
