@@ -6,7 +6,7 @@ import { PlatformBadge } from './components/PlatformBadge';
 export type Screen =
   | 'welcome'
   | 'onboarding'
-  // The four tabs (docs/V1_MASTER_PLAN.md, section 3)
+  // Three persistent tabs plus full-screen Focus (docs/V1_MASTER_PLAN.md, section 3)
   | 'today'
   | 'protect'
   | 'focus'
@@ -428,7 +428,7 @@ export const DEFAULT_APP_CONFIG: Omit<AppConfig, 'id'> = {
   sessionLimit: 0,
   focusModeBehavior: 'warn',
   reelsProtection: {
-    enabled: true,
+    enabled: false,
     mode: 'limit',
     dailyLimitMinutes: 15,
     sessionLimitMinutes: 5,
