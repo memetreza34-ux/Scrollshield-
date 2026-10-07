@@ -1,82 +1,120 @@
-# ScrollShield – Roadmap
+# ScrollShield — V1 Roadmap
 
-Stand: 05.10.2026. Was in Version 1 steckt und warum, steht verbindlich in
-[`docs/V1_MASTER_PLAN.md`](docs/V1_MASTER_PLAN.md). Diese Roadmap legt nur die Reihenfolge fest.
+**Updated:** 2026-10-07  
+Authoritative feature scope: [docs/V1_MASTER_PLAN.md](docs/V1_MASTER_PLAN.md)
 
-Die frühere Roadmap (Cloud-Sync, Partner- und Familienmodus, KI-Empfehlungen, Motivationszitate, Streak-System,
-„gesparte Zeit“) ist ersetzt. Diese Punkte sind entweder nach V1 verschoben oder gestrichen (Master-Plan,
-Abschnitt 11).
+The roadmap intentionally prioritizes a small, reliable Android product over feature breadth.
 
-Arbeitsweise: erst alle Inhalte und Funktionen bauen (Phasen 0–3, schlichtes Aussehen), dann das Design in Claude
-Design, dann Umsetzung des Designs, dann Abrechnung und Release.
+## Phase 0 — Product Truth
 
----
+Goal: repository, product spec, UI promises and store surfaces describe the same product.
 
-## Phase 0 – Produkt-Wahrheit
+- [x] 2-app Free allowance
+- [x] 3 persistent tabs: Heute / Schutz / Einblicke
+- [x] Focus moved to a full-screen action
+- [x] fabricated saved-time display removed/deprecated
+- [x] contextual Pro gates centralized
+- [x] short-video capability demoted to Post-V1 research
+- [x] Accessibility removed as a V1 production dependency
+- [ ] finish documentation/privacy/store consistency audit
+- [ ] remove remaining stale product claims and dead paths
 
-- Master-Plan als einzige Quelle; widersprüchliche Dokumente anpassen oder als veraltet markieren
-- Typen und Datenquellen aufräumen (eine Quelle pro Wert)
-- erfundene Kennzahlen entfernen („gesparte Zeit“)
-- Free/Pro-Aufteilung festgeschrieben (Master-Plan, Abschnitt 10)
+## Phase 1 — Native Foundation
 
-## Phase 1 – Native Grundlage
+Goal: make the basic product promise reliably true on Android.
 
-- versionierter Schutz-Vertrag zwischen Web und Android
-- Regel-Engine pro App auf dem Handy
-- zuverlässige Erkennung, wann eine App in den Vordergrund kommt
-- nativer Unterbrechungs-Bildschirm mit Zurück/Weiter
-- Notfallfreigabe auf dem Handy
-- Konfiguration bleibt über Neustarts erhalten
-- Dienst-Zustand (läuft, Berechtigungen, Akku-Ausnahme) sichtbar
-- **erster Test auf einem echten Gerät** (`docs/DEVICE_TEST_CHECKLIST.md`)
+- versioned protection contract
+- per-app rule lookup
+- per-app opening delay
+- reliable foreground transition detection
+- native Return / Continue intervention
+- config persistence
+- permission/service health
+- restart/reboot behavior
+- JVM tests for parser/rules/transitions
+- Android build succeeds on real toolchain
+- first physical-device test
 
-## Phase 2 – Kern-Engine
+**Exit gate:** different protected apps can use different rules and the behavior is proven on a device.
 
-- Ereignis-Protokoll für alle Unterbrechungen, Öffnungen, Wiederöffnungen
-- Wiederöffnungs-Schutz mit Stufen und Abkühlzeit
-- Sitzungs-Wächter (Prüfung auch während der Nutzung)
-- Kurzvideo-Schutz: Erkennung für Instagram Reels, YouTube Shorts und TikTok auf echten Geräten prüfen; nicht
-  geprüfte Apps ausblenden
-- Kennzahlen nur mit Messquelle (gemessen / abgeleitet / nicht verfügbar)
+## Phase 2 — Signature Engine
 
-## Phase 3 – Produkt-Aufbau (Inhalte, noch ohne finales Design)
+Goal: make Adaptive Reopen Protection the real differentiator.
 
-- 4 Tabs: Heute, Schutz, Fokus, Einblicke; Einstellungen als Zahnrad
-- Heute nach Master-Plan 4.2
-- Schutz mit App-Detail und Voreinstellungen (Sanft, Ausgewogen, Stark, Eigene)
-- freie Zeitpläne statt fester Zeitfenster
-- Fokus (15/30/60, eigene Dauer), Rescue, Selbstverpflichtung
-- Einblicke (Heute, Woche, Muster, Trends)
-- zentrale Pro-Abfrage mit Free-Grenzen, Paywall-Seite (noch ohne echte Abrechnung)
+- durable Reopen event ledger
+- adaptive friction state machine
+- bounded cooldown behavior
+- Session Guard
+- Emergency Unlock integration
+- real intervention/open/session events
+- measured/derived metrics only
+- lifecycle/restart tests
 
-## Phase 3b – Design
+**Exit gate:** repeated reopening demonstrably changes friction without continuous false retriggers.
 
-- Übergabe aller Seiten und Zustände an Claude Design
-- Design-Leitlinie „Ruhige Kontrolle“ (Master-Plan, Abschnitt 13)
-- Umsetzung des Designs
+## Phase 3 — Product UX
 
-## Phase 4 – Monetarisierung
+Goal: make the strong engine easy to understand.
 
-- Google Play Billing anbinden
-- Pro-Status aus dem Store, Testphase beim Jahresabo
-- Käufe wiederherstellen, Abo verwalten
-- Paywalls im Zusammenhang (Master-Plan, Abschnitt 10)
+- Heute hierarchy
+- Schutz progressive disclosure
+- presets: Sanft / Ausgewogen / Stark / Eigene
+- schedule editor
+- Focus full-screen flow
+- Rescue
+- Einblicke Today / Week / trends
+- Calm Control design pass
+- empty/error/permission/offline states
+- accessibility checks
 
-## Phase 5 – Release
+## Phase 4 — Monetization
 
-- Test auf mehreren Android-Geräten und Herstellern (Samsung, Xiaomi, Pixel)
-- Zuverlässigkeit der Berechtigungen und des Hintergrund-Dienstes
-- Datenmigration aus älteren Versionen
-- Abrechnung testen
-- Play-Richtlinien prüfen (Bedienungshilfe, Overlay, Foreground-Service, Data Safety)
-- geschlossene Beta
-- Store-Eintrag und Screenshots (ohne fremde Logos)
+Goal: charge for ongoing advanced value without damaging Free.
 
----
+- Google Play Billing integration
+- central Pro entitlement source
+- third-app paywall
+- contextual advanced-feature paywalls
+- annual trial
+- purchase / restore / pending / cancelled / expired states
+- manage-subscription route
+- store-provided price strings
+- no client-side fake paid grant in production
 
-## Leitlinien
+## Phase 5 — Release Hardening
 
-1. Free bleibt dauerhaft nützlich; keine Paywall vor dem ersten Schutz-Erlebnis.
-2. Eine Funktion ist erst fertig, wenn sie auf dem Handy durchgesetzt und auf einem Gerät getestet ist.
-3. Alles bleibt lokal auf dem Gerät; kein Konto in V1.
-4. Lieber weniger Funktionen, die zuverlässig laufen, als viele halbe.
+Goal: prove reliability before production.
+
+- Android 12–16 test coverage where supported
+- Pixel / Samsung / Xiaomi physical tests
+- reboot
+- process kill
+- screen lock/unlock
+- app update
+- rapid app switching
+- permission revoke/regrant
+- Usage Access denied
+- overlay denied
+- notification denied
+- 12–24 h service reliability/battery measurement
+- migration from previous local state
+- billing license-tester matrix
+- current Google Play policy review
+- closed beta
+- production store assets and disclosures
+
+## Post-V1 Research
+
+Not part of the V1 release contract:
+
+- Reels/Shorts/TikTok surface detection
+- AccessibilityService-based content inspection
+- iOS implementation
+- cloud sync
+- family/partner controls
+- location/Wi-Fi rules
+- AI coach/recommendations
+- reports/export products
+- social/gamified systems
+
+Research code may remain in the repository behind explicit non-production flags. It must not silently become a release dependency.
