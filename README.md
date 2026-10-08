@@ -48,6 +48,7 @@ More friction
 ### Free / Pro
 
 **Free**
+
 - up to 2 protected apps
 - Sanft / Ausgewogen
 - basic Reopen Protection
@@ -58,6 +59,7 @@ More friction
 - no ads
 
 **Pro**
+
 - unlimited apps
 - custom delays
 - advanced Reopen Protection
@@ -76,6 +78,7 @@ Planning price direction: **€3.99/month** or **€24.99/year**, with a 7-day a
 V1 is an **Android product**.
 
 The web/PWA build remains useful for:
+
 - development
 - UI preview
 - automated tests
