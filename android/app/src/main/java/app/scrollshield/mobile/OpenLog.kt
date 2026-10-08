@@ -35,8 +35,7 @@ class OpenLog(private val prefs: SharedPreferences) {
     /** Openings within the last `windowMinutes`, not counting the current attempt. */
     fun count(appId: String, now: Long, windowMinutes: Int): Int {
         synchronized(lock) {
-            val since = now - windowMinutes * 60_000L
-            return load()[appId]?.count { it > since } ?: 0
+            return OpenWindowPolicy.countPreviousOpenings(load()[appId].orEmpty(), now, windowMinutes)
         }
     }
 
