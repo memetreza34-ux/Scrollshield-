@@ -36,7 +36,7 @@ class OpenWindowPolicyTest {
 
     @Test
     fun countsOpeningAtTheCurrentTimestamp() {
-        assertEquals(1, OpenWindowPolicy.countPreviousOpenings(listOf(999_999L, 1_000_000L), 1_000_000L, 0 + 1))
+        assertEquals(1, OpenWindowPolicy.countPreviousOpenings(listOf(1_000_001L, 1_000_000L), 1_000_000L, 1))
     }
 
     @Test
