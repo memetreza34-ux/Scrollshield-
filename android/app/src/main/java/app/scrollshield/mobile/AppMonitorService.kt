@@ -258,6 +258,7 @@ class AppMonitorService : Service() {
     @Volatile
     private var monitoringEnabled = false
 
+    @Volatile
     private var lastForegroundPackage: String? = null
     /** Emergency unlocks per app id: until then the app is completely free. */
     private val emergencyUntil = ConcurrentHashMap<String, Long>()
@@ -812,6 +813,16 @@ class AppMonitorService : Service() {
 
         mainHandler.post {
             if (overlayView != null) return@post
+            // Worker decisions can be stale by the time the main thread runs.
+            // Do not interrupt a different app, a disabled rule or a locked screen.
+            if (!NativeRuntimePolicy.shouldPresentOverlay(
+                    targetPackage = blockedPackage,
+                    currentForegroundPackage = lastForegroundPackage,
+                    isProtected = rules.containsKey(blockedPackage),
+                    monitoringEnabled = monitoringEnabled,
+                    screenInteractive = isScreenInteractive(),
+                )
+            ) return@post
 
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
