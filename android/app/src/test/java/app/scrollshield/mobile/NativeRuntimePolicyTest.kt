@@ -105,4 +105,37 @@ class NativeRuntimePolicyTest {
         assertFalse(NativeRuntimePolicy.shouldInterruptSession(start, start + 1_439L * 60_000L, 1_440))
         assertTrue(NativeRuntimePolicy.shouldInterruptSession(start, start + 1_440L * 60_000L, 1_440))
     }
+
+
+    @Test
+    fun pendingOverlayIsDroppedAfterSwitchingToAnotherApp() {
+        assertFalse(NativeRuntimePolicy.shouldPresentOverlay(
+            "com.instagram.android", "com.google.android.youtube",
+            isProtected = true, monitoringEnabled = true, screenInteractive = true,
+        ))
+    }
+
+    @Test
+    fun pendingOverlayIsDroppedWhenProtectionStopsOrScreenLocks() {
+        assertFalse(NativeRuntimePolicy.shouldPresentOverlay(
+            "com.instagram.android", "com.instagram.android",
+            isProtected = true, monitoringEnabled = false, screenInteractive = true,
+        ))
+        assertFalse(NativeRuntimePolicy.shouldPresentOverlay(
+            "com.instagram.android", "com.instagram.android",
+            isProtected = true, monitoringEnabled = true, screenInteractive = false,
+        ))
+    }
+
+    @Test
+    fun onlyCurrentProtectedForegroundAppMayShowIntervention() {
+        assertTrue(NativeRuntimePolicy.shouldPresentOverlay(
+            "com.instagram.android", "com.instagram.android",
+            isProtected = true, monitoringEnabled = true, screenInteractive = true,
+        ))
+        assertFalse(NativeRuntimePolicy.shouldPresentOverlay(
+            "com.instagram.android", "com.instagram.android",
+            isProtected = false, monitoringEnabled = true, screenInteractive = true,
+        ))
+    }
 }
