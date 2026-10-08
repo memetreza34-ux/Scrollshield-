@@ -24,8 +24,7 @@ export type ProFeature =
   | 'commitment'
   | 'insights_week'
   | 'custom_focus'
-  | 'strict_focus'
-  | 'feed_extras';
+  | 'strict_focus';
 
 /** The paywall's first sentence for each feature. */
 export const PRO_REASONS: Record<ProFeature, string> = {
@@ -40,7 +39,6 @@ export const PRO_REASONS: Record<ProFeature, string> = {
   insights_week: 'Wochenansicht und Trends gehören zu Pro.',
   custom_focus: 'Eine eigene Fokus-Dauer gehört zu Pro.',
   strict_focus: 'Strenger Fokus gehört zu Pro.',
-  feed_extras: 'Wisch-Unterbrecher und Feed-Sitzungslimit gehören zu Pro.',
 };
 
 export const PRO_BENEFITS = [
