@@ -17,6 +17,13 @@ Am einfachsten geht das ohne Android Studio:
 5. **Nur selbst erzeugte APKs aus diesem Repo verwenden.** Das Debug-APK ist
    nicht für Play Store, öffentliche Verteilung oder echte Kaufabwicklung gedacht.
 
+**Falls unter Artifacts kein APK-Download erscheint:** Das GitHub-Konto kann sein
+Actions-Artefakt-Speicherlimit erreicht haben. Ein grüner Android-Build bestätigt
+trotzdem die Kompilierung. Nutze dann Android Studio oder baue die APK lokal mit
+`npm run android:sync` und `npm run android:build`; die lokale Datei liegt unter
+`android/app/build/outputs/apk/debug/app-debug.apk`. Den Download aus GitHub
+nicht als garantiert darstellen, bis der Artefakt-Upload wirklich erfolgreich war.
+
 Alternative für Entwickler: `npm ci`, `npm run android:sync`,
 danach `npm run android:open` beziehungsweise `npm run android:build` mit
 funktionierendem Android SDK und Java.
