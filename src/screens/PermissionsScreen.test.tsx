@@ -76,11 +76,13 @@ describe('PermissionsScreen', () => {
     expect(screen.queryByText('App-Nutzungszugriff')).not.toBeInTheDocument();
   });
 
-  it('offers the Android permissions including short-video detection on Android', () => {
+  it('shows core Android permissions without experimental V1 capabilities', () => {
     render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} isOnboarding />);
 
     expect(screen.getByText('App-Nutzungszugriff')).toBeInTheDocument();
-    expect(screen.getByText('Kurzvideo-Erkennung (Bedienungshilfe)')).toBeInTheDocument();
+    expect(screen.getByText('Hinweis über anderen Apps')).toBeInTheDocument();
+    expect(screen.queryByText('Kurzvideo-Erkennung (Bedienungshilfe)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Zuverlässiger Schutz im Hintergrund')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Du nutzt die Webversion' })).not.toBeInTheDocument();
   });
 
@@ -113,43 +115,18 @@ describe('PermissionsScreen', () => {
     });
   });
 
-  it('shows the accessibility disclosure and opens the settings only after consent', async () => {
-    openAccessibilitySettings.mockResolvedValue({ opened: true });
-    const { container } = render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Aktivieren: Kurzvideo-Erkennung (Bedienungshilfe)' }));
-
-    expect(screen.getByRole('dialog', { name: 'Bedienungshilfe für die Kurzvideo-Erkennung' })).toBeInTheDocument();
-    expect(openAccessibilitySettings).not.toHaveBeenCalled();
-    await expectNoA11yViolations(container);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Zustimmen' }));
-
-    expect(openAccessibilitySettings).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
-  it('does not open the accessibility settings when the disclosure is declined', () => {
-    render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Aktivieren: Kurzvideo-Erkennung (Bedienungshilfe)' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Ablehnen' }));
-
-    expect(openAccessibilitySettings).not.toHaveBeenCalled();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
-  it('opens the battery settings instead of flipping a local switch', async () => {
-    openBatteryOptimizationSettings.mockResolvedValue({ opened: true });
+  it('never opens research-only system settings in the V1 permissions flow', async () => {
     const updateState = vi.fn();
+    const { container } = render(
+      <PermissionsScreen state={androidState} updateState={updateState} navigate={vi.fn()} />,
+    );
 
-    render(<PermissionsScreen state={androidState} updateState={updateState} navigate={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Aktivieren: Zuverlässiger Schutz im Hintergrund' }));
-    await Promise.resolve();
-
-    expect(openBatteryOptimizationSettings).toHaveBeenCalledTimes(1);
-    // "AKTIV" only when Android reports the exemption on return.
-    expect(updateState).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Aktivieren: Kurzvideo-Erkennung (Bedienungshilfe)' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Aktivieren: Zuverlässiger Schutz im Hintergrund' })).toBeNull();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(openAccessibilitySettings).not.toHaveBeenCalled();
+    expect(openBatteryOptimizationSettings).not.toHaveBeenCalled();
+    await expectNoA11yViolations(container);
   });
 
   it('keeps the browser demo switches instead of applying the web fallback', async () => {
