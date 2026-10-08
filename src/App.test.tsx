@@ -202,6 +202,7 @@ describe('App', () => {
     await StorageService.saveState({
       ...DEFAULT_STATE,
       hasCompletedOnboarding: true,
+      appsConfig: { instagram: { ...DEFAULT_APP_CONFIG, id: 'instagram', active: true } },
     });
 
     render(<App />);
