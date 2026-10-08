@@ -37,7 +37,8 @@ describe('normalizeAppsConfig', () => {
 
     expect(configs.instagram.active).toBe(true);
     expect(configs.tiktok.id).toBe('tiktok');
-    expect(configs.youtube.reelsProtection.enabled).toBe(true);
+    // Feed-level enforcement is Post-V1, so new configurations default it off.
+    expect(configs.youtube.reelsProtection.enabled).toBe(false);
   });
 });
 

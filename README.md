@@ -1,80 +1,142 @@
 # ScrollShield
 
-ScrollShield is an offline-first digital wellbeing app for reducing impulsive social media use. The project is now planned as a **web/PWA-first launch**: version 1.0 should ship as a public installable web app before the native Android/iOS store release.
+ScrollShield is an **Android-first, local-first digital wellbeing app** designed to interrupt impulsive app opening and add more friction when a user repeatedly returns to the same distracting app.
 
-## Current Scope
+The authoritative V1 product specification is [docs/V1_MASTER_PLAN.md](docs/V1_MASTER_PLAN.md).
 
-- App and short-video protection profiles
-- Intentional opening delay and emergency unlock flows
-- Focus sessions and local history/statistics
-- Permission education screens with clear platform limits
-- Local-only storage with migration support
+## V1 Product
 
-The web/PWA version does not physically block other installed apps. It is positioned as a self-control and focus tool with intentional delays, local rules, focus sessions, and reflection. Real enforcement remains a later native phase:
+The V1 product is built around three persistent areas:
 
-- iOS: Screen Time / Family Controls entitlement and native managed-settings integration
-- Android: Usage Access, overlay handling, and background reliability work
+- **Heute** — protection status and trustworthy metrics from today
+- **Schutz** — protected apps, presets, schedules and advanced rules
+- **Einblicke** — measured behavior and trends
 
-The generated Android app id is currently `app.scrollshield.mobile`. Confirm this id before the first Play Console upload because package names are hard to change after release. It is not a blocker for the first web/PWA launch.
+Focus is a full-screen action launched from Heute, not a persistent tab.
 
-## Native Android Alpha
+The core behavior is:
 
-The repository also contains a native protection layer that is **not part of the v1.0 web/PWA release**:
+```
+Open protected app
+  ↓
+Intentional pause
+  ↓
+Return / Continue
+  ↓
+Use app
+  ↓
+Leave app
+  ↓
+Reopen detected
+  ↓
+More friction
+```
 
-- `AppMonitorService.kt` detects protected apps through Usage Access and shows the interruption overlay.
-- `ShortVideoWatchService.kt` (accessibility) recognises short-video feeds inside those apps and counts swipes, which
-  is what makes Reels/Shorts rules possible at all.
+### V1 Core
 
-It has not been compiled in CI and not been run on a device, and the Play Console declarations are still open. Feed
-detection relies on host-app view ids and degrades silently when those change — see `docs/SHORT_VIDEO_DETECTION.md` for
-the mechanism, the privacy boundary and the calibration procedure, and `docs/NATIVE_ANDROID.md` for the overall state.
+- per-app opening delay
+- Return / Continue intervention
+- Adaptive Reopen Protection
+- Session Guard
+- schedules
+- Focus
+- Emergency Unlock
+- Rescue Mode [Pro]
+- measured/derived usage and intervention metrics
+- local-only configuration and history
 
-On iOS none of this is possible: the Screen Time API restricts whole apps, never a surface inside one.
+### Free / Pro
+
+**Free**
+
+- up to 2 protected apps
+- Sanft / Ausgewogen
+- basic Reopen Protection
+- 1 recurring schedule
+- Focus 15 / 30 / 60
+- Emergency Unlock
+- Today statistics
+- no ads
+
+**Pro**
+
+- unlimited apps
+- custom delays
+- advanced Reopen Protection
+- Session Guard
+- daily budgets
+- unlimited schedules
+- Stark / Eigene Regeln
+- custom/strict Focus
+- Rescue
+- weekly insights and trends
+
+Planning price direction: **€3.99/month** or **€24.99/year**, with a 7-day annual trial. Billing UI must ultimately use store-provided prices.
+
+## Platform Strategy
+
+V1 is an **Android product**.
+
+The web/PWA build remains useful for:
+
+- development
+- UI preview
+- automated tests
+- product demonstrations
+
+It cannot physically intercept or restrict other installed apps and is not the paid protection product.
+
+iOS parity is explicitly outside V1 and requires a separate Screen Time / FamilyControls architecture.
+
+## Native Android Status
+
+The repository contains a real Android protection layer under `android/`:
+
+- `ScrollShieldBridgePlugin.kt` bridges React state to Android
+- `AppMonitorService.kt` monitors protected foreground apps
+- rules are persisted locally
+- the intervention UI uses a native overlay
+- per-app rules include opening delay, schedules, focus state, Reopen Protection, Session Guard and Emergency Unlock
+- the protection payload uses an explicit versioned native contract
+
+Source-level implementation is **not the same as device verification**.
+
+GitHub CI now compiles/tests the Android project, but release claims still require real-device validation on Pixel, Samsung and Xiaomi-class devices.
+
+## Short-Video / Reels Research
+
+Feed-level detection for Reels, Shorts, TikTok feeds and similar surfaces is **Post-V1 technical research**.
+
+Research code may remain in the repository, but production V1:
+
+- does not depend on AccessibilityService
+- does not request Accessibility access
+- does not send short-video rules to the native engine
+- does not market feed-level blocking as a V1 feature
+
+See [docs/V1_MASTER_PLAN.md](docs/V1_MASTER_PLAN.md) for the release contract.
 
 ## Run Locally
 
-Prerequisites: Node.js 22.12+ and npm 10+.
+Prerequisites: Node.js 24 and npm compatible with the repository lockfile.
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-Open the local Vite URL shown in the terminal, usually `http://localhost:3000`.
-
-The dev server only listens on this computer. To open it from a phone on the same network, use `npm run dev:lan` –
-only on a network you trust, since everyone on it can then reach the dev server.
-
-## Useful Commands
+Common checks:
 
 ```bash
 npm run lint
+npm run test
 npm run build
 npm run verify
-npm run clean
 ```
 
-## Web/PWA Launch
+## Android Development
 
-The first public release can be hosted as a static web app after these manual items are complete:
-
-- Final domain
-- Final imprint/legal provider details
-- Verified support email address
-- Published privacy policy URL
-- Hosting target selected and connected
-
-The production build is created with:
-
-```bash
-npm run build
-```
-
-The output is written to `dist/` and can be deployed to a static host such as Vercel, Netlify, Cloudflare Pages, or GitHub Pages.
-
-## Android Wrapper
-
-The Android wrapper is kept for the later native app phase. Prerequisites: Node.js plus a local Java/Android SDK installation for Gradle builds.
+Local Android development requires Java 21 and Android SDK Platform 36.
 
 ```bash
 npm run android:doctor
@@ -85,8 +147,23 @@ npm run android:release
 npm run android:bundle
 ```
 
-`android:doctor` checks the local Java/Android SDK setup. `android:sync` rebuilds the web app and syncs it into the Capacitor Android project. `android:build` creates a debug APK once Java and the Android SDK are installed locally. `android:bundle` creates the release AAB used for Play Console upload after signing is configured.
+The generated Android application id is currently:
 
-## Release Notes
+```
+app.scrollshield.mobile
+```
 
-Before the web/PWA launch, replace legal placeholders in the imprint, publish the privacy policy on the final domain, verify the support address, and run `npm run verify`. Before a later store release, connect real native permission status and verify the native sections in `docs/RELEASE_CHECKLIST.md`.
+Confirm the package id before the first Play Console production upload.
+
+## Release Rule
+
+A capability is only release-ready when it is:
+
+1. defined in the product contract
+2. implemented in the native engine
+3. covered by automated checks where practical
+4. compiled successfully
+5. tested on real Android devices
+6. reviewed against current Google Play policy
+
+Do not describe source-only functionality as device-verified.

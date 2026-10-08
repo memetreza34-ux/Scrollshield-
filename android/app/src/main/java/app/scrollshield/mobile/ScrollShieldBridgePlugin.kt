@@ -55,6 +55,9 @@ class ScrollShieldBridgePlugin : Plugin() {
         const val PREF_FILE = "scrollshield_native_prefs"
 
         /** JSON array of { packageName, mode, delaySeconds } objects. */
+        const val CONTRACT_VERSION = 1
+        const val KEY_CONTRACT_VERSION = "protection_contract_version"
+        const val KEY_CONTRACT_GENERATED_AT = "protection_contract_generated_at"
         const val KEY_BLOCKED_RULES = "blocked_rules"
         const val KEY_MONITORING_ENABLED = "monitoring_enabled"
 
@@ -251,6 +254,8 @@ class ScrollShieldBridgePlugin : Plugin() {
      * The AppMonitorService reads them to decide how to intervene.
      *
      * JS call: ScrollShieldBridge.syncBlockedApps({
+     *   contractVersion: 1,
+     *   generatedAt: number,
      *   rules: [{ packageName, appId, mode, delaySeconds, dailyLimitMinutes?, antiBinge?, timeWindows?, shortVideo?,
      *             focusUntil?, sessionLimitMinutes?, emergencyUnlock?, emergencyLockedUntil? }],
      *   monitoringEnabled: boolean,
@@ -258,6 +263,16 @@ class ScrollShieldBridgePlugin : Plugin() {
      */
     @PluginMethod
     fun syncBlockedApps(call: PluginCall) {
+        val contractVersion = call.getInt("contractVersion") ?: 0
+        if (contractVersion != CONTRACT_VERSION) {
+            call.reject(
+                "Unsupported protection contract version: $contractVersion",
+                "UNSUPPORTED_PROTECTION_CONTRACT"
+            )
+            return
+        }
+
+        val generatedAt = call.getLong("generatedAt") ?: System.currentTimeMillis()
         val incoming = call.getArray("rules") ?: JSONArray()
         val monitoringEnabled = call.getBoolean("monitoringEnabled", false) ?: false
 
@@ -296,6 +311,8 @@ class ScrollShieldBridgePlugin : Plugin() {
         }
 
         encryptedPrefs.edit()
+            .putInt(KEY_CONTRACT_VERSION, contractVersion)
+            .putLong(KEY_CONTRACT_GENERATED_AT, generatedAt)
             .putString(KEY_BLOCKED_RULES, normalized.toString())
             .putBoolean(KEY_MONITORING_ENABLED, monitoringEnabled)
             .apply()
@@ -307,6 +324,7 @@ class ScrollShieldBridgePlugin : Plugin() {
 
         val result = JSObject()
         result.put("synced", true)
+        result.put("contractVersion", contractVersion)
         result.put("ruleCount", normalized.length())
         call.resolve(result)
     }

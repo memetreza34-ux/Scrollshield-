@@ -29,6 +29,7 @@ import { formatUntil, isCommitmentActive } from '../lib/commitment';
 import { minutesUntilClockTime } from '../lib/focus';
 import { normalizeAppConfig } from '../lib/state';
 import { getShortVideoSignature, V1_SHORT_VIDEO_APP_IDS } from '../lib/shortVideoSignatures';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 
 type ScreenProps = {
   state: AppState;
@@ -212,7 +213,10 @@ export function AppDetailScreen({ state, updateState, navigate }: ScreenProps) {
   const committed = isCommitmentActive(state);
   const presetId = getPresetId(config);
   const hasFeed =
-    !!app.shortVideoSurface && V1_SHORT_VIDEO_APP_IDS.includes(app.id) && !!getShortVideoSignature(app.id);
+    FEATURE_FLAGS.enableShortVideoResearch &&
+    !!app.shortVideoSurface &&
+    V1_SHORT_VIDEO_APP_IDS.includes(app.id) &&
+    !!getShortVideoSignature(app.id);
   const schedules = state.schedules.filter((schedule) => schedule.appIds.includes(app.id));
 
   const save = (next: AppConfig) => updateState({ appsConfig: { ...state.appsConfig, [app.id]: next } });
@@ -385,7 +389,7 @@ export function AppDetailScreen({ state, updateState, navigate }: ScreenProps) {
                   label="Wisch-Unterbrecher"
                   value={config.reelsProtection.stopAfterSwipes ?? 0}
                   onChange={(stopAfterSwipes) =>
-                    saveCustom({ reelsProtection: { ...config.reelsProtection, stopAfterSwipes } }, 'feed_extras')
+                    saveCustom({ reelsProtection: { ...config.reelsProtection, stopAfterSwipes } })
                   }
                   options={[0, 10, 20, 30].map((swipes) => ({
                     value: swipes,

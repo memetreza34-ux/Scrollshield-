@@ -87,9 +87,6 @@ class AppMonitorService : Service() {
         /** Fallback delay when a rule carries no explicit openDelay. */
         const val DEFAULT_DELAY_SECONDS = 5
 
-        /** How long an app stays unblocked after the user chose to continue. */
-        const val GRACE_PERIOD_MS = 5 * 60_000L
-
         /** Longest pause the reopen protection builds up (MAX_ESCALATED_DELAY_SECONDS in protectionRules.ts). */
         const val MAX_ESCALATED_DELAY_SECONDS = 120
 
@@ -263,7 +260,6 @@ class AppMonitorService : Service() {
 
     private var lastForegroundPackage: String? = null
     /** Written by the overlay buttons on the main thread, read by the poll worker. */
-    private val allowedUntil = ConcurrentHashMap<String, Long>()
 
     /** Emergency unlocks per app id: until then the app is completely free. */
     private val emergencyUntil = ConcurrentHashMap<String, Long>()
@@ -356,6 +352,21 @@ class AppMonitorService : Service() {
 
     private fun loadRules() {
         monitoringEnabled = prefs.getBoolean(ScrollShieldBridgePlugin.KEY_MONITORING_ENABLED, false)
+
+        // Version 0 means data from the pre-versioned bridge and remains
+        // intentionally readable for migration. Any unknown non-zero version
+        // may have different semantics, so fail closed instead of enforcing
+        // rules we do not understand.
+        val storedContractVersion = prefs.getInt(ScrollShieldBridgePlugin.KEY_CONTRACT_VERSION, 0)
+        if (
+            storedContractVersion != 0 &&
+            storedContractVersion != ScrollShieldBridgePlugin.CONTRACT_VERSION
+        ) {
+            monitoringEnabled = false
+            rules = emptyMap()
+            dismissOverlay()
+            return
+        }
 
         val raw = prefs.getString(ScrollShieldBridgePlugin.KEY_BLOCKED_RULES, "[]") ?: "[]"
         val parsed = mutableMapOf<String, BlockRule>()
@@ -490,13 +501,6 @@ class AppMonitorService : Service() {
         }
 
         val verdict = evaluate(foreground, rule, now)
-
-        // Inside the grace period after "continue" nothing is shown, but it is
-        // an opening. A lock always wins over the grace period.
-        if (verdict.lockReason == null && now < (allowedUntil[foreground] ?: 0L)) {
-            openLog.record(rule.appId, now)
-            return
-        }
 
         showInterruptionOverlay(foreground, rule, verdict)
     }
@@ -637,7 +641,6 @@ class AppMonitorService : Service() {
                 val now = System.currentTimeMillis()
                 recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_CONTINUED, reason)
                 openLog.record(rule.appId, now)
-                allowedUntil[blockedPackage] = now + GRACE_PERIOD_MS
                 sessionStartedAt[blockedPackage] = now
                 dismissOverlay()
             },
