@@ -30,28 +30,43 @@ const addFocusMinutes = (dailyStats: AppState['dailyStats'], minutes: number, ti
   };
 };
 
+export interface FocusStartOptions {
+  /** Apps to lock; all protected apps when left out. */
+  appIds?: string[];
+  kind?: FocusSession['kind'];
+  strict?: boolean;
+}
+
 export const createFocusStartUpdate = (
   state: AppState,
   durationMinutes: number,
   now = Date.now(),
+  options: FocusStartOptions = {},
 ): Partial<AppState> => {
+  const kind = options.kind ?? 'focus';
   const focusSession: FocusSession = {
     id: createEventId(),
     startTime: now,
     endTime: null,
     duration: durationMinutes,
     successful: false,
-    protectedApps: Object.values(state.appsConfig)
-      .filter((config) => config.active)
-      .map((config) => config.id),
+    protectedApps:
+      options.appIds ??
+      Object.values(state.appsConfig)
+        .filter((config) => config.active)
+        .map((config) => config.id),
     blocksTriggered: 0,
+    kind,
+    // Rescue has no early end by design.
+    strict: kind === 'rescue' || options.strict === true,
   };
 
   const event: HistoryEvent = {
     id: createEventId(),
     timestamp: now,
     type: 'focus_start',
-    desc: `${durationMinutes} Min. Fokus-Sitzung gestartet.`,
+    desc:
+      kind === 'rescue' ? `Rescue für ${durationMinutes} Min. gestartet.` : `${durationMinutes} Min. Fokus gestartet.`,
   };
 
   return {
@@ -105,4 +120,19 @@ export const reconcileFocusRuntime = (state: AppState, now = Date.now()): Partia
   if (state.isFocusModeActive && state.focusTimeRemaining === focusTimeRemaining) return null;
 
   return { isFocusModeActive: true, focusTimeRemaining };
+};
+
+export const getRunningFocusSession = (state: Pick<AppState, 'focusSessions'>) =>
+  state.focusSessions.find((session) => session.endTime === null) ?? null;
+
+/** The apps the running focus or rescue session locks; empty when none runs. */
+export const getFocusBlockedAppIds = (state: Pick<AppState, 'focusSessions' | 'isFocusModeActive'>) =>
+  state.isFocusModeActive ? (getRunningFocusSession(state)?.protectedApps ?? []) : [];
+
+/** Minutes from now until a clock time today, or tomorrow when it has passed. */
+export const minutesUntilClockTime = (hour: number, minute: number, now: Date = new Date()) => {
+  const target = new Date(now);
+  target.setHours(hour, minute, 0, 0);
+  if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
+  return Math.max(1, Math.round((target.getTime() - now.getTime()) / 60_000));
 };

@@ -1,5 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
+import { apiKeyPatterns } from './secret-patterns';
 
 type PackageJson = {
   dependencies?: Record<string, string>;
@@ -69,6 +70,25 @@ if (bundleTrackerFindings.length > 0) {
   throw new Error(`Tracker marker found in production bundle: ${bundleTrackerFindings.join('; ')}`);
 }
 
+// A key read from an environment variable at build time ends up in the
+// shipped JavaScript, where anyone can read it. The key itself is never
+// printed here.
+const builtFiles = (await readdir('dist', { recursive: true }))
+  .filter((file) => /\.(js|css|html|json|webmanifest)$/.test(file))
+  .map((file) => path.join('dist', file));
+const bundleKeyFindings: string[] = [];
+
+for (const file of builtFiles) {
+  const content = await readFile(file, 'utf8');
+  for (const { pattern, reason } of apiKeyPatterns) {
+    if (pattern.test(content)) bundleKeyFindings.push(`${file}: ${reason}`);
+  }
+}
+
+if (bundleKeyFindings.length > 0) {
+  throw new Error(`Credential found in production build: ${bundleKeyFindings.join('; ')}`);
+}
+
 console.log(
-  `Privacy build check passed. ${runtimeDependencies.length} runtime dependencies, ${sourceFiles.length} source files, no network APIs or tracker markers.`,
+  `Privacy build check passed. ${runtimeDependencies.length} runtime dependencies, ${sourceFiles.length} source files, no network APIs, tracker markers or credentials.`,
 );

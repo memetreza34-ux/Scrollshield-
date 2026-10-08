@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The reminder icon is looked up by name from capacitor.config.ts at runtime,
+    which the release resource shrinker cannot see.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_shield" />

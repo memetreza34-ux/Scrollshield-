@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { AppConfig, DEFAULT_APP_CONFIG, DEFAULT_STATE } from '../types';
-import { normalizeAppConfig, normalizeAppsConfig, normalizeAppState, normalizePrivacySettings } from './state';
+import { AppConfig, DEFAULT_APP_CONFIG, DEFAULT_PROFILES, DEFAULT_STATE } from '../types';
+import {
+  applyProfileConfig,
+  normalizeAppConfig,
+  normalizeAppsConfig,
+  normalizeAppState,
+  normalizeHistory,
+  normalizePrivacySettings,
+} from './state';
 
 type LegacyConfigPatch = Parameters<typeof normalizeAppConfig>[1];
 
@@ -31,6 +38,42 @@ describe('normalizeAppsConfig', () => {
     expect(configs.instagram.active).toBe(true);
     expect(configs.tiktok.id).toBe('tiktok');
     expect(configs.youtube.reelsProtection.enabled).toBe(true);
+  });
+});
+
+describe('applyProfileConfig', () => {
+  const protectedInstagram = normalizeAppsConfig({
+    instagram: { id: 'instagram', active: true, mode: 'soft' } as Partial<AppConfig> as AppConfig,
+  });
+  const balance = DEFAULT_PROFILES.find((profile) => profile.id === 'balance')!;
+
+  it('keeps the protected apps when switching to a built-in profile', () => {
+    // Every app is inactive in the built-in profiles; switching used to turn the protection off.
+    expect(balance.appsConfig.instagram.active).toBe(false);
+
+    const configs = applyProfileConfig(balance.appsConfig, protectedInstagram);
+
+    expect(configs.instagram.active).toBe(true);
+    expect(configs.tiktok.active).toBe(false);
+  });
+
+  it('takes the rules from the profile', () => {
+    const configs = applyProfileConfig(balance.appsConfig, protectedInstagram);
+
+    expect(configs.instagram.mode).toBe('standard');
+    expect(configs.instagram.openDelay).toBe(balance.appsConfig.instagram.openDelay);
+  });
+
+  it('keeps the current rules of an app the profile does not know', () => {
+    const current = {
+      ...protectedInstagram,
+      custom_app: normalizeAppConfig('custom_app', { active: true, mode: 'strict' }),
+    };
+
+    const configs = applyProfileConfig(balance.appsConfig, current);
+
+    expect(configs.custom_app.active).toBe(true);
+    expect(configs.custom_app.mode).toBe('strict');
   });
 });
 
@@ -100,5 +143,20 @@ describe('normalizePrivacySettings', () => {
       localOnly: true,
       strictPrivacyMode: false,
     });
+  });
+});
+
+describe('normalizeHistory', () => {
+  it('turns legacy session ends stored as openings into session_end events', () => {
+    const history = normalizeHistory([
+      { id: '2', timestamp: 2, type: 'open', appId: 'instagram', desc: 'Sitzung beendet (3 Min)' },
+      { id: '1', timestamp: 1, type: 'open', appId: 'instagram', desc: 'App geöffnet' },
+    ]);
+
+    expect(history.map((event) => event.type)).toEqual(['session_end', 'open']);
+  });
+
+  it('falls back to an empty history for malformed input', () => {
+    expect(normalizeHistory(undefined)).toEqual([]);
   });
 });

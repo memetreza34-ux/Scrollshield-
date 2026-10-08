@@ -82,8 +82,12 @@
   </head>
   <body>
     <main>
-      <p class="muted">Stand: 17. Juni 2026</p>
+      <p class="muted">Stand: 29. September 2026</p>
       <h1>Datenschutzerklärung</h1>
+      <div class="notice">
+        <strong>Entwurf – vor Release ergänzen und prüfen lassen.</strong> Die mit „Vor Release ergänzen“ markierten
+        Angaben fehlen noch. Dieser Hinweis wird entfernt, sobald die Erklärung rechtlich geprüft ist.
+      </div>
       <p class="lead">
         ScrollShield ist als Offline-First-App konzipiert. Regeln, Verlauf und Statistiken bleiben auf deinem Gerät,
         solange du keine zukünftige Online-Funktion ausdrücklich aktivierst.
@@ -96,8 +100,8 @@
 
       <h2>1. Verantwortlicher</h2>
       <p>
-        Die vollständigen Anbieterangaben werden vor Veröffentlichung im Impressum ergänzt. Für Datenschutzanfragen ist
-        aktuell folgende Adresse vorgesehen:
+        [Vor Release ergänzen: vollständiger Name bzw. Firma, ladungsfähige Anschrift, E-Mail-Adresse.] Für
+        Datenschutzanfragen ist aktuell folgende Adresse vorgesehen:
         <a href="mailto:support@scrollshield.app?subject=Datenschutzanfrage%20ScrollShield">support@scrollshield.app</a
         >.
       </p>
@@ -106,19 +110,60 @@
       <p>ScrollShield kann auf deinem Gerät folgende Daten speichern:</p>
       <ul>
         <li>ausgewählte geschützte Apps und Schutzregeln,</li>
-        <li>lokale Nutzungs- und Blockierhistorie,</li>
-        <li>Statistiken wie gesparte Zeit, Streaks und Fokus-Sitzungen,</li>
-        <li>lokale App-Einstellungen, Berechtigungsstatus und Profilkonfiguration.</li>
+        <li>
+          lokale Nutzungs- und Blockierhistorie (die letzten 100 Ereignisse) – dazu gehört auch der Grund, den du vor
+          dem Öffnen einer App eintippen kannst, genau so, wie du ihn geschrieben hast,
+        </li>
+        <li>Statistiken wie Öffnungen, Unterbrechungen, Wiederöffnungen, Nutzungsminuten und Fokus-Sitzungen,</li>
+        <li>lokale App-Einstellungen, Berechtigungsstatus und Profilkonfiguration,</li>
+        <li>
+          nur in der Android-App: die Unterbrechungen durch den Schutzbildschirm (welche App, wann, aus welchem Grund
+          und wie du entschieden hast), bis ScrollShield sie in den Verlauf übernimmt.
+        </li>
       </ul>
       <p>
         Diese Daten dienen ausschließlich dazu, deine gewählten Schutzregeln auszuführen und dir lokale Auswertungen zu
         zeigen.
       </p>
+      <p>
+        Einstellungen, Profile und die Regeln der Android-App werden verschlüsselt gespeichert. Verlauf und Statistiken
+        liegen unverschlüsselt im Speicher der App, auf den andere Apps keinen Zugriff haben. Die Verschlüsselung
+        schützt nicht vor jemandem, der dein entsperrtes Gerät benutzt. Schreib als Grund deshalb nichts, was niemand
+        sehen soll.
+      </p>
 
       <h2>3. Keine Serverübertragung in Version 1.0</h2>
       <p>
         In der aktuellen Version gibt es keinen Account, keinen Cloud-Sync und keine Entwickler-Server, an die deine
-        Nutzungsdaten übertragen werden. Deine Daten bleiben in der lokalen App-Sandbox deines Geräts.
+        Nutzungsdaten übertragen werden. Deine Daten bleiben in der lokalen App-Sandbox deines Geräts. Die Android-App
+        lädt ihre Oberfläche aus dem App-Paket, nicht aus dem Internet.
+      </p>
+
+      <h2>3a. Webversion: Bereitstellung durch einen Hosting-Anbieter</h2>
+      <p>
+        Wenn du ScrollShield im Browser öffnest, werden die Dateien der App von einem Hosting-Anbieter ausgeliefert [Vor
+        Release ergänzen: Name und Sitz des Anbieters]. Dabei verarbeitet der Anbieter technisch notwendige Daten wie
+        deine IP-Adresse, Datum und Uhrzeit des Abrufs, die abgerufene Datei und Angaben zu deinem Browser, um die Seite
+        auszuliefern und vor Angriffen zu schützen. Rechtsgrundlage ist unser berechtigtes Interesse an einer sicheren
+        Bereitstellung (Art. 6 Abs. 1 lit. f DSGVO). [Vor Release ergänzen: Speicherdauer der Server-Logs,
+        Auftragsverarbeitungsvertrag, gegebenenfalls Übermittlung in ein Drittland.] Deine Regeln, dein Verlauf und
+        deine Statistiken werden dabei nicht übertragen. Damit die App offline funktioniert, speichert dein Browser die
+        App-Dateien in einem lokalen Zwischenspeicher.
+      </p>
+
+      <h2>3b. Download über Google Play</h2>
+      <p>
+        Wenn du die Android-App über Google Play installierst, verarbeitet Google dabei Daten nach seinen eigenen
+        Datenschutzbestimmungen. Google stellt Entwicklern zusammengefasste Statistiken bereit, etwa Installationszahlen
+        und, wenn du der Weitergabe an Entwickler zugestimmt hast, Absturzberichte. Auf deine Regeln, deinen Verlauf und
+        deine Statistiken in ScrollShield hat Google dadurch keinen Zugriff.
+      </p>
+
+      <h2>3c. Kontakt per E-Mail</h2>
+      <p>
+        Wenn du uns schreibst, verarbeiten wir deine E-Mail-Adresse und den Inhalt deiner Nachricht, um deine Anfrage zu
+        beantworten (Art. 6 Abs. 1 lit. b bzw. lit. f DSGVO). Wir löschen die Nachricht, wenn sie erledigt ist und keine
+        gesetzlichen Aufbewahrungspflichten bestehen.
       </p>
 
       <h2>4. Systemberechtigungen</h2>
@@ -128,14 +173,30 @@
       </p>
       <ul>
         <li>
-          <strong>iOS:</strong> Screen-Time- beziehungsweise Family-Controls-Funktionen, sofern von Apple freigegeben.
+          <strong>Android, Nutzungsdatenzugriff:</strong> zur Erkennung der Vordergrund-App. Das System meldet dabei,
+          welche App gerade geöffnet ist; ScrollShield wertet nur deine geschützten Apps aus und speichert die übrigen
+          Angaben nicht. Für das Tageslimit und die Statistik berechnet ScrollShield daraus, wie viele Minuten du deine
+          geschützten Apps heute genutzt hast, und merkt sich für die Anti-Binge-Regel einen Tag lang, wann du sie
+          geöffnet hast.
         </li>
         <li>
-          <strong>Android:</strong> Nutzungsdatenzugriff zur Erkennung der Vordergrund-App und optional Overlay-Rechte
-          zur Anzeige des Schutzbildschirms.
+          <strong>Android, Überlagerung:</strong> zur Anzeige des Schutzbildschirms über der geschützten App. Solange
+          der Schutz läuft, zeigt Android dazu eine dauerhafte Benachrichtigung an.
+        </li>
+        <li>
+          <strong>Benachrichtigungen (optional):</strong> für Erinnerungen wie das Ende einer Fokus-Sitzung oder die
+          Abend-Erinnerung. Sie entstehen auf deinem Gerät; in der Android-App werden einige beim System zur Anzeige
+          eingeplant. Ihr Inhalt verlässt das Gerät nicht.
         </li>
       </ul>
       <p>ScrollShield nutzt diese Berechtigungen nicht, um Chats, Passwörter oder Bildschirminhalte auszulesen.</p>
+
+      <h2>4a. Nicht Bestandteil von V1</h2>
+      <p>
+        Die Produktionsversion V1 verwendet keinen Android-Bedienungshilfedienst. Experimenteller Quellcode für eine
+        mögliche spätere Kurzvideo-Erkennung ist nicht im V1-Manifest registriert, wird von V1 nicht angefordert und
+        gehört nicht zum veröffentlichten Funktionsumfang.
+      </p>
 
       <h2>5. Kein Tracking und keine Werbung</h2>
       <p>
@@ -143,17 +204,17 @@
         werden keine Daten zu Werbezwecken mit Daten anderer Anbieter verknüpft.
       </p>
 
-      <h2>6. Schutz jüngerer Nutzer</h2>
+      <h2>6. Mindestalter</h2>
       <p>
-        Solange keine Altersgruppe bekannt ist, verwendet ScrollShield die strengere Datenschutz-Voreinstellung. Für als
-        unter 16 gekennzeichnete Nutzung bleibt dieser Modus aktiv. Version 1.0 verarbeitet Daten unabhängig davon
-        ausschließlich lokal.
+        ScrollShield richtet sich an Nutzer ab 16 Jahren. Die App fragt kein Alter ab und erhebt keine Altersangaben.
+        Version 1.0 verarbeitet alle Daten ausschließlich lokal auf deinem Gerät.
       </p>
 
       <h2>7. Löschung lokaler Daten</h2>
       <p>
-        Du kannst Verlauf, Statistiken und App-Daten in der App zurücksetzen. Wenn du ScrollShield deinstallierst,
-        löscht das Betriebssystem die lokal gespeicherten App-Daten.
+        Du kannst Verlauf und Statistiken in der App löschen. „App zurücksetzen“ löscht alle ScrollShield-Daten auf dem
+        Gerät, in der Android-App auch die Daten des Schutzdienstes, und beendet den Schutz. Wenn du ScrollShield
+        deinstallierst, löscht das Betriebssystem die lokal gespeicherten App-Daten.
       </p>
 
       <h2>8. Export lokaler Daten</h2>
@@ -162,6 +223,47 @@
         direkt auf deinem Gerät erzeugt und nicht an ScrollShield-Server übertragen. Unterstützte Exportdateien können
         später wieder lokal importiert werden. Systemberechtigungen werden durch einen Import nicht erteilt oder
         überschrieben.
+      </p>
+
+      <h2>8a. Rechtsgrundlage der Verarbeitung</h2>
+      <p>
+        In Version 1.0 verarbeitet ScrollShield ausschließlich auf deinem Gerät. Es findet keine Übermittlung an den
+        Anbieter oder an Dritte statt, und der Anbieter hat zu keinem Zeitpunkt Zugriff auf diese Daten.
+      </p>
+      <p>
+        Soweit die lokale Verarbeitung auf deinem Gerät dem Datenschutzrecht unterfällt, dient sie der Bereitstellung
+        der von dir eingerichteten Schutzregeln und Funktionen. Vor Veröffentlichung werden die endgültigen
+        Rechtsgrundlagen und Anbieterangaben rechtlich geprüft und vervollständigt.
+      </p>
+
+      <h2>8b. Deine Rechte</h2>
+      <p>
+        Dir stehen als betroffene Person die folgenden Rechte zu. Da in Version 1.0 keine Daten an den Anbieter
+        übertragen werden, liegen alle Daten ausschließlich bei dir; Auskunft, Berichtigung und Löschung nimmst du
+        deshalb direkt in der App vor.
+      </p>
+      <ul>
+        <li><strong>Auskunft</strong> (Art. 15 DSGVO): Export deiner lokalen Daten als JSON-Datei in der App.</li>
+        <li><strong>Berichtigung</strong> (Art. 16 DSGVO): Änderung aller Regeln und Einstellungen in der App.</li>
+        <li>
+          <strong>Löschung</strong> (Art. 17 DSGVO): Verlauf leeren, Statistiken zurücksetzen, App-Reset oder
+          Deinstallation.
+        </li>
+        <li>
+          <strong>Einschränkung der Verarbeitung</strong> (Art. 18 DSGVO): Deaktivieren einzelner Schutzfunktionen.
+        </li>
+        <li><strong>Datenübertragbarkeit</strong> (Art. 20 DSGVO): der JSON-Export ist maschinenlesbar.</li>
+        <li>
+          <strong>Widerspruch</strong> (Art. 21 DSGVO) und Widerruf erteilter Einwilligungen (Art. 7 Abs. 3 DSGVO).
+        </li>
+        <li>
+          <strong>Beschwerde bei einer Aufsichtsbehörde</strong> (Art. 77 DSGVO): Du kannst dich bei der für deinen
+          Wohnsitz zuständigen Datenschutzaufsichtsbehörde beschweren.
+        </li>
+      </ul>
+      <p>
+        Sollten künftig Online-Funktionen hinzukommen, kannst du diese Rechte über die im Impressum genannten
+        Kontaktdaten geltend machen.
       </p>
 
       <h2>9. Zukünftige Online-Funktionen</h2>

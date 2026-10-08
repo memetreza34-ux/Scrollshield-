@@ -10,8 +10,19 @@ In der aktuellen Version (v1.0 Offline-MVP) verarbeitet ScrollShield folgende Da
 
 - **App-Nutzungsdaten:** Welche Apps (App-IDs/Bundle-IDs) geöffnet werden.
 - **Zeitstempel:** Wann eine App geöffnet, blockiert oder freigegeben wurde.
-- **Statistiken:** Berechnete Fokus-Zeit, gesparte Zeit, Streaks.
+- **Statistiken:** Fokus-Minuten, Öffnungen, Unterbrechungen, Nutzungszeit (keine geschätzte „gesparte Zeit“, siehe `docs/V1_MASTER_PLAN.md`).
 - **Konfigurationsdaten:** Vom Nutzer erstellte Regeln, Profile und Limits.
+- **Freitext „Grund“:** Was der Nutzer vor dem Öffnen einer App als Grund eintippt, gespeichert im Verlauf (letzte 100
+  Ereignisse). Kann beliebige, auch sensible Inhalte enthalten.
+- **Post-V1-Forschung:** Der Repository-Quellstand enthält experimentelle Kurzvideo-/Accessibility-Komponenten. Sie
+  sind im Production-V1-Manifest nicht registriert und werden in V1 nicht als Datenquelle verwendet.
+- **Benachrichtigungen:** Lokal erzeugte Erinnerungen; auf Android teils beim System eingeplant.
+- **Unterbrechungsprotokoll (nur Android):** Paketname, Zeitpunkt, Grund und Entscheidung jeder Unterbrechung durch den
+  Schutzbildschirm, verschlüsselt, bis die App sie in den Verlauf übernimmt (höchstens 300 Einträge).
+- **Öffnungszeitpunkte (nur Android):** Wann geschützte Apps geöffnet wurden, pro App, verschlüsselt, 24 Stunden lang
+  (Anti-Binge).
+- **Nutzungsminuten geschützter Apps (nur Android):** Aus dem Nutzungsdatenzugriff berechnet, nur für geschützte Apps;
+  landen in der Tagesstatistik.
 - _(Zukunft / v2.0+):_ E-Mail-Adresse, Authentifizierungs-Token, Geräte-IDs (für Cloud-Sync).
 
 ## 2. Verarbeitungszwecke
@@ -25,7 +36,11 @@ Die Datenverarbeitung erfolgt **ausschließlich zur Bereitstellung der App-Funkt
 
 ## 3. Speicherorte
 
-- **Aktuell (v1.0):** 100 % lokal auf dem Endgerät des Nutzers (sichere App-Sandbox / LocalStorage / native Datenbank).
+- **Aktuell (v1.0):** 100 % lokal auf dem Endgerät des Nutzers. Einstellungen und Profile AES-GCM-verschlüsselt im
+  LocalStorage (Schlüssel liegt daneben – kein Schutz bei Gerätezugriff); Verlauf und Statistiken unverschlüsselt im
+  LocalStorage; native Schutzregeln und Ereignisprotokolle in app-internem Android-Speicher.
+- **Webversion:** Der Hosting-Anbieter verarbeitet beim Abruf Server-Logs (IP-Adresse, Zeitpunkt, Datei, Browser).
+  Anbieter noch nicht gewählt.
 - **Zukunft (v2.0+):** Bei Opt-in für Cloud-Sync erfolgt die Speicherung in Google Firebase (Firestore). _Compliance-Ziel:_ Server-Standort Europa (z. B. `europe-west3` / Frankfurt) zwingend festlegen.
 
 ## 4. Aufbewahrungsdauer
@@ -48,13 +63,16 @@ Der Nutzer hat jederzeit die volle Kontrolle über seine Daten. Folgende Routine
 Die App arbeitet nach dem Prinzip der Datenminimierung (Data Minimization). Details siehe `PERMISSION_MATRIX.md`.
 
 - **iOS:** Screen Time API (Family Controls).
-- **Android:** Nutzungsdatenzugriff (`PACKAGE_USAGE_STATS`), Überlagerung (`SYSTEM_ALERT_WINDOW`).
+- **Android V1:** Nutzungsdatenzugriff (`PACKAGE_USAGE_STATS`), Überlagerung (`SYSTEM_ALERT_WINDOW`),
+  Vordergrunddienst und optional Benachrichtigungen (`POST_NOTIFICATIONS`). Die Bedienungshilfe ist nur Post-V1-Forschung und im Production-V1-Manifest nicht registriert.
 - _Zweckbindung:_ Diese Rechte werden ausschließlich lokal ausgewertet, um den Blockier-Screen zu triggern.
 
 ## 7. Drittanbieter-Abhängigkeiten (Third-Party)
 
 - **Aktuell:** Keine aktiven Tracking- oder Analytics-SDKs, die Nutzungsdaten ausleiten.
-- **Firebase (Google):** Das SDK ist im Code vorbereitet. Sobald Cloud-Features aktiviert werden, verarbeitet Firebase Auth (Logins) und Firestore (Daten-Sync). Google fungiert dann als Auftragsverarbeiter (AVV / DPA muss abgeschlossen werden).
+- **Firebase (Google):** Nicht enthalten (Stand 24.09.2026, keine Abhängigkeit in `package.json`). Nur eine Planung für
+  spätere Cloud-Features; Google wäre dann Auftragsverarbeiter (AVV / DPA muss abgeschlossen werden).
+- **@capacitor/local-notifications:** Lokale Benachrichtigungen, keine Datenübertragung (siehe `docs/SDK_REGISTRY.md`).
 
 ## 8. Plattformspezifische Unterschiede
 

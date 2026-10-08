@@ -2,11 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { AppConfig, DEFAULT_APP_CONFIG, HistoryEvent } from '../types';
 import { countEmergencyUnlocksToday, evaluateProtectionAttempt, getAppUsageMinutesToday } from './protectionRules';
 
-type ConfigOverrides = Partial<
-  Omit<AppConfig, 'reelsProtection' | 'singleContent' | 'emergencyUnlock' | 'timeWindows' | 'antiBinge'>
-> & {
+type ConfigOverrides = Partial<Omit<AppConfig, 'reelsProtection' | 'emergencyUnlock' | 'timeWindows' | 'antiBinge'>> & {
   reelsProtection?: Partial<AppConfig['reelsProtection']>;
-  singleContent?: Partial<AppConfig['singleContent']>;
   emergencyUnlock?: Partial<AppConfig['emergencyUnlock']>;
   timeWindows?: Partial<AppConfig['timeWindows']>;
   antiBinge?: Partial<AppConfig['antiBinge']>;
@@ -20,10 +17,6 @@ const makeConfig = (overrides: ConfigOverrides = {}): AppConfig => ({
   reelsProtection: {
     ...DEFAULT_APP_CONFIG.reelsProtection,
     ...overrides.reelsProtection,
-  },
-  singleContent: {
-    ...DEFAULT_APP_CONFIG.singleContent,
-    ...overrides.singleContent,
   },
   emergencyUnlock: {
     ...DEFAULT_APP_CONFIG.emergencyUnlock,
@@ -133,6 +126,7 @@ describe('evaluateProtectionAttempt', () => {
 
     expect(decision.step).toBe('anti_binge_block');
     expect(decision.event?.desc).toBe('Zu viele Notfallfreigaben heute');
+    expect(decision.blockReason).toBe('emergency_limit');
   });
 
   it('blocks when the app daily limit is already reached', () => {
@@ -156,6 +150,7 @@ describe('evaluateProtectionAttempt', () => {
 
     expect(decision.step).toBe('anti_binge_block');
     expect(decision.event?.desc).toBe('Tageslimit erreicht (20/20 Min)');
+    expect(decision.blockReason).toBe('daily_limit');
   });
 
   it('ignores disabled daily limits', () => {
@@ -200,6 +195,67 @@ describe('evaluateProtectionAttempt', () => {
 
     expect(decision.step).toBe('anti_binge_block');
     expect(decision.event?.desc).toContain('Anti-Binge Sperre');
+    expect(decision.blockReason).toBe('anti_binge');
+  });
+
+  it('counts a session end as no extra opening', () => {
+    const sessionEnd = (minutesAgo: number): HistoryEvent => ({
+      ...openEvent(minutesAgo),
+      id: `end-${minutesAgo}`,
+      type: 'session_end',
+      desc: 'Sitzung beendet (1 Min)',
+    });
+    const decision = evaluateProtectionAttempt({
+      appId: 'instagram',
+      config: makeConfig({
+        mode: 'soft',
+        antiBinge: {
+          enabled: true,
+          blockThreshold: 3,
+          blockTimeframe: 20,
+          warningThreshold: 3,
+          warningTimeframe: 20,
+        },
+      }),
+      // Two real openings, each followed by its session end.
+      history: [sessionEnd(1), openEvent(2), sessionEnd(3), openEvent(4)],
+      isFocusModeActive: false,
+      now,
+    });
+
+    expect(decision.step).toBe('soft_intent');
+  });
+
+  it('does not let the anti-binge warning bypass a time window block or strict mode', () => {
+    const antiBinge = {
+      enabled: true,
+      blockThreshold: 10,
+      blockTimeframe: 20,
+      warningThreshold: 2,
+      warningTimeframe: 10,
+    };
+    const history = [openEvent(1), openEvent(2)];
+
+    const windowBlocked = evaluateProtectionAttempt({
+      appId: 'instagram',
+      config: makeConfig({ mode: 'soft', antiBinge }),
+      history,
+      isFocusModeActive: false,
+      schedules: [{ id: 's', name: 'Arbeit', startHour: 9, endHour: 18, appIds: ['instagram'], active: true }],
+      now,
+    });
+    const strict = evaluateProtectionAttempt({
+      appId: 'instagram',
+      config: makeConfig({ mode: 'strict', antiBinge }),
+      history,
+      isFocusModeActive: false,
+      now,
+    });
+
+    expect(windowBlocked.step).toBe('anti_binge_block');
+    expect(windowBlocked.blockReason).toBe('time_window');
+    expect(windowBlocked.event?.desc).toContain('Zeitplan „Arbeit“');
+    expect(strict.step).toBe('strict_blocked');
   });
 
   it('warns when anti-binge warning threshold is reached', () => {

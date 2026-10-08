@@ -1,22 +1,8 @@
-# ScrollShield Web Launch and Native Store Packet
+# ScrollShield Android V1 Store Submission Packet
 
-This packet separates the first public web/PWA launch from the later native App Store / Play Store submission. Version
-1.0 should launch as a web app first. The native store answers below are retained as prepared drafts for the later
-Android/iOS phase and must be verified against the final native binary before submission.
+This packet is for the **Android-first V1** release. The browser/PWA remains a development/demo surface and is not the paid protection product.
 
-## Web/PWA Launch Packet
-
-- Public app URL: `https://[FINAL-DOMAIN]/`
-- Public privacy URL: `https://[FINAL-DOMAIN]/privacy.html`
-- Support address pending verification: `support@scrollshield.app`
-- Legal name/entity: `[REQUIRED]`
-- Address: `[REQUIRED]`
-- Responsible person: `[REQUIRED]`
-- Hosting provider: `[REQUIRED]`
-- No account, login, cloud sync, advertising, analytics, tracking, or developer backend
-- App rules, history, and statistics remain in local browser storage
-- Local data can be exported, imported, or deleted with the in-app reset
-- Web/PWA limitation: the browser version cannot physically block other installed apps
+All declarations below are drafts until checked against the exact release binary and the current Google Play Console forms.
 
 ## Shared Facts
 
@@ -27,46 +13,7 @@ Android/iOS phase and must be verified against the final native binary before su
 - Support address pending verification: `support@scrollshield.app`
 - Store screenshots: `docs/store-assets/`
 
-## Later Native Store Submission
-
-The following sections are not required for the first web/PWA launch. Use them when Android/iOS binaries are ready.
-
-## Apple App Store Connect
-
-### App Privacy
-
-- Data collected: **No**
-- Tracking: **No**
-- Privacy-policy URL: `https://[FINAL-DOMAIN]/privacy.html`
-
-### Rating Target
-
-- Target: **4+**
-- Confirm the questionnaire contains no user-generated content, gambling, violence, sexual content, or unrestricted web
-  access.
-
-### Family Controls Entitlement Request
-
-> ScrollShield is a digital-wellbeing and productivity app that helps users interrupt impulsive app opening. Users
-> explicitly select apps and configure their own limits. Family Controls is used only to apply those user-selected
-> restrictions through Apple's supported Screen Time mechanisms. ScrollShield does not read content from other apps,
-> does not provide covert monitoring, and does not transmit usage history to developer servers.
-
-### Review Notes
-
-> Version 1.0 requires no account or test credentials. Complete onboarding, select one or more apps, and open the
-> permission screen to review the Screen Time explanation. The dashboard remains usable when permission is declined and
-> clearly reports reduced protection. Rules, history, and statistics are processed locally. Short-video protection is a
-> best-effort interruption and is not presented as a guaranteed system block.
-
-### Review Video Shot List
-
-1. Launch and complete onboarding without granting permission.
-2. Show the reduced-protection dashboard warning.
-3. Return to Permissions and grant Screen Time access in the native build.
-4. Select Instagram and configure an opening delay.
-5. Trigger the native shield/interruption.
-6. Show local history, data export, and app reset.
+## Android V1 Store Submission
 
 ## Google Play Console
 
@@ -74,7 +21,8 @@ The following sections are not required for the first web/PWA launch. Use them w
 
 - Data collected: **No**
 - Data shared: **No**
-- Tracking or advertising: **No**
+- Tracking: **No**
+- Advertising: **No**
 - Account creation: **No**
 - Deletion mechanism: local app reset and uninstall
 
@@ -88,22 +36,57 @@ The following sections are not required for the first web/PWA launch. Use them w
 ### `SYSTEM_ALERT_WINDOW` Declaration
 
 > Display over other apps is used only to show a clearly branded ScrollShield interruption when a protected app selected
-> by the user is opened. The screen offers a return action and, where configured, a deliberate emergency release. It does
-> not alter, click, or read the underlying app. Without this permission, overlay-based interruption is unavailable.
+> by the user is opened. The screen offers a return action and, unless the user locked the app, a "continue" button after
+> the configured delay. It does not alter, click, or read the underlying app. Without this permission, overlay-based
+> interruption is unavailable.
+
+### `FOREGROUND_SERVICE_SPECIAL_USE` Declaration
+
+> ScrollShield runs a user-visible foreground service while protection is active. The service checks which app is in the
+> foreground so a user-configured delay or block screen can be shown at the moment a protected app is opened. No existing
+> foreground service type covers self-control app interruption, which is why `specialUse` is declared with the subtype
+> "Self-control: shows a pause screen when the user opens an app they chose to limit". The service is started only after
+> the user enables protection for at least one app, shows a persistent notification for as long as it runs, and stops as
+> soon as the last protected app is deactivated. It performs no network activity and reads no screen content.
+
+Play Console requires this declaration to be reviewed manually. Submit it together with the permission videos below;
+without an approved declaration the upload is rejected.
+
+### Accessibility API — Not part of V1 submission
+
+Production V1 does not register `ShortVideoWatchService` and does not request Accessibility access.
+
+The V1 Play submission must not:
+
+- claim feed-level Reels/Shorts/TikTok blocking,
+- include Accessibility as a required V1 permission,
+- submit an Accessibility declaration for a service that is not packaged in the Production manifest.
+
+The research implementation remains documented in `docs/SHORT_VIDEO_DETECTION.md`. Any future activation requires a fresh policy review, disclosure/consent flow and real-device evidence.
 
 ### Permission Video Shot List
 
-1. Show onboarding before any permission request.
-2. Open the permission explanation and show purpose and fallback text.
-3. Grant Usage Access from Android settings and return to ScrollShield.
-4. Grant display-over-apps permission and return.
-5. Select a protected app and trigger the branded interruption.
-6. Disable each permission and show that ScrollShield remains usable with a warning.
+1. Complete onboarding and choose a protected app.
+2. Show the Usage Access explanation and grant Usage Access.
+3. Show the overlay explanation and grant display-over-other-apps.
+4. Activate protection and show the persistent foreground-service notification.
+5. Open the protected app and record the native Return / Continue intervention.
+6. Return to ScrollShield and show that the event appears in Today/Insights.
+7. Stop protection and show that the service/notification stops.
+
+Do not demonstrate Accessibility or feed-level blocking in the V1 submission because they are not part of V1 production.
 
 ### Rating Target
 
 - Target: **USK 0 / PEGI 3**
 - Confirm no social communication, user-generated content, purchases, gambling, violence, or sexual content.
+
+### Target Audience
+
+- Age groups: **16–17 and 18+** only. Not directed at children, so the Families policy does not apply. The minimum
+  age is stated in the store description and the privacy policy.
+- Countries for the first release: EU/EEA. US states such as Texas (SB 2420) now have app-store age laws with duties
+  for developers; add the US only after checking them.
 
 ## Manual Completion Fields
 
@@ -112,6 +95,5 @@ The following sections are not required for the first web/PWA launch. Use them w
 - Responsible person: `[REQUIRED]`
 - Verified support mailbox: `[REQUIRED]`
 - Final privacy-policy domain: `[REQUIRED]`
-- Apple entitlement approval: `[REQUIRED]`
-- Apple and Google questionnaire confirmations: `[REQUIRED]`
+- Google Play questionnaire confirmations: `[REQUIRED]`
 - Native permission demonstration videos: `[REQUIRED]`

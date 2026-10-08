@@ -3,14 +3,15 @@
 This file covers direct production runtime dependencies shipped with ScrollShield version 1.0. Development-only tools
 are excluded.
 
-| Dependency           | License |
-| -------------------- | ------- |
-| `@capacitor/android` | MIT     |
-| `@capacitor/core`    | MIT     |
-| `lucide-react`       | ISC     |
-| `motion`             | MIT     |
-| `react`              | MIT     |
-| `react-dom`          | MIT     |
+| Dependency                       | License |
+| -------------------------------- | ------- |
+| `@capacitor/android`             | MIT     |
+| `@capacitor/core`                | MIT     |
+| `@capacitor/local-notifications` | MIT     |
+| `lucide-react`                   | ISC     |
+| `motion`                         | MIT     |
+| `react`                          | MIT     |
+| `react-dom`                      | MIT     |
 
 ## Notice
 

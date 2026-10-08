@@ -4,5 +4,46 @@
     <string name="title_activity_main">ScrollShield</string>
     <string name="package_name">app.scrollshield.mobile</string>
     <string name="custom_url_scheme">app.scrollshield.mobile</string>
-    <string name="accessibility_service_description">ScrollShield benötigt diesen Dienst, um gefährliche oder von dir blockierte Inhalte auf dem Bildschirm (z.B. toxische Keywords) zu erkennen und sofort zu blockieren, bevor du sie siehst.</string>
+    <string name="accessibility_service_label">ScrollShield Kurzvideo-Erkennung</string>
+    <string name="accessibility_service_description">ScrollShield erkennt damit, ob ein Kurzvideo-Feed (Reels, Shorts, TikTok) geöffnet ist, und zählt deine Wischbewegungen darin. Der Dienst liest ausschließlich technische Kennungen der Oberfläche – niemals Texte, Nachrichten oder Eingaben. Alle Daten bleiben auf deinem Gerät.</string>
+
+    <!-- Foreground service notification -->
+    <string name="monitor_channel_name">ScrollShield Schutz</string>
+    <string name="monitor_channel_description">ScrollShield überwacht aktiv geschützte Apps.</string>
+    <string name="monitor_notification_title">ScrollShield ist aktiv</string>
+    <string name="monitor_notification_text">Deine geschützten Apps werden überwacht.</string>
+
+    <!-- Interruption overlay -->
+    <string name="overlay_title">ScrollShield</string>
+    <string name="overlay_body">Kurze Pause vor %1$s.</string>
+    <string name="overlay_reopen_body">Du hast %1$s vor Kurzem schon geöffnet. Die Pause ist diesmal länger.</string>
+    <string name="overlay_session_body">%1$d Minuten %2$s am Stück. Weiter oder Schluss?</string>
+    <string name="overlay_strict_hint">%1$s ist im strengen Modus gesperrt.</string>
+    <string name="overlay_focus_hint">Fokus läuft bis %1$s. Bis dahin ist %2$s gesperrt.</string>
+    <string name="overlay_time_window_hint">Gerade läuft ein Zeitplan. Bis zu seinem Ende ist %1$s gesperrt.</string>
+    <string name="overlay_daily_limit_hint">Tagesbudget aufgebraucht: heute %1$d von %2$d Minuten. Morgen ist %3$s wieder frei.</string>
+    <string name="overlay_anti_binge_block_hint">Abkühlzeit: %1$d-mal geöffnet in %2$d Minuten. Später geht es wieder.</string>
+    <string name="overlay_ready_hint">Du kannst weiter – oder zurück.</string>
+    <string name="overlay_continue">Weiter</string>
+    <string name="overlay_continue_to">Weiter zu %1$s</string>
+    <string name="overlay_go_home">Zurück</string>
+    <string name="overlay_emergency">Notfallfreigabe (noch %1$d heute)</string>
+    <string name="overlay_emergency_confirm">%1$s für %2$d Minuten freigeben</string>
+    <plurals name="overlay_emergency_wait">
+        <item quantity="one">Freigabe in %d Sekunde …</item>
+        <item quantity="other">Freigabe in %d Sekunden …</item>
+    </plurals>
+    <string name="overlay_feed_blocked">Der Kurzvideo-Feed von %1$s ist gesperrt.</string>
+    <string name="overlay_feed_daily_limit">Dein Tageslimit für Kurzvideos in %1$s ist erreicht.</string>
+    <string name="overlay_feed_session_limit">Du bist lange genug im Feed von %1$s.</string>
+    <string name="overlay_feed_hard_hint">Der Feed wurde verlassen. Ändere die Regel in ScrollShield, wenn du weitermachen willst.</string>
+    <string name="overlay_feed_soft_hint">Kurze Pause – willst du wirklich weiterscrollen?</string>
+    <plurals name="overlay_feed_swipes">
+        <item quantity="one">Du hast %1$d Mal in %2$s gewischt.</item>
+        <item quantity="other">Du hast %1$d Mal in %2$s gewischt.</item>
+    </plurals>
+    <plurals name="overlay_countdown">
+        <item quantity="one">%d Sekunde</item>
+        <item quantity="other">%d Sekunden</item>
+    </plurals>
 </resources>

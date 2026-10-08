@@ -37,14 +37,18 @@ Diese Matrix definiert die strikte Berechtigungsstrategie für ScrollShield. Das
 
 ---
 
-## 4. Hintergrundaktivität (Akku-Optimierung ignorieren / `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`)
+## 4. Hintergrundaktivität (Akku-Optimierung ignorieren)
+
+> Umgesetzt ohne die Berechtigung `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, die Google Play nur wenigen App-Arten erlaubt:
+> ScrollShield öffnet die Liste der Akku-Ausnahmen, der Nutzer wählt ScrollShield dort selbst. Der Status kommt von
+> Android (`PowerManager.isIgnoringBatteryOptimizations`). Optional; das Dashboard warnt deshalb nicht mehr ohne sie.
 
 - **Plattform:** Android
 - **Wofür gebraucht:** Verhindert, dass das Android-Betriebssystem ScrollShield nach ein paar Stunden Inaktivität im Hintergrund "killt", was den Schutz deaktivieren würde.
 - **Status:** **Dringend empfohlen**
 - **Was ohne funktioniert:** Die App funktioniert initial perfekt, der Schutz fällt aber unvorhersehbar aus, wenn das System RAM leert.
 - **Nutzer-Erklärung:** _"Damit dein Schutz nicht plötzlich vom System beendet wird, muss ScrollShield im Hintergrund aktiv bleiben dürfen."_
-- **Fallback-Logik:** Die App funktioniert, aber das Dashboard zeigt einen Warn-Banner ("Hintergrundschutz eingeschränkt"), der den Nutzer bittet, die Akku-Einstellungen anzupassen.
+- **Fallback-Logik:** Die App funktioniert; die Berechtigungsseite zeigt die Karte als optional mit einem Knopf zu den Akku-Einstellungen.
 
 ---
 
@@ -59,13 +63,31 @@ Diese Matrix definiert die strikte Berechtigungsstrategie für ScrollShield. Das
 
 ---
 
-## 6. Bedienungshilfen (Accessibility Service) – _Sonderfall_
+## 6. Bedienungshilfe (Accessibility Service) — Post-V1 Research
 
-- **Plattform:** Android
-- **Wofür gebraucht:** Könnte genutzt werden, um das Scrollen physisch zu unterbinden oder extrem schnell auf App-Öffnungen zu reagieren.
-- **Status:** **VERZICHTEN (für MVP)**
-- **Warum verzichten:** Google Play lehnt Apps extrem schnell ab, die Accessibility Services nutzen, ohne primär für Menschen mit Behinderungen gedacht zu sein. Es erfordert komplexe Video-Beweise beim App-Review.
-- **Strategie:** Für Version 1.0 ist kein Accessibility Service vorgesehen. Eine spätere Einführung ist nicht geplant und würde eine neue Richtlinien-, Datenschutz- und Store-Prüfung erfordern.
+**V1-Entscheidung:** Die Production-V1 registriert und fordert **keinen AccessibilityService** an.
+
+- `ShortVideoWatchService.kt` darf als experimenteller Forschungsstand im Repository bleiben.
+- `enableShortVideoResearch` ist standardmäßig `false`.
+- Das Production-Manifest registriert den Dienst nicht.
+- Onboarding und V1-Berechtigungsseite fragen keine Bedienungshilfe an.
+- V1-Store-Text verspricht kein Reels-/Shorts-spezifisches Blockieren.
+
+Bevor eine spätere Version diese Fähigkeit aktiviert, sind erneut nötig:
+
+1. aktuelle Google-Play-Policy-Prüfung,
+2. genaue Play-Console-Deklaration,
+3. prominente Offenlegung plus ausdrückliche Zustimmung,
+4. reale Geräte-/App-Versions-Tests,
+5. ein klarer Fallback, wenn Feed-Erkennung nicht zuverlässig ist.
+
+## 7. Sichtbarkeit anderer Apps (`<queries>` im Manifest)
+
+- **Plattform:** Android (ab Android 11 nötig)
+- **Wofür gebraucht:** Ab Android 11 sieht eine App andere Apps nur, wenn sie im Manifest stehen. ScrollShield listet genau die 15 Paketnamen der unterstützten Plattformen (`androidPackages` in `src/types.tsx`). Damit zeigen die App-Kacheln das Symbol der installierten App und der Schutzbildschirm ihren Namen statt des Paketnamens.
+- **Status:** **Keine Berechtigung, keine Nutzerfreigabe, keine Play-Console-Deklaration.** Bewusst kein `QUERY_ALL_PACKAGES`: das bräuchte eine Deklaration und sähe alle Apps des Nutzers.
+- **Was ohne funktioniert:** Alles bis auf die Symbole (dann Kürzel) und den App-Namen auf dem Schutzbildschirm (dann Paketname).
+- **Datenschutz-Grenze:** Ob eine der 15 Apps installiert ist, wird nur auf dem Gerät ausgewertet und nirgends gespeichert oder gesendet. `npm run check:android` prüft, dass die Liste im Manifest genau den Plattformen entspricht.
 
 ---
 

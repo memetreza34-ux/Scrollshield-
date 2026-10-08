@@ -53,7 +53,6 @@ const builtAssets = (await readdir(path.join(distDir, 'assets')))
 const requiredPrecachedFiles = [
   'index.html',
   'manifest.webmanifest',
-  'registerSW.js',
   'privacy.html',
   ...requiredIcons.map((icon) => icon.replace(/^\//, '')),
   ...builtAssets,
@@ -68,12 +67,31 @@ if (!/createHandlerBoundToURL\(["']\/index\.html["']\)/.test(swRaw)) {
   throw new Error('Service worker must use index.html as its offline navigation fallback.');
 }
 
+// src/main.tsx registers the service worker in the browser only; a script tag
+// in index.html would register it inside the Android app as well.
+if (htmlRaw.includes('registerSW')) {
+  throw new Error('index.html must not register the service worker; src/main.tsx does it outside the native app.');
+}
+
+const sourceMaps = (await readdir(distDir, { recursive: true })).filter((file) => file.endsWith('.map'));
+if (sourceMaps.length > 0) {
+  throw new Error(`Source maps must not ship, they contain local file paths: ${sourceMaps.join(', ')}`);
+}
+
 if (!htmlRaw.includes('Content-Security-Policy')) {
   throw new Error('Production index.html must include a Content-Security-Policy meta tag.');
 }
 
 if (!privacyHtmlRaw.includes('Datenschutzerklärung') || !privacyHtmlRaw.includes('Offline-First')) {
   throw new Error('Production build must include the public privacy.html page.');
+}
+
+// MIT, ISC and 0BSD require the license texts to ship with the app.
+const licensesText = await readDistFile('third-party-licenses.txt').catch(() => '');
+const packageJson = JSON.parse(await readFile('package.json', 'utf8')) as { dependencies?: Record<string, string> };
+const unlicensed = Object.keys(packageJson.dependencies ?? {}).filter((name) => !licensesText.includes(`${name} `));
+if (!licensesText || unlicensed.length > 0) {
+  throw new Error(`third-party-licenses.txt is missing or lacks: ${unlicensed.join(', ') || 'everything'}`);
 }
 
 console.log('PWA build checks passed.');

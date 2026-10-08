@@ -1,47 +1,114 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { AppState, Screen, DEFAULT_STATE, SUPPORTED_APPS } from './types';
 import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
-import { reconcileFocusRuntime } from './lib/focus';
-import { syncNativeBlockList } from './lib/nativeBridge';
+import { getFocusBlockedAppIds, getRunningFocusSession, reconcileFocusRuntime } from './lib/focus';
+import {
+  acknowledgeInterruptionEvents,
+  clearNativeData,
+  minimizeApp,
+  onHardwareBack,
+  readAppIcons,
+  readAppUsage,
+  readScreenTime,
+  readInterruptionEvents,
+  readShortVideoUsage,
+  syncNativeBlockList,
+} from './lib/nativeBridge';
+import { getBackTarget, isAllowedBeforeOnboarding } from './lib/navigation';
+import { mergeNativeInterruptions } from './lib/nativeEvents';
+import { mergeNativeAppUsage, mergeNativeShortVideoUsage, mergeScreenTime } from './lib/stats';
+import { getLocalDateKey } from './lib/appUtils';
+import { detectOperatingSystem } from './lib/platform';
+import { AppIconsContext } from './lib/appIcons';
+import {
+  EVENING_REMINDER_HOUR,
+  EVENING_REMINDER_TAG,
+  FOCUS_FINISHED_TAG,
+  NotificationPayload,
+  RELAPSE_WINDOW_MINUTES,
+  buildDailySummary,
+  buildEveningReminder,
+  buildFocusFinished,
+  buildRelapseWarning,
+  buildWeeklyReview,
+  cancelNotification,
+  scheduleDailyNotification,
+  scheduleNotification,
+  sendNotification,
+  shouldSendDailySummary,
+  shouldSendEveningReminder,
+  shouldSendRelapseWarning,
+  shouldSendWeeklyReview,
+  usesNativeNotifications,
+} from './lib/notifications';
 import { BottomNav } from './components/ui';
 import { Welcome, Onboarding } from './screens/OnboardingScreens';
-import { Dashboard, History } from './screens/MainScreens';
-import { AppList, AppDetail, Rules, Settings, Help, PrivacyScreen } from './screens/ConfigScreens';
-import { ReelsProtectionScreen } from './screens/ReelsProtectionScreen';
+import { Help, PrivacyScreen } from './screens/ConfigScreens';
+import { TodayScreen } from './screens/TodayScreen';
+import { AppDetailScreen, CommitmentScreen, ProtectScreen, ScheduleEditScreen } from './screens/ProtectScreens';
 import { Focus } from './screens/FocusScreens';
+import { RescueScreen } from './screens/RescueScreen';
+import { InsightsScreen } from './screens/InsightsScreen';
+import { NotificationsScreen, PaywallScreen, SettingsScreen } from './screens/SettingsScreens';
 import { ProtectionFlow } from './screens/ProtectionFlow';
 import { PermissionsScreen } from './screens/PermissionsScreen';
 import { DebugScreen } from './screens/DebugScreen';
+import { DiagnosticsScreen } from './screens/DiagnosticsScreen';
 import { ActiveSessionScreen } from './screens/ActiveSessionScreen';
 import { SupportScreen, ImprintScreen } from './screens/SupportScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
+
+/** When each best-effort notification was last sent, per session of the app. */
+type SentNotifications = {
+  dailySummarySentOn: string | null;
+  weeklyReviewSentOn: string | null;
+  eveningReminderSentOn: string | null;
+  relapseSentAt: number | null;
+};
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
   const [appState, setAppState] = useState<AppState>(DEFAULT_STATE);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [appIcons, setAppIcons] = useState<ReadonlyMap<string, string>>(() => new Map());
+  const settingsReturnScreenRef = useRef<Screen>('today');
+  const paywallReturnScreenRef = useRef<Screen>('today');
   const skipNextSaveRef = useRef(false);
   const screenScrollRef = useRef<HTMLDivElement>(null);
+  // Notifications are deliberately not persisted: a reminder missed because the
+  // app was closed should not fire on next launch.
+  const notificationStateRef = useRef<SentNotifications>({
+    dailySummarySentOn: null,
+    weeklyReviewSentOn: null,
+    eveningReminderSentOn: null,
+    relapseSentAt: null,
+  });
 
   useEffect(() => {
     const init = async () => {
       const saved = await StorageService.loadState();
+      // The platform is a property of the device, never of the stored state:
+      // the same export can be imported on a phone and in a browser.
+      const operatingSystem = detectOperatingSystem();
+
       if (saved) {
         try {
-          const normalizedState = normalizeAppState(saved);
+          const normalizedState = { ...normalizeAppState(saved), operatingSystem };
           const focusUpdate = reconcileFocusRuntime(normalizedState);
           const restoredState = focusUpdate ? { ...normalizedState, ...focusUpdate } : normalizedState;
           setAppState(restoredState);
           if (saved.hasCompletedOnboarding) {
-            setCurrentScreen(restoredState.activeSession ? 'active_session' : 'dashboard');
+            setCurrentScreen(restoredState.activeSession ? 'active_session' : 'today');
           } else {
             setCurrentScreen('welcome');
           }
         } catch (e) {
           console.error('Failed to parse saved state', e);
         }
+      } else {
+        setAppState((previous) => ({ ...previous, operatingSystem }));
       }
       setIsLoaded(true);
     };
@@ -63,23 +130,250 @@ export default function App() {
     return () => window.clearInterval(interval);
   }, [isLoaded, appState.isFocusModeActive]);
 
+  // Focus-end reminder. Sent from committed state, not from inside the state
+  // updater: React may run an updater twice (StrictMode does), and an updater
+  // must not have side effects.
+  //  - Native app: handed to the system when the session starts, so it arrives
+  //    even when ScrollShield is closed at the end; withdrawn if the session is
+  //    stopped early or the switch is turned off.
+  //  - Browser: nothing can be scheduled, so it is sent when the running app
+  //    notices the session ran out.
+  const focusRemindersEnabled = appState.settings.notifications.focusReminders;
+  const runningFocusSessionIdRef = useRef<string | null>(null);
+  const scheduledFocusReminderRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const running = appState.focusSessions.find((session) => session.endTime === null);
+    const previousId = runningFocusSessionIdRef.current;
+    runningFocusSessionIdRef.current = running?.id ?? null;
+
+    if (running) {
+      const key = focusRemindersEnabled ? running.id : null;
+      if (scheduledFocusReminderRef.current === key) return;
+      scheduledFocusReminderRef.current = key;
+      if (key) {
+        void scheduleNotification(
+          buildFocusFinished(running.duration),
+          new Date(running.startTime + running.duration * 60_000),
+        );
+      } else {
+        void cancelNotification(FOCUS_FINISHED_TAG);
+      }
+      return;
+    }
+
+    scheduledFocusReminderRef.current = null;
+    if (!previousId) return;
+
+    // Only the timer ends a session exactly at its scheduled end.
+    const finished = appState.focusSessions.find((session) => session.id === previousId);
+    const ranOut =
+      !!finished?.successful &&
+      finished.endTime !== null &&
+      finished.endTime === finished.startTime + finished.duration * 60_000;
+
+    if (!ranOut) {
+      void cancelNotification(FOCUS_FINISHED_TAG);
+    } else if (focusRemindersEnabled && !usesNativeNotifications()) {
+      void sendNotification(buildFocusFinished(finished.duration));
+    }
+  }, [isLoaded, appState.focusSessions, focusRemindersEnabled]);
+
+  // What happened on the device while ScrollShield was in the background:
+  // short-video minutes from the accessibility service, foreground minutes of
+  // the protected apps and the interruptions the overlay showed. Pulled on start, on return to the app and once a
+  // minute while it runs; in the browser both come back empty.
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    let cancelled = false;
+    const pull = async () => {
+      const [usage, appUsage, interruptions, screenTime] = await Promise.all([
+        readShortVideoUsage(),
+        readAppUsage(),
+        readInterruptionEvents(),
+        readScreenTime(),
+      ]);
+      if (cancelled) return;
+      const today = getLocalDateKey(new Date());
+
+      setAppState((previous) => {
+        let next = previous;
+        if (usage.available && usage.entries.length > 0) {
+          const dailyStats = mergeNativeShortVideoUsage(
+            next.dailyStats,
+            { date: usage.date ?? today, entries: usage.entries },
+            SUPPORTED_APPS,
+          );
+          if (dailyStats !== next.dailyStats) next = { ...next, dailyStats };
+        }
+        if (appUsage.available && appUsage.entries.length > 0) {
+          const dailyStats = mergeNativeAppUsage(
+            next.dailyStats,
+            { date: appUsage.date ?? today, entries: appUsage.entries },
+            SUPPORTED_APPS,
+          );
+          if (dailyStats !== next.dailyStats) next = { ...next, dailyStats };
+        }
+        if (screenTime.available) {
+          const dailyStats = mergeScreenTime(next.dailyStats, { ...screenTime, date: screenTime.date ?? today });
+          if (dailyStats !== next.dailyStats) next = { ...next, dailyStats };
+        }
+        if (interruptions.length > 0) {
+          const merged = mergeNativeInterruptions(next, interruptions, SUPPORTED_APPS);
+          if (merged.history !== next.history) next = { ...next, ...merged };
+        }
+        return next;
+      });
+
+      // Now part of the state, which the save effect persists right away.
+      // Should the acknowledgement fail, the next pull finds them in the
+      // history and skips them.
+      void acknowledgeInterruptionEvents(interruptions.map((event) => event.id));
+    };
+    const pullWhenVisible = () => {
+      if (document.visibilityState === 'visible') void pull();
+    };
+
+    void pull();
+    const interval = window.setInterval(() => void pull(), 60_000);
+    document.addEventListener('visibilitychange', pullWhenVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', pullWhenVisible);
+    };
+  }, [isLoaded]);
+
+  // Launcher icons of the installed protected apps for the app tiles. Read on
+  // start and on return to the app, which is where a new app gets installed.
+  useEffect(() => {
+    if (detectOperatingSystem() !== 'android') return;
+
+    let cancelled = false;
+    const packages = SUPPORTED_APPS.flatMap((app) => app.androidPackages);
+    const read = () => {
+      if (document.visibilityState !== 'visible') return;
+      void readAppIcons(packages).then((icons) => {
+        if (!cancelled) setAppIcons(icons);
+      });
+    };
+
+    read();
+    document.addEventListener('visibilitychange', read);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', read);
+    };
+  }, []);
+
+  // The evening reminder has a fixed text, so the native app hands it to the
+  // system as a daily alarm. Re-done on every start (an alarm does not survive
+  // a reboot) and when the permission arrives later.
+  const eveningReminderEnabled = appState.settings.notifications.eveningReminder;
+  const notificationsPermitted = appState.permissions.notifications;
+  useEffect(() => {
+    if (!isLoaded || !usesNativeNotifications()) return;
+    if (eveningReminderEnabled) {
+      void scheduleDailyNotification(buildEveningReminder(), EVENING_REMINDER_HOUR);
+    } else {
+      void cancelNotification(EVENING_REMINDER_TAG);
+    }
+  }, [isLoaded, eveningReminderEnabled, notificationsPermitted]);
+
+  // Everything that depends on the day's data can only be sent while the app
+  // runs: daily summary, weekly review and relapse warning – plus the evening
+  // reminder in the browser, where nothing can be scheduled. The "sent" mark
+  // is set before the asynchronous send so a state change in between cannot
+  // send twice; a failed send clears it again.
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const sendMarked = <K extends keyof SentNotifications>(
+      key: K,
+      value: SentNotifications[K],
+      payload: NotificationPayload,
+    ) => {
+      const sent = notificationStateRef.current;
+      const previous = sent[key];
+      sent[key] = value;
+      void sendNotification(payload).then((ok) => {
+        if (!ok) sent[key] = previous;
+      });
+    };
+
+    const check = () => {
+      const sent = notificationStateRef.current;
+      const now = new Date();
+      const today = getLocalDateKey(now);
+
+      if (shouldSendWeeklyReview(appState, sent.weeklyReviewSentOn, now)) {
+        sendMarked('weeklyReviewSentOn', today, buildWeeklyReview(appState, now));
+      }
+
+      if (shouldSendDailySummary(appState, sent.dailySummarySentOn, now)) {
+        sendMarked('dailySummarySentOn', today, buildDailySummary(appState, now));
+      }
+
+      if (!usesNativeNotifications() && shouldSendEveningReminder(appState, sent.eveningReminderSentOn, now)) {
+        sendMarked('eveningReminderSentOn', today, buildEveningReminder());
+      }
+
+      if (shouldSendRelapseWarning(appState, appState.history, sent.relapseSentAt)) {
+        const recentBlocks = appState.history.filter(
+          (event) => event.type === 'block' && Date.now() - event.timestamp < RELAPSE_WINDOW_MINUTES * 60_000,
+        ).length;
+        sendMarked('relapseSentAt', Date.now(), buildRelapseWarning(recentBlocks));
+      }
+    };
+
+    check();
+    const interval = window.setInterval(check, 60_000);
+    return () => window.clearInterval(interval);
+  }, [isLoaded, appState]);
+
   useEffect(() => {
     if (screenScrollRef.current) {
       screenScrollRef.current.scrollTop = 0;
     }
   }, [currentScreen]);
 
+  // Android's back button. Screens are switched without browser history, so
+  // without this back closed ScrollShield on every screen. Registered once;
+  // the ref carries the current screen into the handler.
+  const backStateRef = useRef({ screen: currentScreen, onboarded: false });
+  useEffect(() => {
+    backStateRef.current = { screen: currentScreen, onboarded: appState.hasCompletedOnboarding };
+  }, [currentScreen, appState.hasCompletedOnboarding]);
+  useEffect(() => {
+    if (!isLoaded) return;
+    return onHardwareBack(() => {
+      const { screen, onboarded } = backStateRef.current;
+      const target =
+        screen === 'settings'
+          ? settingsReturnScreenRef.current
+          : screen === 'paywall'
+            ? paywallReturnScreenRef.current
+            : getBackTarget(screen, onboarded);
+      if (!target) {
+        void minimizeApp();
+        return;
+      }
+      // Leaving the protection flow is its "cancel".
+      if (screen === 'protection_flow') setAppState((previous) => ({ ...previous, simulatedAppToOpen: null }));
+      setCurrentScreen(target);
+    });
+  }, [isLoaded]);
+
   useEffect(() => {
     if (isLoaded) {
       if (import.meta.env.PROD && currentScreen === 'debug') {
-        setCurrentScreen('dashboard');
-      } else if (
-        !appState.hasCompletedOnboarding &&
-        !['welcome', 'onboarding', 'permissions'].includes(currentScreen)
-      ) {
+        setCurrentScreen('today');
+      } else if (!appState.hasCompletedOnboarding && !isAllowedBeforeOnboarding(currentScreen)) {
         setCurrentScreen('welcome');
       } else if (appState.hasCompletedOnboarding && ['welcome', 'onboarding'].includes(currentScreen)) {
-        setCurrentScreen('dashboard');
+        setCurrentScreen('today');
       }
     }
   }, [isLoaded, currentScreen, appState.hasCompletedOnboarding]);
@@ -95,121 +389,186 @@ export default function App() {
     }
   }, [appState, isLoaded]);
 
-  // Sync blocked-app list to native layer whenever appsConfig changes
+  // Sync protection rules to the native layer whenever they change. Focus
+  // and rescue go down with their end time, so the phone unlocks on time even
+  // when ScrollShield is closed.
   useEffect(() => {
     if (!isLoaded) return;
-    void syncNativeBlockList(appState.appsConfig, SUPPORTED_APPS);
-  }, [appState.appsConfig, isLoaded]);
+    const running = getRunningFocusSession({ focusSessions: appState.focusSessions });
+    void syncNativeBlockList(appState.appsConfig, SUPPORTED_APPS, {
+      isFocusModeActive: appState.isFocusModeActive,
+      focusBlockedAppIds: getFocusBlockedAppIds({
+        focusSessions: appState.focusSessions,
+        isFocusModeActive: appState.isFocusModeActive,
+      }),
+      focusUntil: running ? running.startTime + running.duration * 60_000 : undefined,
+      focusStrict: running?.strict === true,
+      commitmentUntil: appState.commitment?.until,
+      schedules: appState.schedules,
+    });
+  }, [
+    appState.appsConfig,
+    appState.isFocusModeActive,
+    appState.focusSessions,
+    appState.schedules,
+    appState.commitment,
+    isLoaded,
+  ]);
+
+  // Stable, and accepts an updater for callers that must merge into the latest
+  // state rather than the one they rendered with.
+  const updateState = useCallback((updates: Partial<AppState> | ((previous: AppState) => Partial<AppState>)) => {
+    setAppState((prev) => ({ ...prev, ...(typeof updates === 'function' ? updates(prev) : updates) }));
+  }, []);
 
   if (!isLoaded)
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">Laden...</div>;
 
-  const updateState = (updates: Partial<AppState>) => {
-    setAppState((prev) => ({ ...prev, ...updates }));
-  };
-
   const resetApp = () => {
     skipNextSaveRef.current = true;
     StorageService.clearState();
+    void clearNativeData();
     setAppState(DEFAULT_STATE);
     setCurrentScreen('welcome');
   };
 
   const navigate = (screen: Screen) => {
+    if (screen === 'settings' && ['today', 'protect', 'insights'].includes(currentScreen)) {
+      settingsReturnScreenRef.current = currentScreen;
+    }
+    if (screen === 'paywall' && currentScreen !== 'paywall') {
+      paywallReturnScreenRef.current = currentScreen;
+    }
     setCurrentScreen(screen);
   };
 
   return (
     <ErrorBoundary>
-      <div className="app-stage min-h-screen text-zinc-100 font-sans selection:bg-zinc-800 flex justify-center items-center p-0 sm:p-4">
-        <div className="app-device w-full max-w-md bg-zinc-950 h-[100dvh] sm:h-[850px] sm:max-h-[90vh] relative overflow-hidden flex flex-col sm:rounded-[2.5rem] shadow-2xl shadow-black/80 sm:border border-zinc-800/50">
-          <div
-            ref={screenScrollRef}
-            data-testid="screen-scroll"
-            className="flex-1 overflow-y-auto overflow-x-hidden relative scrollbar-hide"
-          >
-            <AnimatePresence mode="wait">
-              {currentScreen === 'welcome' && <Welcome key="welcome" navigate={navigate} />}
-              {currentScreen === 'onboarding' && (
-                <Onboarding key="onboarding" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-              {currentScreen === 'permissions' && (
-                <PermissionsScreen
-                  key="permissions"
-                  state={appState}
-                  updateState={updateState}
-                  navigate={navigate}
-                  isOnboarding={!appState.hasCompletedOnboarding}
-                />
-              )}
-              {currentScreen === 'dashboard' && (
-                <Dashboard key="dashboard" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-              {currentScreen === 'apps' && (
-                <AppList key="apps" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-              {currentScreen === 'app_detail' && (
-                <AppDetail key="app_detail" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-              {currentScreen === 'rules' && (
-                <Rules key="rules" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-              {currentScreen === 'reels_protection' && (
-                <ReelsProtectionScreen
-                  key="reels_protection"
-                  state={appState}
-                  updateState={updateState}
-                  navigate={navigate}
-                />
-              )}
-              {currentScreen === 'focus' && (
-                <Focus key="focus" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-              {currentScreen === 'history' && <History key="history" state={appState} navigate={navigate} />}
-              {currentScreen === 'settings' && (
-                <Settings
-                  key="settings"
-                  state={appState}
-                  updateState={updateState}
-                  resetApp={resetApp}
-                  navigate={navigate}
-                />
-              )}
-              {currentScreen === 'privacy' && (
-                <PrivacyScreen
-                  key="privacy"
-                  state={appState}
-                  updateState={updateState}
-                  resetApp={resetApp}
-                  navigate={navigate}
-                />
-              )}
-              {currentScreen === 'help' && <Help key="help" navigate={navigate} />}
-              {currentScreen === 'protection_flow' && (
-                <ProtectionFlow key="protection_flow" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-              {currentScreen === 'active_session' && (
-                <ActiveSessionScreen
-                  key="active_session"
-                  state={appState}
-                  updateState={updateState}
-                  navigate={navigate}
-                />
-              )}
-              {currentScreen === 'support' && <SupportScreen key="support" navigate={navigate} />}
-              {currentScreen === 'imprint' && <ImprintScreen key="imprint" navigate={navigate} />}
-              {currentScreen === 'debug' && !import.meta.env.PROD && (
-                <DebugScreen key="debug" state={appState} updateState={updateState} navigate={navigate} />
-              )}
-            </AnimatePresence>
-          </div>
+      <AppIconsContext.Provider value={appIcons}>
+        <div className="app-stage min-h-screen text-zinc-100 font-sans selection:bg-zinc-800 flex justify-center items-center p-0 sm:p-4">
+          <div className="app-device w-full max-w-md bg-zinc-950 h-[100dvh] sm:h-[850px] sm:max-h-[90vh] relative overflow-hidden flex flex-col sm:rounded-[2.5rem] shadow-2xl shadow-black/80 sm:border border-zinc-800/50">
+            <div
+              ref={screenScrollRef}
+              data-testid="screen-scroll"
+              className="flex-1 overflow-y-auto overflow-x-hidden relative scrollbar-hide"
+            >
+              <AnimatePresence mode="wait">
+                {currentScreen === 'welcome' && <Welcome key="welcome" navigate={navigate} />}
+                {currentScreen === 'onboarding' && (
+                  <Onboarding key="onboarding" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'permissions' && (
+                  <PermissionsScreen
+                    key="permissions"
+                    state={appState}
+                    updateState={updateState}
+                    navigate={navigate}
+                    isOnboarding={!appState.hasCompletedOnboarding}
+                  />
+                )}
+                {currentScreen === 'today' && (
+                  <TodayScreen key="today" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'protect' && (
+                  <ProtectScreen key="protect" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'app_detail' && (
+                  <AppDetailScreen key="app_detail" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'schedule_edit' && (
+                  <ScheduleEditScreen
+                    key="schedule_edit"
+                    state={appState}
+                    updateState={updateState}
+                    navigate={navigate}
+                  />
+                )}
+                {currentScreen === 'commitment' && (
+                  <CommitmentScreen key="commitment" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'focus' && (
+                  <Focus key="focus" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'rescue' && (
+                  <RescueScreen key="rescue" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'insights' && (
+                  <InsightsScreen key="insights" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'settings' && (
+                  <SettingsScreen
+                    key="settings"
+                    state={appState}
+                    updateState={updateState}
+                    navigate={navigate}
+                    settingsReturnScreen={settingsReturnScreenRef.current}
+                  />
+                )}
+                {currentScreen === 'notifications' && (
+                  <NotificationsScreen
+                    key="notifications"
+                    state={appState}
+                    updateState={updateState}
+                    navigate={navigate}
+                  />
+                )}
+                {currentScreen === 'paywall' && (
+                  <PaywallScreen
+                    key="paywall"
+                    state={appState}
+                    updateState={updateState}
+                    navigate={navigate}
+                    paywallReturnScreen={paywallReturnScreenRef.current}
+                  />
+                )}
+                {currentScreen === 'privacy' && (
+                  <PrivacyScreen
+                    key="privacy"
+                    state={appState}
+                    updateState={updateState}
+                    resetApp={resetApp}
+                    navigate={navigate}
+                  />
+                )}
+                {currentScreen === 'help' && <Help key="help" navigate={navigate} />}
+                {currentScreen === 'protection_flow' && (
+                  <ProtectionFlow
+                    key="protection_flow"
+                    state={appState}
+                    updateState={updateState}
+                    navigate={navigate}
+                  />
+                )}
+                {currentScreen === 'active_session' && (
+                  <ActiveSessionScreen
+                    key="active_session"
+                    state={appState}
+                    updateState={updateState}
+                    navigate={navigate}
+                  />
+                )}
+                {currentScreen === 'diagnostics' && <DiagnosticsScreen key="diagnostics" navigate={navigate} />}
+                {currentScreen === 'support' && <SupportScreen key="support" navigate={navigate} />}
+                {currentScreen === 'imprint' && <ImprintScreen key="imprint" navigate={navigate} />}
+                {currentScreen === 'debug' && !import.meta.env.PROD && (
+                  <DebugScreen key="debug" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+              </AnimatePresence>
+            </div>
 
-          {appState.hasCompletedOnboarding &&
-            !['welcome', 'onboarding', 'protection_flow', 'active_session', 'permissions'].includes(currentScreen) && (
-              <BottomNav currentScreen={currentScreen} navigate={navigate} />
-            )}
+            {appState.hasCompletedOnboarding &&
+              ![
+                'welcome',
+                'onboarding',
+                'protection_flow',
+                'active_session',
+                'permissions',
+                'focus',
+                'rescue',
+              ].includes(currentScreen) && <BottomNav currentScreen={currentScreen} navigate={navigate} />}
+          </div>
         </div>
-      </div>
+      </AppIconsContext.Provider>
     </ErrorBoundary>
   );
 }

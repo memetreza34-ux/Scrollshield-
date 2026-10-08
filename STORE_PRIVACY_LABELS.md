@@ -77,3 +77,4 @@ Die App ist bereits so gebaut, dass sie diese Angaben stützt:
 2.  Es werden keine Backend-, Auth-, Analytics-, Werbe- oder Crash-Reporting-SDKs ausgeliefert.
 3.  `npm run check:privacy` lehnt Netzwerk-APIs und bekannte Tracker-Marker im Release-Bundle ab.
 4.  Die In-App- und öffentliche Datenschutzerklärung spiegeln diese Offline-First-Architektur wider.
+5.  Die Android-App schaut nur auf dem Gerät nach, welche der 15 unterstützten Apps installiert sind, um deren Symbol zu zeigen (`<queries>` im Manifest, siehe `PERMISSION_MATRIX.md`). Das verlässt das Gerät nicht und gilt im Data-Safety-Formular deshalb nicht als erhobene Angabe „Installierte Apps“.

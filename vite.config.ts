@@ -31,6 +31,10 @@ export default defineConfig(({ mode }) => ({
     },
     VitePWA({
       registerType: 'autoUpdate',
+      // Registered in src/main.tsx, and only in the browser: inside the Android
+      // app the files come from the APK, and a service worker there could keep
+      // serving the previous version after an update.
+      injectRegister: false,
       manifest: {
         name: 'ScrollShield',
         short_name: 'ScrollShield',
@@ -71,6 +75,8 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       workbox: {
+        // Source maps would ship local file paths inside the app.
+        sourcemap: false,
         cleanupOutdatedCaches: true,
         navigateFallback: '/index.html',
         globPatterns: ['**/*.{js,css,html,svg,png,ico,json,webmanifest}'],

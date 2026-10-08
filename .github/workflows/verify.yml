@@ -28,5 +28,39 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify formatting with diff
+        run: |
+          npx prettier --write .
+          git diff --exit-code
+
       - name: Verify
         run: npm run verify
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync Capacitor Android project
+        run: npm run android:sync
+
+      - name: Android unit tests and debug compile
+        working-directory: android
+        run: ./gradlew testDebugUnitTest assembleDebug --stacktrace

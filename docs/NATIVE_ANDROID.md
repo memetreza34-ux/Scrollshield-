@@ -1,18 +1,111 @@
 # Native Android Status
 
-ScrollShield now has a Capacitor Android wrapper under `android/`.
+ScrollShield has a Capacitor Android wrapper under `android/`. The native interruption layer is **implemented but not
+yet verified on a device** — it has never been compiled in CI, and no Play Console declaration has been filed. Treat it
+as an alpha that is separate from the web/PWA launch described in `README.md`.
 
-## Implemented
+## Project Setup
 
 - Capacitor app id: `app.scrollshield.mobile`
 - Android `versionName` aligned with `package.json` version `1.0.0`
+- Kotlin (`org.jetbrains.kotlin.android`, JVM target 21) alongside the generated Java sources
 - Cleartext HTTP disabled in the Android manifest
 - Android app backup disabled so local wellbeing data is not copied into device backups
 - Android release builds use R8 minification and resource shrinking
-- Current Android manifest only requests `android.permission.INTERNET`; sensitive enforcement permissions are
-  intentionally absent until native implementation and Play Console declarations are ready
 - Release signing is configured through ignored local files only: start from `android/signing.properties.example`
-- Reproducible npm scripts for sync, Android Studio opening, and debug APK builds
+
+`npm run check:android` guards these invariants, including the declared permission list and the presence of the Kotlin
+toolchain whenever Kotlin sources exist.
+
+## Implemented Native Behaviour
+
+`ScrollShieldBridgePlugin.kt` exposes to the web layer:
+
+| Method                            | Purpose                                                                  |
+| --------------------------------- | ------------------------------------------------------------------------ |
+| `getPermissionStatus`             | Usage Access, overlay, notifications, battery exemption, service state   |
+| `requestUsageStatsPermission`     | Opens the system Usage Access screen                                     |
+| `requestOverlayPermission`        | Opens the system overlay screen                                          |
+| `openBatteryOptimizationSettings` | Opens the battery-optimisation list (no `REQUEST_IGNORE_…` permission)   |
+| `getForegroundApp`                | Current foreground package (diagnostics)                                 |
+| `syncBlockedApps`                 | Writes the per-app rule set                                              |
+| `startMonitoring`                 | Starts `AppMonitorService`                                               |
+| `stopMonitoring`                  | Stops it and clears the master switch                                    |
+| `getInterruptionEvents`           | Interruptions the overlay showed, not yet in the history                 |
+| `getAppUsage`                     | Today's foreground minutes of the protected packages                     |
+| `acknowledgeInterruptionEvents`   | Drops the ones the web layer took over                                   |
+| `clearNativeData`                 | Deletes all native data and stops the monitor ("App zurücksetzen")       |
+| `saveTextFile`                    | Writes the data export through the system "save as" dialog               |
+| `minimizeApp`, `backButton` event | Android back button: the web layer navigates, or the app goes background |
+
+`AppMonitorService.kt` runs as a foreground service, reads the foreground app from the `UsageStatsManager` **event**
+stream every 1.5 s, and shows a full-screen overlay when a protected package appears:
+
+| Rule mode  | Overlay behaviour                                               |
+| ---------- | --------------------------------------------------------------- |
+| `soft`     | Reminder, "continue" available immediately                      |
+| `standard` | Countdown of the app's own `openDelay`, then "continue" unlocks |
+| `strict`   | No "continue"; only "back to home screen"                       |
+
+Rules are synced from `src/lib/nativeBridge.ts` (`buildNativeProtectionRules`), which also escalates an app to `strict`
+while a focus session is running. Choosing "continue" grants a five-minute grace period so the overlay does not
+immediately reappear.
+
+Time windows travel down as a schedule (hours from `TIME_WINDOWS` in `src/lib/timeWindows.ts`) and are evaluated by the
+service on every app switch, because the web layer may not be running when a window starts. A window set to `strict` or
+`block` locks the app like `strict` mode and overrides the grace period; the native side has no emergency unlock that
+would tell the two apart.
+
+The short-video minutes measured by the accessibility service are read back by the web layer once a minute and on every
+return to the app, and flow into the daily stats (dashboard, insights, in-app feed limit).
+
+Reminders use `@capacitor/local-notifications`. Two have a fixed text and are scheduled with the system, so they arrive
+even when the app is closed: the focus-end reminder (when a session starts, withdrawn if it is stopped early) and the
+evening reminder at 22:00 (a daily alarm, rescheduled on every app start). The daily summary (from 20:00), the weekly
+review (Sundays from 20:00, instead of the daily summary) and the relapse warning depend on the day's data and need the
+running app. Alarms are inexact: `SCHEDULE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED` and `WAKE_LOCK`, which the plugin
+declares, are removed from the merged manifest.
+
+Every interruption is recorded (`InterruptionLog.kt`: package, outcome, reason, time – nothing from the screen) until
+the web layer takes it into its history and acknowledges it (`src/lib/nativeEvents.ts`). Dashboard, statistics, stop
+rate, relapse warning and summaries therefore count what happens on the phone. `BootReceiver` restarts the monitor after
+a reboot or an app update if monitoring was on.
+
+## Short-Video Detection — Research Only
+
+`ShortVideoWatchService.kt`, signatures and calibration tooling remain in source as **Post-V1 research**.
+
+Production V1 deliberately does not register this AccessibilityService, does not request the permission and does not send short-video rules while `enableShortVideoResearch=false`.
+
+See `docs/SHORT_VIDEO_DETECTION.md` for the research mechanism. Nothing in that document is a V1 release guarantee.
+
+## Known Limits
+
+- **Checked on opening only.** Daily limit, anti-binge and time windows are evaluated when a protected app comes to the
+  front, in the same order as `src/lib/protectionRules.ts`. Someone who stays in the app past the limit or into a
+  locking window is not thrown out until the next opening.
+- **Emergency unlocks exist only in the web layer.** On the phone, a lock cannot be lifted early.
+- **Anti-binge counts openings on the phone only** (continue on the overlay, or a return during the grace period), not
+  openings inside ScrollShield's own protection flow.
+- A focus session is folded into the synced mode. If it ends while the app is not running, the native rules stay `strict`
+  until ScrollShield is opened again and re-syncs.
+- Scheduled reminders may arrive a few minutes late (inexact alarms).
+- Detection lags an app switch by up to one poll interval (1.5 s).
+- The overlay does not prevent the user from leaving through system gestures. It reappears on the next foreground
+  transition of the protected app.
+- Background reliability under Doze and OEM battery managers (Xiaomi, Samsung, Huawei) is **untested**.
+- `EncryptedSharedPreferences` comes from Jetpack Security, which is in maintenance mode. Revisit before extending its
+  use.
+- Feed-level rules are outside the V1 contract on every platform.
+
+## Still Open Before a Store Release
+
+- Compile and run the Android build on a real device; nothing here has been executed yet
+- Verify service survival after reboot, battery optimisation and OEM task killers
+- Record the Play Console permission demonstration videos (`PACKAGE_USAGE_STATS`, `SYSTEM_ALERT_WINDOW`)
+- File the `FOREGROUND_SERVICE_SPECIAL_USE` declaration (see `docs/STORE_SUBMISSION_PACKET.md`)
+- Confirm the final package id before the first Play Console upload
+- Decide whether daily limits should move into the native layer or stay web-only
 
 ## Commands
 
@@ -25,16 +118,6 @@ npm run android:build
 npm run android:release
 npm run android:bundle
 ```
-
-## Still Native Work
-
-- Implement Usage Access based app detection
-- Implement overlay or interruption UI for protected apps
-- Add background reliability handling for device reboot, battery optimization, and OEM restrictions
-- Add sensitive Android permissions only together with the native feature, Play Console declaration text, and review
-  video evidence
-- Add Play Console sensitive permission declaration videos for `PACKAGE_USAGE_STATS` and any overlay permission if used
-- Confirm the final package id before the first Play Console upload
 
 ## Local Tooling
 

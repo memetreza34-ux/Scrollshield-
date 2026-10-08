@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
 type Finding = {
@@ -80,14 +80,133 @@ requireMatch(manifestPath, manifest, /android:allowBackup="false"/, 'Android app
 requireMatch(manifestPath, manifest, /android:usesCleartextTraffic="false"/, 'Cleartext HTTP must stay disabled.');
 requireMatch(manifestPath, manifest, /android:exported="true"/, 'Launcher activity must explicitly declare exported.');
 
-const allowedPermissions = new Set(['android.permission.INTERNET']);
-const permissions = [...manifest.matchAll(/<uses-permission[^>]+android:name="([^"]+)"/g)].map((match) => match[1]);
+// Every permission here needs a Play Console declaration before upload; see
+// docs/STORE_SUBMISSION_PACKET.md. Adding a permission without updating this
+// list (and that document) must fail the build.
+const allowedPermissions = new Set([
+  'android.permission.PACKAGE_USAGE_STATS',
+  'android.permission.SYSTEM_ALERT_WINDOW',
+  'android.permission.FOREGROUND_SERVICE',
+  'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
+  'android.permission.POST_NOTIFICATIONS',
+  // Normal permission, no Play Console declaration: restarts the app lock
+  // after a reboot (BootReceiver).
+  'android.permission.RECEIVE_BOOT_COMPLETED',
+]);
+// Entries with tools:node="remove" strip a permission a library would merge
+// in; they declare nothing.
+const permissions = [...manifest.matchAll(/<uses-permission[^>]+android:name="([^"]+)"[^>]*>/g)]
+  .filter((match) => !/tools:node="remove"/.test(match[0]))
+  .map((match) => match[1]);
 for (const permission of permissions) {
   if (allowedPermissions.has(permission)) continue;
   findings.push({
     file: manifestPath,
     text: `Unexpected Android permission ${permission}; add store declarations before allowing it.`,
   });
+}
+
+// @capacitor/local-notifications merges these into the final manifest. The
+// check above only sees this file, so the removals themselves are guarded.
+for (const permission of ['SCHEDULE_EXACT_ALARM', 'WAKE_LOCK']) {
+  requireMatch(
+    manifestPath,
+    manifest,
+    new RegExp(`android:name="android\\.permission\\.${permission}"\\s+tools:node="remove"`),
+    `${permission} from @capacitor/local-notifications must stay removed from the merged manifest.`,
+  );
+}
+
+// The manifest uses the tools namespace for the PACKAGE_USAGE_STATS lint
+// suppression; without the declaration the resource compiler fails.
+if (/\btools:/.test(manifest)) {
+  requireMatch(
+    manifestPath,
+    manifest,
+    /xmlns:tools="http:\/\/schemas\.android\.com\/tools"/,
+    'Manifest uses the tools namespace without declaring xmlns:tools.',
+  );
+}
+
+// A foreground service must declare its type from Android 14 onwards.
+if (/<service[^>]+android:name="\.AppMonitorService"/.test(manifest)) {
+  requireMatch(
+    manifestPath,
+    manifest,
+    /android:foregroundServiceType="specialUse"/,
+    'AppMonitorService must declare its foreground service type.',
+  );
+  requireMatch(
+    manifestPath,
+    manifest,
+    /PROPERTY_SPECIAL_USE_FGS_SUBTYPE/,
+    'A specialUse foreground service must declare its subtype property.',
+  );
+}
+
+// Android 11+ hides other apps unless the manifest lists them. The app tiles
+// read icons and the interruption screen reads names for exactly the built-in
+// platform packages, so <queries> must match them – no more, no less.
+const platformsPath = path.join('src', 'types.tsx');
+const platformPackages = new Set(
+  [...(await readFile(platformsPath, 'utf8')).matchAll(/androidPackages:\s*\[([^\]]*)\]/g)].flatMap((match) =>
+    [...match[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1]),
+  ),
+);
+const queriedPackages = new Set(
+  [...(manifest.match(/<queries>([\s\S]*?)<\/queries>/)?.[1] ?? '').matchAll(/<package\s+android:name="([^"]+)"/g)].map(
+    (match) => match[1],
+  ),
+);
+for (const packageName of platformPackages) {
+  if (queriedPackages.has(packageName)) continue;
+  findings.push({ file: manifestPath, text: `${packageName} from ${platformsPath} is missing under <queries>.` });
+}
+for (const packageName of queriedPackages) {
+  if (platformPackages.has(packageName)) continue;
+  findings.push({
+    file: manifestPath,
+    text: `<queries> lists ${packageName}, which no platform in ${platformsPath} uses.`,
+  });
+}
+
+// Kotlin sources only compile when the Kotlin plugin is applied. Without this
+// check a Kotlin file can be added that silently never reaches the APK.
+const kotlinSources = (await readdir(path.join(androidDir, 'app', 'src', 'main', 'java'), { recursive: true }))
+  .map((entry) => String(entry))
+  .filter((entry) => entry.endsWith('.kt'));
+
+if (kotlinSources.length > 0) {
+  requireMatch(
+    buildGradlePath,
+    buildGradle,
+    /apply plugin: 'org\.jetbrains\.kotlin\.android'/,
+    `Project contains ${kotlinSources.length} Kotlin source(s) but does not apply the Kotlin plugin.`,
+  );
+
+  const rootGradlePath = path.join(androidDir, 'build.gradle');
+  const rootGradle = await readFile(rootGradlePath, 'utf8');
+  requireMatch(
+    rootGradlePath,
+    rootGradle,
+    /kotlin-gradle-plugin/,
+    'Kotlin sources require the kotlin-gradle-plugin classpath.',
+  );
+
+  const usesSecurityCrypto = (
+    await Promise.all(
+      kotlinSources.map((file) => readFile(path.join(androidDir, 'app', 'src', 'main', 'java', file), 'utf8')),
+    )
+  ).some((source) => /androidx\.security\.crypto/.test(source));
+
+  if (usesSecurityCrypto) {
+    requireMatch(
+      buildGradlePath,
+      buildGradle,
+      /androidx\.security:security-crypto/,
+      'Kotlin sources import androidx.security.crypto without the matching dependency.',
+    );
+  }
 }
 
 if (findings.length > 0) {
@@ -99,5 +218,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `Android project check passed. SDK ${minSdk}/${targetSdk}/${compileSdk}, ${permissions.length} permission.`,
+  `Android project check passed. SDK ${minSdk}/${targetSdk}/${compileSdk}, ${permissions.length} declared permissions.`,
 );

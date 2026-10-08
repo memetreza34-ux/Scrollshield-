@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="false"
@@ -35,38 +36,17 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
-        <!--
-            ScrollShield Content Filter Service
-            ═══════════════════════════════════
-            STATUS: DISABLED FOR PRODUCTION / PLAY STORE RELEASE
+        <!-- Short-video surface detection is POST-V1 research.
+             ShortVideoWatchService.kt remains in source for experiments, but
+             the production V1 manifest deliberately does NOT register an
+             AccessibilityService. Core protection must work without it. -->
 
-            Reason: Google Play Policy (Nov 2023) requires a video demonstration
-            proving exclusive accessibility use for users with disabilities.
-            This service is reserved for a future "Accessibility-reviewed" release
-            track and must NOT be present in the initial Play Store submission.
-
-            To re-enable during local development / sideloading:
-              1. Uncomment the <service> block below.
-              2. Set VITE_ENABLE_ACCESSIBILITY_SERVICE=true in .env.local
-              3. DO NOT push with the block uncommented to the release branch.
-        -->
-        <!--
-        <service
-            android:name=".ScrollShieldContentFilterService"
-            android:exported="true"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
-        -->
-        <!-- ── AppMonitorService (PRODUCTION – enabled) ──────────────────────
-             Foreground service that polls UsageStatsManager every second and
-             shows a SYSTEM_ALERT_WINDOW countdown overlay when a blocked app
-             comes to the foreground.
+        <!-- ── AppMonitorService ─────────────────────────────────────────────
+             Foreground service that reads UsageStatsManager foreground events
+             and shows a SYSTEM_ALERT_WINDOW interruption screen when a
+             protected app is opened. Requires an approved Play Console
+             declaration for FOREGROUND_SERVICE_SPECIAL_USE before upload;
+             see docs/STORE_SUBMISSION_PACKET.md.
         -->
         <service
             android:name=".AppMonitorService"
@@ -74,12 +54,23 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="App usage monitoring for parental and self-control purposes" />
-            <intent-filter>
-                <action android:name="app.scrollshield.ACTION_CONFIG_UPDATE" />
-            </intent-filter>
+                android:value="Self-control: shows a pause screen when the user opens an app they chose to limit" />
         </service>
 
+        <!-- ── BootReceiver ──────────────────────────────────────────────────
+             Restarts AppMonitorService after a reboot or an app update, if
+             the user had monitoring on. Both actions are protected broadcasts
+             that only the system can send; the receiver must be exported to
+             receive them and ignores every other action.
+        -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 
     <!-- ── Permissions ──────────────────────────────────────────────────── -->
@@ -97,9 +88,52 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- Optional: Internet (Capacitor needs this) -->
-    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Optional: Notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Restart the app lock after a reboot or an update (BootReceiver). Also
+         lets @capacitor/local-notifications restore scheduled reminders. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+        @capacitor/local-notifications declares these as well; ScrollShield
+        needs neither. Reminders are scheduled as inexact alarms
+        (isExactNotification: false), which need no exact-alarm access and no
+        Play Console declaration. The plugin never takes a wake lock.
+    -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" tools:node="remove" />
+
+    <!-- ── Package visibility ───────────────────────────────────────────────
+         Since Android 11 other apps are invisible unless listed here. These
+         are the androidPackages of BUILTIN_PLATFORMS in src/types.tsx, so the
+         app tiles can show the icon from the user's own launcher and the
+         interruption screen the real app name. No QUERY_ALL_PACKAGES: a fixed
+         list needs no Play Console declaration. npm run check:android keeps
+         both lists in step.
+    -->
+    <queries>
+        <package android:name="com.instagram.android" />
+        <package android:name="com.instagram.lite" />
+        <package android:name="com.zhiliaoapp.musically" />
+        <package android:name="com.ss.android.ugc.trill" />
+        <package android:name="com.zhiliaoapp.musically.go" />
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.google.android.apps.youtube.mango" />
+        <package android:name="com.facebook.katana" />
+        <package android:name="com.facebook.lite" />
+        <package android:name="com.twitter.android" />
+        <package android:name="com.twitter.android.lite" />
+        <package android:name="com.snapchat.android" />
+        <package android:name="com.reddit.frontpage" />
+        <package android:name="com.reddit.frontpage.lite" />
+        <package android:name="com.pinterest" />
+        <!-- Home screens, so their time does not count as screen time (ForegroundUsage). -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+    </queries>
 
 </manifest>

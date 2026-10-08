@@ -6,8 +6,14 @@ Diese Richtlinie definiert den internen Standard für den Umgang mit jüngeren Z
 
 ## 1. Alterslogik & Einstufung
 
-- **Mindestalter:** 13 Jahre (gemäß COPPA in den USA und DSGVO-Vorgaben in vielen EU-Ländern für digitale Dienste ohne elterliche Zustimmung).
-- **Altersgruppen-Logik:**
+- **Mindestalter für Version 1.0: 16 Jahre.** Entschieden am 29.09.2026. Grund: Die optionale Bedienungshilfe stützt
+  sich auf eine Einwilligung, und nach Art. 8 DSGVO braucht eine Einwilligung unter 16 in Deutschland die Zustimmung
+  der Eltern. Ob das für eine rein lokale App überhaupt gilt, ist eine offene Frage für die rechtliche Prüfung
+  (`docs/LEGAL_REVIEW_BRIEF.md`, Frage 6); 16+ umgeht sie. Umgesetzt als Zielgruppe „16–17 und 18+“ in der Play
+  Console und als Hinweis in Store-Beschreibung und Datenschutzerklärung. Die App fragt kein Alter ab.
+- **Veröffentlichung zuerst nur in der EU.** In US-Staaten wie Texas (SB 2420) gelten inzwischen Altersgesetze für
+  App-Stores mit Pflichten für Entwickler.
+- **Altersgruppen-Logik** (nur relevant, falls die Altersgrenze später gesenkt wird oder Online-Funktionen kommen):
   - **Unter 13:** Nutzung nur im reinen Offline-Modus (lokal) ohne jegliche Cloud- oder Social-Features erlaubt (Family-Link / Screen Time Integration durch Eltern).
   - **13 bis 15 Jahre (Teens):** "Strict Privacy Mode" ist aktiviert. Version 1.0 bleibt vollständig lokal und bietet keinen Cloud-Sync oder öffentliche Auffindbarkeit.
   - **16+ Jahre:** Standard-Erlebnis. Social-Features sind Opt-in.
@@ -48,7 +54,9 @@ Wenn ScrollShield später Accountability-Partner oder Gruppen (z.B. "Lern-Squads
 
 ## 6. App Store Positionierung (Altersgerecht)
 
-- **Altersfreigabe:** Ziel ist ein 4+ (Apple) bzw. USK 0 (Google) Rating für die App selbst, da sie keine anstößigen Inhalte enthält. Die Nutzungsbedingungen erfordern dennoch ein Mindestalter von 13 Jahren für Cloud-Dienste.
-- **Kategorie:** "Produktivität" oder "Gesundheit & Fitness".
-- **Beschreibung:** Fokus auf "Lernen", "Hausaufgaben", "Prüfungsvorbereitung" und "Digital Wellbeing".
-- **Datenschutz-Label:** "Data Not Linked to You" muss das Ziel bleiben, um Eltern und Schulen (Einsatz im Bildungsbereich) Sicherheit zu geben.
+- **Altersfreigabe:** USK 0 / PEGI 3 für die Inhalte der App (Fragebogen in der Play Console). Das ist unabhängig vom
+  Mindestalter 16, das über die Zielgruppe festgelegt wird.
+- **Kategorie:** "Produktivität". Nicht "Gesundheit & Fitness": Das legt ein Gesundheitsversprechen nahe.
+- **Beschreibung:** Fokus auf "Lernen", "Konzentration", "Fokus" und "Digital Wellbeing"; keine Werbung, die sich an
+  Kinder richtet ("Hausaufgaben").
+- **Datenschutz-Label:** "Keine Daten erhoben" muss das Ziel bleiben.

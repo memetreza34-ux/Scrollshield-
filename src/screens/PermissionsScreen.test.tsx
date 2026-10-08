@@ -1,13 +1,36 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Capacitor } from '@capacitor/core';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { expectNoA11yViolations } from '../test/a11y';
-import { DEFAULT_STATE } from '../types';
+import { AppState, DEFAULT_STATE } from '../types';
 import { PermissionsScreen } from './PermissionsScreen';
+
+const { getPermissionStatus, openAccessibilitySettings, openBatteryOptimizationSettings } = vi.hoisted(() => ({
+  getPermissionStatus: vi.fn(),
+  openAccessibilitySettings: vi.fn(),
+  openBatteryOptimizationSettings: vi.fn(),
+}));
+vi.mock('../lib/nativeBridge', () => ({
+  ScrollShieldBridge: { getPermissionStatus, openAccessibilitySettings, openBatteryOptimizationSettings },
+}));
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  getPermissionStatus.mockReset();
+  openAccessibilitySettings.mockReset();
+  openBatteryOptimizationSettings.mockReset();
+});
+
+// Platform-specific cards only render for their platform, so the state has to
+// name one explicitly. DEFAULT_STATE is 'web', where neither Screen Time nor
+// Usage Access exists.
+const iosState = { ...DEFAULT_STATE, operatingSystem: 'ios' as const };
+const androidState = { ...DEFAULT_STATE, operatingSystem: 'android' as const };
 
 describe('PermissionsScreen', () => {
   it('labels permission actions with their context for screen readers', async () => {
     const { container } = render(
-      <PermissionsScreen state={DEFAULT_STATE} updateState={vi.fn()} navigate={vi.fn()} isOnboarding />,
+      <PermissionsScreen state={iosState} updateState={vi.fn()} navigate={vi.fn()} isOnboarding />,
     );
 
     expect(screen.getByRole('button', { name: 'Aktivieren: Benachrichtigungen' })).toBeInTheDocument();
@@ -31,7 +54,7 @@ describe('PermissionsScreen', () => {
 
     expect(updateState).toHaveBeenCalledWith({ hasCompletedOnboarding: true });
     expect(updateState).not.toHaveBeenCalledWith(expect.objectContaining({ permissions: expect.anything() }));
-    expect(navigate).toHaveBeenCalledWith('dashboard');
+    expect(navigate).toHaveBeenCalledWith('today');
   });
 
   it('keeps a skipped permission disabled', () => {
@@ -43,5 +66,83 @@ describe('PermissionsScreen', () => {
     expect(updateState).toHaveBeenCalledWith({
       permissions: { ...DEFAULT_STATE.permissions, notifications: false },
     });
+  });
+
+  it('does not offer system permissions in the browser', () => {
+    render(<PermissionsScreen state={DEFAULT_STATE} updateState={vi.fn()} navigate={vi.fn()} isOnboarding />);
+
+    expect(screen.getByRole('heading', { name: 'Du nutzt die Webversion' })).toBeInTheDocument();
+    expect(screen.queryByText('Bildschirmzeit-Zugriff (iPhone/iPad)')).not.toBeInTheDocument();
+    expect(screen.queryByText('App-Nutzungszugriff')).not.toBeInTheDocument();
+  });
+
+  it('offers only the V1 Android permissions during onboarding', () => {
+    render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} isOnboarding />);
+
+    expect(screen.getByText('App-Nutzungszugriff')).toBeInTheDocument();
+    expect(screen.getByText('Hinweis über anderen Apps')).toBeInTheDocument();
+    expect(screen.queryByText('Kurzvideo-Erkennung (Bedienungshilfe)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Zuverlässiger Schutz im Hintergrund')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Du nutzt die Webversion' })).not.toBeInTheDocument();
+  });
+
+  it('merges the system status into the latest state instead of the first render', async () => {
+    vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
+    getPermissionStatus.mockResolvedValue({
+      usageStats: true,
+      overlay: false,
+      notifications: true,
+      monitoringActive: false,
+      accessibility: true,
+    });
+    const updateState = vi.fn();
+
+    render(<PermissionsScreen state={androidState} updateState={updateState} navigate={vi.fn()} />);
+    await waitFor(() => expect(updateState).toHaveBeenCalled());
+
+    // A switch the user set after this screen rendered must survive.
+    const latest: AppState = {
+      ...androidState,
+      permissions: { ...androidState.permissions, backgroundActivity: true },
+    };
+    const updater = updateState.mock.calls[0][0] as (previous: AppState) => Partial<AppState>;
+    expect(updater(latest).permissions).toEqual({
+      ...latest.permissions,
+      usageAccess: true,
+      overlay: false,
+      notifications: true,
+      accessibility: true,
+    });
+  });
+
+  it('keeps the research-only accessibility permission out of the production permission screen', () => {
+    render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    expect(screen.queryByText('Kurzvideo-Erkennung (Bedienungshilfe)')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /Bedienungshilfe/ })).not.toBeInTheDocument();
+    expect(openAccessibilitySettings).not.toHaveBeenCalled();
+  });
+
+  it('opens the battery settings instead of flipping a local switch', async () => {
+    openBatteryOptimizationSettings.mockResolvedValue({ opened: true });
+    const updateState = vi.fn();
+
+    render(<PermissionsScreen state={androidState} updateState={updateState} navigate={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Aktivieren: Zuverlässiger Schutz im Hintergrund' }));
+    await Promise.resolve();
+
+    expect(openBatteryOptimizationSettings).toHaveBeenCalledTimes(1);
+    // "AKTIV" only when Android reports the exemption on return.
+    expect(updateState).not.toHaveBeenCalled();
+  });
+
+  it('keeps the browser demo switches instead of applying the web fallback', async () => {
+    const updateState = vi.fn();
+
+    render(<PermissionsScreen state={DEFAULT_STATE} updateState={updateState} navigate={vi.fn()} />);
+    await Promise.resolve();
+
+    expect(getPermissionStatus).not.toHaveBeenCalled();
+    expect(updateState).not.toHaveBeenCalled();
   });
 });

@@ -3,6 +3,7 @@ import { Terminal, Shield, Activity, AlertTriangle, Database, Play, RefreshCw, X
 import { AppState, Screen, HistoryEvent } from '../types';
 import { Header } from '../components/ui';
 import { createEventId, getLocalDateKey } from '../lib/appUtils';
+import { createDemoState } from '../lib/demoData';
 
 export function DebugScreen({
   state,
@@ -99,6 +100,15 @@ export function DebugScreen({
             <Activity size={14} /> Testfunktionen
           </h3>
           <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => {
+                updateState(createDemoState(state));
+                navigate('today');
+              }}
+              className="bg-emerald-500 p-3 rounded-xl text-xs font-bold text-zinc-950 hover:bg-emerald-400 flex items-center gap-2 col-span-2 justify-center"
+            >
+              <Database size={14} /> Demo-Daten laden
+            </button>
             <button
               onClick={() => {
                 updateState({ isFocusModeActive: true, focusTimeRemaining: 15 });

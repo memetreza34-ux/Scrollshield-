@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { apiKeyPatterns } from './secret-patterns';
 
 type Finding = {
   file: string;
@@ -21,6 +22,7 @@ const forbiddenPathPatterns = [
   { pattern: /^android\/local\.properties$/i, reason: 'Android SDK paths are local machine configuration.' },
   { pattern: /^android\/signing\.properties$/i, reason: 'Android signing passwords must stay local.' },
   { pattern: /(^|\/)google-services\.json$/i, reason: 'Firebase service config must be intentionally reviewed.' },
+  { pattern: /(^|\/)firebase-applet-config\.json$/i, reason: 'Firebase web config carries an API key.' },
   { pattern: /\.(?:jks|keystore)$/i, reason: 'Android keystores must not be committed.' },
   { pattern: /^\.env(?!\.example$)/i, reason: 'Environment files may contain secrets.' },
 ];
@@ -29,6 +31,7 @@ const forbiddenContentPatterns = [
   { pattern: /-----BEGIN (?:RSA |EC |OPENSSH |)PRIVATE KEY-----/i, reason: 'Private key material found.' },
   { pattern: /^storePassword\s*=/im, reason: 'Android signing store password found.' },
   { pattern: /^keyPassword\s*=/im, reason: 'Android signing key password found.' },
+  ...apiKeyPatterns,
 ];
 
 const textFilePattern = /\.(?:cjs|css|gradle|html|js|json|jsx|kt|kts|md|mjs|properties|pro|ts|tsx|txt|xml|yaml|yml)$/i;

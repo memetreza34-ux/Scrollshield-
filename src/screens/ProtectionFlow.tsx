@@ -3,7 +3,15 @@ import { motion } from 'motion/react';
 import { AlertTriangle, Clock, Lock, Shield } from 'lucide-react';
 import { AppState, HistoryEvent, Screen, SUPPORTED_APPS } from '../types';
 import { createEventId } from '../lib/appUtils';
-import { countEmergencyUnlocksToday, evaluateProtectionAttempt, ProtectionFlowStep } from '../lib/protectionRules';
+import {
+  countEmergencyUnlocksToday,
+  evaluateProtectionAttempt,
+  ProtectionBlockReason,
+  ProtectionFlowStep,
+} from '../lib/protectionRules';
+import { getActiveScheduleForApp } from '../lib/schedules';
+import { getFocusBlockedAppIds, getRunningFocusSession } from '../lib/focus';
+import { isCommitmentActive } from '../lib/commitment';
 import { recordProtectionEventStats } from '../lib/session';
 
 const EMERGENCY_REASONS = ['Dringende Nachricht', 'Wichtiger Post / Upload', 'Kurz etwas recherchieren'];
@@ -22,13 +30,16 @@ export function ProtectionFlow({
   const config = state.appsConfig[appId || ''];
 
   const [step, setStep] = useState<ProtectionFlowStep>('init');
+  const [blockReason, setBlockReason] = useState<ProtectionBlockReason | undefined>();
   const [delayRemaining, setDelayRemaining] = useState(0);
+  /** The longer pause of a reopen, kept for after the reopen notice. */
+  const [escalatedDelay, setEscalatedDelay] = useState<number | undefined>();
   const [intentReason, setIntentReason] = useState('');
   const [intentDuration, setIntentDuration] = useState(5);
   const [sessionLimitOverrideMinutes, setSessionLimitOverrideMinutes] = useState<number | undefined>();
 
   const logEvent = useCallback(
-    (type: HistoryEvent['type'], desc: string) => {
+    (type: HistoryEvent['type'], desc: string, metadata?: HistoryEvent['metadata']) => {
       if (!appId) return;
 
       const newEvent: HistoryEvent = {
@@ -37,6 +48,7 @@ export function ProtectionFlow({
         type,
         appId,
         desc,
+        ...(metadata ? { metadata } : {}),
       };
       updateState({
         history: [newEvent, ...state.history],
@@ -47,9 +59,18 @@ export function ProtectionFlow({
   );
 
   const openApp = useCallback(
-    (durationOverride?: number) => {
+    (durationOverride?: number, reason?: string) => {
       setSessionLimitOverrideMinutes(durationOverride);
-      logEvent('open', 'App geoeffnet');
+
+      // The stated intention used to be discarded the moment the app opened.
+      // Keeping it is what makes the question more than a formality: it turns
+      // up in the history and feeds the "why do you open this" insight.
+      const trimmedReason = reason?.trim();
+      logEvent(
+        'open',
+        trimmedReason ? `App geöffnet: ${trimmedReason}` : 'App geöffnet',
+        trimmedReason ? { intentReason: trimmedReason, intentDurationMinutes: durationOverride } : undefined,
+      );
       setStep('app_opened');
     },
     [logEvent],
@@ -57,12 +78,12 @@ export function ProtectionFlow({
 
   const cancel = () => {
     updateState({ simulatedAppToOpen: null });
-    navigate('dashboard');
+    navigate('today');
   };
 
   useEffect(() => {
     if (!appId || !appInfo || !config) {
-      navigate('dashboard');
+      navigate('today');
       return;
     }
 
@@ -74,11 +95,18 @@ export function ProtectionFlow({
       dailyStats: state.dailyStats,
       history: state.history,
       isFocusModeActive: state.isFocusModeActive,
+      focusBlockedAppIds: getFocusBlockedAppIds({
+        focusSessions: state.focusSessions,
+        isFocusModeActive: state.isFocusModeActive,
+      }),
+      schedules: state.schedules,
     });
 
     if (decision.delaySeconds !== undefined) {
       setDelayRemaining(decision.delaySeconds);
+      if (decision.step === 'anti_binge_warning') setEscalatedDelay(decision.delaySeconds);
     }
+    setBlockReason(decision.blockReason);
 
     if (decision.event) {
       logEvent(decision.event.type, decision.event.desc);
@@ -100,6 +128,8 @@ export function ProtectionFlow({
     state.dailyStats,
     state.history,
     state.isFocusModeActive,
+    state.focusSessions,
+    state.schedules,
     step,
   ]);
 
@@ -119,6 +149,25 @@ export function ProtectionFlow({
       {appInfo.icon}
     </div>
   );
+
+  const runningSession = getRunningFocusSession(state);
+  // No emergency unlock during a self-commitment or a strict focus / rescue.
+  const emergencyAllowed = !isCommitmentActive(state) && !(state.isFocusModeActive && runningSession?.strict);
+
+  const describeBlock = () => {
+    switch (blockReason) {
+      case 'daily_limit':
+        return `Dein Tageslimit für ${appInfo.name} ist für heute aufgebraucht. Morgen ist die App wieder frei.`;
+      case 'time_window': {
+        const schedule = getActiveScheduleForApp(state.schedules, appInfo.id);
+        return `${appInfo.name} ist im Zeitplan „${schedule?.name ?? ''}“ gesperrt. Zeitpläne findest du im Tab „Schutz“.`;
+      }
+      case 'emergency_limit':
+        return `Du hast heute alle Notfallfreigaben genutzt. ${appInfo.name} bleibt bis morgen gesperrt.`;
+      default:
+        return `Du hast ${appInfo.name} in den letzten ${config.antiBinge.blockTimeframe} Minuten zu oft geöffnet. Mach eine Pause und versuch es später wieder.`;
+    }
+  };
 
   const renderIosFallbackInfo = () => {
     if (state.operatingSystem !== 'ios') return null;
@@ -145,7 +194,7 @@ export function ProtectionFlow({
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-sm">
           <div className="mb-8">{renderAppIcon()}</div>
           <h2 className="text-3xl font-bold mb-3 tracking-tight">Kurzer Check</h2>
-          <p className="text-zinc-400 mb-10 text-lg">Warum moechtest du {appInfo.name} oeffnen?</p>
+          <p className="text-zinc-400 mb-10 text-lg">Warum möchtest du {appInfo.name} öffnen?</p>
 
           <div className="space-y-6 mb-10 text-left">
             <div>
@@ -186,7 +235,7 @@ export function ProtectionFlow({
               Abbrechen
             </button>
             <button
-              onClick={() => openApp(intentDuration)}
+              onClick={() => openApp(intentDuration, intentReason)}
               className="flex-1 py-4 rounded-[1.5rem] font-bold bg-zinc-100 text-zinc-950 shadow-lg shadow-zinc-100/10 active:scale-[0.98] transition-transform"
             >
               Weiter
@@ -227,14 +276,14 @@ export function ProtectionFlow({
               onClick={cancel}
               className="w-full py-4 rounded-[1.5rem] font-bold bg-zinc-100 text-zinc-950 shadow-lg shadow-zinc-100/10 active:scale-[0.98] transition-transform"
             >
-              App schliessen
+              App schließen
             </button>
             <button
               onClick={() => openApp()}
               disabled={delayRemaining > 0}
               className={`w-full py-4 rounded-[1.5rem] font-semibold transition-all ${delayRemaining > 0 ? 'bg-zinc-900/50 text-zinc-600 border border-zinc-800/30' : 'bg-zinc-900/80 backdrop-blur-md text-zinc-300 border border-zinc-800/50 hover:bg-zinc-800'}`}
             >
-              Trotzdem oeffnen
+              Trotzdem öffnen
             </button>
           </div>
         </motion.div>
@@ -248,7 +297,7 @@ export function ProtectionFlow({
           <h2 className="text-3xl font-bold mb-3 tracking-tight">Blockiert</h2>
           <p className="text-zinc-400 mb-10 text-lg leading-relaxed">
             {state.isFocusModeActive
-              ? `${appInfo.name} ist waehrend deiner Fokus-Sitzung gesperrt.`
+              ? `${appInfo.name} ist während ${runningSession?.kind === 'rescue' ? 'Rescue' : 'deines Fokus'} gesperrt.`
               : `${appInfo.name} ist aktuell durch deine strengen Regeln gesperrt.`}
           </p>
 
@@ -259,7 +308,7 @@ export function ProtectionFlow({
             >
               Verstanden
             </button>
-            {(config.emergencyUnlock?.enabled || state.isFocusModeActive) && (
+            {emergencyAllowed && (config.emergencyUnlock?.enabled || state.isFocusModeActive) && (
               <button
                 onClick={() => {
                   setStep('emergency_countdown');
@@ -294,7 +343,7 @@ export function ProtectionFlow({
             </div>
             <p className="text-zinc-400 text-sm leading-relaxed mb-3">
               Bitte warte <span className="font-mono font-bold text-amber-400">{delayRemaining}</span> Sekunden. Nutze
-              diese Zeit, um zu pruefen, ob du die App jetzt wirklich brauchst.
+              diese Zeit, um zu prüfen, ob du die App jetzt wirklich brauchst.
             </p>
             {(() => {
               const emergencyCountToday = countEmergencyUnlocksToday(state.history);
@@ -303,8 +352,8 @@ export function ProtectionFlow({
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-start gap-2">
                   <Shield size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
                   <span className="text-xs text-amber-400/90 font-medium">
-                    Du hast heute noch {remaining} Notfallfreigabe{remaining !== 1 ? 'n' : ''} uebrig. Bei Missbrauch
-                    wird die App fuer {config.antiBinge.blockTimeframe} Min. komplett gesperrt.
+                    Du hast heute noch {remaining} Notfallfreigabe{remaining !== 1 ? 'n' : ''} übrig. Sind sie
+                    aufgebraucht, bleibt die App bis morgen gesperrt.
                   </span>
                 </div>
               );
@@ -330,7 +379,7 @@ export function ProtectionFlow({
       {step === 'emergency_reason' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-sm text-left">
           <h2 className="text-2xl font-bold mb-2 tracking-tight">Bewusste Freigabe</h2>
-          <p className="text-zinc-400 mb-6 text-sm">Warum musst du {appInfo.name} jetzt oeffnen?</p>
+          <p className="text-zinc-400 mb-6 text-sm">Warum musst du {appInfo.name} jetzt öffnen?</p>
 
           <div className="space-y-2 mb-6">
             {EMERGENCY_REASONS.map((reason) => (
@@ -371,7 +420,7 @@ export function ProtectionFlow({
             </div>
             {state.isFocusModeActive && (
               <p className="text-[10px] text-amber-500/80 mt-3 flex items-center gap-1.5">
-                <AlertTriangle size={12} /> Warnung: Deine Fokus-Sitzung wird waehrenddessen pausiert.
+                <AlertTriangle size={12} /> Warnung: Deine Fokus-Sitzung wird währenddessen pausiert.
               </p>
             )}
           </div>
@@ -405,7 +454,7 @@ export function ProtectionFlow({
           </div>
           <h2 className="text-3xl font-bold mb-3 tracking-tight">Anti-Binge Warnung</h2>
           <p className="text-zinc-400 mb-10 text-lg leading-relaxed">
-            Du hast {appInfo.name} in letzter Zeit sehr oft geoeffnet. Versuchst du gerade, Langeweile zu bekaempfen?
+            Du hast {appInfo.name} in letzter Zeit sehr oft geöffnet. Versuchst du gerade, Langeweile zu bekämpfen?
           </p>
 
           <div className="w-full flex flex-col gap-4">
@@ -413,10 +462,20 @@ export function ProtectionFlow({
               onClick={cancel}
               className="w-full py-4 rounded-[1.5rem] font-bold bg-zinc-100 text-zinc-950 shadow-lg shadow-zinc-100/10 active:scale-[0.98] transition-transform"
             >
-              Besser nicht oeffnen
+              Besser nicht öffnen
             </button>
             <button
-              onClick={() => setStep(config.mode === 'standard' ? 'standard_delay' : 'soft_intent')}
+              onClick={() => {
+                // The warning replaces the first decision, so the delay of the
+                // standard flow has not been set yet; without it the countdown
+                // started at zero and the warning skipped the pause.
+                if (config.mode === 'standard') {
+                  setDelayRemaining(escalatedDelay ?? config.openDelay);
+                  setStep('standard_delay');
+                } else {
+                  setStep('soft_intent');
+                }
+              }}
               className="w-full py-4 rounded-[1.5rem] font-semibold bg-zinc-900/80 backdrop-blur-md text-zinc-400 border border-zinc-800/50 hover:text-zinc-300 transition-colors"
             >
               Trotzdem weiter
@@ -431,12 +490,7 @@ export function ProtectionFlow({
             <Shield size={40} className="text-red-500 drop-shadow-md" />
           </div>
           <h2 className="text-3xl font-bold mb-3 tracking-tight">Schutz-Sperre</h2>
-          <p className="text-zinc-400 mb-10 text-lg leading-relaxed">
-            Du hast {appInfo.name} zu oft geoeffnet oder zu viele Notfallfreigaben genutzt. Die App ist nun zu deinem
-            eigenen Schutz fuer{' '}
-            <span className="font-mono font-bold text-zinc-200">{config.antiBinge.blockTimeframe}</span> Minuten strikt
-            eingeschraenkt.
-          </p>
+          <p className="text-zinc-400 mb-10 text-lg leading-relaxed">{describeBlock()}</p>
 
           <button
             onClick={cancel}
@@ -452,7 +506,7 @@ export function ProtectionFlow({
           <div className="mb-10">{renderAppIcon('w-32 h-32', 'text-6xl')}</div>
           <h2 className="text-3xl font-bold mb-3 tracking-tight">{appInfo.name} ist offen</h2>
           <div className="text-zinc-400 mb-10 text-lg leading-relaxed space-y-2">
-            <p>Dein Zeitlimit laeuft.</p>
+            <p>Dein Zeitlimit läuft.</p>
           </div>
 
           <button
@@ -478,7 +532,7 @@ export function ProtectionFlow({
             onClick={cancel}
             className="w-full py-4 rounded-[1.5rem] font-semibold bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 text-zinc-300 hover:bg-zinc-800 transition-colors"
           >
-            Doch nicht oeffnen
+            Doch nicht öffnen
           </button>
         </motion.div>
       )}

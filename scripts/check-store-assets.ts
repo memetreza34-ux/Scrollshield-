@@ -27,13 +27,34 @@ const publicPrivacy = await readFile(publicPrivacyPath, 'utf8');
 
 requireText(listingPath, listing, /## Kurzbeschreibung/i, 'Missing short description.');
 requireText(listingPath, listing, /## Lange Beschreibung/i, 'Missing long description.');
-requireText(listingPath, listing, /## Keywords/i, 'Missing keyword section.');
+requireText(listingPath, listing, /## (?:Keywords|Suchbegriffe)/i, 'Missing keyword section.');
 requireText(listingPath, listing, /## Screenshot-Texte/i, 'Missing screenshot text section.');
-requireText(listingPath, listing, /## Review Notes - Apple/i, 'Missing Apple review notes.');
 requireText(listingPath, listing, /## Review Notes - Google Play/i, 'Missing Google Play review notes.');
 requireText(listingPath, listing, /Werkzeug zur Selbstkontrolle/i, 'Missing self-control positioning.');
-requireText(listingPath, listing, /Best-Effort-Unterbrecher/i, 'Missing best-effort short-video disclosure.');
-requireText(listingPath, listing, /keinen Cloud-Sync, keine Werbung und kein Tracking/i, 'Missing privacy promise.');
+requireText(listingPath, listing, /kein Bestandteil der V1-Produktzusage/i, 'Missing V1 short-video scope boundary.');
+requireText(
+  listingPath,
+  listing,
+  /keinen (?:ScrollShield-Account und keinen )?Cloud-Sync[\s\S]*keine Werbung[\s\S]*(?:kein Tracking|keine Tracking-SDKs)/i,
+  'Missing privacy promise.',
+);
+
+// Production V1 intentionally ships without AccessibilityService/feed-level blocking.
+// The store listing must not accidentally advertise the post-V1 research capability.
+if (
+  /Bedienungshilfe|AccessibilityService|Reels\s*(?:sperren|blockieren)|Shorts\s*(?:sperren|blockieren)/i.test(listing)
+) {
+  findings.push({
+    file: listingPath,
+    text: 'V1 store copy advertises or depends on post-V1 Accessibility/feed-level functionality.',
+  });
+}
+requireText(listingPath, listing, /ab 16 Jahren/i, 'Store copy must state the minimum age (16).');
+
+// Health and addiction terms suggest a medical purpose (keyword list and description alike).
+if (/\b(?:ADHS|ADHD|Sucht|süchtig|Therapie|heilen|Heilung)\b/i.test(listing)) {
+  findings.push({ file: listingPath, text: 'Store copy uses health or addiction terms.' });
+}
 
 const riskyClaimPattern =
   /100%\s*(?:unumgehbar|offline)|unumgehbar|un.berwind|komplett\s+blockier|garantiert\s+block|ohne\s+Ausnahme\s+block/i;
@@ -44,19 +65,17 @@ if (riskyClaimPattern.test(listing)) {
   });
 }
 
-requireText(packetPath, packet, /Data collected:\s+\*\*No\*\*/i, 'Missing App Store data collection answer.');
 requireText(packetPath, packet, /Data shared:\s+\*\*No\*\*/i, 'Missing Play Console data sharing answer.');
 requireText(packetPath, packet, /Tracking:\s+\*\*No\*\*/i, 'Missing tracking answer.');
 requireText(packetPath, packet, /PACKAGE_USAGE_STATS/i, 'Missing Usage Access declaration draft.');
 requireText(packetPath, packet, /SYSTEM_ALERT_WINDOW/i, 'Missing overlay declaration draft.');
 requireText(packetPath, packet, /USK 0 \/ PEGI 3/i, 'Missing Google rating target.');
-requireText(packetPath, packet, /Target:\s+\*\*4\+\*\*/i, 'Missing Apple rating target.');
 
 requireText(
   privacyLabelsPath,
   privacyLabels,
   /Daten werden vom Entwickler erhoben:\s+\*\*Nein\*\*/i,
-  'Missing Apple no-data guidance.',
+  'Missing no-data guidance.',
 );
 requireText(
   privacyLabelsPath,
