@@ -389,7 +389,7 @@ export function AppDetailScreen({ state, updateState, navigate }: ScreenProps) {
                   label="Wisch-Unterbrecher"
                   value={config.reelsProtection.stopAfterSwipes ?? 0}
                   onChange={(stopAfterSwipes) =>
-                    saveCustom({ reelsProtection: { ...config.reelsProtection, stopAfterSwipes } }, 'feed_extras')
+                    saveCustom({ reelsProtection: { ...config.reelsProtection, stopAfterSwipes } })
                   }
                   options={[0, 10, 20, 30].map((swipes) => ({
                     value: swipes,
