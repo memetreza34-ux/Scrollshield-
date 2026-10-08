@@ -4,6 +4,7 @@ import { AppState, Screen, DEFAULT_STATE, SUPPORTED_APPS } from './types';
 import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
 import { getFocusBlockedAppIds, getRunningFocusSession, reconcileFocusRuntime } from './lib/focus';
+import { getEntitledNativeProtection, hasPro } from './lib/entitlements';
 import {
   acknowledgeInterruptionEvents,
   clearNativeData,
@@ -394,17 +395,26 @@ export default function App() {
   // when ScrollShield is closed.
   useEffect(() => {
     if (!isLoaded) return;
+    // Local Pro preview flags are never paid entitlements in production.
+    // Clamp even imported/stale app rules before syncing them to Android.
+    const pro = hasPro(appState);
+    const entitled = getEntitledNativeProtection(appState);
     const running = getRunningFocusSession({ focusSessions: appState.focusSessions });
-    void syncNativeBlockList(appState.appsConfig, SUPPORTED_APPS, {
-      isFocusModeActive: appState.isFocusModeActive,
+    const permittedFocus = !pro && running?.kind === 'rescue' ? null : running;
+    const focusActive = appState.isFocusModeActive && permittedFocus !== null;
+    const focusUntil = focusActive && permittedFocus
+      ? permittedFocus.startTime + Math.min(permittedFocus.duration, pro ? Number.MAX_SAFE_INTEGER : 60) * 60_000
+      : undefined;
+    void syncNativeBlockList(entitled.appsConfig, SUPPORTED_APPS, {
+      isFocusModeActive: focusActive,
       focusBlockedAppIds: getFocusBlockedAppIds({
         focusSessions: appState.focusSessions,
-        isFocusModeActive: appState.isFocusModeActive,
-      }),
-      focusUntil: running ? running.startTime + running.duration * 60_000 : undefined,
-      focusStrict: running?.strict === true,
-      commitmentUntil: appState.commitment?.until,
-      schedules: appState.schedules,
+        isFocusModeActive: focusActive,
+      }).filter((appId) => entitled.appsConfig[appId]?.active),
+      focusUntil,
+      focusStrict: pro && permittedFocus?.strict === true,
+      commitmentUntil: pro ? appState.commitment?.until : undefined,
+      schedules: entitled.schedules,
     });
   }, [
     appState.appsConfig,
