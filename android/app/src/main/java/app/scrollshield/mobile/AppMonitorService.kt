@@ -23,6 +23,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.os.Process
+import android.os.SystemClock
 import android.provider.Settings
 import android.text.format.DateFormat
 import android.view.Gravity
@@ -186,9 +187,6 @@ class AppMonitorService : Service() {
         }
     }
 
-    /** A window that tightens the mode; `endHour < startHour` wraps past midnight. */
-    private data class TimeWindow(val startHour: Int, val endHour: Int)
-
     private data class AntiBinge(
         val warningThreshold: Int,
         val warningTimeframe: Int,
@@ -205,7 +203,7 @@ class AppMonitorService : Service() {
         val delaySeconds: Int,
         /** Platform id; packages of one app (main and lite build) share limits. */
         val appId: String = "",
-        val timeWindows: List<TimeWindow> = emptyList(),
+        val timeWindows: List<HourWindow> = emptyList(),
         val weekendRule: String = "normal",
         /** Minutes per day across all packages of the app; 0 = no limit. */
         val dailyLimitMinutes: Int = 0,
@@ -264,7 +262,7 @@ class AppMonitorService : Service() {
     /** Emergency unlocks per app id: until then the app is completely free. */
     private val emergencyUntil = ConcurrentHashMap<String, Long>()
 
-    /** When the current session without a break began, per protected package. */
+    /** Monotonic elapsedRealtime() start of the current session, per protected package. */
     private val sessionStartedAt = ConcurrentHashMap<String, Long>()
 
     private val colorBackground = Color.parseColor("#F70A0A0A")
@@ -436,11 +434,11 @@ class AppMonitorService : Service() {
         ).takeIf { it.maxPerDay > 0 && it.durationMinutes > 0 }
     }
 
-    private fun parseTimeWindows(schedule: JSONObject?): List<TimeWindow> {
+    private fun parseTimeWindows(schedule: JSONObject?): List<HourWindow> {
         val windows = schedule?.optJSONArray("windows") ?: return emptyList()
         return (0 until windows.length()).mapNotNull { index ->
             val window = windows.optJSONObject(index) ?: return@mapNotNull null
-            TimeWindow(window.optInt("startHour"), window.optInt("endHour"))
+            HourWindow(window.optInt("startHour", -1), window.optInt("endHour", -1))
         }
     }
 
@@ -448,21 +446,13 @@ class AppMonitorService : Service() {
      * Mirrors getActiveScheduleForApp() in src/lib/schedules.ts: a schedule
      * covering the current hour, or on a weekend a weekend rule, locks the app.
      */
-    private fun isLockedByTimeWindow(rule: BlockRule, now: Calendar = Calendar.getInstance()): Boolean {
-        val hour = now.get(Calendar.HOUR_OF_DAY)
-        val inWindow = rule.timeWindows.any { window ->
-            if (window.startHour < window.endHour) {
-                hour >= window.startHour && hour < window.endHour
-            } else {
-                hour >= window.startHour || hour < window.endHour
-            }
-        }
-        if (inWindow) return true
-
-        val day = now.get(Calendar.DAY_OF_WEEK)
-        val isWeekend = day == Calendar.SATURDAY || day == Calendar.SUNDAY
-        return isWeekend && rule.weekendRule != "normal"
-    }
+    private fun isLockedByTimeWindow(rule: BlockRule, now: Calendar = Calendar.getInstance()): Boolean =
+        NativeRuntimePolicy.isScheduleLocked(
+            hour = now.get(Calendar.HOUR_OF_DAY),
+            dayOfWeek = now.get(Calendar.DAY_OF_WEEK),
+            windows = rule.timeWindows,
+            weekendRule = rule.weekendRule,
+        )
 
     // ── Core logic ────────────────────────────────────────────────────────────
 
@@ -492,13 +482,13 @@ class AppMonitorService : Service() {
         }
 
         if (foreground == lastForegroundPackage) {
-            checkSessionLimit(foreground, now)
+            checkSessionLimit(foreground, SystemClock.elapsedRealtime())
             return
         }
         lastForegroundPackage = foreground
 
         val rule = rules[foreground] ?: return
-        sessionStartedAt[foreground] = now
+        sessionStartedAt[foreground] = SystemClock.elapsedRealtime()
 
         // An emergency unlock frees the app completely for its duration.
         if (now < (emergencyUntil[rule.appId] ?: 0L)) {
@@ -525,7 +515,7 @@ class AppMonitorService : Service() {
             sessionStartedAt[packageName] = now
             return
         }
-        if (now - startedAt < rule.sessionLimitMinutes * 60_000L) return
+        if (!NativeRuntimePolicy.shouldInterruptSession(startedAt, now, rule.sessionLimitMinutes)) return
 
         sessionStartedAt[packageName] = now
         showSessionOverlay(packageName, rule)
@@ -660,7 +650,7 @@ class AppMonitorService : Service() {
                 val now = System.currentTimeMillis()
                 recordInterruption(blockedPackage, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_CONTINUED, reason)
                 openLog.record(rule.appId, now)
-                sessionStartedAt[blockedPackage] = now
+                sessionStartedAt[blockedPackage] = SystemClock.elapsedRealtime()
                 dismissOverlay()
             },
             onGoHome = {
@@ -691,7 +681,7 @@ class AppMonitorService : Service() {
                 recordInterruption(packageName, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_WARNED, "SESSION_LIMIT")
             },
             onContinue = {
-                sessionStartedAt[packageName] = System.currentTimeMillis()
+                sessionStartedAt[packageName] = SystemClock.elapsedRealtime()
                 dismissOverlay()
             },
         ) { views ->
@@ -730,7 +720,7 @@ class AppMonitorService : Service() {
                             val now = System.currentTimeMillis()
                             EmergencyLog.record(prefs, rule.appId)
                             emergencyUntil[rule.appId] = now + unlock.durationMinutes * 60_000L
-                            sessionStartedAt[packageName] = now
+                            sessionStartedAt[packageName] = SystemClock.elapsedRealtime()
                             recordInterruption(
                                 packageName,
                                 InterruptionLog.KIND_APP,
