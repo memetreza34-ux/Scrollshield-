@@ -1,4 +1,5 @@
-import type { AppState } from '../types';
+import type { AppConfig, AppState, Schedule } from '../types';
+import { applyPreset, getPresetId } from './presets';
 
 /**
  * Free and Pro (docs/V1_MASTER_PLAN.md, section 10)
@@ -51,7 +52,55 @@ export const PRO_BENEFITS = [
   'Woche, Wiederöffnungs-Muster und App-Trends',
 ];
 
-export const hasPro = (state: Pick<AppState, 'pro'>) => state.pro?.active === true;
+/**
+ * Until Google Play Billing and purchase verification are integrated, Pro is
+ * available ONLY as a development preview. A saved, imported or edited local
+ * `pro.active` flag is never proof of payment in a production build.
+ */
+export const hasPro = (state: Pick<AppState, 'pro'>): boolean =>
+  !import.meta.env.PROD && state.pro?.active === true;
+
+/**
+ * The last trusted UI-to-native boundary while Billing remains disabled.
+ *
+ * Imported backups can contain more than two active apps or Pro-only rules.
+ * Never let those stored settings silently become native paid protection.
+ * Presets and schedules are reduced only for native enforcement; we preserve
+ * the user's configuration so it can be restored after verified purchase.
+ */
+export function getEntitledNativeProtection(
+  state: Pick<AppState, 'appsConfig' | 'schedules' | 'pro'>,
+): { appsConfig: Record<string, AppConfig>; schedules: Schedule[] } {
+  if (hasPro(state)) return { appsConfig: state.appsConfig, schedules: state.schedules };
+
+  const allowed = new Set(
+    Object.entries(state.appsConfig)
+      .filter(([, config]) => config.active)
+      .slice(0, FREE_LIMITS.protectedApps)
+      .map(([appId]) => appId),
+  );
+
+  const appsConfig: Record<string, AppConfig> = {};
+  for (const [appId, config] of Object.entries(state.appsConfig)) {
+    const active = config.active && allowed.has(appId);
+    if (!active) {
+      appsConfig[appId] = { ...config, active: false };
+      continue;
+    }
+    const freePreset = getPresetId(config) === 'sanft' ? 'sanft' : 'ausgewogen';
+    appsConfig[appId] = applyPreset({ ...config, active: true }, freePreset);
+  }
+
+  const schedules = state.schedules
+    .filter((schedule) => schedule.active)
+    .slice(0, FREE_LIMITS.schedules)
+    .map((schedule) => ({
+      ...schedule,
+      appIds: schedule.appIds.filter((appId) => allowed.has(appId)),
+    }));
+
+  return { appsConfig, schedules };
+}
 
 export const countProtectedApps = (state: Pick<AppState, 'appsConfig'>) =>
   Object.values(state.appsConfig).filter((config) => config.active).length;
