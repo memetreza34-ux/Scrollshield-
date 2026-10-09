@@ -24,6 +24,7 @@ import { getShortVideoSignature } from './shortVideoSignatures';
 import { isShortVideoFeedBlockedByConfig } from './stats';
 import { TimeWindowRule } from './schedules';
 import { FEATURE_FLAGS } from '../config/featureFlags';
+import { createSerialTaskQueue } from './nativeSyncQueue';
 
 // ── Type definitions ──────────────────────────────────────────────────────────
 
@@ -548,20 +549,25 @@ export function requiresAccessibilityService(rules: NativeProtectionRule[]): boo
  * Syncs the current app configuration to the native monitoring service.
  * Call this whenever appsConfig or the focus session state changes.
  */
+const enqueueNativeProtection = createSerialTaskQueue(async (config: NativeProtectionConfig) => {
+  await ScrollShieldBridgeNative.syncBlockedApps(config);
+  if (config.monitoringEnabled) {
+    await ScrollShieldBridgeNative.startMonitoring();
+  } else {
+    await ScrollShieldBridgeNative.stopMonitoring();
+  }
+});
+
 export async function syncNativeBlockList(
   appsConfig: Record<string, AppConfigSlice | undefined>,
   allPlatforms: PlatformSlice[],
   options: NativeProtectionOptions = {},
 ): Promise<void> {
+  // Snapshot immediately, but write strictly in request order. Otherwise
+  // a slow earlier sync may overwrite a later "turn protection off" request.
   const config = buildNativeProtectionConfig(appsConfig, allPlatforms, options);
-
   try {
-    await ScrollShieldBridgeNative.syncBlockedApps(config);
-    if (config.monitoringEnabled) {
-      await ScrollShieldBridgeNative.startMonitoring();
-    } else {
-      await ScrollShieldBridgeNative.stopMonitoring();
-    }
+    await enqueueNativeProtection(config);
   } catch {
     // Graceful no-op on web and whenever a permission is still missing.
   }
