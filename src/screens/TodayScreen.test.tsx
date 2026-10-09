@@ -95,6 +95,14 @@ describe('TodayScreen', () => {
     });
   });
 
+  it('never presents the browser preview as active Android protection', () => {
+    render(<TodayScreen state={state({ operatingSystem: 'web' })} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    expect(screen.getByText('Nur Vorschau – kein Android-Schutz')).toBeInTheDocument();
+    expect(screen.getByText('1 App zum Schutz ausgewählt')).toBeInTheDocument();
+    expect(screen.queryByText('Schutz aktiv')).not.toBeInTheDocument();
+  });
+
   it('asks to protect an app when none is protected', () => {
     render(<TodayScreen state={state({ appsConfig: {} })} updateState={vi.fn()} navigate={vi.fn()} />);
 
