@@ -48,6 +48,14 @@ internal object NativeRuntimePolicy {
     }
 
     /**
+     * Emergency unlock expiration timestamps are wall-clock epoch millis,
+     * while session durations use elapsedRealtime. Never compare the two.
+     */
+    fun isEmergencyUnlockActive(untilEpochMillis: Long?, nowEpochMillis: Long): Boolean =
+        untilEpochMillis != null && untilEpochMillis > 0L && nowEpochMillis < untilEpochMillis
+
+
+    /**
      * Overlays are created on the main thread after a worker-thread decision.
      * A fast app switch in between must not show an obsolete interruption.
      */
