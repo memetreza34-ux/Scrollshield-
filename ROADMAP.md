@@ -1,9 +1,13 @@
 # ScrollShield — V1 Roadmap
 
-**Updated:** 2026-10-07  
-Authoritative feature scope: [docs/V1_MASTER_PLAN.md](docs/V1_MASTER_PLAN.md)
+**Updated:** 2026-10-09  
+Authoritative feature scope: [docs/V1_MASTER_PLAN.md](docs/V1_MASTER_PLAN.md)  
+**Verbindliche Tasks, Abnahmen und Status:** [docs/V1_EXECUTION_PLAN.md](docs/V1_EXECUTION_PLAN.md)  
+**Verbindliche Arbeitsregeln für Agents:** [docs/ENGINEERING_WORKFLOW.md](docs/ENGINEERING_WORKFLOW.md)
 
-The roadmap intentionally prioritizes a small, reliable Android product over feature breadth.
+This file is the phase summary only. Do not infer completion from unchecked task prose: evidence and current PR/CI status live in the execution plan. The roadmap intentionally prioritizes a small, reliable Android product over feature breadth.
+
+**Nächste drei Aufgaben:** SS-001 (PR #20 prüfen), SS-002 (CI/Artifact/Runner-Blocker klären), SS-003/004 (Altlasten und Free-/Pro-Native-Vertrag auditieren). Keine zusätzliche Feature-Entwicklung vor dem zugehörigen Test-Gate.
 
 ## Phase 0 — Product Truth
 
