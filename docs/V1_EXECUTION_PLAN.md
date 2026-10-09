@@ -7,6 +7,10 @@
 **Technische Details:** tatsächlicher Code, reproduzierbare Tests und dokumentierte Gerätemessungen.  
 **Übersicht:** [`ROADMAP.md`](../ROADMAP.md).  
 **Vergleich:** [`COMPETITOR_BASELINE.md`](COMPETITOR_BASELINE.md).  
+**Nutzer- und Screen-UX:** [`V1_PRODUCT_EXPERIENCE.md`](V1_PRODUCT_EXPERIENCE.md).  
+**Visual Design + Native Overlay:** [`V1_DESIGN_SYSTEM.md`](V1_DESIGN_SYSTEM.md).  
+**Abo- und Billing-Vertrag:** [`V1_BILLING_EXPERIENCE.md`](V1_BILLING_EXPERIENCE.md).  
+**Sicherheit, Datenschutz und Rechtsprüfung:** [`V1_COMPLIANCE_REVIEW.md`](V1_COMPLIANCE_REVIEW.md).  
 **Agentenregeln:** [`ENGINEERING_WORKFLOW.md`](ENGINEERING_WORKFLOW.md).
 
 Bei Widersprüchen **nicht stillschweigend neu erfinden**, sondern die betroffenen Aussagen mit Datei/Zeile dokumentieren, eine Entscheidung treffen und erst danach Plan + Code angleichen.
@@ -102,7 +106,7 @@ Designannahmen aus Masterplan: nahe Schwarzwerte, Zink/Grau/Weiß, **ein** zurü
 
 | ID | Screen / Interaktion | Status | Abnahme |
 | --- | --- | --- | --- |
-| SS-301 | Designsystem: Farb-/Spacing-/Typo-/Radius-/Motion-Tokens, Buttons/Rows/Sheets | OPEN | Einheitliche Komponenten + belastbare Hell-/Dunkel-Kontraste im festgelegten Dark-first-System; 44–48dp Touchflächen |
+| SS-301 | Designsystem: Farb-/Spacing-/Typo-/Radius-/Motion-Tokens, Buttons/Rows/Sheets | OPEN | Einheitliche Komponenten + belastbare Hell-/Dunkel-Kontraste im festgelegten Dark-first-System; mindestens 48dp Touchflächen |
 | SS-302 | Onboarding und Berechtigungs-Wizard | UI PRESENT / QA OPEN | Verständlicher Nutzen in 30–60 s; echte Permission-Zustände; kein Fake-Setup |
 | SS-303 | Heute: Schutzstatus, Hauptkennzahl, Fokus/Rescue, Reopens, nächster Zeitplan | UI PRESENT / QA OPEN | Kernnutzen oberhalb des Folds; metrisch ehrlich; Zustände leer/aktiv/eingeschränkt |
 | SS-304 | Schutz: App-Auswahl, 2-App-Grenze, Presets, progressive App-Details | UI PRESENT / QA OPEN | 3.-App-Paywall; einfache Default-Ansicht; technische Regeln sekundär |
@@ -139,6 +143,38 @@ Designannahmen aus Masterplan: nahe Schwarzwerte, Zink/Grau/Weiß, **ein** zurü
 | SS-505 | Name/Marke/Application ID, App-Icon, Splash, Store-Screens und Tonalität | BLOCKED:OWNER | Marken-/Verwechslungsrisiko geprüft; ein konsistenter Name in App + Metadaten |
 | SS-506 | Signierung, Play Console, interner/geschlossener Test, Crash-/Feedback-Schleife | BLOCKED:OWNER | Kein Leak von Keystores; Testerberichte bearbeitet, Retest grün |
 | SS-507 | Finale Releaseprüfung `npm run verify`, Android Release Build, Strict-Readiness | OPEN | Grüner Nachweis auf Release-Commit und alle P0-/P1-Risiken geschlossen |
+
+## 3a. Vollständigkeits-Gates: Nutzer, Design, Sicherheit und Recht
+
+Der folgende Detailvertrag ergänzt die P0–P5-Arbeitspakete und verhindert, dass „Screen vorhanden“ als „Screen fertig“ gewertet wird.
+
+| Audit-ID | Was vor einem „fertig“ nachgewiesen sein muss | Vertrag |
+| --- | --- | --- |
+| UXR-01 | Erste 90 Sekunden, 2-App-Auswahl, OS-Berechtigungen, erster echter Eingriff ohne Anleitung | [Product Experience, B](V1_PRODUCT_EXPERIENCE.md) |
+| UXR-02 | Alle Haupt-/Nebenscreens, Gesten/Back, Navigation und Schutzstatus; User Journey bei Fehlern | [Product Experience, D](V1_PRODUCT_EXPERIENCE.md) |
+| UXR-03 | Empty/Loading/Error/Offline/PermissionDenied/Free/Pro/Restore/No-Data je Screen | [Product Experience, E](V1_PRODUCT_EXPERIENCE.md) |
+| UXR-04 | Overlay blockiert keinen falschen Vordergrund und keine kritische Systemfunktion; Notfallweg funktioniert | [Product Experience, D5](V1_PRODUCT_EXPERIENCE.md) |
+| DES-01 | Calm-Control-Tokens, Komponenten, Raster, Typografie, Designvergleich mit echten Screenshots | [Design System](V1_DESIGN_SYSTEM.md) |
+| DES-02 | 360/412dp, 100/150/200% Schrift, TalkBack, 48dp Ziele, Reduce Motion, Insets | [Design System, 8](V1_DESIGN_SYSTEM.md) |
+| BILL-01 | Preis/Trial/Verlängerung sichtbar, Kontext-Paywall, Free-Alternative, Restore, Verwaltung | [Billing](V1_BILLING_EXPERIENCE.md) |
+| BILL-02 | Kaufverifikation, Pending/Grace/Hold/Refund/Expiry, Offline, zwei Geräte, Downgrade ohne Konfigurationsverlust | [Billing, 4–5](V1_BILLING_EXPERIENCE.md) |
+| SC-01–SC-04 | Dateninventar, Android-Risiken, Geheimnisse, Berechtigungen, Speicher/Backup, Native-Bridge-Validierung | [Compliance Review](V1_COMPLIANCE_REVIEW.md) |
+| SC-05–SC-09 | DSGVO/TDDDG, AI Act, BFSG, Google Play/FGS/Data Safety, Verbraucherrechte, Jugend, Recht und Marke | [Compliance Review](V1_COMPLIANCE_REVIEW.md) |
+
+**Regel:** Ein Arbeitspaket SS-301/302/… darf erst auf `DONE`, wenn die zugehörigen UXR-/DES-Abnahmen anhand von Screenshots/Interaktions- und Testnachweisen vorliegen. Dasselbe gilt für SS-401–406 und BILL-01/02 sowie SS-504/507 und SC-01–SC-09.
+
+### Kritische, durch das Tiefenaudit neu identifizierte Lücken
+
+1. **Overlay-/Notfall-Sicherheit:** besondere OS-Oberflächen, Lockscreen, Race Conditions und System-Kommunikation explizit durch echte Tests absichern; ein fehlerhaftes Overlay ist ein Release-NO-GO.
+2. **Paywall-Verbraucherinformation:** nicht nur Store-Preise, sondern Trial-Umwandlung, Vollbetrag, Kündigung, Restore und Rechte-/Refund-Prozess.
+3. **DSGVO/Data Safety:** Speicherinventar und SDK-/Billing-/Support-Datenflüsse statt pauschalem „alles bleibt lokal“.
+4. **EU AI Act:** aktuelle V1 voraussichtlich rein regelbasiert; schriftlicher Dependency-/Algorithmus-Audit mit Neustufungs-Gate bei späterer KI.
+5. **BFSG:** Barrierefreiheitsanforderungen für den entgeltlichen elektronischen Geschäftsverkehr und etwaige Kleinunternehmerausnahme konkret prüfen.
+6. **Jugendschutz/gesundheitsnahe Formulierungen:** Zielgruppe, Datensparsamkeit, kein Beschämen, keine Heil-/Suchtversprechen.
+7. **Nutzerführung vor Nutzerzahlen:** erste 90 Sekunden, Fehler/Offline/PermissionDenied, Kündigung und Systemgesundheit müssen unabhängig von Feature-Listen verständlich sein.
+8. **Design nicht nur „schön“:** exakt dokumentierte Tokens und State-Screens, natives Overlay, 48dp Touchflächen und qualifizierte Screenshot-Reviews.
+9. **Security der Kaufdaten und Native-Regeln:** kein vertrauenswürdiges Pro allein aus lokaler Datei/Boolean; Release-Keys und Kauf-Tokens nicht exportieren.
+10. **Betreiber-Freigaben:** konkrete Verantwortung für Produktname, Play, Support, Datenschutz/Vertragsbedingungen, Beta/Tester; Code kann dies nicht stellvertretend erfinden.
 
 ## 4. Verbindliche Reihenfolge und Abhängigkeiten
 
@@ -198,4 +234,5 @@ Nur diese Entscheidungen/Aktionen erfordern zwingend den Betreiber, **nicht jetz
 
 | Datum | Änderung | Evidenz |
 | --- | --- | --- |
+| 2026-10-09 | UX-/Design-/Billing-/Compliance-Tiefenaudit: vollständige Screen-Zustände, Sicherheitsfälle, EU AI Act, GDPR, BFSG und Abo-Lifecycle vertraglich ergänzt | `V1_PRODUCT_EXPERIENCE.md`, `V1_DESIGN_SYSTEM.md`, `V1_BILLING_EXPERIENCE.md`, `V1_COMPLIANCE_REVIEW.md` |
 | 2026-10-09 | Erste gemeinsame Umsetzungsbasis aus Masterplan, aktuellem `main`, PR #20 und Konkurrenzrecherche erstellt | Repo-Audit; `COMPETITOR_BASELINE.md` |
