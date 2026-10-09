@@ -8,6 +8,10 @@ ScrollShield is an **Android-first digital-wellbeing app** designed to interrupt
 - **Umsetzung von Anfang bis Release:** [V1 Execution Plan](docs/V1_EXECUTION_PLAN.md)
 - **Aufgaben-/Prüfworkflow für Agents:** [Engineering Workflow](docs/ENGINEERING_WORKFLOW.md)
 - **Konkurrenz und Positionierung:** [Competitor Baseline](docs/COMPETITOR_BASELINE.md)
+- **Nutzerführung und Screens:** [V1 Product Experience](docs/V1_PRODUCT_EXPERIENCE.md)
+- **Visuelles Design und natives Overlay:** [V1 Design System](docs/V1_DESIGN_SYSTEM.md)
+- **Google-Play-Abonnements:** [V1 Billing Experience](docs/V1_BILLING_EXPERIENCE.md)
+- **Sicherheit, Datenschutz, AI Act und Store Compliance:** [V1 Compliance Review](docs/V1_COMPLIANCE_REVIEW.md)
 - **Kurzüberblick:** [Roadmap](ROADMAP.md)
 
 Bei Widersprüchen entscheidet der Masterplan über **was** gebaut wird und der Execution Plan über **Reihenfolge, Task-IDs und Abnahme**. Der Code allein beweist keine Gerätetauglichkeit.
