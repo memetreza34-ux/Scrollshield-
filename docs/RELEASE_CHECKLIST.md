@@ -1,3 +1,8 @@
+> **HISTORISCHE PWA-FIRST-CHECKLISTE – NICHT DIE ANDROID-V1-RELEASE-FREIGABE.**  
+> Dieses Dokument beschreibt einen früheren Web/PWA-Plan und enthält inzwischen überholte Aussagen zu Reels, Android und Premium.  
+> **Gültig:** [V1-Masterplan](V1_MASTER_PLAN.md), [operativer V1-Ausführungsplan](V1_EXECUTION_PLAN.md) und dessen Release-Arbeitspakete SS-501–507.  
+> Offene alte Checkboxen nicht als neue V1-Anforderungen interpretieren. Dieses Dokument bleibt vorerst nur zur Historie.
+>
 # ScrollShield - Web/PWA-First Release Checkliste
 
 Diese Checkliste trennt den ersten oeffentlichen Webapp/PWA-Launch von der spaeteren nativen App-Store-Version. Version 1.0 soll zuerst als installierbare Webapp erscheinen; Android und iOS bleiben vorbereitet, aber sind nicht mehr Launch-Blocker fuer Phase 1.
