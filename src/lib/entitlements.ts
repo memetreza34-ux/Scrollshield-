@@ -70,12 +70,13 @@ export const hasPro = (state: Pick<AppState, 'pro'>): boolean =>
  */
 export function getEntitledNativeProtection(
   state: Pick<AppState, 'appsConfig' | 'schedules' | 'pro'>,
+  supportedAppIds: ReadonlySet<string>,
 ): { appsConfig: Record<string, AppConfig>; schedules: Schedule[] } {
   if (hasPro(state)) return { appsConfig: state.appsConfig, schedules: state.schedules };
 
   const allowed = new Set(
     Object.entries(state.appsConfig)
-      .filter(([, config]) => config.active)
+      .filter(([appId, config]) => config.active && supportedAppIds.has(appId))
       .slice(0, FREE_LIMITS.protectedApps)
       .map(([appId]) => appId),
   );
