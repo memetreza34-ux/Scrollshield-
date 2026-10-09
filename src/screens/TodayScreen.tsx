@@ -78,8 +78,12 @@ export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
     void refresh();
     document.addEventListener('visibilitychange', onReturn);
     window.addEventListener('focus', onReturn);
+    // The monitor may be killed while the dashboard stays visible.
+    // Poll only this foreground screen; background intervals are unnecessary.
+    const heartbeat = window.setInterval(onReturn, 30_000);
     return () => {
       mounted = false;
+      window.clearInterval(heartbeat);
       document.removeEventListener('visibilitychange', onReturn);
       window.removeEventListener('focus', onReturn);
     };
