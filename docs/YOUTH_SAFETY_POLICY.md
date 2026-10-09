@@ -1,3 +1,5 @@
+> **V1-SCOPE-HINWEIS (09.10.2026):** Die historische Empfehlung für Neon-Akzente und die Begründung „16+ wegen Accessibility“ sind nicht der aktuelle Produktvertrag. Android V1 hat keinen produktiven AccessibilityService; die visuelle Vorgabe ist **Calm Control ohne Neon**. Die endgültige Alters-/Datenschutzbewertung ist offen. Maßgeblich: [Design System](V1_DESIGN_SYSTEM.md) und [Compliance-Review](V1_COMPLIANCE_REVIEW.md).
+
 # ScrollShield - Jugendschutz & Youth Safety Policy
 
 ScrollShield ist ein Werkzeug zur digitalen Selbstkontrolle. Da Themen wie Bildschirmzeit, Fokus und mentale Gesundheit besonders für Jugendliche (Schüler, Studenten) hochrelevant sind, muss die App "by design" sicher für Minderjährige sein.
