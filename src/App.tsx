@@ -398,7 +398,7 @@ export default function App() {
     // Local Pro preview flags are never paid entitlements in production.
     // Clamp even imported/stale app rules before syncing them to Android.
     const pro = hasPro(appState);
-    const entitled = getEntitledNativeProtection(appState);
+    const entitled = getEntitledNativeProtection(appState, new Set(SUPPORTED_APPS.map((app) => app.id)));
     const running = getRunningFocusSession({ focusSessions: appState.focusSessions });
     const permittedFocus = !pro && running?.kind === 'rescue' ? null : running;
     const focusActive = appState.isFocusModeActive && permittedFocus !== null;
@@ -422,6 +422,7 @@ export default function App() {
     appState.focusSessions,
     appState.schedules,
     appState.commitment,
+    appState.pro,
     isLoaded,
   ]);
 
