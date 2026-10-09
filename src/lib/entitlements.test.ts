@@ -105,13 +105,16 @@ describe('Free native protection boundary', () => {
 
   it('keeps the gentle Free preset and its emergency unlock', () => {
     vi.stubEnv('PROD', true);
-    const result = getEntitledNativeProtection({
-      pro: { active: false },
-      appsConfig: {
-        instagram: makeApp('instagram', { preset: 'sanft', mode: 'standard', openDelay: 3 }),
+    const result = getEntitledNativeProtection(
+      {
+        pro: { active: false },
+        appsConfig: {
+          instagram: makeApp('instagram', { preset: 'sanft', mode: 'standard', openDelay: 3 }),
+        },
+        schedules: [],
       },
-      schedules: [],
-    }, SUPPORTED_TEST_IDS);
+      SUPPORTED_TEST_IDS,
+    );
     expect(result.appsConfig.instagram.openDelay).toBe(3);
     expect(result.appsConfig.instagram.antiBinge.enabled).toBe(false);
     expect(result.appsConfig.instagram.emergencyUnlock.enabled).toBe(true);
@@ -125,7 +128,7 @@ describe('Free native protection boundary', () => {
       youtube: makeApp('youtube'),
     };
     const schedules = [schedule('night', ['instagram']), schedule('work', ['youtube'])];
-    const result = getEntitledNativeProtection({ pro: { active: true }, appsConfig, schedules });
+    const result = getEntitledNativeProtection({ pro: { active: true }, appsConfig, schedules }, SUPPORTED_TEST_IDS);
     expect(result.appsConfig).toBe(appsConfig);
     expect(result.schedules).toBe(schedules);
   });
