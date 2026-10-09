@@ -120,6 +120,27 @@ describe('Free native protection boundary', () => {
     expect(result.appsConfig.instagram.emergencyUnlock.enabled).toBe(true);
   });
 
+  it('restores Free emergency access after a Pro-only custom rule or imported backup', () => {
+    vi.stubEnv('PROD', true);
+    const emergencyUnlock = {
+      enabled: false,
+      maxPerDay: 0,
+      durationMinutes: 120,
+      requireCountdown: false,
+      requireReason: false,
+    };
+    const state = {
+      pro: { active: true },
+      appsConfig: { instagram: makeApp('instagram', { preset: 'eigene', emergencyUnlock }) },
+      schedules: [],
+    };
+    const result = getEntitledNativeProtection(state, SUPPORTED_TEST_IDS);
+    expect(result.appsConfig.instagram.emergencyUnlock).toEqual(DEFAULT_APP_CONFIG.emergencyUnlock);
+    expect(result.appsConfig.instagram.preset).toBe('ausgewogen');
+    // Downgrade never destroys the user's saved custom configuration.
+    expect(state.appsConfig.instagram.emergencyUnlock).toEqual(emergencyUnlock);
+  });
+
   it('preserves advanced native settings in development Pro preview', () => {
     vi.stubEnv('PROD', false);
     const appsConfig = {
