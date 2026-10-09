@@ -56,6 +56,9 @@ export function ProtectScreen({ state, updateState, navigate }: ScreenProps) {
   const effectiveApps = getEntitledNativeProtection(state, SUPPORTED_APP_IDS).appsConfig;
   const protectedApps = SUPPORTED_APPS.filter((app) => effectiveApps[app.id]?.active);
   const otherApps = SUPPORTED_APPS.filter((app) => !effectiveApps[app.id]?.active);
+  const inactiveSavedApps = SUPPORTED_APPS.filter(
+    (app) => state.appsConfig[app.id]?.active && !effectiveApps[app.id]?.active,
+  ).length;
 
   const setActive = (appId: string, active: boolean) => {
     if (active && !canProtectAnotherApp(state, SUPPORTED_APP_IDS)) {
@@ -110,6 +113,13 @@ export function ProtectScreen({ state, updateState, navigate }: ScreenProps) {
       {committed && state.commitment && (
         <p className="mb-6 rounded-xl border border-zinc-800 px-4 py-3 text-sm text-zinc-400">
           Selbstverpflichtung bis {formatUntil(state.commitment.until)}: Schutz lässt sich nur verstärken.
+        </p>
+      )}
+
+      {inactiveSavedApps > 0 && (
+        <p className="mb-5 rounded-xl border border-amber-500/30 px-4 py-3 text-sm text-amber-100">
+          {inactiveSavedApps} gespeicherte {inactiveSavedApps === 1 ? 'App ist' : 'Apps sind'} wegen des kostenlosen
+          Limits derzeit nicht geschützt.
         </p>
       )}
 
@@ -275,7 +285,9 @@ export function AppDetailScreen({ state, updateState, navigate }: ScreenProps) {
         <AppTile app={app} size="md" />
         <span className="flex-1">
           <span className="block font-semibold text-zinc-100">Schutz {nativeActive ? 'an' : 'aus'}</span>
-          <span className="block text-sm text-zinc-500">{getPresetLabel(presetId)}</span>
+          <span className="block text-sm text-zinc-500">
+            {nativeActive && nativeConfig ? getPresetLabel(getPresetId(nativeConfig)) : getPresetLabel(presetId)}
+          </span>
         </span>
         <Switch
           checked={nativeActive}
