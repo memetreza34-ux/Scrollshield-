@@ -1,3 +1,4 @@
+import { DEFAULT_APP_CONFIG } from '../types';
 import type { AppConfig, AppState, Schedule } from '../types';
 import { applyPreset, getPresetId } from './presets';
 
@@ -89,7 +90,16 @@ export function getEntitledNativeProtection(
       continue;
     }
     const freePreset = getPresetId(config) === 'sanft' ? 'sanft' : 'ausgewogen';
-    appsConfig[appId] = applyPreset({ ...config, active: true }, freePreset);
+    appsConfig[appId] = applyPreset(
+      {
+        ...config,
+        active: true,
+        // Custom Pro-only emergency policies must not survive downgrade or
+        // imported backups. Free always keeps its standard safety exit.
+        emergencyUnlock: { ...DEFAULT_APP_CONFIG.emergencyUnlock },
+      },
+      freePreset,
+    );
   }
 
   const schedules = state.schedules
