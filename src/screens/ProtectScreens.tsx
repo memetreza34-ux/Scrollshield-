@@ -13,7 +13,7 @@ import {
   Switch,
   TabHeader,
 } from '../components/ui';
-import { canAddSchedule, canProtectAnotherApp, hasPro, paywallFor, ProFeature } from '../lib/entitlements';
+import { canAddSchedule, canProtectAnotherApp, getEntitledNativeProtection, hasPro, paywallFor, ProFeature } from '../lib/entitlements';
 import {
   applyPreset,
   EIGENE_PRESET,
@@ -47,16 +47,18 @@ const showPaywall = (
 };
 
 const hourOptions = Array.from({ length: 24 }, (_, hour) => hour);
+const SUPPORTED_APP_IDS = new Set(SUPPORTED_APPS.map((app) => app.id));
 
 // ── Schutz (tab) ─────────────────────────────────────────────────────────────
 
 export function ProtectScreen({ state, updateState, navigate }: ScreenProps) {
   const committed = isCommitmentActive(state);
-  const protectedApps = SUPPORTED_APPS.filter((app) => state.appsConfig[app.id]?.active);
-  const otherApps = SUPPORTED_APPS.filter((app) => !state.appsConfig[app.id]?.active);
+  const effectiveApps = getEntitledNativeProtection(state, SUPPORTED_APP_IDS).appsConfig;
+  const protectedApps = SUPPORTED_APPS.filter((app) => effectiveApps[app.id]?.active);
+  const otherApps = SUPPORTED_APPS.filter((app) => !effectiveApps[app.id]?.active);
 
   const setActive = (appId: string, active: boolean) => {
-    if (active && !canProtectAnotherApp(state)) {
+    if (active && !canProtectAnotherApp(state, SUPPORTED_APP_IDS)) {
       showPaywall(updateState, navigate, 'third_app');
       return;
     }
@@ -81,7 +83,7 @@ export function ProtectScreen({ state, updateState, navigate }: ScreenProps) {
   };
 
   const appRow = (app: (typeof SUPPORTED_APPS)[number]) => {
-    const config = state.appsConfig[app.id];
+    const config = effectiveApps[app.id];
     const active = config?.active ?? false;
     return (
       <Row
@@ -277,7 +279,7 @@ export function AppDetailScreen({ state, updateState, navigate }: ScreenProps) {
           checked={config.active}
           ariaLabel={`${app.name} schützen`}
           onChange={(active) => {
-            if (active && !canProtectAnotherApp(state)) {
+            if (active && !canProtectAnotherApp(state, SUPPORTED_APP_IDS)) {
               showPaywall(updateState, navigate, 'third_app');
               return;
             }
