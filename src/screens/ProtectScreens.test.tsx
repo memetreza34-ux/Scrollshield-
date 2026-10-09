@@ -102,6 +102,18 @@ describe('AppDetailScreen', () => {
     expect(navigate).toHaveBeenCalledWith('paywall');
   });
 
+  it('explains when a stored Pro preset is not actually enforced on Android', () => {
+    const imported = state({
+      selectedAppId: 'instagram',
+      appsConfig: {
+        instagram: { ...DEFAULT_APP_CONFIG, id: 'instagram', active: true, preset: 'stark', openDelay: 60 },
+      },
+    });
+
+    render(<AppDetailScreen state={imported} updateState={vi.fn()} navigate={vi.fn()} />);
+    expect(screen.getByText(/Auf Android gilt „Ausgewogen“/)).toBeInTheDocument();
+  });
+
   it('does not expose research-only feed controls in the production V1 app detail', () => {
     const { rerender } = render(
       <AppDetailScreen state={state({ selectedAppId: 'instagram' })} updateState={vi.fn()} navigate={vi.fn()} />,
