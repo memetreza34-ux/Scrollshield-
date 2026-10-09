@@ -3,6 +3,8 @@ import { DEFAULT_APP_CONFIG } from '../types';
 import type { AppConfig, Schedule } from '../types';
 import { getEntitledNativeProtection, hasPro } from './entitlements';
 
+const SUPPORTED_TEST_IDS = new Set(['instagram', 'tiktok', 'youtube']);
+
 const makeApp = (id: string, overrides: Partial<AppConfig> = {}): AppConfig => ({
   ...DEFAULT_APP_CONFIG,
   id,
@@ -57,7 +59,7 @@ describe('Free native protection boundary', () => {
       ],
     };
 
-    const result = getEntitledNativeProtection(state);
+    const result = getEntitledNativeProtection(state, SUPPORTED_TEST_IDS);
 
     expect(Object.entries(result.appsConfig).filter(([, config]) => config.active).map(([id]) => id)).toEqual([
       'instagram',
@@ -80,6 +82,27 @@ describe('Free native protection boundary', () => {
     expect(state.schedules).toHaveLength(2);
   });
 
+  it('never spends a Free protection slot on an unsupported imported platform', () => {
+    vi.stubEnv('PROD', true);
+    const result = getEntitledNativeProtection(
+      {
+        pro: { active: true },
+        appsConfig: {
+          'unrecognized-app': makeApp('unrecognized-app'),
+          instagram: makeApp('instagram'),
+          tiktok: makeApp('tiktok'),
+        },
+        schedules: [schedule('evening', ['unrecognized-app', 'instagram', 'tiktok'])],
+      },
+      SUPPORTED_TEST_IDS,
+    );
+
+    expect(result.appsConfig['unrecognized-app'].active).toBe(false);
+    expect(result.appsConfig.instagram.active).toBe(true);
+    expect(result.appsConfig.tiktok.active).toBe(true);
+    expect(result.schedules[0].appIds).toEqual(['instagram', 'tiktok']);
+  });
+
   it('keeps the gentle Free preset and its emergency unlock', () => {
     vi.stubEnv('PROD', true);
     const result = getEntitledNativeProtection({
@@ -88,7 +111,7 @@ describe('Free native protection boundary', () => {
         instagram: makeApp('instagram', { preset: 'sanft', mode: 'standard', openDelay: 3 }),
       },
       schedules: [],
-    });
+    }, SUPPORTED_TEST_IDS);
     expect(result.appsConfig.instagram.openDelay).toBe(3);
     expect(result.appsConfig.instagram.antiBinge.enabled).toBe(false);
     expect(result.appsConfig.instagram.emergencyUnlock.enabled).toBe(true);
