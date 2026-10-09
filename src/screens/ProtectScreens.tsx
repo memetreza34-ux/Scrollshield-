@@ -13,7 +13,7 @@ import {
   Switch,
   TabHeader,
 } from '../components/ui';
-import { canAddSchedule, canProtectAnotherApp, hasPro, paywallFor, ProFeature } from '../lib/entitlements';
+import { canAddSchedule, canProtectAnotherApp, getEntitledNativeProtection, hasPro, paywallFor, ProFeature } from '../lib/entitlements';
 import {
   applyPreset,
   EIGENE_PRESET,
@@ -47,16 +47,21 @@ const showPaywall = (
 };
 
 const hourOptions = Array.from({ length: 24 }, (_, hour) => hour);
+const SUPPORTED_APP_IDS = new Set(SUPPORTED_APPS.map((app) => app.id));
 
 // ── Schutz (tab) ─────────────────────────────────────────────────────────────
 
 export function ProtectScreen({ state, updateState, navigate }: ScreenProps) {
   const committed = isCommitmentActive(state);
-  const protectedApps = SUPPORTED_APPS.filter((app) => state.appsConfig[app.id]?.active);
-  const otherApps = SUPPORTED_APPS.filter((app) => !state.appsConfig[app.id]?.active);
+  const effectiveApps = getEntitledNativeProtection(state, SUPPORTED_APP_IDS).appsConfig;
+  const protectedApps = SUPPORTED_APPS.filter((app) => effectiveApps[app.id]?.active);
+  const otherApps = SUPPORTED_APPS.filter((app) => !effectiveApps[app.id]?.active);
+  const inactiveSavedApps = SUPPORTED_APPS.filter(
+    (app) => state.appsConfig[app.id]?.active && !effectiveApps[app.id]?.active,
+  ).length;
 
   const setActive = (appId: string, active: boolean) => {
-    if (active && !canProtectAnotherApp(state)) {
+    if (active && !canProtectAnotherApp(state, SUPPORTED_APP_IDS)) {
       showPaywall(updateState, navigate, 'third_app');
       return;
     }
@@ -81,7 +86,7 @@ export function ProtectScreen({ state, updateState, navigate }: ScreenProps) {
   };
 
   const appRow = (app: (typeof SUPPORTED_APPS)[number]) => {
-    const config = state.appsConfig[app.id];
+    const config = effectiveApps[app.id];
     const active = config?.active ?? false;
     return (
       <Row
@@ -108,6 +113,13 @@ export function ProtectScreen({ state, updateState, navigate }: ScreenProps) {
       {committed && state.commitment && (
         <p className="mb-6 rounded-xl border border-zinc-800 px-4 py-3 text-sm text-zinc-400">
           Selbstverpflichtung bis {formatUntil(state.commitment.until)}: Schutz lässt sich nur verstärken.
+        </p>
+      )}
+
+      {inactiveSavedApps > 0 && (
+        <p className="mb-5 rounded-xl border border-amber-500/30 px-4 py-3 text-sm text-amber-100">
+          {inactiveSavedApps} gespeicherte {inactiveSavedApps === 1 ? 'App ist' : 'Apps sind'} wegen des kostenlosen
+          Limits derzeit nicht geschützt.
         </p>
       )}
 
@@ -209,6 +221,8 @@ export function AppDetailScreen({ state, updateState, navigate }: ScreenProps) {
   if (!app) return null;
 
   const config = normalizeAppConfig(app.id, state.appsConfig[app.id]);
+  const nativeConfig = getEntitledNativeProtection(state, SUPPORTED_APP_IDS).appsConfig[app.id];
+  const nativeActive = nativeConfig?.active ?? false;
   const pro = hasPro(state);
   const committed = isCommitmentActive(state);
   const presetId = getPresetId(config);
@@ -270,14 +284,16 @@ export function AppDetailScreen({ state, updateState, navigate }: ScreenProps) {
       <div className="mb-8 flex items-center gap-4 rounded-2xl bg-zinc-900 p-4">
         <AppTile app={app} size="md" />
         <span className="flex-1">
-          <span className="block font-semibold text-zinc-100">Schutz {config.active ? 'an' : 'aus'}</span>
-          <span className="block text-sm text-zinc-500">{getPresetLabel(presetId)}</span>
+          <span className="block font-semibold text-zinc-100">Schutz {nativeActive ? 'an' : 'aus'}</span>
+          <span className="block text-sm text-zinc-500">
+            {nativeActive && nativeConfig ? getPresetLabel(getPresetId(nativeConfig)) : getPresetLabel(presetId)}
+          </span>
         </span>
         <Switch
-          checked={config.active}
+          checked={nativeActive}
           ariaLabel={`${app.name} schützen`}
           onChange={(active) => {
-            if (active && !canProtectAnotherApp(state)) {
+            if (active && !canProtectAnotherApp(state, SUPPORTED_APP_IDS)) {
               showPaywall(updateState, navigate, 'third_app');
               return;
             }
@@ -286,6 +302,12 @@ export function AppDetailScreen({ state, updateState, navigate }: ScreenProps) {
           }}
         />
       </div>
+
+      {nativeActive && nativeConfig && getPresetId(nativeConfig) !== presetId && (
+        <p className="mb-6 rounded-xl border border-zinc-800 px-4 py-3 text-sm text-zinc-400">
+          Gespeicherte Pro-Regeln sind derzeit nicht aktiv. Auf Android gilt „{getPresetLabel(getPresetId(nativeConfig))}“.
+        </p>
+      )}
 
       {committed && (
         <p className="mb-6 rounded-xl border border-zinc-800 px-4 py-3 text-sm text-zinc-400">
@@ -389,7 +411,7 @@ export function AppDetailScreen({ state, updateState, navigate }: ScreenProps) {
                   label="Wisch-Unterbrecher"
                   value={config.reelsProtection.stopAfterSwipes ?? 0}
                   onChange={(stopAfterSwipes) =>
-                    saveCustom({ reelsProtection: { ...config.reelsProtection, stopAfterSwipes } }, 'feed_extras')
+                    saveCustom({ reelsProtection: { ...config.reelsProtection, stopAfterSwipes } })
                   }
                   options={[0, 10, 20, 30].map((swipes) => ({
                     value: swipes,

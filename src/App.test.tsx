@@ -213,7 +213,8 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: 'Einstellungen' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Zurück' }));
-    expect(await screen.findByRole('heading', { name: 'Schutz' })).toBeInTheDocument();
+    // AnimatePresence waits for the Settings exit animation before mounting Schutz.
+    expect(await screen.findByRole('heading', { name: 'Schutz' }, { timeout: 5000 })).toBeInTheDocument();
   });
 
   it('counts interruptions from the phone on the dashboard and acknowledges them', async () => {

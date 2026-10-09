@@ -64,3 +64,17 @@ jobs:
       - name: Android unit tests and debug compile
         working-directory: android
         run: ./gradlew testDebugUnitTest assembleDebug --stacktrace
+
+      - name: Upload Android test APK (optional; storage quota dependent)
+        id: apk_upload
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrollshield-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Explain unavailable test APK
+        if: steps.apk_upload.outcome == 'failure'
+        run: echo "::warning::Android tests and APK compilation passed, but GitHub artifact storage is full or the upload failed. Build locally with npm run android:sync && npm run android:build and install android/app/build/outputs/apk/debug/app-debug.apk."

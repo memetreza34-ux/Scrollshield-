@@ -46,4 +46,30 @@ internal object NativeRuntimePolicy {
         if (startedAt == null || limitMinutes <= 0 || now < startedAt) return false
         return now - startedAt >= limitMinutes.toLong() * 60_000L
     }
+
+    /**
+     * Emergency unlock expiration timestamps are wall-clock epoch millis,
+     * while session durations use elapsedRealtime. Never compare the two.
+     */
+    fun isEmergencyUnlockActive(untilEpochMillis: Long?, nowEpochMillis: Long): Boolean =
+        untilEpochMillis != null && untilEpochMillis > 0L && nowEpochMillis < untilEpochMillis
+
+
+    /**
+     * Overlays are created on the main thread after a worker-thread decision.
+     * A fast app switch in between must not show an obsolete interruption.
+     */
+    fun shouldPresentOverlay(
+        targetPackage: String,
+        currentForegroundPackage: String?,
+        isProtected: Boolean,
+        monitoringEnabled: Boolean,
+        screenInteractive: Boolean,
+    ): Boolean =
+        targetPackage.isNotBlank() &&
+            targetPackage == currentForegroundPackage &&
+            isProtected &&
+            monitoringEnabled &&
+            screenInteractive
+
 }

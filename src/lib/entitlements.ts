@@ -1,4 +1,6 @@
-import type { AppState } from '../types';
+import { DEFAULT_APP_CONFIG } from '../types';
+import type { AppConfig, AppState, Schedule } from '../types';
+import { applyPreset, getPresetId } from './presets';
 
 /**
  * Free and Pro (docs/V1_MASTER_PLAN.md, section 10)
@@ -24,8 +26,7 @@ export type ProFeature =
   | 'commitment'
   | 'insights_week'
   | 'custom_focus'
-  | 'strict_focus'
-  | 'feed_extras';
+  | 'strict_focus';
 
 /** The paywall's first sentence for each feature. */
 export const PRO_REASONS: Record<ProFeature, string> = {
@@ -40,7 +41,6 @@ export const PRO_REASONS: Record<ProFeature, string> = {
   insights_week: 'Wochenansicht und Trends gehören zu Pro.',
   custom_focus: 'Eine eigene Fokus-Dauer gehört zu Pro.',
   strict_focus: 'Strenger Fokus gehört zu Pro.',
-  feed_extras: 'Wisch-Unterbrecher und Feed-Sitzungslimit gehören zu Pro.',
 };
 
 export const PRO_BENEFITS = [
@@ -53,14 +53,79 @@ export const PRO_BENEFITS = [
   'Woche, Wiederöffnungs-Muster und App-Trends',
 ];
 
-export const hasPro = (state: Pick<AppState, 'pro'>) => state.pro?.active === true;
+/**
+ * Until Google Play Billing and purchase verification are integrated, Pro is
+ * available ONLY as a development preview. A saved, imported or edited local
+ * `pro.active` flag is never proof of payment in a production build.
+ */
+export const hasPro = (state: Pick<AppState, 'pro'>): boolean =>
+  !import.meta.env.PROD && state.pro?.active === true;
 
-export const countProtectedApps = (state: Pick<AppState, 'appsConfig'>) =>
-  Object.values(state.appsConfig).filter((config) => config.active).length;
+/**
+ * The last trusted UI-to-native boundary while Billing remains disabled.
+ *
+ * Imported backups can contain more than two active apps or Pro-only rules.
+ * Never let those stored settings silently become native paid protection.
+ * Presets and schedules are reduced only for native enforcement; we preserve
+ * the user's configuration so it can be restored after verified purchase.
+ */
+export function getEntitledNativeProtection(
+  state: Pick<AppState, 'appsConfig' | 'schedules' | 'pro'>,
+  supportedAppIds: ReadonlySet<string>,
+): { appsConfig: Record<string, AppConfig>; schedules: Schedule[] } {
+  if (hasPro(state)) return { appsConfig: state.appsConfig, schedules: state.schedules };
 
-/** Whether one more app may be switched on. */
-export const canProtectAnotherApp = (state: Pick<AppState, 'appsConfig' | 'pro'>) =>
-  hasPro(state) || countProtectedApps(state) < FREE_LIMITS.protectedApps;
+  const allowed = new Set(
+    Object.entries(state.appsConfig)
+      .filter(([appId, config]) => config.active && supportedAppIds.has(appId))
+      .slice(0, FREE_LIMITS.protectedApps)
+      .map(([appId]) => appId),
+  );
+
+  const appsConfig: Record<string, AppConfig> = {};
+  for (const [appId, config] of Object.entries(state.appsConfig)) {
+    const active = config.active && allowed.has(appId);
+    if (!active) {
+      appsConfig[appId] = { ...config, active: false };
+      continue;
+    }
+    const freePreset = getPresetId(config) === 'sanft' ? 'sanft' : 'ausgewogen';
+    appsConfig[appId] = applyPreset(
+      {
+        ...config,
+        active: true,
+        // Custom Pro-only emergency policies must not survive downgrade or
+        // imported backups. Free always keeps its standard safety exit.
+        emergencyUnlock: { ...DEFAULT_APP_CONFIG.emergencyUnlock },
+      },
+      freePreset,
+    );
+  }
+
+  const schedules = state.schedules
+    .filter((schedule) => schedule.active)
+    .slice(0, FREE_LIMITS.schedules)
+    .map((schedule) => ({
+      ...schedule,
+      appIds: schedule.appIds.filter((appId) => allowed.has(appId)),
+    }));
+
+  return { appsConfig, schedules };
+}
+
+export const countProtectedApps = (
+  state: Pick<AppState, 'appsConfig'>,
+  supportedAppIds?: ReadonlySet<string>,
+) =>
+  Object.entries(state.appsConfig).filter(
+    ([appId, config]) => config.active && (!supportedAppIds || supportedAppIds.has(appId)),
+  ).length;
+
+/** Whether one more supported app may be switched on. */
+export const canProtectAnotherApp = (
+  state: Pick<AppState, 'appsConfig' | 'pro'>,
+  supportedAppIds?: ReadonlySet<string>,
+) => hasPro(state) || countProtectedApps(state, supportedAppIds) < FREE_LIMITS.protectedApps;
 
 export const canAddSchedule = (state: Pick<AppState, 'schedules' | 'pro'>) =>
   hasPro(state) || state.schedules.length < FREE_LIMITS.schedules;

@@ -26,6 +26,37 @@ describe('ProtectScreen', () => {
     expect(updateState.mock.calls[0][0].paywallReason).toMatch(/2 Apps/);
   });
 
+  it('does not spend Free slots on unsupported imported apps', () => {
+    const updateState = vi.fn();
+    const navigate = vi.fn();
+    const imported = state({
+      appsConfig: {
+        legacy: { ...DEFAULT_APP_CONFIG, id: 'legacy', active: true },
+        instagram: { ...DEFAULT_APP_CONFIG, id: 'instagram', active: true },
+      },
+    });
+
+    render(<ProtectScreen state={imported} updateState={updateState} navigate={navigate} />);
+    fireEvent.click(screen.getByRole('switch', { name: 'TikTok schützen' }));
+
+    expect(navigate).not.toHaveBeenCalledWith('paywall');
+    expect(updateState.mock.calls[0][0].appsConfig.tiktok.active).toBe(true);
+  });
+
+  it('does not show an imported third Free app as protected when native enforcement excludes it', () => {
+    const imported = state({
+      appsConfig: {
+        instagram: { ...DEFAULT_APP_CONFIG, id: 'instagram', active: true },
+        tiktok: { ...DEFAULT_APP_CONFIG, id: 'tiktok', active: true },
+        youtube: { ...DEFAULT_APP_CONFIG, id: 'youtube', active: true },
+      },
+    });
+
+    render(<ProtectScreen state={imported} updateState={vi.fn()} navigate={vi.fn()} />);
+    expect(screen.getByRole('switch', { name: 'YouTube schützen' })).not.toBeChecked();
+    expect(screen.getByText(/wegen des kostenlosen Limits derzeit nicht geschützt/)).toBeInTheDocument();
+  });
+
   it('lets Pro users protect a third app', () => {
     const updateState = vi.fn();
     render(<ProtectScreen state={state({ pro: { active: true } })} updateState={updateState} navigate={vi.fn()} />);
@@ -69,6 +100,18 @@ describe('AppDetailScreen', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: /Stark/ }));
     expect(navigate).toHaveBeenCalledWith('paywall');
+  });
+
+  it('explains when a stored Pro preset is not actually enforced on Android', () => {
+    const imported = state({
+      selectedAppId: 'instagram',
+      appsConfig: {
+        instagram: { ...DEFAULT_APP_CONFIG, id: 'instagram', active: true, preset: 'stark', openDelay: 60 },
+      },
+    });
+
+    render(<AppDetailScreen state={imported} updateState={vi.fn()} navigate={vi.fn()} />);
+    expect(screen.getByText(/Auf Android gilt „Ausgewogen“/)).toBeInTheDocument();
   });
 
   it('does not expose research-only feed controls in the production V1 app detail', () => {

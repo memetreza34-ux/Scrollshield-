@@ -105,4 +105,53 @@ class NativeRuntimePolicyTest {
         assertFalse(NativeRuntimePolicy.shouldInterruptSession(start, start + 1_439L * 60_000L, 1_440))
         assertTrue(NativeRuntimePolicy.shouldInterruptSession(start, start + 1_440L * 60_000L, 1_440))
     }
+
+
+    @Test
+    fun pendingOverlayIsDroppedAfterSwitchingToAnotherApp() {
+        assertFalse(NativeRuntimePolicy.shouldPresentOverlay(
+            "com.instagram.android", "com.google.android.youtube",
+            isProtected = true, monitoringEnabled = true, screenInteractive = true,
+        ))
+    }
+
+    @Test
+    fun pendingOverlayIsDroppedWhenProtectionStopsOrScreenLocks() {
+        assertFalse(NativeRuntimePolicy.shouldPresentOverlay(
+            "com.instagram.android", "com.instagram.android",
+            isProtected = true, monitoringEnabled = false, screenInteractive = true,
+        ))
+        assertFalse(NativeRuntimePolicy.shouldPresentOverlay(
+            "com.instagram.android", "com.instagram.android",
+            isProtected = true, monitoringEnabled = true, screenInteractive = false,
+        ))
+    }
+
+    @Test
+    fun onlyCurrentProtectedForegroundAppMayShowIntervention() {
+        assertTrue(NativeRuntimePolicy.shouldPresentOverlay(
+            "com.instagram.android", "com.instagram.android",
+            isProtected = true, monitoringEnabled = true, screenInteractive = true,
+        ))
+        assertFalse(NativeRuntimePolicy.shouldPresentOverlay(
+            "com.instagram.android", "com.instagram.android",
+            isProtected = false, monitoringEnabled = true, screenInteractive = true,
+        ))
+    }
+
+    @Test
+    fun emergencyExpiryUsesEpochMillisNotElapsedRealtime() {
+        val wallNow = 1_800_000_000_000L
+        val until = wallNow + 5 * 60_000L
+        val deviceUptime = 12_000_000L
+        assertTrue(NativeRuntimePolicy.isEmergencyUnlockActive(until, wallNow))
+        assertFalse(NativeRuntimePolicy.isEmergencyUnlockActive(until, until))
+        assertFalse(NativeRuntimePolicy.isEmergencyUnlockActive(until, until + 1))
+        // An expired emergency release must not be considered active
+        // just because Android elapsedRealtime() is far smaller than epoch time.
+        assertFalse(NativeRuntimePolicy.isEmergencyUnlockActive(until, wallNow + 10 * 60_000L))
+        assertFalse(NativeRuntimePolicy.isEmergencyUnlockActive(null, deviceUptime))
+        assertFalse(NativeRuntimePolicy.isEmergencyUnlockActive(0L, deviceUptime))
+    }
+
 }
