@@ -303,6 +303,12 @@ export function AppDetailScreen({ state, updateState, navigate }: ScreenProps) {
         />
       </div>
 
+      {nativeActive && nativeConfig && getPresetId(nativeConfig) !== presetId && (
+        <p className="mb-6 rounded-xl border border-zinc-800 px-4 py-3 text-sm text-zinc-400">
+          Gespeicherte Pro-Regeln sind derzeit nicht aktiv. Auf Android gilt „{getPresetLabel(getPresetId(nativeConfig))}“.
+        </p>
+      )}
+
       {committed && (
         <p className="mb-6 rounded-xl border border-zinc-800 px-4 py-3 text-sm text-zinc-400">
           Selbstverpflichtung aktiv: Du kannst den Schutz nur verstärken.
