@@ -1,4 +1,8 @@
+import { useEffect, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { AppState, Screen, SUPPORTED_APPS } from '../types';
+import { ScrollShieldBridge, type PermissionStatus } from '../lib/nativeBridge';
+import { getProtectionHealth } from '../lib/protectionHealth';
 import {
   AppTile,
   List,
@@ -44,7 +48,42 @@ export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
     protectedApps.some((app) => getActiveScheduleForApp([schedule], app.id)),
   );
   const isWeb = state.operatingSystem === 'web';
-  const missingPermissions = !isWeb && (!state.permissions.usageAccess || !state.permissions.overlay);
+  const isNativeAndroid = state.operatingSystem === 'android' && Capacitor.isNativePlatform();
+  const hasProtectedApps = protectedApps.length > 0;
+  const [nativeStatus, setNativeStatus] = useState<PermissionStatus | 'unavailable' | null>(null);
+
+  // The stored permission flags can be stale after process death or a system
+  // settings change. Recheck the actual Android permissions AND running service
+  // whenever the dashboard opens or the user returns from another app.
+  useEffect(() => {
+    if (!isNativeAndroid || !hasProtectedApps) return;
+    let mounted = true;
+    let latestRequest = 0;
+
+    const refresh = async () => {
+      const request = ++latestRequest;
+      setNativeStatus(null); // Never show a stale green state while refreshing.
+      try {
+        const result = await ScrollShieldBridge.getPermissionStatus();
+        if (mounted && request === latestRequest) setNativeStatus(result);
+      } catch {
+        if (mounted && request === latestRequest) setNativeStatus('unavailable');
+      }
+    };
+
+    const onReturn = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+
+    void refresh();
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
+    return () => {
+      mounted = false;
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('focus', onReturn);
+    };
+  }, [isNativeAndroid, hasProtectedApps]);
 
   const now = new Date();
   const yesterday = new Date(now);
@@ -54,12 +93,7 @@ export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
   const protectedMinutes = metrics.perApp.reduce((sum, app) => sum + (app.usageMinutes ?? 0), 0);
   const suggestion = getSuggestion(state, now);
 
-  const status =
-    protectedApps.length === 0
-      ? { label: 'Kein Schutz aktiv', tone: 'text-zinc-400' }
-      : missingPermissions
-        ? { label: 'Schutz eingeschränkt – eine Berechtigung fehlt', tone: 'text-amber-400' }
-        : { label: 'Schutz aktiv', tone: 'text-emerald-400' };
+  const status = getProtectionHealth(protectedApps.length, isNativeAndroid, nativeStatus);
 
   const openRescue = () => {
     if (hasPro(state)) navigate('rescue');
@@ -113,14 +147,14 @@ export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
 
       {/* Status */}
       <button
-        onClick={() => navigate(missingPermissions ? 'permissions' : 'protect')}
+        onClick={() => navigate(status.destination)}
         className="mb-8 block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
       >
         <span className={`block font-semibold ${status.tone}`}>{status.label}</span>
         <span className="mt-0.5 block text-sm text-zinc-400">
           {protectedApps.length === 0
             ? 'Wähle mindestens eine App aus.'
-            : `${protectedApps.length} ${protectedApps.length === 1 ? 'App' : 'Apps'} geschützt`}
+            : `${protectedApps.length} ${protectedApps.length === 1 ? 'App' : 'Apps'} ${status.operating ? 'geschützt' : 'zum Schutz ausgewählt'}`}
           {isCommitmentActive(state) && state.commitment
             ? ` · Selbstverpflichtung bis ${formatUntil(state.commitment.until)}`
             : ''}
