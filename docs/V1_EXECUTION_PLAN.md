@@ -106,7 +106,7 @@ Designannahmen aus Masterplan: nahe Schwarzwerte, Zink/Grau/Weiß, **ein** zurü
 
 | ID | Screen / Interaktion | Status | Abnahme |
 | --- | --- | --- | --- |
-| SS-301 | Designsystem: Farb-/Spacing-/Typo-/Radius-/Motion-Tokens, Buttons/Rows/Sheets | OPEN | Einheitliche Komponenten + belastbare Hell-/Dunkel-Kontraste im festgelegten Dark-first-System; mindestens 48dp Touchflächen |
+| [SS-301](https://github.com/memetreza34-ux/Scrollshield-/issues/25) | Designsystem: Farb-/Spacing-/Typo-/Radius-/Motion-Tokens, Buttons/Rows/Sheets | OPEN | Einheitliche Komponenten + belastbare Hell-/Dunkel-Kontraste im festgelegten Dark-first-System; mindestens 48dp Touchflächen |
 | SS-302 | Onboarding und Berechtigungs-Wizard | UI PRESENT / QA OPEN | Verständlicher Nutzen in 30–60 s; echte Permission-Zustände; kein Fake-Setup |
 | SS-303 | Heute: Schutzstatus, Hauptkennzahl, Fokus/Rescue, Reopens, nächster Zeitplan | UI PRESENT / QA OPEN | Kernnutzen oberhalb des Folds; metrisch ehrlich; Zustände leer/aktiv/eingeschränkt |
 | SS-304 | Schutz: App-Auswahl, 2-App-Grenze, Presets, progressive App-Details | UI PRESENT / QA OPEN | 3.-App-Paywall; einfache Default-Ansicht; technische Regeln sekundär |
@@ -206,6 +206,19 @@ ANDROID V1 RELEASE
 3. **SS-003/004:** Legacy-/Store-Widersprüche und Free/Pro-Native-Lücken durch konkrete Tests schließen; nach den drei Aufgaben Review + Planstatus aktualisieren.
 
 **Danach:** Batch B mit SS-101/102/104 (zwei App-Regeln, schnelle Übergänge, Gesundheitszustand), dann Geräteabnahme statt kosmetischem Umbau.
+
+### Betreiber-/Geschäftsperspektive vor Store-Launch
+
+Entwickler und Produktverantwortlicher müssen auch die langfristige Funktionsfähigkeit nach dem ersten Download absichern:
+
+- **Wert:** Kann ein Free-Nutzer die Kernwirkung regelmäßig erleben? Ist der Pro-Mehrwert ein laufender, nachweisbarer Nutzen statt ein künstlich schlechtes Gratisprodukt?
+- **Erlöse:** Wirtschaftlichkeit des Preisziels über tatsächlich konfigurierte Store-Preise, Steuern/Google-Play-Gebühren, Billing-/Backend-Kosten, Support, Retouren und Wartung modellieren. **Keine angenommenen Gewinne oder Conversion-Zahlen als Fakten.**
+- **Kundenbindung:** Wirklicher Mehrwert nach 7/30 Tagen durch freiwillige Interviews und aggregierte Testauswertungen; keine verpflichtende Online-Analytics- oder Werbeverfolgung.
+- **Support:** Kauf nicht erkannt, Schutz funktioniert nicht, Datenverlust, Abostorno, Datenschutzanfrage, Gerätewechsel; jeweils eine getestete Antwort und ein freigegebener Kontaktweg.
+- **Wartbarkeit:** Verantwortliche für Android-/SDK-/Play-Updates, Monitoring von Policies, Crash-/ANR-Analyse mit datensparsamer, transparenter Methodik.
+- **Onboarding-Qualität:** Keine immanente Paywall vor dem ersten Schutzerlebnis; Beta-Teilnehmer sollen ohne Entwicklerhilfe Schutz aktivieren und verstehen.
+- **Bezahlvertrauen:** Store-Preis/Trial und Kündigung sind **vor** dem Bezahlklick sichtbar, danach jederzeit erreichbar.
+- **Entwicklerkapazität:** Schon jetzt Abnahmetests pro Feature einbauen; neue Features erst, wenn die wichtigste bestehende Funktion belastbar ist.
 
 ## 6. Qualitäts- und Arbeitsregeln
 
