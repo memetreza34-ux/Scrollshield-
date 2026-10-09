@@ -103,12 +103,19 @@ export function getEntitledNativeProtection(
   return { appsConfig, schedules };
 }
 
-export const countProtectedApps = (state: Pick<AppState, 'appsConfig'>) =>
-  Object.values(state.appsConfig).filter((config) => config.active).length;
+export const countProtectedApps = (
+  state: Pick<AppState, 'appsConfig'>,
+  supportedAppIds?: ReadonlySet<string>,
+) =>
+  Object.entries(state.appsConfig).filter(
+    ([appId, config]) => config.active && (!supportedAppIds || supportedAppIds.has(appId)),
+  ).length;
 
-/** Whether one more app may be switched on. */
-export const canProtectAnotherApp = (state: Pick<AppState, 'appsConfig' | 'pro'>) =>
-  hasPro(state) || countProtectedApps(state) < FREE_LIMITS.protectedApps;
+/** Whether one more supported app may be switched on. */
+export const canProtectAnotherApp = (
+  state: Pick<AppState, 'appsConfig' | 'pro'>,
+  supportedAppIds?: ReadonlySet<string>,
+) => hasPro(state) || countProtectedApps(state, supportedAppIds) < FREE_LIMITS.protectedApps;
 
 export const canAddSchedule = (state: Pick<AppState, 'schedules' | 'pro'>) =>
   hasPro(state) || state.schedules.length < FREE_LIMITS.schedules;
