@@ -9,6 +9,7 @@
 **Vergleich:** [`COMPETITOR_BASELINE.md`](COMPETITOR_BASELINE.md).  
 **Nutzer- und Screen-UX:** [`V1_PRODUCT_EXPERIENCE.md`](V1_PRODUCT_EXPERIENCE.md).  
 **Visual Design + Native Overlay:** [`V1_DESIGN_SYSTEM.md`](V1_DESIGN_SYSTEM.md).  
+**Finaler Claude-Design-Pass nach technischen Funktionen:** [`CLAUDE_FINAL_DESIGN_HANDOFF.md`](CLAUDE_FINAL_DESIGN_HANDOFF.md).  
 **Abo- und Billing-Vertrag:** [`V1_BILLING_EXPERIENCE.md`](V1_BILLING_EXPERIENCE.md).  
 **Sicherheit, Datenschutz und Rechtsprüfung:** [`V1_COMPLIANCE_REVIEW.md`](V1_COMPLIANCE_REVIEW.md).  
 **Agentenregeln:** [`ENGINEERING_WORKFLOW.md`](ENGINEERING_WORKFLOW.md).
@@ -100,7 +101,9 @@ Statuswerte: `DONE (evidenced)`, `IN REVIEW`, `IN PROGRESS`, `OPEN`, `BLOCKED:OW
 | SS-205 | Focus/Rescue: Laufzeit ohne UI, Strict-Schutz, Sessions über App-Neustart | CODE PRESENT / NOT DEVICE-VERIFIED | 15/30/60, Pro-Sondersitzung, Ablauf, Reboot und Early-Stop je Modus korrekt |
 | SS-206 | Ereignisledger & Metrik-Vertrauensklassen (`MEASURED/DERIVED/UNAVAILABLE`) | OPEN | Kein `blockedOpens × x Minuten`; keine Doppelerfassung nach Reopen/Sync/Import; Offline-/Berechtigungszustände |
 
-### P3 — Komplettes Calm-Control-Produktdesign (nicht nur kosmetisch)
+### P3 — UX funktional absichern; finalen visuellen Design-Pass später an Claude übergeben
+
+**Verbindliche Betreiberentscheidung (2026-10-09):** ChatGPT stellt zuerst sämtliche Funktionen, Android-Schutz, Billing, Sicherheit und Tests fertig. **Das abschließende visuelle Redesign erfolgt danach mit Claude Code/Claude Design** anhand [der Design-Übergabe](CLAUDE_FINAL_DESIGN_HANDOFF.md). In der technischen Phase beheben wir unbedienbare Buttons, unverständliche Zustände, fehlende Navigation und Accessibility-Fehler; wir führen aber keinen frühzeitigen umfassenden Farb-/Layout-Umbau durch.
 
 Designannahmen aus Masterplan: nahe Schwarzwerte, Zink/Grau/Weiß, **ein** zurückhaltender Emerald-Akzent, saubere Typohierarchie, viel Platz, sparsame Animation. Keine überladenen Karten, Neon, Glows oder Motivations-Gamification.
 
@@ -186,11 +189,13 @@ SS-003/004/005 (eine Produktwahrheit + Native-/Free-Sicherheit)
        ↓
 SS-101–106 + SS-201–206 (echter Android-Kern beweisen)
        ↓
-SS-301–310 (alle Screens/States mit echten Daten designfinalisieren)
+UX-Grundfunktion/States sichern (keine endgültige Design-Überarbeitung)
        ↓
 SS-401–406 (Store Billing, Pro-Entitlements, End-to-End-Test)
        ↓
-SS-501–507 (Devices, Policy, Beta, Store)
+SS-301–310 (Claude Code: endgültiges Design + Native Overlay)
+       ↓
+SS-501–507 (Device-Retest, Policy, Beta, Store)
        ↓
 ANDROID V1 RELEASE
 ```
@@ -205,7 +210,7 @@ ANDROID V1 RELEASE
 2. **SS-002:** Falls GitHub Actions vor Runnerstart ausfällt, Blocker sauber trennen; Artefakt-Quota von Kompilierung trennen und lokalen reproduzierbaren Prüfpfad dokumentieren. Nicht grün fälschen.
 3. **SS-003/004:** Legacy-/Store-Widersprüche und Free/Pro-Native-Lücken durch konkrete Tests schließen; nach den drei Aufgaben Review + Planstatus aktualisieren.
 
-**Danach:** Batch B mit SS-101/102/104 (zwei App-Regeln, schnelle Übergänge, Gesundheitszustand), dann Geräteabnahme statt kosmetischem Umbau.
+**Danach:** Batch B mit SS-101/102/104 (zwei App-Regeln, schnelle Übergänge, Gesundheitszustand), dann funktionale Geräteabnahme und Billing. **Finales visuelles Redesign erst als Claude-Handoff nach technischen Kernfunktionen und Abos.**
 
 ### Betreiber-/Geschäftsperspektive vor Store-Launch
 
