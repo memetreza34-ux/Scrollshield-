@@ -1,3 +1,6 @@
+> **HISTORISCHER RECHTSBRIEF (24.09.2026) – NICHT ALS AKTUELLE PRODUKTBESCHREIBUNG VERWENDEN.**  
+> Die Aussagen zu Reels-/Accessibility-Erkennung, dem EU AI Act und Geschäftsmodell stammen aus einem alten Scope. Aktuelle V1: [Masterplan](V1_MASTER_PLAN.md), [Compliance-Review](V1_COMPLIANCE_REVIEW.md), [Billing-Vertrag](V1_BILLING_EXPERIENCE.md). Eine juristische Freigabe liegt nicht vor. Die alten Angaben bleiben darunter als historische Fragen erhalten.
+
 # ScrollShield – Unterlagen für die rechtliche Prüfung
 
 Stand: 24. September 2026. Dieses Dokument fasst für eine Anwältin oder einen Anwalt zusammen, was ScrollShield
