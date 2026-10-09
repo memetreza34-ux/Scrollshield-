@@ -211,6 +211,8 @@ export function AppDetailScreen({ state, updateState, navigate }: ScreenProps) {
   if (!app) return null;
 
   const config = normalizeAppConfig(app.id, state.appsConfig[app.id]);
+  const nativeConfig = getEntitledNativeProtection(state, SUPPORTED_APP_IDS).appsConfig[app.id];
+  const nativeActive = nativeConfig?.active ?? false;
   const pro = hasPro(state);
   const committed = isCommitmentActive(state);
   const presetId = getPresetId(config);
@@ -272,11 +274,11 @@ export function AppDetailScreen({ state, updateState, navigate }: ScreenProps) {
       <div className="mb-8 flex items-center gap-4 rounded-2xl bg-zinc-900 p-4">
         <AppTile app={app} size="md" />
         <span className="flex-1">
-          <span className="block font-semibold text-zinc-100">Schutz {config.active ? 'an' : 'aus'}</span>
+          <span className="block font-semibold text-zinc-100">Schutz {nativeActive ? 'an' : 'aus'}</span>
           <span className="block text-sm text-zinc-500">{getPresetLabel(presetId)}</span>
         </span>
         <Switch
-          checked={config.active}
+          checked={nativeActive}
           ariaLabel={`${app.name} schützen`}
           onChange={(active) => {
             if (active && !canProtectAnotherApp(state, SUPPORTED_APP_IDS)) {
