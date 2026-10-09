@@ -509,7 +509,9 @@ class AppMonitorService : Service() {
     private fun checkSessionLimit(packageName: String, now: Long) {
         val rule = rules[packageName] ?: return
         if (rule.sessionLimitMinutes <= 0 || overlayView != null) return
-        if (now < (emergencyUntil[rule.appId] ?: 0L)) return
+        // Emergency expiry is persisted as wall-clock epoch millis; session duration
+        // uses elapsedRealtime(). Mixing clocks can suppress Session Guard forever.
+        if (NativeRuntimePolicy.isEmergencyUnlockActive(emergencyUntil[rule.appId], System.currentTimeMillis())) return
 
         val startedAt = sessionStartedAt[packageName]
         if (startedAt == null) {
