@@ -1,3 +1,5 @@
+> **SCOPE-HINWEIS:** Frühere Reels-/Accessibility-Risiken sind historischer Kontext, kein Auftrag zur Einführung solcher Funktionen in Android V1. Die aktuelle Store-Prüfung folgt dem [Masterplan](V1_MASTER_PLAN.md) und [Compliance-Review](V1_COMPLIANCE_REVIEW.md).
+
 # ScrollShield - Store Review Risiken & Gegenmaßnahmen
 
 Diese Analyse identifiziert potenzielle Ablehnungsrisiken bei den App-Store-Reviews von Apple (App Store) und Google (Play Store) und definiert konkrete Gegenmaßnahmen, die in die Architektur und das UI-Design von ScrollShield eingeflossen sind.
