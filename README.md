@@ -2,10 +2,15 @@
 
 ScrollShield is an **Android-first digital-wellbeing app** designed to interrupt impulsive app opening and increase friction when the user repeatedly returns to the same distracting app.
 
-The authoritative V1 product specification is:
+## Verbindliche Projektdokumente
 
-- [docs/V1_MASTER_PLAN.md](docs/V1_MASTER_PLAN.md)
-- [ROADMAP.md](ROADMAP.md)
+- **Produktumfang:** [V1 Masterplan](docs/V1_MASTER_PLAN.md)
+- **Umsetzung von Anfang bis Release:** [V1 Execution Plan](docs/V1_EXECUTION_PLAN.md)
+- **Aufgaben-/Prüfworkflow für Agents:** [Engineering Workflow](docs/ENGINEERING_WORKFLOW.md)
+- **Konkurrenz und Positionierung:** [Competitor Baseline](docs/COMPETITOR_BASELINE.md)
+- **Kurzüberblick:** [Roadmap](ROADMAP.md)
+
+Bei Widersprüchen entscheidet der Masterplan über **was** gebaut wird und der Execution Plan über **Reihenfolge, Task-IDs und Abnahme**. Der Code allein beweist keine Gerätetauglichkeit.
 
 ## V1 Product
 
