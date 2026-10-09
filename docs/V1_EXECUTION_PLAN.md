@@ -68,10 +68,10 @@ Statuswerte: `DONE (evidenced)`, `IN REVIEW`, `IN PROGRESS`, `OPEN`, `BLOCKED:OW
 
 | ID | Aufgabe / konkreter Codebereich | Status | Abnahme |
 | --- | --- | --- | --- |
-| SS-001 | PR #20 gegen `main` nach echten Checks prüfen, Fehler korrigieren, ggf. mergen | IN REVIEW | TypeScript/UI/JVM/Android-Build nachweisbar grün auf *demselben* Head; keine UI-/Native-Regression |
-| SS-002 | GitHub Actions Budget/Runner-/Artefaktprobleme diagnostizieren, Debug-APK als optionalen Download oder lokalen Build-Weg bereitstellen | BLOCKED:EXTERNAL | CI führt wieder aus; Kotlin-Build-Erfolg getrennt von Artifact-Upload; dokumentierter lokaler APK-Pfad |
-| SS-003 | Veraltete Dokumente/Store-Kopien gezielt an den V1-Masterplan angleichen | OPEN | Keine produktionswirksame Reels-/PWA-first-/4-Tab-Aussage mehr; Legacy-Dokumente klar markiert |
-| SS-004 | Integritätsmatrix für lokale/importierte Pro-Daten und Native Sync abschließen | IN REVIEW | Gespeichertes `pro.active` gewährt in Produktion kein Pro; Free-Limits server-/Store-unabhängig vor Native Sync begrenzt; Tests |
+| [SS-001](https://github.com/memetreza34-ux/Scrollshield-/issues/22) | PR #20 gegen `main` nach echten Checks prüfen, Fehler korrigieren, ggf. mergen | IN REVIEW | TypeScript/UI/JVM/Android-Build nachweisbar grün auf *demselben* Head; keine UI-/Native-Regression |
+| [SS-002](https://github.com/memetreza34-ux/Scrollshield-/issues/23) | GitHub Actions Budget/Runner-/Artefaktprobleme diagnostizieren, Debug-APK als optionalen Download oder lokalen Build-Weg bereitstellen | BLOCKED:EXTERNAL | CI führt wieder aus; Kotlin-Build-Erfolg getrennt von Artifact-Upload; dokumentierter lokaler APK-Pfad |
+| [SS-003](https://github.com/memetreza34-ux/Scrollshield-/issues/24) | Veraltete Dokumente/Store-Kopien gezielt an den V1-Masterplan angleichen | OPEN | Keine produktionswirksame Reels-/PWA-first-/4-Tab-Aussage mehr; Legacy-Dokumente klar markiert |
+| [SS-004](https://github.com/memetreza34-ux/Scrollshield-/issues/24) | Integritätsmatrix für lokale/importierte Pro-Daten und Native Sync abschließen | IN REVIEW | Gespeichertes `pro.active` gewährt in Produktion kein Pro; Free-Limits server-/Store-unabhängig vor Native Sync begrenzt; Tests |
 | SS-005 | Sicherheits-/Policy-Audit von Manifest, Overlay, FGS, Berechtigungen und Paketlisten | OPEN | Keine V1-Accessibility-Registrierung; nur notwendige Berechtigungen; dokumentierte aktuelle Google-Play-Anforderungen |
 
 ### P1 — Android-Schutz: zuverlässig, schnell, vorhersehbar
