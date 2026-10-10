@@ -1,7 +1,16 @@
+import { useEffect, useState } from 'react';
 import { Check } from 'lucide-react';
 import { AppState, Screen } from '../types';
 import { Header, List, Page, PrimaryButton, Row, SecondaryButton, Section, Switch } from '../components/ui';
 import { hasPro, PRO_BENEFITS } from '../lib/entitlements';
+import {
+  describeOffer,
+  describePurchaseOverview,
+  getPlayCatalog,
+  getPlayPurchaseOverview,
+  isNativePlayBilling,
+} from '../lib/billing';
+import type { PlayCatalog } from '../lib/billing';
 import { FEATURE_FLAGS } from '../config/featureFlags';
 import {
   EVENING_REMINDER_HOUR,
@@ -121,6 +130,39 @@ export function NotificationsScreen({ state, updateState, navigate }: ScreenProp
  */
 export function PaywallScreen({ state, updateState, navigate, paywallReturnScreen = 'today' }: ScreenProps) {
   const pro = hasPro(state);
+  const onAndroid = isNativePlayBilling();
+  const [catalog, setCatalog] = useState<PlayCatalog | null>(null);
+  const [catalogError, setCatalogError] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [restoreNote, setRestoreNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!onAndroid || pro) return;
+    let mounted = true;
+    void getPlayCatalog()
+      .then((response) => {
+        if (mounted) setCatalog(response);
+      })
+      .catch(() => {
+        if (mounted) setCatalogError(true);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [onAndroid, pro]);
+
+  const checkPlaySubscriptions = async () => {
+    setChecking(true);
+    try {
+      const overview = await getPlayPurchaseOverview();
+      setRestoreNote(describePurchaseOverview(overview));
+    } catch {
+      setRestoreNote('Google Play konnte den Abo-Status gerade nicht abrufen. Bitte versuche es später erneut.');
+    } finally {
+      setChecking(false);
+    }
+  };
+
   const close = () => {
     updateState({ paywallReason: null });
     navigate(paywallReturnScreen);
@@ -150,15 +192,47 @@ export function PaywallScreen({ state, updateState, navigate, paywallReturnScree
       {!pro && (
         <div className="space-y-3">
           <div className="rounded-2xl border border-zinc-800 p-4">
-            <p className="text-sm font-medium text-zinc-200">Preis über Google Play</p>
-            <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-              Preis, Testphase und Verlängerung werden in der Kaufversion direkt aus Google Play geladen und vor dem
-              Kauf vollständig angezeigt. ScrollShield verwendet hier keine veralteten Platzhalterpreise.
+            <p className="text-sm font-medium text-zinc-200">Google Play-Abonnements</p>
+            {catalog?.plans.length ? (
+              <ul className="mt-3 space-y-3">
+                {catalog.plans.map((offer, index) => (
+                  <li key={`${offer.productId}-${offer.basePlanId}-${offer.offerId ?? 'base'}-${index}`}>
+                    <p className="font-medium text-zinc-100">
+                      {offer.basePlanId === 'monthly' ? 'Monatlich' : 'Jährlich'}
+                      {offer.offerId ? ' · Angebot' : ''}
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-400">{describeOffer(offer)}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+                {!onAndroid
+                  ? 'Abonnements sind ausschließlich in der Android-App über Google Play verfügbar.'
+                  : catalogError
+                    ? 'Preise konnten gerade nicht geladen werden. Prüfe die Play-Store-Verbindung.'
+                    : catalog
+                      ? 'In Google Play sind derzeit keine kaufbaren ScrollShield-Angebote hinterlegt.'
+                      : 'Preise werden direkt bei Google Play abgefragt …'}
+              </p>
+            )}
+            <p className="mt-3 text-sm leading-relaxed text-zinc-500">
+              Käufe sind bis zur sicheren serverseitigen Verifikation deaktiviert. Es wird keine Zahlung ausgelöst.
             </p>
           </div>
           <PrimaryButton onClick={() => undefined} disabled>
-            Abrechnung noch nicht aktiviert
+            Kaufen noch nicht verfügbar
           </PrimaryButton>
+          {onAndroid && (
+            <SecondaryButton onClick={() => void checkPlaySubscriptions()} disabled={checking}>
+              {checking ? 'Prüfe Google Play …' : 'Bestehende Play-Abos prüfen'}
+            </SecondaryButton>
+          )}
+          {restoreNote && (
+            <p role="status" className="rounded-xl border border-zinc-800 p-3 text-sm text-zinc-300">
+              {restoreNote}
+            </p>
+          )}
           <SecondaryButton onClick={close}>Später</SecondaryButton>
         </div>
       )}
