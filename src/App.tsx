@@ -423,6 +423,10 @@ export default function App() {
     appState.schedules,
     appState.commitment,
     appState.pro,
+    // Revoking a native permission stops the monitor. When Android settings
+    // report a re-grant, resend the rules and explicitly restart monitoring.
+    appState.permissions.usageAccess,
+    appState.permissions.overlay,
     isLoaded,
   ]);
 
