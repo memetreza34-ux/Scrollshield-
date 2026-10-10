@@ -72,7 +72,7 @@ object EmergencyLog {
                 val key = keys.next()
                 if (!EmergencyGrantPolicy.isActive(active.optLong(key, 0L), nowEpochMillis)) expired.add(key)
             }
-            expired.forEach(active::remove)
+            expired.forEach { active.remove(it) }
             active.put(appId, expiresAt)
 
             val saved = prefs.edit()
