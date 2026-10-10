@@ -5,6 +5,8 @@
  * Note: cancelled subscriptions retain access until the paid expiry. Grace
  * period retains access; on-hold, paused and pending subscriptions do not.
  */
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
 export const PLAY_PACKAGE = 'app.scrollshield.mobile';
 export const PLAY_PRODUCT = 'scrollshield_pro';
 
@@ -48,4 +50,24 @@ export function safePublicEntitlement(result) {
     expiresAt: result.expiryEpochMs !== null ? new Date(result.expiryEpochMs).toISOString() : null,
     source: 'verified_google_play',
   };
+}
+
+/**
+ * Must be supplied as BillingFlowParams.setObfuscatedAccountId when purchasing.
+ * Firebase UID is never sent directly to Google Play; a server secret prevents
+ * third parties from guessing or forging another account's Play binding.
+ */
+export function obfuscatedPlayAccountId(uid, secret) {
+  if (typeof uid !== 'string' || uid.length < 1 || uid.length > 128 ||
+      typeof secret !== 'string' || Buffer.byteLength(secret, 'utf8') < 32) {
+    throw new Error('Billing account binding not configured');
+  }
+  return createHmac('sha256', secret).update('scrollshield-play-v1:' + uid).digest('hex');
+}
+
+export function isPlayPurchaseBoundToOwner(play, uid, secret) {
+  const provided = play?.externalAccountIdentifiers?.obfuscatedExternalAccountId;
+  if (typeof provided !== 'string' || !/^[a-f0-9]{64}$/.test(provided)) return false;
+  const expected = obfuscatedPlayAccountId(uid, secret);
+  return timingSafeEqual(Buffer.from(provided, 'hex'), Buffer.from(expected, 'hex'));
 }
