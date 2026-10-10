@@ -29,6 +29,7 @@
     <string name="overlay_go_home">Zurück</string>
     <string name="overlay_emergency">Notfallfreigabe (noch %1$d heute)</string>
     <string name="overlay_emergency_confirm">%1$s für %2$d Minuten freigeben</string>
+    <string name="overlay_emergency_unavailable">Notfallfreigabe gerade nicht möglich. Bitte versuche es erneut oder gehe zurück.</string>
     <plurals name="overlay_emergency_wait">
         <item quantity="one">Freigabe in %d Sekunde …</item>
         <item quantity="other">Freigabe in %d Sekunden …</item>
