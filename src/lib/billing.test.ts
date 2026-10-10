@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   describeBillingPeriod,
   describeOffer,
   describePurchaseOverview,
+  withBillingReadTimeout,
 } from './billing';
 import type { PlaySubscriptionOffer } from './billing';
 
@@ -84,5 +85,23 @@ describe('unverified purchases never imply entitlement', () => {
         purchases: [{ state: 'unknown', acknowledged: false }],
       }),
     ).toContain('nicht als aktives Abo bestätigt');
+  });
+});
+
+afterEach(() => vi.useRealTimers());
+
+describe('Play Billing read timeout', () => {
+  it('does not hang the paywall when the Play service never responds', async () => {
+    vi.useFakeTimers();
+    const result = withBillingReadTimeout(new Promise<string>(() => undefined), 100);
+    const assertion = expect(result).rejects.toThrow('PLAY_BILLING_READ_TIMEOUT');
+    await vi.advanceTimersByTimeAsync(101);
+    await assertion;
+  });
+
+  it('clears the timeout when the Play service responds promptly', async () => {
+    vi.useFakeTimers();
+    await expect(withBillingReadTimeout(Promise.resolve('ready'), 500)).resolves.toBe('ready');
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
