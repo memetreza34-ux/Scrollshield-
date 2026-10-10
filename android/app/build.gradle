@@ -62,6 +62,10 @@ dependencies {
     // EncryptedSharedPreferences for the native blocked-app list.
     // Jetpack Security is in maintenance mode; revisit before adding new usage.
     implementation "androidx.security:security-crypto:$androidxSecurityCryptoVersion"
+    // Google Play Billing 9.1: real localized subscription offers and
+    // read-only purchase observations. Payments remain disabled until secure
+    // Play Developer API verification is deployed.
+    implementation "com.android.billingclient:billing:9.1.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
