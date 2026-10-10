@@ -671,6 +671,7 @@ class AppMonitorService : Service() {
             bodyText = verdict.statusText ?: verdict.reopenText ?: getString(R.string.overlay_body, appName),
             continueText = getString(R.string.overlay_continue_to, appName),
             showContinue = !locked,
+            expectedRule = rule,
             onShown = {
                 // A lock and a reopen count the moment they are shown, as in
                 // the in-app flow; a plain pause only once the user decides.
@@ -711,6 +712,7 @@ class AppMonitorService : Service() {
             bodyText = getString(R.string.overlay_session_body, rule.sessionLimitMinutes, appName),
             continueText = getString(R.string.overlay_continue),
             showContinue = true,
+            expectedRule = rule,
             onShown = {
                 recordInterruption(packageName, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_WARNED, "SESSION_LIMIT")
             },
@@ -840,12 +842,16 @@ class AppMonitorService : Service() {
         onShown: () -> Unit = {},
         onContinue: () -> Unit,
         onGoHome: () -> Unit = {},
+        expectedRule: BlockRule? = null,
         configure: (OverlayViews) -> Unit,
     ) {
         if (!Settings.canDrawOverlays(this)) return
 
         mainHandler.post {
             if (overlayView != null) return@post
+            // A config update can replace the rule while the worker is still
+            // preparing its view. Never show its old decision afterward.
+            if (expectedRule != null && rules[blockedPackage] != expectedRule) return@post
             // Worker decisions can be stale by the time the main thread runs.
             // Do not interrupt a different app, a disabled rule or a locked screen.
             if (!NativeRuntimePolicy.shouldPresentOverlay(
