@@ -25,8 +25,28 @@ object ForegroundUsage {
         set(Calendar.MILLISECOND, 0)
     }.timeInMillis
 
-    /** Minutes per package since local midnight; 0 for packages without use. */
-    @Suppress("DEPRECATION") // MOVE_TO_* equal ACTIVITY_RESUMED/PAUSED and also cover Android 9.
+    /**
+     * UsageEvents global transitions have no guaranteed packageName. Decode the
+     * event type before looking at its package, especially for screen-off and
+     * device shutdown: otherwise a stale activity appears active all night.
+     */
+    @Suppress("DEPRECATION") // MOVE_TO_* aliases ACTIVITY_RESUMED/PAUSED since Android P.
+    private fun decodeObservation(event: UsageEvents.Event): UsageObservation? {
+        val signal = when (event.eventType) {
+            UsageEvents.Event.MOVE_TO_FOREGROUND -> UsageSignal.FOREGROUND
+            UsageEvents.Event.MOVE_TO_BACKGROUND -> UsageSignal.BACKGROUND
+            UsageEvents.Event.SCREEN_NON_INTERACTIVE ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) UsageSignal.SCREEN_OFF else return null
+            UsageEvents.Event.DEVICE_SHUTDOWN ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) UsageSignal.DEVICE_SHUTDOWN else return null
+            UsageEvents.Event.DEVICE_STARTUP ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) UsageSignal.DEVICE_STARTUP else return null
+            else -> return null
+        }
+        return UsageObservation(event.timeStamp, event.packageName, signal)
+    }
+
+    /** Minutes per protected package since local midnight; 0 when unused. */
     fun minutesToday(context: Context, packages: Set<String>): Map<String, Int> {
         if (packages.isEmpty()) return emptyMap()
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
@@ -39,73 +59,13 @@ object ForegroundUsage {
             null
         } ?: return emptyMap()
 
-        // An app can have several activities resumed in overlapping order, so
-        // time runs while at least one of them is in front.
-        val resumed = mutableMapOf<String, Int>()
-        val since = mutableMapOf<String, Long>()
-        val totals = mutableMapOf<String, Long>()
+        val accumulator = ProtectedUsageAccumulator(packages)
         val event = UsageEvents.Event()
-
-        // Closes every running interval at `end`. Android does not always log
-        // the matching MOVE_TO_BACKGROUND (process killed, reboot); the open
-        // interval then ran on until now and the daily limit locked the app
-        // for time nobody spent in it.
-        fun closeAll(end: Long) {
-            for ((packageName, start) in since) {
-                totals[packageName] = (totals[packageName] ?: 0L) + (end - start).coerceAtLeast(0L)
-            }
-            since.clear()
-            resumed.clear()
-        }
-
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
-            val packageName = event.packageName ?: continue
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
-                (event.eventType == UsageEvents.Event.DEVICE_SHUTDOWN ||
-                    event.eventType == UsageEvents.Event.DEVICE_STARTUP)
-            ) {
-                closeAll(event.timeStamp)
-                continue
-            }
-
-            if (packageName !in packages) {
-                // Another app in front ends the protected one's time, whether or
-                // not its own background event was logged. In split screen this
-                // undercounts, which errs on the lenient side.
-                if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) closeAll(event.timeStamp)
-                continue
-            }
-
-            when (event.eventType) {
-                UsageEvents.Event.MOVE_TO_FOREGROUND -> {
-                    // Switching straight from one protected app to another.
-                    if (since.keys.any { it != packageName }) closeAll(event.timeStamp)
-                    val count = resumed[packageName] ?: 0
-                    if (count == 0) since[packageName] = event.timeStamp
-                    resumed[packageName] = count + 1
-                }
-
-                UsageEvents.Event.MOVE_TO_BACKGROUND -> {
-                    val count = resumed[packageName] ?: 0
-                    if (count == 0) continue
-                    if (count == 1) {
-                        since.remove(packageName)?.let { start ->
-                            totals[packageName] = (totals[packageName] ?: 0L) + (event.timeStamp - start)
-                        }
-                    }
-                    resumed[packageName] = count - 1
-                }
-            }
+            decodeObservation(event)?.let(accumulator::accept)
         }
-
-        // Still in front right now.
-        for ((packageName, start) in since) {
-            totals[packageName] = (totals[packageName] ?: 0L) + (now - start)
-        }
-
-        return packages.associateWith { packageName -> ((totals[packageName] ?: 0L) / 60_000L).toInt() }
+        return accumulator.minutesAt(now)
     }
 
     /** Local midnight `daysBack` days before today. */
@@ -115,11 +75,10 @@ object ForegroundUsage {
     }.timeInMillis
 
     /**
-     * Total screen time between two moments: the time any app was in front,
-     * except home screens and the system UI, like Android's own Digital
-     * Wellbeing counts it. Nothing is stored; only the sum is returned.
+     * Total screen time between two moments, excluding home screens and
+     * system UI. Screen-off events terminate open intervals even if Android
+     * does not supply a package name or matching activity background event.
      */
-    @Suppress("DEPRECATION") // MOVE_TO_* equal ACTIVITY_RESUMED/PAUSED and also cover Android 9.
     fun screenTimeMinutes(context: Context, from: Long, to: Long): Int {
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
             ?: return 0
@@ -130,55 +89,13 @@ object ForegroundUsage {
         } ?: return 0
 
         val excluded = homeScreenPackages(context) + setOf("com.android.systemui", "android")
-        var current: String? = null
-        var resumedCount = 0
-        var since = 0L
-        var total = 0L
+        val accumulator = ScreenTimeAccumulator(excluded)
         val event = UsageEvents.Event()
-
-        fun close(end: Long) {
-            if (current != null) total += (end - since).coerceAtLeast(0L)
-            current = null
-            resumedCount = 0
-        }
-
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
-            val packageName = event.packageName ?: continue
-
-            val endsEverything = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
-                (event.eventType == UsageEvents.Event.SCREEN_NON_INTERACTIVE ||
-                    event.eventType == UsageEvents.Event.DEVICE_SHUTDOWN)
-            if (endsEverything) {
-                close(event.timeStamp)
-                continue
-            }
-
-            when (event.eventType) {
-                UsageEvents.Event.MOVE_TO_FOREGROUND -> {
-                    if (packageName == current) {
-                        resumedCount++
-                    } else {
-                        close(event.timeStamp)
-                        if (packageName !in excluded) {
-                            current = packageName
-                            resumedCount = 1
-                            since = event.timeStamp
-                        }
-                    }
-                }
-
-                UsageEvents.Event.MOVE_TO_BACKGROUND -> {
-                    if (packageName == current) {
-                        resumedCount--
-                        if (resumedCount <= 0) close(event.timeStamp)
-                    }
-                }
-            }
+            decodeObservation(event)?.let(accumulator::accept)
         }
-
-        close(to)
-        return (total / 60_000L).toInt()
+        return accumulator.minutesAt(to)
     }
 
     /** The installed home screens; listed under <queries> so Android shows them. */
