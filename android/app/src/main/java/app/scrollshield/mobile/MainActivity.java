@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // Register the native bridge plugin before super.onCreate()
         registerPlugin(ScrollShieldBridgePlugin.class);
+        registerPlugin(ScrollShieldBillingPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
