@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { expectNoA11yViolations } from '../test/a11y';
 import { AppState, DEFAULT_APP_CONFIG, DEFAULT_STATE, HistoryEvent } from '../types';
 import { TodayScreen } from './TodayScreen';
@@ -19,6 +19,8 @@ const state = (overrides: Partial<AppState> = {}): AppState => ({
   appsConfig: { instagram: { ...DEFAULT_APP_CONFIG, id: 'instagram', active: true } },
   ...overrides,
 });
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe('TodayScreen', () => {
   it('shows measured interruptions and no estimated saved time', () => {
@@ -93,6 +95,49 @@ describe('TodayScreen', () => {
     expect(updateState.mock.calls[1][0].dismissedSuggestions).toEqual({
       'evening-instagram': getLocalDateKey(new Date()),
     });
+  });
+
+  it('never presents the browser preview as active Android protection', () => {
+    render(<TodayScreen state={state({ operatingSystem: 'web' })} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    expect(screen.getByText('Nur Vorschau – kein Android-Schutz')).toBeInTheDocument();
+    expect(screen.getByText('1 App zum Schutz ausgewählt')).toBeInTheDocument();
+    expect(screen.queryByText('Schutz aktiv')).not.toBeInTheDocument();
+  });
+
+  it('reflects the enforced Free app limit instead of imported saved Pro rules', () => {
+    vi.stubEnv('PROD', true);
+    const imported = state({
+      operatingSystem: 'web',
+      pro: { active: true },
+      appsConfig: {
+        instagram: { ...DEFAULT_APP_CONFIG, id: 'instagram', active: true },
+        tiktok: { ...DEFAULT_APP_CONFIG, id: 'tiktok', active: true },
+        youtube: { ...DEFAULT_APP_CONFIG, id: 'youtube', active: true },
+      },
+    });
+    render(<TodayScreen state={imported} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    expect(screen.getByText('2 Apps zum Schutz ausgewählt')).toBeInTheDocument();
+    expect(screen.getByText(/1 zusätzlich gespeicherte App ist wegen des kostenlosen Limits derzeit nicht geschützt/))
+      .toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /YouTube öffnen/ })).not.toBeInTheDocument();
+  });
+
+  it('preserves the full Pro preview selection for local development', () => {
+    vi.stubEnv('PROD', false);
+    const imported = state({
+      operatingSystem: 'web',
+      pro: { active: true },
+      appsConfig: {
+        instagram: { ...DEFAULT_APP_CONFIG, id: 'instagram', active: true },
+        tiktok: { ...DEFAULT_APP_CONFIG, id: 'tiktok', active: true },
+        youtube: { ...DEFAULT_APP_CONFIG, id: 'youtube', active: true },
+      },
+    });
+    render(<TodayScreen state={imported} updateState={vi.fn()} navigate={vi.fn()} />);
+    expect(screen.getByText('3 Apps zum Schutz ausgewählt')).toBeInTheDocument();
+    expect(screen.queryByText(/zusätzlich gespeicherte App/)).not.toBeInTheDocument();
   });
 
   it('asks to protect an app when none is protected', () => {
