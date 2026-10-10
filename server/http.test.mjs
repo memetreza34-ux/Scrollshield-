@@ -5,11 +5,15 @@ import { test } from 'node:test';
 import { createHandler } from './http.mjs';
 import { PurchaseOwnedError, UpstreamError } from './google-cloud.mjs';
 import { UnauthorizedError } from './identity.mjs';
+import { obfuscatedPlayAccountId } from './play-policy.mjs';
+
+const ACCOUNT_KEY = 'this-is-a-fake-test-only-account-binding-secret-012345';
 
 const TOKEN = 'test_valid_purchase_token_1234567890';
 const VALID = {
   subscriptionState: 'SUBSCRIPTION_STATE_ACTIVE',
   lineItems: [{ productId: 'scrollshield_pro', expiryTime: '2028-10-10T00:00:00Z' }],
+  externalAccountIdentifiers: { obfuscatedExternalAccountId: obfuscatedPlayAccountId('test-uid', ACCOUNT_KEY) },
 };
 
 async function fixture(callback, opts = {}) {
@@ -32,6 +36,7 @@ async function fixture(callback, opts = {}) {
   const server = createServer(createHandler({
     store,
     firebaseProjectId: 'test-project',
+    accountHmacKey: ACCOUNT_KEY,
     pushAudience: 'https://example.test/v1/play/rtdn',
     pushEmail: 'push@example.test',
     authenticate: async (token) => {
@@ -141,4 +146,33 @@ test('existing claim is refreshed after valid PubSub notification', async () => 
     assert.equal(recorded.lookups.length, 1);
     assert.equal(recorded.updates.length, 1);
   }, { priorClaim: { ownerUid: 'test-uid', productId: 'scrollshield_pro' } });
+});
+
+test('server issues deterministic per-user account binding only to authorized callers', async () => {
+  await fixture(async ({ post }) => {
+    const good = await post('/v1/play/account-id', {});
+    assert.equal(good.status, 200);
+    assert.deepEqual(await good.json(), {
+      obfuscatedAccountId: obfuscatedPlayAccountId('test-uid', ACCOUNT_KEY),
+    });
+    assert.equal((await post('/v1/play/account-id', {}, 'invalid')).status, 401);
+  });
+});
+
+test('stolen purchase token with another Play account binding is rejected before Firestore claim', async () => {
+  await fixture(async ({ post, recorded }) => {
+    const res = await post('/v1/play/verify', { purchaseToken: TOKEN });
+    assert.equal(res.status, 403);
+    assert.equal((await res.json()).error, 'PURCHASE_ACCOUNT_MISMATCH');
+    assert.equal(recorded.claims.length, 0);
+  }, { play: { ...VALID, externalAccountIdentifiers: {
+    obfuscatedExternalAccountId: obfuscatedPlayAccountId('another-uid', ACCOUNT_KEY),
+  } } });
+});
+
+test('purchase without Play account-binding proof cannot be claimed', async () => {
+  await fixture(async ({ post, recorded }) => {
+    assert.equal((await post('/v1/play/verify', { purchaseToken: TOKEN })).status, 403);
+    assert.equal(recorded.claims.length, 0);
+  }, { play: { ...VALID, externalAccountIdentifiers: undefined } });
 });
