@@ -1,6 +1,9 @@
 import { createServer } from 'node:http';
 import { URL } from 'node:url';
-import { evaluatePlaySubscription, validPurchaseToken, safePublicEntitlement } from './play-policy.mjs';
+import {
+  evaluatePlaySubscription, validPurchaseToken, safePublicEntitlement,
+  obfuscatedPlayAccountId, isPlayPurchaseBoundToOwner,
+} from './play-policy.mjs';
 import { fingerprintPurchaseToken, GoogleCloudStore, PurchaseOwnedError, UpstreamError } from './google-cloud.mjs';
 import { verifyFirebaseIdToken, verifyPubSubJwt, UnauthorizedError } from './identity.mjs';
 
@@ -58,13 +61,17 @@ const bearer = (request) => {
 export function createHandler({
   store,
   firebaseProjectId,
+  accountHmacKey,
   pushAudience,
   pushEmail,
   authenticate = (token) => verifyFirebaseIdToken(token, firebaseProjectId),
   authenticatePush = (token) => verifyPubSubJwt(token, pushAudience, pushEmail),
   now = Date.now,
 }) {
-  if (!store || !firebaseProjectId) throw new Error('Billing verifier config missing');
+  if (!store || !firebaseProjectId || typeof accountHmacKey !== 'string' ||
+      Buffer.byteLength(accountHmacKey, 'utf8') < 32) {
+    throw new Error('Billing verifier config missing');
+  }
 
   return async (request, response) => {
     try {
@@ -74,6 +81,12 @@ export function createHandler({
         return jsonResponse(response, 200, { ok: true });
       }
       if (request.method !== 'POST') return jsonResponse(response, 404, { error: 'NOT_FOUND' });
+
+      if (url.pathname === '/v1/play/account-id') {
+        const { uid } = await authenticate(bearer(request));
+        if (typeof uid !== 'string' || !uid || uid.length > 128) throw new UnauthorizedError();
+        return jsonResponse(response, 200, { obfuscatedAccountId: obfuscatedPlayAccountId(uid, accountHmacKey) });
+      }
 
       if (url.pathname === '/v1/play/verify') {
         const { uid } = await authenticate(bearer(request));
@@ -91,6 +104,11 @@ export function createHandler({
         const hasExpectedProduct = play.lineItems.some((x) => x?.productId === store.productId);
         if (!hasExpectedProduct) {
           return jsonResponse(response, 403, { error: 'WRONG_PRODUCT' });
+        }
+        // Token possession alone is insufficient. Only purchases made with
+        // this Firebase identity's server-issued Play account binding qualify.
+        if (!isPlayPurchaseBoundToOwner(play, uid, accountHmacKey)) {
+          return jsonResponse(response, 403, { error: 'PURCHASE_ACCOUNT_MISMATCH' });
         }
 
         // Upgrades / replacements may rotate purchase tokens. If an old token
@@ -166,14 +184,17 @@ export function createProductionServer(env = process.env) {
     FIREBASE_PROJECT_ID,
     PUBSUB_PUSH_AUDIENCE,
     PUBSUB_PUSH_SERVICE_ACCOUNT,
+    BILLING_ACCOUNT_HMAC_KEY,
   } = env;
-  if (!GOOGLE_CLOUD_PROJECT || !FIREBASE_PROJECT_ID) {
-    throw new Error('GOOGLE_CLOUD_PROJECT and FIREBASE_PROJECT_ID must be set');
+  if (!GOOGLE_CLOUD_PROJECT || !FIREBASE_PROJECT_ID ||
+      !BILLING_ACCOUNT_HMAC_KEY || BILLING_ACCOUNT_HMAC_KEY.length < 32) {
+    throw new Error('Missing GCP/Firebase project or BILLING_ACCOUNT_HMAC_KEY');
   }
   const store = new GoogleCloudStore({ projectId: GOOGLE_CLOUD_PROJECT });
   return createServer(createHandler({
     store,
     firebaseProjectId: FIREBASE_PROJECT_ID,
+    accountHmacKey: BILLING_ACCOUNT_HMAC_KEY,
     pushAudience: PUBSUB_PUSH_AUDIENCE,
     pushEmail: PUBSUB_PUSH_SERVICE_ACCOUNT,
   }));
