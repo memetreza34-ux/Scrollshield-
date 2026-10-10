@@ -4,6 +4,7 @@ import { once } from 'node:events';
 import { test } from 'node:test';
 import { createHandler } from './http.mjs';
 import { PurchaseOwnedError, UpstreamError } from './google-cloud.mjs';
+import { UnauthorizedError } from './identity.mjs';
 
 const TOKEN = 'test_valid_purchase_token_1234567890';
 const VALID = {
@@ -34,11 +35,11 @@ async function fixture(callback, opts = {}) {
     pushAudience: 'https://example.test/v1/play/rtdn',
     pushEmail: 'push@example.test',
     authenticate: async (token) => {
-      if (token !== 'valid-user-token') throw new Error('bad auth');
+      if (token !== 'valid-user-token') throw new UnauthorizedError();
       return { uid: 'test-uid' };
     },
     authenticatePush: async (token) => {
-      if (token !== 'valid-push-token') throw new Error('invalid push');
+      if (token !== 'valid-push-token') throw new UnauthorizedError();
     },
     now: () => Date.parse('2026-10-10T12:00:00Z'),
   }));
@@ -87,7 +88,7 @@ test('wrong product must never claim ownership', async () => {
 
 test('no JWT, invalid token and incorrect content type fail closed', async () => {
   await fixture(async ({ post, recorded }) => {
-    assert.equal((await post('/v1/play/verify', { purchaseToken: TOKEN }, '')).status, 503);
+    assert.equal((await post('/v1/play/verify', { purchaseToken: TOKEN }, '')).status, 401);
     assert.equal((await post('/v1/play/verify', { purchaseToken: 'bad' })).status, 400);
     assert.equal(recorded.claims.length, 0);
   });
