@@ -112,6 +112,24 @@ class ForegroundTransitionTrackerTest {
     }
 
     @Test
+    fun manualClockRollbackRecoversNewEventsWithoutReplayingOldState() {
+        val tracker = ForegroundTransitionTracker()
+        tracker.accept(resume(20_000, "instagram"))
+        tracker.reconcileWallClock(10_000)
+        assertNull(tracker.currentPackage)
+        tracker.accept(resume(9_900, "tiktok"))
+        assertEquals("tiktok", tracker.currentPackage)
+    }
+
+    @Test
+    fun stableClockKeepsTheLastKnownForegroundWhenNoNewEventArrives() {
+        val tracker = ForegroundTransitionTracker()
+        tracker.accept(resume(10_000, "instagram"))
+        tracker.reconcileWallClock(11_000)
+        assertEquals("instagram", tracker.currentPackage)
+    }
+
+    @Test
     fun homeAndScrollShieldAreNormalForegroundTransitions() {
         val tracker = ForegroundTransitionTracker()
         tracker.accept(resume(100, "instagram"))
