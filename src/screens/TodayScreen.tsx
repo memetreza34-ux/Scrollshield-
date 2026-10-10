@@ -1,4 +1,8 @@
+import { useEffect, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { AppState, Screen, SUPPORTED_APPS } from '../types';
+import { ScrollShieldBridge, type PermissionStatus } from '../lib/nativeBridge';
+import { getProtectionHealth } from '../lib/protectionHealth';
 import {
   AppTile,
   List,
@@ -11,7 +15,7 @@ import {
   TabHeader,
 } from '../components/ui';
 import { describeAppDay, getDayMetrics } from '../lib/metrics';
-import { canAddSchedule, hasPro, paywallFor } from '../lib/entitlements';
+import { canAddSchedule, getEntitledNativeProtection, hasPro, paywallFor } from '../lib/entitlements';
 import { getRunningFocusSession } from '../lib/focus';
 import { createSchedule, formatScheduleRange, getActiveScheduleForApp, getNextSchedule } from '../lib/schedules';
 import { formatUntil, isCommitmentActive } from '../lib/commitment';
@@ -26,6 +30,8 @@ type ScreenProps = {
   navigate: (s: Screen) => void;
 };
 
+const SUPPORTED_APP_IDS = new Set(SUPPORTED_APPS.map((app) => app.id));
+
 /** "3 Std. 12 Min." or "48 Min." */
 const formatMinutes = (minutes: number) => {
   const hours = Math.floor(minutes / 60);
@@ -36,30 +42,73 @@ const formatMinutes = (minutes: number) => {
 
 /** Heute (docs/V1_MASTER_PLAN.md, 4.2): is protection on, and what happened today. */
 export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
-  const protectedApps = SUPPORTED_APPS.filter((app) => state.appsConfig[app.id]?.active);
+  // Must match the enforced native rules after an imported backup or Pro downgrade.
+  // Raw saved settings can contain extra apps which Android will NOT protect.
+  const entitledProtection = getEntitledNativeProtection(state, SUPPORTED_APP_IDS);
+  const protectedApps = SUPPORTED_APPS.filter((app) => entitledProtection.appsConfig[app.id]?.active);
+  const inactiveSavedApps = SUPPORTED_APPS.filter(
+    (app) => state.appsConfig[app.id]?.active && !entitledProtection.appsConfig[app.id]?.active,
+  ).length;
   const metrics = getDayMetrics(state);
   const running = getRunningFocusSession(state);
-  const nextSchedule = getNextSchedule(state.schedules);
-  const activeSchedule = state.schedules.find((schedule) =>
+  const nextSchedule = getNextSchedule(entitledProtection.schedules);
+  const activeSchedule = entitledProtection.schedules.find((schedule) =>
     protectedApps.some((app) => getActiveScheduleForApp([schedule], app.id)),
   );
   const isWeb = state.operatingSystem === 'web';
-  const missingPermissions = !isWeb && (!state.permissions.usageAccess || !state.permissions.overlay);
+  const isNativeAndroid = state.operatingSystem === 'android' && Capacitor.isNativePlatform();
+  const hasProtectedApps = protectedApps.length > 0;
+  const [nativeStatus, setNativeStatus] = useState<PermissionStatus | 'unavailable' | null>(null);
+
+  // The stored permission flags can be stale after process death or a system
+  // settings change. Recheck the actual Android permissions AND running service
+  // whenever the dashboard opens or the user returns from another app.
+  useEffect(() => {
+    if (!isNativeAndroid || !hasProtectedApps) return;
+    let mounted = true;
+    let latestRequest = 0;
+
+    const refresh = async () => {
+      const request = ++latestRequest;
+      setNativeStatus(null); // Never show a stale green state while refreshing.
+      try {
+        const result = await ScrollShieldBridge.getPermissionStatus();
+        if (mounted && request === latestRequest) setNativeStatus(result);
+      } catch {
+        if (mounted && request === latestRequest) setNativeStatus('unavailable');
+      }
+    };
+
+    const onReturn = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+
+    void refresh();
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
+    // The monitor may be killed while the dashboard stays visible.
+    // Poll only this foreground screen; background intervals are unnecessary.
+    const heartbeat = window.setInterval(onReturn, 30_000);
+    return () => {
+      mounted = false;
+      window.clearInterval(heartbeat);
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('focus', onReturn);
+    };
+  }, [isNativeAndroid, hasProtectedApps]);
 
   const now = new Date();
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   const screenToday = state.dailyStats[getLocalDateKey(now)]?.screenTimeMinutes;
   const screenYesterday = state.dailyStats[getLocalDateKey(yesterday)]?.screenTimeMinutes;
-  const protectedMinutes = metrics.perApp.reduce((sum, app) => sum + (app.usageMinutes ?? 0), 0);
+  const protectedMinutes = metrics.perApp.reduce(
+    (sum, app) => sum + (entitledProtection.appsConfig[app.appId]?.active ? (app.usageMinutes ?? 0) : 0),
+    0,
+  );
   const suggestion = getSuggestion(state, now);
 
-  const status =
-    protectedApps.length === 0
-      ? { label: 'Kein Schutz aktiv', tone: 'text-zinc-400' }
-      : missingPermissions
-        ? { label: 'Schutz eingeschränkt – eine Berechtigung fehlt', tone: 'text-amber-400' }
-        : { label: 'Schutz aktiv', tone: 'text-emerald-400' };
+  const status = getProtectionHealth(protectedApps.length, isNativeAndroid, nativeStatus);
 
   const openRescue = () => {
     if (hasPro(state)) navigate('rescue');
@@ -113,19 +162,26 @@ export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
 
       {/* Status */}
       <button
-        onClick={() => navigate(missingPermissions ? 'permissions' : 'protect')}
+        onClick={() => navigate(status.destination)}
         className="mb-8 block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
       >
         <span className={`block font-semibold ${status.tone}`}>{status.label}</span>
         <span className="mt-0.5 block text-sm text-zinc-400">
           {protectedApps.length === 0
             ? 'Wähle mindestens eine App aus.'
-            : `${protectedApps.length} ${protectedApps.length === 1 ? 'App' : 'Apps'} geschützt`}
+            : `${protectedApps.length} ${protectedApps.length === 1 ? 'App' : 'Apps'} ${status.operating ? 'geschützt' : 'zum Schutz ausgewählt'}`}
           {isCommitmentActive(state) && state.commitment
             ? ` · Selbstverpflichtung bis ${formatUntil(state.commitment.until)}`
             : ''}
         </span>
       </button>
+
+      {inactiveSavedApps > 0 && (
+        <p className="mb-6 rounded-xl border border-amber-500/30 px-4 py-3 text-sm text-amber-100">
+          {inactiveSavedApps} zusätzlich gespeicherte {inactiveSavedApps === 1 ? 'App ist' : 'Apps sind'} wegen des
+          kostenlosen Limits derzeit nicht geschützt. Im Bereich „Schutz“ kannst du die Auswahl ändern.
+        </p>
+      )}
 
       {/* Bildschirmzeit */}
       <Section title="Bildschirmzeit heute">
