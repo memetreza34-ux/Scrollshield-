@@ -61,6 +61,19 @@ internal class ForegroundTransitionTracker {
     }
 
     /**
+     * UsageEvents timestamps use wall-clock time, not elapsedRealtime.
+     * After a manual clock rollback we must accept new, earlier timestamps.
+     * Forget the previous foreground rather than inventing continuity.
+     */
+    fun reconcileWallClock(nowEpochMillis: Long) {
+        if (latestTimestampMillis > nowEpochMillis) {
+            latestTimestampMillis = Long.MIN_VALUE
+            seenAtLatestTimestamp.clear()
+            currentPackage = null
+        }
+    }
+
+    /**
      * Called when PowerManager says the device is locked, independently of the
      * last usage event. Do not replay stale RESUMED events on the next poll.
      */
