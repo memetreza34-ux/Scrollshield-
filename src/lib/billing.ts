@@ -47,13 +47,28 @@ interface PlayBillingBridge {
 
 const bridge = registerPlugin<PlayBillingBridge>('ScrollShieldBilling');
 
+// A missing/blocked Play Store must not leave the purchase screen spinning forever.
+const BILLING_READ_TIMEOUT_MS = 12_000;
+
+export async function withBillingReadTimeout<T>(operation: Promise<T>, timeoutMs = BILLING_READ_TIMEOUT_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeout = new Promise<T>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('PLAY_BILLING_READ_TIMEOUT')), timeoutMs);
+    });
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 export const isNativePlayBilling = () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
 export const getPlayCatalog = async (): Promise<PlayCatalog> =>
-  isNativePlayBilling() ? bridge.getCatalog() : { available: false, plans: [] };
+  isNativePlayBilling() ? withBillingReadTimeout(bridge.getCatalog()) : { available: false, plans: [] };
 
 export const getPlayPurchaseOverview = async (): Promise<PlayPurchaseOverview> =>
-  isNativePlayBilling() ? bridge.getPurchaseOverview() : { available: false, purchases: [] };
+  isNativePlayBilling() ? withBillingReadTimeout(bridge.getPurchaseOverview()) : { available: false, purchases: [] };
 
 /** Play supplies the price; this only translates its ISO-8601 billing period. */
 export function describeBillingPeriod(period: string): string {
