@@ -100,7 +100,7 @@ plan an explicit multi-key migration before rotation.
 8. Implement server reconciliation, authoritative native entitlements,
    offline expiration, Play acknowledge after verification, RTDN retries,
    refund/revoke transitions, and migration for account ID/key rotation.
-   This first backend is a tested foundation, not the final release solution.
+   This backend is a source-level foundation with added tests, **not yet executed or deployed** and not the final release solution.
 
 ## Local test commands
 
