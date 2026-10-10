@@ -300,6 +300,9 @@ class AppMonitorService : Service() {
 
         startInForeground()
         loadRules()
+        // An emergency grant remains valid after a service restart; never
+        // end a safety window early just because Android killed the process.
+        emergencyUntil.putAll(EmergencyLog.activeUnlocks(prefs))
         if (!hasActiveRules()) {
             stopSelf()
             return
@@ -720,17 +723,29 @@ class AppMonitorService : Service() {
                         views.continueButton.visibility = View.VISIBLE
                         setButtonEnabled(views.continueButton, true)
                         views.continueButton.setOnClickListener {
-                            val now = System.currentTimeMillis()
-                            EmergencyLog.record(prefs, rule.appId)
-                            emergencyUntil[rule.appId] = now + unlock.durationMinutes * 60_000L
-                            sessionStartedAt[packageName] = SystemClock.elapsedRealtime()
-                            recordInterruption(
-                                packageName,
-                                InterruptionLog.KIND_APP,
-                                InterruptionLog.OUTCOME_EMERGENCY,
-                                "EMERGENCY",
+                            // Consume and persist ONE quota slot before unlocking;
+                            // rapid double-taps cannot spend two slots or double-log.
+                            setButtonEnabled(views.continueButton, false)
+                            val expiry = EmergencyLog.tryGrant(
+                                prefs = prefs,
+                                appId = rule.appId,
+                                maxPerDay = unlock.maxPerDay,
+                                durationMinutes = unlock.durationMinutes,
                             )
-                            dismissOverlay()
+                            if (expiry == null) {
+                                views.status.text = getString(R.string.overlay_emergency_unavailable)
+                                setButtonEnabled(views.continueButton, true)
+                            } else {
+                                emergencyUntil[rule.appId] = expiry
+                                sessionStartedAt[packageName] = SystemClock.elapsedRealtime()
+                                recordInterruption(
+                                    packageName,
+                                    InterruptionLog.KIND_APP,
+                                    InterruptionLog.OUTCOME_EMERGENCY,
+                                    "EMERGENCY",
+                                )
+                                dismissOverlay()
+                            }
                         }
                         return
                     }
