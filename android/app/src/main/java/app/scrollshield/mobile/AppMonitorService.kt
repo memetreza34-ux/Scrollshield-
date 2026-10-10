@@ -667,9 +667,9 @@ class AppMonitorService : Service() {
                 UsageEvents.Event.SCREEN_NON_INTERACTIVE ->
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) ForegroundTransitionKind.SCREEN_OFF else null
                 UsageEvents.Event.DEVICE_SHUTDOWN ->
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) ForegroundTransitionKind.DEVICE_SHUTDOWN else null
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ForegroundTransitionKind.DEVICE_SHUTDOWN else null
                 UsageEvents.Event.DEVICE_STARTUP ->
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) ForegroundTransitionKind.DEVICE_STARTUP else null
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ForegroundTransitionKind.DEVICE_STARTUP else null
                 else -> null
             } ?: continue
             foregroundTracker.accept(
