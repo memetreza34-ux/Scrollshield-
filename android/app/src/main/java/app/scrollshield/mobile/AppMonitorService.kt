@@ -172,7 +172,11 @@ class AppMonitorService : Service() {
             if (contractVersion != 0 && !ProtectionContract.isSupported(contractVersion)) return
             val rules = prefs.getString(ScrollShieldBridgePlugin.KEY_BLOCKED_RULES, "[]") ?: "[]"
             if (rules.isBlank() || rules.trim() == "[]") return
-            if (!hasUsageAccess(context)) return
+            if (!NativeRuntimePolicy.canEnforce(
+                    usageAccessGranted = hasUsageAccess(context),
+                    overlayGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context),
+                )
+            ) return
 
             val intent = Intent(context, AppMonitorService::class.java)
             try {
@@ -410,9 +414,18 @@ class AppMonitorService : Service() {
             return
         }
 
+        val previousRules = rules
+        val overlayWasInvalidated = NativeRuntimePolicy.shouldInvalidateOverlay(
+            displayedPackage = overlayPackage,
+            previousRules = previousRules,
+            updatedRules = parsed,
+            monitoringEnabled = monitoringEnabled,
+        )
         rules = parsed
-        if (!monitoringEnabled || parsed.isEmpty()) {
+        if (!monitoringEnabled || parsed.isEmpty() || overlayWasInvalidated) {
             dismissOverlay()
+            // Re-evaluate the app with the new rule on the next poll.
+            if (overlayWasInvalidated) lastForegroundPackage = null
         }
     }
 
@@ -460,9 +473,27 @@ class AppMonitorService : Service() {
     private fun checkForegroundApp() {
         if (!monitoringEnabled || rules.isEmpty()) return
 
-        // With the screen off nobody is using an app: no session runs.
+        // A permission revoked in Settings makes monitoring ineffective.
+        // Stop rather than continuing to consume battery or showing old overlays.
+        // The JS permission-return sync may start us again after re-granting.
+        if (!NativeRuntimePolicy.canEnforce(
+                usageAccessGranted = hasUsageAccess(this),
+                overlayGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this),
+            )
+        ) {
+            sessionStartedAt.clear()
+            lastForegroundPackage = null
+            dismissOverlay()
+            stopSelf()
+            return
+        }
+
+        // A lock/screen-off terminates the current protected opening and its
+        // overlay. On unlock we must not reuse stale app/session state.
         if (!isScreenInteractive()) {
             sessionStartedAt.clear()
+            lastForegroundPackage = null
+            if (overlayPackage != null) dismissOverlay()
             return
         }
 
@@ -640,6 +671,7 @@ class AppMonitorService : Service() {
             bodyText = verdict.statusText ?: verdict.reopenText ?: getString(R.string.overlay_body, appName),
             continueText = getString(R.string.overlay_continue_to, appName),
             showContinue = !locked,
+            expectedRule = rule,
             onShown = {
                 // A lock and a reopen count the moment they are shown, as in
                 // the in-app flow; a plain pause only once the user decides.
@@ -680,6 +712,7 @@ class AppMonitorService : Service() {
             bodyText = getString(R.string.overlay_session_body, rule.sessionLimitMinutes, appName),
             continueText = getString(R.string.overlay_continue),
             showContinue = true,
+            expectedRule = rule,
             onShown = {
                 recordInterruption(packageName, InterruptionLog.KIND_APP, InterruptionLog.OUTCOME_WARNED, "SESSION_LIMIT")
             },
@@ -809,12 +842,16 @@ class AppMonitorService : Service() {
         onShown: () -> Unit = {},
         onContinue: () -> Unit,
         onGoHome: () -> Unit = {},
+        expectedRule: BlockRule? = null,
         configure: (OverlayViews) -> Unit,
     ) {
         if (!Settings.canDrawOverlays(this)) return
 
         mainHandler.post {
             if (overlayView != null) return@post
+            // A config update can replace the rule while the worker is still
+            // preparing its view. Never show its old decision afterward.
+            if (expectedRule != null && rules[blockedPackage] != expectedRule) return@post
             // Worker decisions can be stale by the time the main thread runs.
             // Do not interrupt a different app, a disabled rule or a locked screen.
             if (!NativeRuntimePolicy.shouldPresentOverlay(

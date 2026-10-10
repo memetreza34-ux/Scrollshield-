@@ -154,4 +154,62 @@ class NativeRuntimePolicyTest {
         assertFalse(NativeRuntimePolicy.isEmergencyUnlockActive(0L, deviceUptime))
     }
 
+    @Test
+    fun revokedUsageAccessMakesProtectionUnavailable() {
+        assertFalse(NativeRuntimePolicy.canEnforce(false, true))
+    }
+
+    @Test
+    fun revokedOverlayPermissionMakesProtectionUnavailable() {
+        assertFalse(NativeRuntimePolicy.canEnforce(true, false))
+    }
+
+    @Test
+    fun onlyBothRequiredPermissionsAllowMonitoring() {
+        assertFalse(NativeRuntimePolicy.canEnforce(false, false))
+        assertTrue(NativeRuntimePolicy.canEnforce(true, true))
+    }
+
+    @Test
+    fun removingProtectedAppDismissesExistingOverlay() {
+        assertTrue(NativeRuntimePolicy.shouldInvalidateOverlay(
+            "instagram", mapOf("instagram" to "strict"), emptyMap(), true,
+        ))
+    }
+
+    @Test
+    fun downgradedOrEditedRuleDismissesOutdatedOverlay() {
+        assertTrue(NativeRuntimePolicy.shouldInvalidateOverlay(
+            "instagram",
+            mapOf("instagram" to "strict"),
+            mapOf("instagram" to "standard"),
+            true,
+        ))
+    }
+
+    @Test
+    fun unrelatedRuleEditsDoNotDismissAnUnchangedOverlay() {
+        assertFalse(NativeRuntimePolicy.shouldInvalidateOverlay(
+            "instagram",
+            mapOf("instagram" to "strict", "tiktok" to "standard"),
+            mapOf("instagram" to "strict", "tiktok" to "strict"),
+            true,
+        ))
+    }
+
+    @Test
+    fun disablingMonitoringInvalidatesAnyVisibleOverlay() {
+        assertTrue(NativeRuntimePolicy.shouldInvalidateOverlay(
+            "instagram", mapOf("instagram" to "strict"),
+            mapOf("instagram" to "strict"), false,
+        ))
+    }
+
+    @Test
+    fun noOverlayMeansRuleEditsCannotInvalidateIt() {
+        assertFalse(NativeRuntimePolicy.shouldInvalidateOverlay(
+            null, mapOf("instagram" to "strict"), emptyMap(), false,
+        ))
+    }
+
 }
