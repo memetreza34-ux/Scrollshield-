@@ -72,4 +72,26 @@ internal object NativeRuntimePolicy {
             monitoringEnabled &&
             screenInteractive
 
+    /**
+     * A running foreground service without these privileges cannot enforce a
+     * pause, and must not consume battery while reporting itself as healthy.
+     * Notification consent is deliberately NOT required on Android 13+.
+     */
+    fun canEnforce(usageAccessGranted: Boolean, overlayGranted: Boolean): Boolean =
+        usageAccessGranted && overlayGranted
+
+    /**
+     * Rule edits, removals and subscription downgrades must invalidate a
+     * currently displayed intervention based on the previous rule.
+     * Keep unchanged overlays stable so unrelated app edits do not dismiss them.
+     */
+    fun <T> shouldInvalidateOverlay(
+        displayedPackage: String?,
+        previousRules: Map<String, T>,
+        updatedRules: Map<String, T>,
+        monitoringEnabled: Boolean,
+    ): Boolean =
+        displayedPackage != null &&
+            (!monitoringEnabled || previousRules[displayedPackage] != updatedRules[displayedPackage])
+
 }
