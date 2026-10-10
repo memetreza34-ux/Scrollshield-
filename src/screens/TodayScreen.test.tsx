@@ -119,8 +119,8 @@ describe('TodayScreen', () => {
     render(<TodayScreen state={imported} updateState={vi.fn()} navigate={vi.fn()} />);
 
     expect(screen.getByText('2 Apps zum Schutz ausgewählt')).toBeInTheDocument();
-    expect(screen.getByText(/1 zusätzlich gespeicherte App ist wegen des kostenlosen Limits derzeit nicht geschützt/))
-      .toBeInTheDocument();
+    const freeWarning = screen.getByText(/1 zusätzlich gespeicherte App ist wegen des kostenlosen Limits derzeit nicht geschützt/);
+    expect(freeWarning).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /YouTube öffnen/ })).not.toBeInTheDocument();
   });
 
