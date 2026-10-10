@@ -31,6 +31,28 @@ or advertise fully working subscriptions until every gate below is completed.
 4. The existing Free native protection boundary in PR #20 is unchanged:
    unverified status cannot bypass the 2-app/1-schedule limit.
 
+## SS-402 backend foundation (stacked PR)
+
+The sibling `server/` folder adds a **not-yet-deployed** Cloud Run verification
+prototype. It verifies Firebase ID tokens and authenticated Pub/Sub push
+signatures, queries `purchases.subscriptionsv2.get`, checks product, state,
+expiry and the purchase's Play-side `obfuscatedExternalAccountId`, and records
+an immutable per-token ownership claim using Firestore `createDocument`.
+See [server/README.md](../server/README.md).
+
+The Android purchase flow must first call
+`POST /v1/play/account-id` using a verified Firebase ID token and pass the
+returned HMAC account binding to
+`BillingFlowParams.setObfuscatedAccountId`. After purchase, it must transmit
+the token **directly from native Android to the backend** with that identity.
+A copied receipt must not be sufficient to claim someone else's purchase.
+
+**Important:** Neither this backend nor the read-only Billing plugin enables
+subscriptions by itself. No Firebase Auth UI, native purchase launcher,
+purchase acknowledgment, server-to-native signed entitlement enforcement,
+offline policy, account recovery or complete RTDN lifecycle is shipping yet.
+The checkout remains disabled. No Google Cloud deployment has occurred.
+
 ## Mandatory next technical work before selling
 
 1. Create the subscription and base plans in **Google Play Console** with

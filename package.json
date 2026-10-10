@@ -43,8 +43,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "test:billing-server": "node --test server/*.test.mjs",
     "test:coverage": "vitest run --coverage",
-    "verify": "npm run check:runtime && npm run lint && npm run format:check && npm run check:version && npm run check:android && npm run check:sdk && npm run check:notices && npm run check:secrets && npm run check:store && npm run check:release && npm run test && npm run check:a11y && npm run build && npm run check:pwa && npm run check:privacy && npm run check:bundle"
+    "verify": "npm run check:runtime && npm run lint && npm run format:check && npm run check:version && npm run check:android && npm run check:sdk && npm run check:notices && npm run check:secrets && npm run check:store && npm run check:release && npm run test && npm run test:billing-server && npm run check:a11y && npm run build && npm run check:pwa && npm run check:privacy && npm run check:bundle"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
