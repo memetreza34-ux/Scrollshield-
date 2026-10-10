@@ -653,12 +653,14 @@ class AppMonitorService : Service() {
         val usageStatsManager = getSystemService(USAGE_STATS_SERVICE) as? UsageStatsManager
             ?: return foregroundTracker.currentPackage
         val now = System.currentTimeMillis()
+        foregroundTracker.reconcileWallClock(now)
         val events = usageStatsManager.queryEvents(now - EVENT_LOOKBACK_MS, now)
             ?: return foregroundTracker.currentPackage
 
         val event = UsageEvents.Event()
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
+            if (event.timeStamp > now) continue // Ignore future ledger events after clock rollback.
             val kind = when (event.eventType) {
                 UsageEvents.Event.MOVE_TO_FOREGROUND -> ForegroundTransitionKind.RESUMED
                 UsageEvents.Event.MOVE_TO_BACKGROUND -> ForegroundTransitionKind.PAUSED
