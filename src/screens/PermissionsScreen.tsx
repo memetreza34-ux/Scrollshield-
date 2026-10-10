@@ -90,7 +90,13 @@ export function PermissionsScreen({
       if (document.visibilityState === 'visible') void refreshNativeStatus();
     };
     document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
+    // Android WebView may regain window focus without dispatching a matching
+    // visibilitychange after the user comes back from a settings activity.
+    window.addEventListener('focus', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+    };
   }, [refreshNativeStatus]);
 
   const openAccessibilitySettings = () => {
