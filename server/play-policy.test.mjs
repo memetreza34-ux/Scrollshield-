@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { evaluatePlaySubscription, safePublicEntitlement, validPurchaseToken } from './play-policy.mjs';
+import {
+  evaluatePlaySubscription, safePublicEntitlement, validPurchaseToken,
+  obfuscatedPlayAccountId, isPlayPurchaseBoundToOwner,
+} from './play-policy.mjs';
 
 const expiry = '2027-01-01T00:00:00Z';
 const now = Date.parse('2026-10-10T12:00:00Z');
@@ -70,4 +73,25 @@ test('purchase tokens must be bounded and well formed', () => {
   assert.equal(validPurchaseToken('x'.repeat(4097)), false);
   assert.equal(validPurchaseToken('token-with-spaces-999'), false);
   assert.equal(validPurchaseToken(null), false);
+});
+
+test('obfuscated Play account identity is stable and unique per Firebase UID', () => {
+  const secret = 'a-fake-server-secret-with-at-least-32-characters';
+  const one = obfuscatedPlayAccountId('firebase-user-one', secret);
+  const other = obfuscatedPlayAccountId('firebase-user-two', secret);
+  assert.equal(one.length, 64);
+  assert.notEqual(one, other);
+  assert.equal(one, obfuscatedPlayAccountId('firebase-user-one', secret));
+  assert.equal(isPlayPurchaseBoundToOwner({
+    externalAccountIdentifiers: { obfuscatedExternalAccountId: one },
+  }, 'firebase-user-one', secret), true);
+  assert.equal(isPlayPurchaseBoundToOwner({
+    externalAccountIdentifiers: { obfuscatedExternalAccountId: one },
+  }, 'firebase-user-two', secret), false);
+});
+
+test('missing purchase binding and weak server configuration fail closed', () => {
+  const secret = 'a-fake-server-secret-with-at-least-32-characters';
+  assert.equal(isPlayPurchaseBoundToOwner({}, 'firebase-user-one', secret), false);
+  assert.throws(() => obfuscatedPlayAccountId('firebase-user-one', 'too-short'));
 });
