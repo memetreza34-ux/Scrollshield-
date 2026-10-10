@@ -264,6 +264,10 @@ class AppMonitorService : Service() {
 
     @Volatile
     private var lastForegroundPackage: String? = null
+
+    /** Worker-owned event cursor; repeated 15-second UsageEvents windows are idempotent. */
+    private val foregroundTracker = ForegroundTransitionTracker()
+
     /** Emergency unlocks per app id: until then the app is completely free. */
     private val emergencyUntil = ConcurrentHashMap<String, Long>()
 
@@ -482,6 +486,7 @@ class AppMonitorService : Service() {
             )
         ) {
             sessionStartedAt.clear()
+            foregroundTracker.resetCurrent()
             lastForegroundPackage = null
             dismissOverlay()
             stopSelf()
@@ -492,14 +497,21 @@ class AppMonitorService : Service() {
         // overlay. On unlock we must not reuse stale app/session state.
         if (!isScreenInteractive()) {
             sessionStartedAt.clear()
+            foregroundTracker.resetCurrent()
             lastForegroundPackage = null
             if (overlayPackage != null) dismissOverlay()
             return
         }
 
-        // The event stream only reports switches. While an app stays in front
-        // there may be no new event for minutes; then the last switch holds.
-        val foreground = queryForegroundPackage() ?: lastForegroundPackage ?: return
+        // A PAUSED event without a replacement RESUMED means no foreground
+        // app. The previous implementation fell back to the stale last app.
+        val foreground = queryForegroundPackage()
+        if (foreground == null) {
+            if (overlayPackage != null) dismissOverlay()
+            sessionStartedAt.clear()
+            lastForegroundPackage = null
+            return
+        }
         val now = System.currentTimeMillis()
 
         if (foreground == packageName) {
@@ -629,30 +641,47 @@ class AppMonitorService : Service() {
     private fun formatTime(millis: Long): String = DateFormat.getTimeFormat(this).format(Date(millis))
 
     /**
-     * Returns the package of the most recent foreground transition.
-     * Uses the event stream instead of aggregated usage stats, which only
-     * reports daily buckets and lags behind real app switches.
+     * Reads foreground AND background transitions. The Android event stream
+     * returns overlapping windows across polls, so the pure state tracker
+     * ignores events already seen at its timestamp cursor.
+     *
+     * A background event with no subsequent resume yields null (not the last
+     * previously resumed app). This avoids stale overlays after app closure.
      */
+    @Suppress("DEPRECATION") // MOVE_TO_* aliases ACTIVITY_RESUMED/PAUSED.
     private fun queryForegroundPackage(): String? {
-        val usageStatsManager = getSystemService(USAGE_STATS_SERVICE) as? UsageStatsManager ?: return null
+        val usageStatsManager = getSystemService(USAGE_STATS_SERVICE) as? UsageStatsManager
+            ?: return foregroundTracker.currentPackage
         val now = System.currentTimeMillis()
-        val events = usageStatsManager.queryEvents(now - EVENT_LOOKBACK_MS, now) ?: return null
+        foregroundTracker.reconcileWallClock(now)
+        val events = usageStatsManager.queryEvents(now - EVENT_LOOKBACK_MS, now)
+            ?: return foregroundTracker.currentPackage
 
         val event = UsageEvents.Event()
-        var latestPackage: String? = null
-        var latestTimestamp = 0L
-
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
-            val isForegroundEvent = event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
-                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && event.eventType == UsageEvents.Event.ACTIVITY_RESUMED)
-            if (isForegroundEvent && event.timeStamp >= latestTimestamp) {
-                latestTimestamp = event.timeStamp
-                latestPackage = event.packageName
-            }
+            if (event.timeStamp > now) continue // Ignore future ledger events after clock rollback.
+            val kind = when (event.eventType) {
+                UsageEvents.Event.MOVE_TO_FOREGROUND -> ForegroundTransitionKind.RESUMED
+                UsageEvents.Event.MOVE_TO_BACKGROUND -> ForegroundTransitionKind.PAUSED
+                UsageEvents.Event.SCREEN_NON_INTERACTIVE ->
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) ForegroundTransitionKind.SCREEN_OFF else null
+                UsageEvents.Event.DEVICE_SHUTDOWN ->
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ForegroundTransitionKind.DEVICE_SHUTDOWN else null
+                UsageEvents.Event.DEVICE_STARTUP ->
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ForegroundTransitionKind.DEVICE_STARTUP else null
+                else -> null
+            } ?: continue
+            foregroundTracker.accept(
+                ForegroundTransition(
+                    timestampMillis = event.timeStamp,
+                    kind = kind,
+                    packageName = event.packageName,
+                )
+            )
         }
 
-        return latestPackage
+        return foregroundTracker.currentPackage
     }
 
     // ── Overlay ───────────────────────────────────────────────────────────────
