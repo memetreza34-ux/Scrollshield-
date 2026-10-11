@@ -37,6 +37,8 @@ async function fixture(callback, opts = {}) {
     store,
     firebaseProjectId: 'test-project',
     accountHmacKey: ACCOUNT_KEY,
+    kmsKeyVersion: 'projects/test/locations/global/keyRings/dev/cryptoKeys/sign/cryptoKeyVersions/1',
+    signMessage: async () => Buffer.alloc(256, 42),
     pushAudience: 'https://example.test/v1/play/rtdn',
     pushEmail: 'push@example.test',
     authenticate: async (token) => {
@@ -69,8 +71,10 @@ test('successful purchase verification binds the token and returns a minimal res
   await fixture(async ({ post, recorded }) => {
     const res = await post('/v1/play/verify', { purchaseToken: TOKEN });
     assert.equal(res.status, 200);
-    assert.deepEqual(Object.keys(await res.clone().json()).sort(), ['expiresAt', 'pro', 'source', 'state']);
-    assert.equal((await res.json()).pro, true);
+    const result = await res.json();
+    assert.deepEqual(Object.keys(result).sort(), ['entitlementToken', 'expiresAt', 'pro', 'source', 'state']);
+    assert.equal(result.pro, true);
+    assert.ok(result.entitlementToken.startsWith('SS1.'));
     assert.equal(recorded.claims.length, 1);
     assert.equal(recorded.updates.length, 1);
   });
