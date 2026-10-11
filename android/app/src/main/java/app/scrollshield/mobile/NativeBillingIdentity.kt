@@ -50,7 +50,7 @@ internal object NativeBillingIdentity {
             onResult(null)
             return
         }
-        user.getIdToken(false)
+        user.getIdToken(true)
             .addOnSuccessListener { result ->
                 // UID may change while Firebase refresh is in progress.
                 if (currentUid(context) == user.uid) onResult(result.token) else onResult(null)
