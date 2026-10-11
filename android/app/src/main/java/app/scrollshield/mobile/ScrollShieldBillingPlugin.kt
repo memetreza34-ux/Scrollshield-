@@ -197,7 +197,8 @@ class ScrollShieldBillingPlugin : Plugin() {
     @PluginMethod
     fun getNativeProStatus(call: PluginCall) {
         val active = NativeProEntitlement.isActive(
-            SecurePrefs.open(context), BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI
+            SecurePrefs.open(context), BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI,
+            NativeBillingIdentity.currentUid(context)
         )
         call.resolve(JSObject().put("verified", active))
     }
@@ -295,6 +296,7 @@ class ScrollShieldBillingPlugin : Plugin() {
                                         SecurePrefs.open(context),
                                         grant,
                                         BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI,
+                                        NativeBillingIdentity.currentUid(context),
                                     )
                                     if (saved) {
                                         verifiedActive++
