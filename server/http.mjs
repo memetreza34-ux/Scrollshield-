@@ -6,6 +6,7 @@ import {
 } from './play-policy.mjs';
 import { fingerprintPurchaseToken, GoogleCloudStore, PurchaseOwnedError, UpstreamError } from './google-cloud.mjs';
 import { verifyFirebaseIdToken, verifyPubSubJwt, UnauthorizedError } from './identity.mjs';
+import { issueSignedProEntitlement } from './signed-entitlement.mjs';
 
 const jsonResponse = (response, status, value) => {
   const body = JSON.stringify(value);
@@ -62,6 +63,8 @@ export function createHandler({
   store,
   firebaseProjectId,
   accountHmacKey,
+  kmsKeyVersion,
+  signMessage,
   pushAudience,
   pushEmail,
   authenticate = (token) => verifyFirebaseIdToken(token, firebaseProjectId),
@@ -121,7 +124,21 @@ export function createHandler({
         const hash = fingerprintPurchaseToken(token);
         await store.claimPurchase(hash, uid);
         await store.updateVerifiedStatus(hash, entitlement);
-        return jsonResponse(response, 200, safePublicEntitlement(entitlement));
+        const result = safePublicEntitlement(entitlement);
+        if (entitlement.active) {
+          // An unsigned client-visible "pro: true" is NEVER an entitlement.
+          // No KMS key -> reject instead of issuing an unusable paid grant.
+          if (!kmsKeyVersion && !signMessage) throw new UpstreamError();
+          const signed = await issueSignedProEntitlement({
+            uid,
+            verified: entitlement,
+            nowMillis: now(),
+            signMessage: signMessage ?? ((message) => store.signEntitlement(message, kmsKeyVersion)),
+          });
+          if (!signed) throw new UpstreamError();
+          result.entitlementToken = signed;
+        }
+        return jsonResponse(response, 200, result);
       }
 
       if (url.pathname === '/v1/play/rtdn') {
@@ -185,9 +202,11 @@ export function createProductionServer(env = process.env) {
     PUBSUB_PUSH_AUDIENCE,
     PUBSUB_PUSH_SERVICE_ACCOUNT,
     BILLING_ACCOUNT_HMAC_KEY,
+    BILLING_KMS_KEY_VERSION,
   } = env;
   if (!GOOGLE_CLOUD_PROJECT || !FIREBASE_PROJECT_ID ||
-      !BILLING_ACCOUNT_HMAC_KEY || BILLING_ACCOUNT_HMAC_KEY.length < 32) {
+      !BILLING_ACCOUNT_HMAC_KEY || BILLING_ACCOUNT_HMAC_KEY.length < 32 ||
+      !BILLING_KMS_KEY_VERSION) {
     throw new Error('Missing GCP/Firebase project or BILLING_ACCOUNT_HMAC_KEY');
   }
   const store = new GoogleCloudStore({ projectId: GOOGLE_CLOUD_PROJECT });
@@ -195,6 +214,7 @@ export function createProductionServer(env = process.env) {
     store,
     firebaseProjectId: FIREBASE_PROJECT_ID,
     accountHmacKey: BILLING_ACCOUNT_HMAC_KEY,
+    kmsKeyVersion: BILLING_KMS_KEY_VERSION,
     pushAudience: PUBSUB_PUSH_AUDIENCE,
     pushEmail: PUBSUB_PUSH_SERVICE_ACCOUNT,
   }));
