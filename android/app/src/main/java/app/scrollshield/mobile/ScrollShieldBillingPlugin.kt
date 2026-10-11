@@ -184,9 +184,30 @@ class ScrollShieldBillingPlugin : Plugin() {
         call.resolve(
             JSObject().put(
                 "configured",
-                NativeBillingPolicy.normalizedHttpsBase(BuildConfig.SCROLLSHIELD_BILLING_API_URL) != null
+                NativeBillingPolicy.normalizedHttpsBase(BuildConfig.SCROLLSHIELD_BILLING_API_URL) != null &&
+                    BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI.isNotEmpty()
             )
         )
+    }
+
+    /**
+     * A signed token is readable only by the native layer. This UI-facing
+     * status is not itself an entitlement, so no user-controllable pro flag.
+     */
+    @PluginMethod
+    fun getNativeProStatus(call: PluginCall) {
+        val active = NativeProEntitlement.isActive(
+            SecurePrefs.open(context), BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI
+        )
+        call.resolve(JSObject().put("verified", active))
+    }
+
+    /** Call on sign-out, account change or explicit user data removal. */
+    @PluginMethod
+    fun clearVerifiedPro(call: PluginCall) {
+        val success = NativeProEntitlement.clear(SecurePrefs.open(context))
+        if (success) AppMonitorService.notifyConfigUpdate(context)
+        call.resolve(JSObject().put("cleared", success))
     }
 
     /**
