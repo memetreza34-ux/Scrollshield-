@@ -65,10 +65,9 @@ interface PlayBillingBridge {
   getVerificationReadiness(): Promise<PlayBackendReadiness>;
   getNativeProStatus(): Promise<{ verified: boolean }>;
   clearVerifiedPro(): Promise<{ cleared: boolean }>;
-  getVerifiedAccountBinding(options: { firebaseIdToken: string }): Promise<{ obfuscatedAccountId: string }>;
-  verifyExistingPurchases(options: { firebaseIdToken: string }): Promise<VerifiedPlayRestore>;
+  getVerifiedAccountBinding(): Promise<{ obfuscatedAccountId: string }>;
+  verifyExistingPurchases(): Promise<VerifiedPlayRestore>;
   prepareVerifiedCheckout(options: {
-    firebaseIdToken: string;
     basePlanId: 'monthly' | 'annual';
     offerId?: string;
   }): Promise<{ readyForFutureCheckout: boolean; checkoutEnabled: false; basePlanId: string }>;
@@ -121,12 +120,12 @@ export const getPlayBackendReadiness = async (): Promise<PlayBackendReadiness> =
 
 /**
  * Prepared for a future authenticated native purchase flow. Firebase ID
- * tokens must be short-lived and obtained through verified user sign-in.
- * These are not persisted by ScrollShield.
+ * tokens are fetched and refreshed INSIDE native Firebase Auth.
+ * They are never transmitted to React or stored in local app backups.
  */
-export async function getVerifiedPlayAccountBinding(firebaseIdToken: string): Promise<string> {
+export async function getVerifiedPlayAccountBinding(): Promise<string> {
   if (!isNativePlayBilling()) throw new Error('PLAY_BILLING_ANDROID_ONLY');
-  const response = await withBillingReadTimeout(bridge.getVerifiedAccountBinding({ firebaseIdToken }), 18_000);
+  const response = await withBillingReadTimeout(bridge.getVerifiedAccountBinding(), 18_000);
   if (!/^[a-f0-9]{64}$/.test(response.obfuscatedAccountId)) throw new Error('INVALID_PLAY_ACCOUNT_BINDING');
   return response.obfuscatedAccountId;
 }
@@ -136,21 +135,20 @@ export async function getVerifiedPlayAccountBinding(firebaseIdToken: string): Pr
  * Launching an actual purchase remains disabled in native Android.
  */
 export async function prepareVerifiedPlayCheckout(
-  firebaseIdToken: string,
   basePlanId: 'monthly' | 'annual',
   offerId?: string,
 ): Promise<{ readyForFutureCheckout: boolean; checkoutEnabled: false; basePlanId: string }> {
   if (!isNativePlayBilling()) throw new Error('PLAY_BILLING_ANDROID_ONLY');
   return withBillingReadTimeout(
-    bridge.prepareVerifiedCheckout({ firebaseIdToken, basePlanId, offerId }),
+    bridge.prepareVerifiedCheckout({ basePlanId, offerId }),
     24_000,
   );
 }
 
 /** Restore is diagnostic-only until native signed entitlement enforcement ships. */
-export const verifyOwnedPlayPurchases = async (firebaseIdToken: string): Promise<VerifiedPlayRestore> =>
+export const verifyOwnedPlayPurchases = async (): Promise<VerifiedPlayRestore> =>
   isNativePlayBilling()
-    ? withBillingReadTimeout(bridge.verifyExistingPurchases({ firebaseIdToken }), 120_000)
+    ? withBillingReadTimeout(bridge.verifyExistingPurchases(), 120_000)
     : {
         available: false,
         verifiedActiveObservations: 0,
