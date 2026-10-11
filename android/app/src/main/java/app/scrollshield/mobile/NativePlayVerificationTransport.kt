@@ -39,10 +39,16 @@ internal class NativePlayVerificationTransport(configuredEndpoint: String) {
         if (!NativeBillingPolicy.isVerifiedStatusResponse(source, state)) {
             throw IllegalStateException("Unrecognized verification response")
         }
+        val isActive = body.optBoolean("pro", false)
+        val signed = body.optString("entitlementToken").takeIf { it.isNotBlank() }
+        if (isActive && signed == null) {
+            throw IllegalStateException("Verified Pro entitlement signature missing")
+        }
         return VerifiedPlayObservation(
-            active = body.optBoolean("pro", false),
+            active = isActive,
             state = state,
             expiresAt = body.optString("expiresAt").takeIf { it.isNotBlank() && it != "null" },
+            entitlementToken = signed,
         )
     }
 
@@ -95,4 +101,6 @@ internal data class VerifiedPlayObservation(
     val active: Boolean,
     val state: String,
     val expiresAt: String?,
+    /** Only native code consumes this cryptographically verifiable, short-lived claim. */
+    val entitlementToken: String?,
 )
