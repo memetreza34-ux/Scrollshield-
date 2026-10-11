@@ -58,8 +58,17 @@ export const PRO_BENEFITS = [
  * available ONLY as a development preview. A saved, imported or edited local
  * `pro.active` flag is never proof of payment in a production build.
  */
+// This state is runtime-only: never serialized into AppState, localStorage or
+// backups. The Android monitoring service independently validates signed RSA
+// grants and cannot be unlocked by spoofing this UI-only flag.
+let nativeVerifiedProRuntime = false;
+
+export const setNativeVerifiedProRuntime = (verified: boolean): void => {
+  nativeVerifiedProRuntime = verified === true;
+};
+
 export const hasPro = (state: Pick<AppState, 'pro'>): boolean =>
-  !import.meta.env.PROD && state.pro?.active === true;
+  nativeVerifiedProRuntime || (!import.meta.env.PROD && state.pro?.active === true);
 
 /**
  * The last trusted UI-to-native boundary while Billing remains disabled.
