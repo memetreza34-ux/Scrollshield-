@@ -173,4 +173,125 @@ class ScrollShieldBillingPlugin : Plugin() {
             }
         }
     }
+
+    // This is an observation/restore foundation, NOT the payment flow.
+    // No server => no verification; native Pro remains Free in production.
+    private val backendHandler = Handler(Looper.getMainLooper())
+    private val verificationExecutor = Executors.newSingleThreadExecutor()
+
+    @PluginMethod
+    fun getVerificationReadiness(call: PluginCall) {
+        call.resolve(
+            JSObject().put(
+                "configured",
+                NativeBillingPolicy.normalizedHttpsBase(BuildConfig.SCROLLSHIELD_BILLING_API_URL) != null
+            )
+        )
+    }
+
+    /**
+     * Returns a non-secret account binding for a FUTURE BillingFlowParams.
+     * Caller must obtain a Firebase Auth ID token from the planned sign-in UX.
+     * The backend validates the Firebase signature before issuing this ID.
+     */
+    @PluginMethod
+    fun getVerifiedAccountBinding(call: PluginCall) {
+        val firebaseIdToken = call.getString("firebaseIdToken")
+        if (!NativeBillingPolicy.canBeginVerification(
+                firebaseIdToken, BuildConfig.SCROLLSHIELD_BILLING_API_URL
+            )
+        ) {
+            call.reject("Firebase-Anmeldung oder Kaufprüfung fehlt.", "BILLING_NOT_CONFIGURED")
+            return
+        }
+        verificationExecutor.execute {
+            try {
+                val id = NativePlayVerificationTransport(BuildConfig.SCROLLSHIELD_BILLING_API_URL)
+                    .accountBinding(firebaseIdToken!!)
+                backendHandler.post {
+                    call.resolve(JSObject().put("obfuscatedAccountId", id))
+                }
+            } catch (_: Exception) {
+                backendHandler.post {
+                    call.reject("Play-Konto konnte nicht sicher verbunden werden.", "BILLING_IDENTITY_FAILED")
+                }
+            }
+        }
+    }
+
+    /**
+     * Observe owned subscriptions and verify every PURCHASED, non-suspended
+     * purchase directly native -> backend. Never return purchase tokens or
+     * issue entitlements / acknowledge purchases. A server response alone
+     * is not yet wired to enforce paid features in the native monitor.
+     */
+    @PluginMethod
+    fun verifyExistingPurchases(call: PluginCall) {
+        val firebaseIdToken = call.getString("firebaseIdToken")
+        if (!NativeBillingPolicy.canBeginVerification(
+                firebaseIdToken, BuildConfig.SCROLLSHIELD_BILLING_API_URL
+            )
+        ) {
+            call.reject("Firebase-Anmeldung oder Kaufprüfung fehlt.", "BILLING_NOT_CONFIGURED")
+            return
+        }
+
+        connected(call) { client ->
+            val params = QueryPurchasesParams.newBuilder()
+                .setProductType(BillingClient.ProductType.SUBS)
+                .includeSuspendedSubscriptions(true)
+                .build()
+            client.queryPurchasesAsync(params) { result, purchases ->
+                client.endConnection()
+                if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+                    call.reject("Bestehende Google-Play-Abos nicht abrufbar.", "BILLING_RESTORE_FAILED")
+                    return@queryPurchasesAsync
+                }
+
+                // Snapshot only package-owned purchases, never WebView-visible.
+                val eligible = purchases.filter {
+                    PRODUCT_ID in it.products &&
+                        it.purchaseState == Purchase.PurchaseState.PURCHASED &&
+                        !it.isSuspended &&
+                        NativeBillingPolicy.validPurchaseToken(it.purchaseToken)
+                }.take(10)
+                val pendingCount = purchases.count {
+                    PRODUCT_ID in it.products && it.purchaseState == Purchase.PurchaseState.PENDING
+                }
+                verificationExecutor.execute {
+                    try {
+                        val transport = NativePlayVerificationTransport(BuildConfig.SCROLLSHIELD_BILLING_API_URL)
+                        var verifiedActive = 0
+                        var verifiedInactive = 0
+                        var rejected = 0
+                        for (purchase in eligible) {
+                            try {
+                                val status = transport.verify(firebaseIdToken!!, purchase.purchaseToken)
+                                if (status.active) verifiedActive++ else verifiedInactive++
+                            } catch (_: Exception) {
+                                // No offline/cached Pro; an unreachable backend is a failure.
+                                rejected++
+                            }
+                        }
+                        backendHandler.post {
+                            call.resolve(
+                                JSObject()
+                                    .put("available", true)
+                                    .put("verifiedActiveObservations", verifiedActive)
+                                    .put("verifiedInactiveObservations", verifiedInactive)
+                                    .put("pendingPurchases", pendingCount)
+                                    .put("verificationFailures", rejected)
+                                    .put("proActivated", false)
+                            )
+                        }
+                    } catch (_: Exception) {
+                        backendHandler.post {
+                            call.reject("Abo-Prüfung nicht verfügbar.", "BILLING_VERIFICATION_FAILED")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }
