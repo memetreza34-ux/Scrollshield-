@@ -67,6 +67,18 @@ class NativeBillingPolicyTest {
     }
 
     @Test
+    fun checkoutPreflightRejectsUnknownPlansOrMalformedOfferIds() {
+        assertTrue(NativeBillingPolicy.validBasePlan("monthly"))
+        assertTrue(NativeBillingPolicy.validBasePlan("annual"))
+        assertFalse(NativeBillingPolicy.validBasePlan("weekly"))
+        assertFalse(NativeBillingPolicy.validBasePlan(""))
+        assertTrue(NativeBillingPolicy.validOfferId(null))
+        assertTrue(NativeBillingPolicy.validOfferId("trial-7d"))
+        assertFalse(NativeBillingPolicy.validOfferId("bad offer"))
+        assertFalse(NativeBillingPolicy.validOfferId("x".repeat(65)))
+    }
+
+    @Test
     fun onlyBackendVerifiedSourceAndKnownStateShapeAreRecognized() {
         assertTrue(NativeBillingPolicy.isVerifiedStatusResponse(
             "verified_google_play", "SUBSCRIPTION_STATE_ACTIVE"))
