@@ -69,10 +69,21 @@ internal class NativePlayVerificationTransport(configuredEndpoint: String) {
                 // Never echo a Google API payload or JWT to error screens/logs.
                 throw IllegalStateException("Play backend verification rejected or unavailable")
             }
-            val result = connection.inputStream.bufferedReader(Charsets.UTF_8).use {
-                it.readText()
+            // Apply the response limit while streaming, not after readText():
+            // a misconfigured upstream must never allocate unbounded memory.
+            val result = connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                val buffer = CharArray(2_048)
+                val content = StringBuilder()
+                while (true) {
+                    val count = reader.read(buffer)
+                    if (count < 0) break
+                    if (content.length + count > 16_384) {
+                        throw IllegalStateException("Response too large")
+                    }
+                    content.append(buffer, 0, count)
+                }
+                content.toString()
             }
-            if (result.length > 16_384) throw IllegalStateException("Response too large")
             return JSONObject(result)
         } finally {
             connection.disconnect()
