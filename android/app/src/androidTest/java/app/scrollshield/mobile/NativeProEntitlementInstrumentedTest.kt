@@ -102,6 +102,17 @@ class NativeProEntitlementInstrumentedTest {
     }
 
     @Test
+    fun malformedNativePreferenceTypeCannotLeavePaidRulesEnabled() {
+        val now = 2_000_000_000_000L
+        val (token, key) = signedToken(now)
+        val prefs = context.getSharedPreferences("ss404-entitlement-test", Context.MODE_PRIVATE)
+        prefs.edit().clear().putString(NativeProEntitlement.KEY_MAX_WALL_CLOCK, "corrupt").commit()
+        assertFalse(NativeProEntitlement.install(prefs, token, key, now))
+        assertFalse(NativeProEntitlement.isActive(prefs, key, now))
+        prefs.edit().clear().commit()
+    }
+
+    @Test
     fun legacyPackageListStillGetsFreeClamping() {
         val legacy = org.json.JSONArray()
             .put("com.instagram.android")
