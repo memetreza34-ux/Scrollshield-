@@ -412,7 +412,13 @@ class AppMonitorService : Service() {
                 }
             }
         } catch (_: Exception) {
-            // Keep the previous rule set on malformed input.
+            // Never retain previously loaded paid rules when the saved data
+            // becomes unreadable at the exact time a signed grant expires.
+            rules = emptyMap()
+            signedProRulesActive = false
+            lastForegroundPackage = null
+            sessionStartedAt.clear()
+            dismissOverlay()
             return
         }
 
