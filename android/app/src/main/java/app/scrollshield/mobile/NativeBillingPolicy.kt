@@ -12,6 +12,9 @@ internal object NativeBillingPolicy {
 
     fun validAccountBinding(id: String): Boolean = accountIdPattern.matches(id)
     fun validPurchaseToken(token: String): Boolean = purchaseTokenPattern.matches(token)
+    fun validBasePlan(id: String): Boolean = id == "monthly" || id == "annual"
+    fun validOfferId(id: String?): Boolean =
+        id == null || (id.length in 1..64 && Regex("^[A-Za-z0-9_-]+$").matches(id))
 
     /** Empty means billing not configured, NOT localhost / a dev fallback. */
     fun normalizedHttpsBase(raw: String): String? {
