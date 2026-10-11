@@ -4,6 +4,10 @@ import {
   describeOffer,
   describePurchaseOverview,
   withBillingReadTimeout,
+  getPlayBackendReadiness,
+  verifyOwnedPlayPurchases,
+  getVerifiedPlayAccountBinding,
+  prepareVerifiedPlayCheckout,
 } from './billing';
 import type { PlaySubscriptionOffer } from './billing';
 
@@ -103,5 +107,27 @@ describe('Play Billing read timeout', () => {
     vi.useFakeTimers();
     await expect(withBillingReadTimeout(Promise.resolve('ready'), 500)).resolves.toBe('ready');
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('native verified billing bridge fails closed in a browser', () => {
+  it('reports no verification backend when Android native billing is absent', async () => {
+    await expect(getPlayBackendReadiness()).resolves.toEqual({ configured: false });
+  });
+
+  it('never treats browser purchase restoration as paid', async () => {
+    await expect(verifyOwnedPlayPurchases('not-a-real-token')).resolves.toEqual({
+      available: false,
+      verifiedActiveObservations: 0,
+      verifiedInactiveObservations: 0,
+      pendingPurchases: 0,
+      verificationFailures: 0,
+      proActivated: false,
+    });
+  });
+
+  it('cannot prepare Play checkout or obtain a binding outside Android', async () => {
+    await expect(getVerifiedPlayAccountBinding('fake-jwt')).rejects.toThrow('PLAY_BILLING_ANDROID_ONLY');
+    await expect(prepareVerifiedPlayCheckout('fake-jwt', 'monthly')).rejects.toThrow('PLAY_BILLING_ANDROID_ONLY');
   });
 });

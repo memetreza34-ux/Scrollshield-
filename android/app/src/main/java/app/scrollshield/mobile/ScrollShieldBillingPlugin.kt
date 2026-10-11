@@ -173,4 +173,207 @@ class ScrollShieldBillingPlugin : Plugin() {
             }
         }
     }
+
+    // This is an observation/restore foundation, NOT the payment flow.
+    // No server => no verification; native Pro remains Free in production.
+    private val backendHandler = Handler(Looper.getMainLooper())
+    private val verificationExecutor = Executors.newSingleThreadExecutor()
+
+    @PluginMethod
+    fun getVerificationReadiness(call: PluginCall) {
+        call.resolve(
+            JSObject().put(
+                "configured",
+                NativeBillingPolicy.normalizedHttpsBase(BuildConfig.SCROLLSHIELD_BILLING_API_URL) != null
+            )
+        )
+    }
+
+    /**
+     * Returns a non-secret account binding for a FUTURE BillingFlowParams.
+     * Caller must obtain a Firebase Auth ID token from the planned sign-in UX.
+     * The backend validates the Firebase signature before issuing this ID.
+     */
+    @PluginMethod
+    fun getVerifiedAccountBinding(call: PluginCall) {
+        val firebaseIdToken = call.getString("firebaseIdToken")
+        if (!NativeBillingPolicy.canBeginVerification(
+                firebaseIdToken, BuildConfig.SCROLLSHIELD_BILLING_API_URL
+            )
+        ) {
+            call.reject("Firebase-Anmeldung oder Kaufprüfung fehlt.", "BILLING_NOT_CONFIGURED")
+            return
+        }
+        verificationExecutor.execute {
+            try {
+                val id = NativePlayVerificationTransport(BuildConfig.SCROLLSHIELD_BILLING_API_URL)
+                    .accountBinding(firebaseIdToken!!)
+                backendHandler.post {
+                    call.resolve(JSObject().put("obfuscatedAccountId", id))
+                }
+            } catch (_: Exception) {
+                backendHandler.post {
+                    call.reject("Play-Konto konnte nicht sicher verbunden werden.", "BILLING_IDENTITY_FAILED")
+                }
+            }
+        }
+    }
+
+    /**
+     * Observe owned subscriptions and verify every PURCHASED, non-suspended
+     * purchase directly native -> backend. Never return purchase tokens or
+     * issue entitlements / acknowledge purchases. A server response alone
+     * is not yet wired to enforce paid features in the native monitor.
+     */
+    @PluginMethod
+    fun verifyExistingPurchases(call: PluginCall) {
+        val firebaseIdToken = call.getString("firebaseIdToken")
+        if (!NativeBillingPolicy.canBeginVerification(
+                firebaseIdToken, BuildConfig.SCROLLSHIELD_BILLING_API_URL
+            )
+        ) {
+            call.reject("Firebase-Anmeldung oder Kaufprüfung fehlt.", "BILLING_NOT_CONFIGURED")
+            return
+        }
+
+        connected(call) { client ->
+            val params = QueryPurchasesParams.newBuilder()
+                .setProductType(BillingClient.ProductType.SUBS)
+                .includeSuspendedSubscriptions(true)
+                .build()
+            client.queryPurchasesAsync(params) { result, purchases ->
+                client.endConnection()
+                if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+                    call.reject("Bestehende Google-Play-Abos nicht abrufbar.", "BILLING_RESTORE_FAILED")
+                    return@queryPurchasesAsync
+                }
+
+                // Snapshot only package-owned purchases, never WebView-visible.
+                val eligible = purchases.filter {
+                    PRODUCT_ID in it.products &&
+                        it.purchaseState == Purchase.PurchaseState.PURCHASED &&
+                        !it.isSuspended &&
+                        NativeBillingPolicy.validPurchaseToken(it.purchaseToken)
+                }.take(10)
+                val pendingCount = purchases.count {
+                    PRODUCT_ID in it.products && it.purchaseState == Purchase.PurchaseState.PENDING
+                }
+                verificationExecutor.execute {
+                    try {
+                        val transport = NativePlayVerificationTransport(BuildConfig.SCROLLSHIELD_BILLING_API_URL)
+                        var verifiedActive = 0
+                        var verifiedInactive = 0
+                        var rejected = 0
+                        for (purchase in eligible) {
+                            try {
+                                val status = transport.verify(firebaseIdToken!!, purchase.purchaseToken)
+                                if (status.active) verifiedActive++ else verifiedInactive++
+                            } catch (_: Exception) {
+                                // No offline/cached Pro; an unreachable backend is a failure.
+                                rejected++
+                            }
+                        }
+                        backendHandler.post {
+                            call.resolve(
+                                JSObject()
+                                    .put("available", true)
+                                    .put("verifiedActiveObservations", verifiedActive)
+                                    .put("verifiedInactiveObservations", verifiedInactive)
+                                    .put("pendingPurchases", pendingCount)
+                                    .put("verificationFailures", rejected)
+                                    .put("proActivated", false)
+                            )
+                        }
+                    } catch (_: Exception) {
+                        backendHandler.post {
+                            call.reject("Abo-Prüfung nicht verfügbar.", "BILLING_VERIFICATION_FAILED")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Preflight ONLY: authenticate against our server and query a FRESH Play
+     * offer that Google says this user is eligible to buy. No launchBillingFlow
+     * until user sign-in, restore, acknowledgment and enforceable native Pro
+     * entitlements are released together. The offerToken never reaches React.
+     */
+    @PluginMethod
+    fun prepareVerifiedCheckout(call: PluginCall) {
+        val firebaseIdToken = call.getString("firebaseIdToken")
+        val basePlanId = call.getString("basePlanId") ?: ""
+        val offerId = call.getString("offerId")
+        if (!NativeBillingPolicy.validBasePlan(basePlanId) ||
+            !NativeBillingPolicy.validOfferId(offerId)) {
+            call.reject("Ungültiger Google-Play-Tarif.", "BILLING_INVALID_PLAN")
+            return
+        }
+        if (!NativeBillingPolicy.canBeginVerification(
+                firebaseIdToken, BuildConfig.SCROLLSHIELD_BILLING_API_URL
+            )
+        ) {
+            call.reject("Kauf noch nicht bereit: Anmeldung/Backend fehlt.", "BILLING_NOT_CONFIGURED")
+            return
+        }
+
+        verificationExecutor.execute {
+            val authenticated = try {
+                // The server verifies the JWT and returns a stable HMAC binding.
+                NativePlayVerificationTransport(BuildConfig.SCROLLSHIELD_BILLING_API_URL)
+                    .accountBinding(firebaseIdToken!!)
+            } catch (_: Exception) {
+                null
+            }
+
+            backendHandler.post {
+                if (authenticated == null) {
+                    call.reject("Google-Play-Konto nicht überprüfbar.", "BILLING_IDENTITY_FAILED")
+                    return@post
+                }
+
+                connected(call) { client ->
+                    val product = QueryProductDetailsParams.Product.newBuilder()
+                        .setProductId(PRODUCT_ID)
+                        .setProductType(BillingClient.ProductType.SUBS)
+                        .build()
+                    val params = QueryProductDetailsParams.newBuilder()
+                        .setProductList(listOf(product))
+                        .build()
+                    client.queryProductDetailsAsync(params) { result, details ->
+                        try {
+                            if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+                                call.reject("Google Play-Angebote sind nicht verfügbar.", "BILLING_CATALOG_FAILED")
+                                return@queryProductDetailsAsync
+                            }
+                            val eligible = details.productDetailsList
+                                .filter { it.productId == PRODUCT_ID }
+                                .flatMap { it.subscriptionOfferDetails.orEmpty() }
+                                .firstOrNull { it.basePlanId == basePlanId && it.offerId == offerId }
+
+                            if (eligible == null) {
+                                call.reject("Dieses Angebot ist derzeit nicht verfügbar.", "BILLING_OFFER_NOT_ELIGIBLE")
+                                return@queryProductDetailsAsync
+                            }
+                            // No actual purchase/entitlement is possible here.
+                            call.resolve(
+                                JSObject()
+                                    .put("readyForFutureCheckout", true)
+                                    .put("checkoutEnabled", false)
+                                    .put("basePlanId", basePlanId)
+                                    .put("serverIdentityVerified", true)
+                            )
+                        } catch (_: Exception) {
+                            call.reject("Google-Play-Angebot konnte nicht geprüft werden.", "BILLING_CATALOG_FAILED")
+                        } finally {
+                            client.endConnection()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }
