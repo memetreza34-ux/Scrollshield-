@@ -46,6 +46,8 @@ export interface PlayPurchaseOverview {
  */
 export interface VerifiedPlayRestore {
   available: boolean;
+  /** Native trust requires a fresh server-signed RSA entitlement. */
+  nativeProVerified?: boolean;
   verifiedActiveObservations: number;
   verifiedInactiveObservations: number;
   pendingPurchases: number;
@@ -61,6 +63,8 @@ interface PlayBillingBridge {
   getCatalog(): Promise<PlayCatalog>;
   getPurchaseOverview(): Promise<PlayPurchaseOverview>;
   getVerificationReadiness(): Promise<PlayBackendReadiness>;
+  getNativeProStatus(): Promise<{ verified: boolean }>;
+  clearVerifiedPro(): Promise<{ cleared: boolean }>;
   getVerifiedAccountBinding(options: { firebaseIdToken: string }): Promise<{ obfuscatedAccountId: string }>;
   verifyExistingPurchases(options: { firebaseIdToken: string }): Promise<VerifiedPlayRestore>;
   prepareVerifiedCheckout(options: {
@@ -94,6 +98,22 @@ export const getPlayCatalog = async (): Promise<PlayCatalog> =>
 
 export const getPlayPurchaseOverview = async (): Promise<PlayPurchaseOverview> =>
   isNativePlayBilling() ? withBillingReadTimeout(bridge.getPurchaseOverview()) : { available: false, purchases: [] };
+
+/**
+ * Read-only native trust indicator. It is intentionally NOT connected to
+ * the local `state.pro.active` preview or paid React gates until sign-in,
+ * durable account recovery and post-purchase UX are implemented.
+ */
+export const getNativeVerifiedProStatus = async (): Promise<boolean> =>
+  isNativePlayBilling()
+    ? (await withBillingReadTimeout(bridge.getNativeProStatus())).verified === true
+    : false;
+
+/** Erases a signed native grant at sign-out / account change. */
+export const clearNativeVerifiedPro = async (): Promise<boolean> =>
+  isNativePlayBilling()
+    ? (await withBillingReadTimeout(bridge.clearVerifiedPro())).cleared === true
+    : false;
 
 /** No server URL built into the APK means all paid verification stays disabled. */
 export const getPlayBackendReadiness = async (): Promise<PlayBackendReadiness> =>
