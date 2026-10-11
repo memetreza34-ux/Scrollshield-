@@ -258,6 +258,10 @@ class AppMonitorService : Service() {
     @Volatile
     private var monitoringEnabled = false
 
+    /** Updated with every rule parse; expired signed Pro must fall back to Free. */
+    @Volatile
+    private var signedProRulesActive = false
+
     @Volatile
     private var lastForegroundPackage: String? = null
     /** Emergency unlocks per app id: until then the app is completely free. */
@@ -376,7 +380,9 @@ class AppMonitorService : Service() {
         val raw = prefs.getString(ScrollShieldBridgePlugin.KEY_BLOCKED_RULES, "[]") ?: "[]"
         val parsed = mutableMapOf<String, BlockRule>()
         try {
-            val array = JSONArray(raw)
+            val signedPro = NativeProEntitlement.isActive(prefs, BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI)
+            val array = NativeFreeRules.project(JSONArray(raw), signedPro)
+            signedProRulesActive = signedPro
             for (index in 0 until array.length()) {
                 val entry = array.optJSONObject(index)
                 if (entry != null) {
@@ -459,6 +465,16 @@ class AppMonitorService : Service() {
 
     private fun checkForegroundApp() {
         if (!monitoringEnabled || rules.isEmpty()) return
+
+        // The entitlement can expire while the user stays inside a protected
+        // app. Reproject from stored rules immediately, without waiting for JS.
+        val signedProNow = NativeProEntitlement.isActive(prefs, BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI)
+        if (signedProNow != signedProRulesActive) {
+            loadRules()
+            lastForegroundPackage = null
+            sessionStartedAt.clear()
+            dismissOverlay()
+        }
 
         // With the screen off nobody is using an app: no session runs.
         if (!isScreenInteractive()) {
