@@ -8,9 +8,21 @@ import {
   describePurchaseOverview,
   getPlayCatalog,
   getPlayPurchaseOverview,
+  verifyOwnedPlayPurchases,
+  getNativeVerifiedProStatus,
   isNativePlayBilling,
 } from '../lib/billing';
 import type { PlayCatalog } from '../lib/billing';
+import {
+  createBillingAccount,
+  getBillingAccountStatus,
+  refreshBillingAccountStatus,
+  requestBillingPasswordReset,
+  sendBillingVerificationEmail,
+  signInBillingAccount,
+  signOutBillingAccount,
+} from '../lib/billingIdentity';
+import type { BillingAccountStatus } from '../lib/billingIdentity';
 import { FEATURE_FLAGS } from '../config/featureFlags';
 import {
   EVENING_REMINDER_HOUR,
@@ -26,6 +38,7 @@ type ScreenProps = {
   navigate: (s: Screen) => void;
   settingsReturnScreen?: Screen;
   paywallReturnScreen?: Screen;
+  onBillingIdentityChange?: () => void;
 };
 
 /** Einstellungen (docs/V1_MASTER_PLAN.md, 4.9), reached through the gear on every tab. */
@@ -128,13 +141,24 @@ export function NotificationsScreen({ state, updateState, navigate }: ScreenProp
  * phase 4; until then the development build can switch Pro on as a preview so
  * every screen can be seen.
  */
-export function PaywallScreen({ state, updateState, navigate, paywallReturnScreen = 'today' }: ScreenProps) {
+export function PaywallScreen({
+  state,
+  updateState,
+  navigate,
+  paywallReturnScreen = 'today',
+  onBillingIdentityChange,
+}: ScreenProps) {
   const pro = hasPro(state);
   const onAndroid = isNativePlayBilling();
   const [catalog, setCatalog] = useState<PlayCatalog | null>(null);
   const [catalogError, setCatalogError] = useState(false);
   const [checking, setChecking] = useState(false);
   const [restoreNote, setRestoreNote] = useState<string | null>(null);
+  const [account, setAccount] = useState<BillingAccountStatus | null>(null);
+  const [accountEmail, setAccountEmail] = useState('');
+  const [accountPassword, setAccountPassword] = useState('');
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [accountMessage, setAccountMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!onAndroid || pro) return;
@@ -151,11 +175,80 @@ export function PaywallScreen({ state, updateState, navigate, paywallReturnScree
     };
   }, [onAndroid, pro]);
 
+  useEffect(() => {
+    if (!onAndroid) return;
+    let active = true;
+    void getBillingAccountStatus()
+      .then((status) => {
+        if (active) setAccount(status);
+      })
+      .catch(() => {
+        if (active) setAccount(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [onAndroid]);
+
+  const runAccountAction = async (action: 'signIn' | 'create' | 'reset' | 'refresh' | 'resend' | 'signOut') => {
+    if (accountBusy) return;
+    setAccountBusy(true);
+    setAccountMessage(null);
+    try {
+      if (action === 'reset') {
+        await requestBillingPasswordReset(accountEmail.trim());
+        setAccountMessage('Falls ein Konto zu dieser Adresse besteht, erhältst du eine E-Mail zum Zurücksetzen.');
+      } else if (action === 'resend') {
+        await sendBillingVerificationEmail();
+        setAccountMessage('Die Bestätigungs-E-Mail wurde angefordert.');
+      } else {
+        const next = action === 'signIn'
+          ? await signInBillingAccount(accountEmail.trim(), accountPassword)
+          : action === 'create'
+            ? await createBillingAccount(accountEmail.trim(), accountPassword)
+            : action === 'signOut'
+              ? await signOutBillingAccount()
+              : await refreshBillingAccountStatus();
+        setAccount(next);
+        setAccountPassword('');
+        onBillingIdentityChange?.();
+        if (action === 'signOut') setAccountMessage('Du bist abgemeldet. Die lokale Pro-Berechtigung wurde entfernt.');
+        else if (next.signedIn && !next.verified) {
+          setAccountMessage('Bitte bestätige deine E-Mail-Adresse, bevor du Pro nutzen kannst.');
+        } else if (next.verified) {
+          setAccountMessage('Deine E-Mail-Adresse ist bestätigt. Vorhandene Play-Käufe können jetzt sicher geprüft werden.');
+        }
+      }
+    } catch {
+      setAccountMessage('Die Kontoaktion ist fehlgeschlagen. Bitte prüfe deine Angaben oder versuche es später.');
+    } finally {
+      setAccountPassword('');
+      setAccountBusy(false);
+    }
+  };
+
   const checkPlaySubscriptions = async () => {
     setChecking(true);
     try {
       const overview = await getPlayPurchaseOverview();
-      setRestoreNote(describePurchaseOverview(overview));
+      if (!account?.verified) {
+        setRestoreNote(describePurchaseOverview(overview));
+      } else {
+        // Only Android native code sees Play purchase tokens or the Firebase JWT.
+        // It installs a signed Pro grant only after backend verification.
+        const restored = await verifyOwnedPlayPurchases();
+        const verifiedNow = await getNativeVerifiedProStatus();
+        onBillingIdentityChange?.();
+        setRestoreNote(
+          verifiedNow
+            ? 'Dein vorhandenes Google-Play-Abo wurde sicher überprüft. Pro ist auf diesem Gerät aktiv.'
+            : restored.verificationFailures > 0
+              ? 'Die Kaufprüfung war teilweise nicht verfügbar. Pro bleibt bis zur erfolgreichen Prüfung gesperrt.'
+              : restored.pendingPurchases > 0
+                ? 'Die Zahlung ist noch ausstehend. Pro wird nach Abschluss und Prüfung aktiviert.'
+                : 'Es wurde keine gültige Pro-Berechtigung für dieses Konto bestätigt.',
+        );
+      }
     } catch {
       setRestoreNote('Google Play konnte den Abo-Status gerade nicht abrufen. Bitte versuche es später erneut.');
     } finally {
@@ -188,6 +281,74 @@ export function PaywallScreen({ state, updateState, navigate, paywallReturnScree
           Zahlen von heute. Keine Werbung.
         </p>
       </Section>
+
+      {onAndroid && (
+        <Section title="Google-Play-Konto">
+          {!account ? (
+            <p className="text-sm text-zinc-400">Kontostatus wird geladen …</p>
+          ) : !account.configured ? (
+            <p className="text-sm text-zinc-400">
+              Die Kontoverbindung ist in dieser App-Version noch nicht eingerichtet.
+              Ohne Firebase-Konfiguration bleiben Käufe deaktiviert.
+            </p>
+          ) : account.signedIn ? (
+            <div className="space-y-3">
+              <p className="text-sm text-zinc-200">
+                Angemeldet: {account.email}
+              </p>
+              <p className="text-sm text-zinc-400">
+                {account.verified
+                  ? 'E-Mail bestätigt. Pro benötigt zusätzlich einen verifizierten Google-Play-Kauf.'
+                  : 'E-Mail noch nicht bestätigt. Prüfe deinen Posteingang.'}
+              </p>
+              {!account.verified && (
+                <SecondaryButton onClick={() => void runAccountAction('resend')} disabled={accountBusy}>
+                  Bestätigungs-E-Mail erneut senden
+                </SecondaryButton>
+              )}
+              <SecondaryButton onClick={() => void runAccountAction('refresh')} disabled={accountBusy}>
+                Kontostatus aktualisieren
+              </SecondaryButton>
+              <SecondaryButton onClick={() => void runAccountAction('signOut')} disabled={accountBusy}>
+                Abmelden
+              </SecondaryButton>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <label className="block text-sm text-zinc-300">
+                E-Mail-Adresse
+                <input
+                  className="mt-1 w-full rounded-xl bg-zinc-900 p-3 text-zinc-100"
+                  autoComplete="email"
+                  type="email"
+                  value={accountEmail}
+                  onChange={(event) => setAccountEmail(event.target.value)}
+                />
+              </label>
+              <label className="block text-sm text-zinc-300">
+                Passwort
+                <input
+                  className="mt-1 w-full rounded-xl bg-zinc-900 p-3 text-zinc-100"
+                  autoComplete="current-password"
+                  type="password"
+                  value={accountPassword}
+                  onChange={(event) => setAccountPassword(event.target.value)}
+                />
+              </label>
+              <PrimaryButton onClick={() => void runAccountAction('signIn')} disabled={accountBusy}>
+                Anmelden
+              </PrimaryButton>
+              <SecondaryButton onClick={() => void runAccountAction('create')} disabled={accountBusy}>
+                Konto erstellen
+              </SecondaryButton>
+              <SecondaryButton onClick={() => void runAccountAction('reset')} disabled={accountBusy}>
+                Passwort vergessen?
+              </SecondaryButton>
+            </div>
+          )}
+          {accountMessage && <p role="status" className="mt-3 text-sm text-zinc-300">{accountMessage}</p>}
+        </Section>
+      )}
 
       {!pro && (
         <div className="space-y-3">

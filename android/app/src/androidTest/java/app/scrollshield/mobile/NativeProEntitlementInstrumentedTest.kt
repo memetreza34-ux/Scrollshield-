@@ -12,6 +12,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.security.KeyPairGenerator
+import java.security.MessageDigest
 import java.security.Signature
 import android.util.Base64
 
@@ -19,11 +20,16 @@ import android.util.Base64
 class NativeProEntitlementInstrumentedTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
+    private val testUid = "ss405-test-account"
+
     private fun signedToken(now: Long, ttlSeconds: Long = 600): Pair<String, String> {
         val keyPair = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
         val payload = JSONObject()
             .put("v", 1).put("aud", "app.scrollshield.mobile")
-            .put("sub", "a".repeat(64)).put("plan", "pro").put("pro", true)
+            .put("sub", MessageDigest.getInstance("SHA-256")
+                .digest(("scrollshield-uid-v1:" + testUid).toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it.toInt() and 0xff) })
+            .put("plan", "pro").put("pro", true)
             .put("iat", now / 1000L)
             .put("exp", now / 1000L + ttlSeconds)
             .toString()
@@ -47,9 +53,10 @@ class NativeProEntitlementInstrumentedTest {
         val (token, publicKey) = signedToken(now)
         val prefs = context.getSharedPreferences("ss404-entitlement-test", Context.MODE_PRIVATE)
         prefs.edit().clear().commit()
-        assertTrue(NativeProEntitlement.install(prefs, token, publicKey, now))
-        assertTrue(NativeProEntitlement.isActive(prefs, publicKey, now + 30_000L))
-        assertFalse(NativeProEntitlement.isActive(prefs, publicKey, now + 601_000L))
+        assertTrue(NativeProEntitlement.install(prefs, token, publicKey, testUid, now))
+        assertTrue(NativeProEntitlement.isActive(prefs, publicKey, testUid, now + 30_000L))
+        assertFalse(NativeProEntitlement.isActive(prefs, publicKey, testUid, now + 601_000L))
+        assertFalse(NativeProEntitlement.isActive(prefs, publicKey, "wrong-account", now + 30_000L))
         prefs.edit().clear().commit()
     }
 
@@ -58,20 +65,20 @@ class NativeProEntitlementInstrumentedTest {
         val now = 2_000_000_000_000L
         val (token, publicKey) = signedToken(now)
         val (other, wrongKey) = signedToken(now)
-        assertNotNull(NativeProEntitlement.verifiedExpirationSeconds(token, publicKey, now))
-        assertNull(NativeProEntitlement.verifiedExpirationSeconds(token, wrongKey, now))
+        assertNotNull(NativeProEntitlement.verifiedExpirationSeconds(token, publicKey, now, testUid))
+        assertNull(NativeProEntitlement.verifiedExpirationSeconds(token, wrongKey, now, testUid))
         assertNull(NativeProEntitlement.verifiedExpirationSeconds(
-            token.replace("SS1.", "SS0."), publicKey, now
+            token.replace("SS1.", "SS0."), publicKey, now, testUid
         ))
         assertNull(NativeProEntitlement.verifiedExpirationSeconds(
-            token.dropLast(10) + "invalidsig", publicKey, now
+            token.dropLast(10) + "invalidsig", publicKey, now, testUid
         ))
-        assertNull(NativeProEntitlement.verifiedExpirationSeconds(other, "", now))
+        assertNull(NativeProEntitlement.verifiedExpirationSeconds(other, "", now, testUid))
         val prefs = context.getSharedPreferences("ss404-entitlement-test", Context.MODE_PRIVATE)
         prefs.edit().clear().commit()
-        assertTrue(NativeProEntitlement.install(prefs, token, publicKey, now))
-        assertTrue(NativeProEntitlement.isActive(prefs, publicKey, now + 90_000L))
-        assertFalse(NativeProEntitlement.isActive(prefs, publicKey, now - 60_000L))
+        assertTrue(NativeProEntitlement.install(prefs, token, publicKey, testUid, now))
+        assertTrue(NativeProEntitlement.isActive(prefs, publicKey, testUid, now + 90_000L))
+        assertFalse(NativeProEntitlement.isActive(prefs, publicKey, testUid, now - 60_000L))
         prefs.edit().clear().commit()
     }
 
@@ -107,8 +114,8 @@ class NativeProEntitlementInstrumentedTest {
         val (token, key) = signedToken(now)
         val prefs = context.getSharedPreferences("ss404-entitlement-test", Context.MODE_PRIVATE)
         prefs.edit().clear().putString(NativeProEntitlement.KEY_MAX_WALL_CLOCK, "corrupt").commit()
-        assertFalse(NativeProEntitlement.install(prefs, token, key, now))
-        assertFalse(NativeProEntitlement.isActive(prefs, key, now))
+        assertFalse(NativeProEntitlement.install(prefs, token, key, testUid, now))
+        assertFalse(NativeProEntitlement.isActive(prefs, key, testUid, now))
         prefs.edit().clear().commit()
     }
 

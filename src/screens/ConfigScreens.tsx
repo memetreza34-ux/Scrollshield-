@@ -176,7 +176,8 @@ export function Help({ navigate }: { navigate: (s: Screen) => void }) {
             <li>
               <strong>Deine Daten:</strong> Diese Berechtigungen werden <em>ausschließlich</em> für die Blockier-Logik
               verwendet. Wir lesen keine Chats, sehen keine Passwörter und senden keine Nutzungsdaten an unsere Server.
-              Alles bleibt lokal auf deinem Gerät.
+              Dein App-Nutzungsverlauf bleibt lokal auf deinem Gerät. Für ein freiwilliges Pro-Konto
+              werden Anmelde- und Kaufprüfungsdaten über Firebase und Google Play verarbeitet.
             </li>
           </ul>
         </AccordionItem>
@@ -299,7 +300,8 @@ export function PrivacyScreen({
             <p className="text-sm text-zinc-400">
               Wir haben ScrollShield entwickelt, um dir die Kontrolle über deine Zeit zurückzugeben – nicht, um deine
               Daten zu sammeln. Diese Erklärung zeigt in einfachen Worten, was mit deinen Daten passiert. Die
-              Kurzfassung: Was auf deinem Gerät passiert, bleibt auf deinem Gerät.
+              Kurzfassung: Deine App-Nutzungsdaten bleiben auf deinem Gerät. Ein optionales
+              Pro-Konto benötigt zusätzlich Firebase Authentication und Google Play.
             </p>
           </div>
 
@@ -313,10 +315,14 @@ export function PrivacyScreen({
           </div>
 
           <div>
-            <h3 className="text-lg font-bold text-zinc-100 mb-2">2. Keine Server-Übertragung</h3>
+            <h3 className="text-lg font-bold text-zinc-100 mb-2">2. Konto und Abrechnung</h3>
             <p className="text-sm text-zinc-400">
-              Wir übertragen aktuell keinerlei Nutzungsdaten, App-Historien oder Statistiken an unsere Server. Wir haben
-              keinen Zugriff auf dein Verhalten.
+              Die Nutzung von ScrollShield ohne Pro-Konto bleibt lokal. Wenn du freiwillig ein Pro-Konto erstellst,
+              verarbeitet Firebase Authentication deine E-Mail-Adresse und Anmeldedaten für Anmeldung und
+              Passwortwiederherstellung. Zur Abo-Prüfung werden Google Play und unser Verifikationsdienst
+              kontaktiert. Der Dienst speichert eine kontobezogene Kaufzuordnung und einen Hash des Kauf-Tokens.
+              Die App sendet dafür keine Nutzungsstatistiken, App-Verläufe oder geschützten App-Regeln an den Server.
+              Die Pro-Kontofunktionen werden erst nach Einrichtung der erforderlichen Cloud-Dienste aktiviert.
             </p>
           </div>
 
@@ -349,8 +355,10 @@ export function PrivacyScreen({
           <div>
             <h3 className="text-lg font-bold text-zinc-100 mb-2">5. Datenlöschung</h3>
             <p className="text-sm text-zinc-400">
-              Da deine Daten lokal gespeichert sind, hast du die volle Kontrolle. Ein Klick auf "App komplett
-              zurücksetzen" oder die Deinstallation der App löscht alle Daten unwiderruflich von deinem Gerät.
+              „App komplett zurücksetzen“ löscht lokale App-Daten und meldet das Pro-Konto auf diesem Gerät ab.
+              Ein gegebenenfalls angelegtes Firebase-Konto, zugehörige serverseitige Kaufzuordnungen und ein
+              Google-Play-Abo werden dadurch nicht gelöscht oder gekündigt. Vor dem Pro-Release muss ein gesonderter
+              Weg zur Kontolöschung eingerichtet und in der vollständigen Datenschutzerklärung beschrieben werden.
             </p>
           </div>
         </div>

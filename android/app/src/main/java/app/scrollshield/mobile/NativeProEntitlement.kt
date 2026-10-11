@@ -2,6 +2,7 @@ package app.scrollshield.mobile
 
 import android.content.SharedPreferences
 import org.json.JSONObject
+import java.security.MessageDigest
 import java.security.KeyFactory
 import android.util.Base64
 import java.security.Signature
@@ -28,9 +29,10 @@ internal object NativeProEntitlement {
         signed: String?,
         spkiBase64: String,
         nowMillis: Long,
+        expectedUid: String?,
     ): Long? {
         if (signed.isNullOrBlank() || spkiBase64.isBlank() ||
-            signed.length > 5000 || nowMillis <= 0L) return null
+            expectedUid.isNullOrBlank() || signed.length > 5000 || nowMillis <= 0L) return null
         return try {
             val parts = signed.split('.')
             if (parts.size != 3 || parts[0] != "SS1") return null
@@ -42,6 +44,16 @@ internal object NativeProEntitlement {
             signature.initVerify(key)
             signature.update(message.toByteArray(Charsets.UTF_8))
             if (!signature.verify(Base64.decode(parts[2], Base64.URL_SAFE or Base64.NO_WRAP))) return null
+
+            val expectedSubject = MessageDigest.getInstance("SHA-256")
+                .digest(("scrollshield-uid-v1:" + expectedUid).toByteArray(Charsets.UTF_8))
+            val expectedHex = expectedSubject.joinToString("") { "%02x".format(it.toInt() and 0xff) }
+            val claimedSubject = payload.optString("sub")
+            if (!MessageDigest.isEqual(
+                    expectedHex.toByteArray(Charsets.US_ASCII),
+                    claimedSubject.toByteArray(Charsets.US_ASCII)
+                )
+            ) return null
 
             val issued = payload.optLong("iat", -1L)
             val expiry = payload.optLong("exp", -1L)
@@ -64,6 +76,7 @@ internal object NativeProEntitlement {
     fun isActive(
         prefs: SharedPreferences,
         publicKeyBase64: String,
+        expectedUid: String?,
         nowMillis: Long = System.currentTimeMillis(),
     ): Boolean {
         if (publicKeyBase64.isBlank()) return false
@@ -73,7 +86,7 @@ internal object NativeProEntitlement {
             val high = prefs.getLong(KEY_MAX_WALL_CLOCK, 0L)
             if (high > nowMillis + 30_000L) return false
             val token = prefs.getString(KEY_SIGNED_TOKEN, null)
-            if (verifiedExpirationSeconds(token, publicKeyBase64, nowMillis) == null) return false
+            if (verifiedExpirationSeconds(token, publicKeyBase64, nowMillis, expectedUid) == null) return false
             if (nowMillis > high + 60_000L) {
                 if (!prefs.edit().putLong(KEY_MAX_WALL_CLOCK, nowMillis).commit()) return false
             }
@@ -87,9 +100,10 @@ internal object NativeProEntitlement {
         prefs: SharedPreferences,
         signed: String,
         publicKeyBase64: String,
+        expectedUid: String?,
         nowMillis: Long = System.currentTimeMillis(),
     ): Boolean {
-        if (verifiedExpirationSeconds(signed, publicKeyBase64, nowMillis) == null) return false
+        if (verifiedExpirationSeconds(signed, publicKeyBase64, nowMillis, expectedUid) == null) return false
         return try {
             if (prefs.getLong(KEY_MAX_WALL_CLOCK, 0L) > nowMillis + 30_000L) return false
             prefs.edit()

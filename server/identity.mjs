@@ -75,7 +75,11 @@ export async function verifyFirebaseIdToken(token, projectId, opts = {}) {
     jwksUrl: FIREBASE_JWKS,
     ...opts,
   });
-  if (payload.sub.length > 128 || !Number.isFinite(payload.auth_time) ||
+  // Purchases must be recoverable. Unverified email and anonymous Firebase
+  // identities are not eligible to claim paid subscriptions.
+  if (payload.sub.length > 128 || payload.email_verified !== true ||
+      payload.firebase?.sign_in_provider === 'anonymous' ||
+      !Number.isFinite(payload.auth_time) ||
       payload.auth_time * 1000 > (opts.now ?? Date.now()) + 60_000) throw new UnauthorizedError();
   return { uid: payload.sub };
 }

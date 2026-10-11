@@ -116,7 +116,7 @@ describe('native verified billing bridge fails closed in a browser', () => {
   });
 
   it('never treats browser purchase restoration as paid', async () => {
-    await expect(verifyOwnedPlayPurchases('not-a-real-token')).resolves.toEqual({
+    await expect(verifyOwnedPlayPurchases()).resolves.toEqual({
       available: false,
       verifiedActiveObservations: 0,
       verifiedInactiveObservations: 0,
@@ -127,7 +127,7 @@ describe('native verified billing bridge fails closed in a browser', () => {
   });
 
   it('cannot prepare Play checkout or obtain a binding outside Android', async () => {
-    await expect(getVerifiedPlayAccountBinding('fake-jwt')).rejects.toThrow('PLAY_BILLING_ANDROID_ONLY');
-    await expect(prepareVerifiedPlayCheckout('fake-jwt', 'monthly')).rejects.toThrow('PLAY_BILLING_ANDROID_ONLY');
+    await expect(getVerifiedPlayAccountBinding()).rejects.toThrow('PLAY_BILLING_ANDROID_ONLY');
+    await expect(prepareVerifiedPlayCheckout('monthly')).rejects.toThrow('PLAY_BILLING_ANDROID_ONLY');
   });
 });

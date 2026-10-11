@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_APP_CONFIG } from '../types';
 import type { AppConfig, Schedule } from '../types';
-import { getEntitledNativeProtection, hasPro } from './entitlements';
+import { getEntitledNativeProtection, hasPro, setNativeVerifiedProRuntime } from './entitlements';
 
 const SUPPORTED_TEST_IDS = new Set(['instagram', 'tiktok', 'youtube']);
 
@@ -21,13 +21,28 @@ const schedule = (id: string, appIds: string[]): Schedule => ({
   appIds,
 });
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  setNativeVerifiedProRuntime(false);
+  vi.unstubAllEnvs();
+});
 
 describe('unverified billing state', () => {
   it('never treats a saved Pro preview flag as payment in a production build', () => {
     vi.stubEnv('PROD', true);
     expect(hasPro({ pro: { active: true } })).toBe(false);
     expect(hasPro({ pro: { active: false } })).toBe(false);
+  });
+
+  it('allows only runtime-verified Android Pro in a production UI', () => {
+    vi.stubEnv('PROD', true);
+    const state = { pro: { active: false } };
+    expect(hasPro(state)).toBe(false);
+    setNativeVerifiedProRuntime(true);
+    expect(hasPro(state)).toBe(true);
+    setNativeVerifiedProRuntime(false);
+    expect(hasPro(state)).toBe(false);
+    // The verified runtime status is not part of the persisted AppState.
+    expect(state.pro).toEqual({ active: false });
   });
 
   it('allows Pro preview for development testing only', () => {

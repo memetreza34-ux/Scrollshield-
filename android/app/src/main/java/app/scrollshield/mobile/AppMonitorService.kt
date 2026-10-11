@@ -380,7 +380,7 @@ class AppMonitorService : Service() {
         val raw = prefs.getString(ScrollShieldBridgePlugin.KEY_BLOCKED_RULES, "[]") ?: "[]"
         val parsed = mutableMapOf<String, BlockRule>()
         try {
-            val signedPro = NativeProEntitlement.isActive(prefs, BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI)
+            val signedPro = NativeProEntitlement.isActive(prefs, BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI, NativeBillingIdentity.currentUid(this))
             val array = NativeFreeRules.project(JSONArray(raw), signedPro)
             signedProRulesActive = signedPro
             for (index in 0 until array.length()) {
@@ -472,9 +472,14 @@ class AppMonitorService : Service() {
     private fun checkForegroundApp() {
         if (!monitoringEnabled || rules.isEmpty()) return
 
+        // This service already runs in the foreground for actual protection.
+        // Renew signed paid access only when the user is signed in; the network
+        // and Play calls are asynchronous and throttled independently.
+        NativePlayRefreshCoordinator.maybeRefresh(this)
+
         // The entitlement can expire while the user stays inside a protected
         // app. Reproject from stored rules immediately, without waiting for JS.
-        val signedProNow = NativeProEntitlement.isActive(prefs, BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI)
+        val signedProNow = NativeProEntitlement.isActive(prefs, BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI, NativeBillingIdentity.currentUid(this))
         if (signedProNow != signedProRulesActive) {
             loadRules()
             lastForegroundPackage = null

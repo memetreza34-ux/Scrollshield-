@@ -4,7 +4,9 @@ import { AppState, Screen, DEFAULT_STATE, SUPPORTED_APPS } from './types';
 import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
 import { getFocusBlockedAppIds, getRunningFocusSession, reconcileFocusRuntime } from './lib/focus';
-import { getEntitledNativeProtection, hasPro } from './lib/entitlements';
+import { getEntitledNativeProtection, hasPro, setNativeVerifiedProRuntime } from './lib/entitlements';
+import { getNativeVerifiedProStatus } from './lib/billing';
+import { signOutBillingAccount } from './lib/billingIdentity';
 import {
   acknowledgeInterruptionEvents,
   clearNativeData,
@@ -74,6 +76,8 @@ export default function App() {
   const [appState, setAppState] = useState<AppState>(DEFAULT_STATE);
   const [isLoaded, setIsLoaded] = useState(false);
   const [appIcons, setAppIcons] = useState<ReadonlyMap<string, string>>(() => new Map());
+  const [nativeVerifiedPro, setNativeVerifiedPro] = useState(false);
+  const [billingIdentityRevision, setBillingIdentityRevision] = useState(0);
   const settingsReturnScreenRef = useRef<Screen>('today');
   const paywallReturnScreenRef = useRef<Screen>('today');
   const skipNextSaveRef = useRef(false);
@@ -390,6 +394,34 @@ export default function App() {
     }
   }, [appState, isLoaded]);
 
+  // Native grants are short-lived. Reflect only signed Android status in the
+  // current runtime (never into persisted AppState/pro.active/backups).
+  useEffect(() => {
+    if (!isLoaded) return;
+    let alive = true;
+    const refreshPaidStatus = async () => {
+      const active = await getNativeVerifiedProStatus().catch(() => false);
+      if (!alive) return;
+      setNativeVerifiedProRuntime(active);
+      setNativeVerifiedPro(active);
+    };
+    void refreshPaidStatus();
+    const interval = window.setInterval(() => void refreshPaidStatus(), 30_000);
+    const onFocus = () => void refreshPaidStatus();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshPaidStatus();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      alive = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+      setNativeVerifiedProRuntime(false);
+    };
+  }, [isLoaded, billingIdentityRevision]);
+
   // Sync protection rules to the native layer whenever they change. Focus
   // and rescue go down with their end time, so the phone unlocks on time even
   // when ScrollShield is closed.
@@ -423,6 +455,7 @@ export default function App() {
     appState.schedules,
     appState.commitment,
     appState.pro,
+    nativeVerifiedPro,
     isLoaded,
   ]);
 
@@ -438,6 +471,9 @@ export default function App() {
   const resetApp = () => {
     skipNextSaveRef.current = true;
     StorageService.clearState();
+    setNativeVerifiedProRuntime(false);
+    setNativeVerifiedPro(false);
+    void signOutBillingAccount().catch(() => undefined);
     void clearNativeData();
     setAppState(DEFAULT_STATE);
     setCurrentScreen('welcome');
@@ -530,6 +566,7 @@ export default function App() {
                     updateState={updateState}
                     navigate={navigate}
                     paywallReturnScreen={paywallReturnScreenRef.current}
+                    onBillingIdentityChange={() => setBillingIdentityRevision((value) => value + 1)}
                   />
                 )}
                 {currentScreen === 'privacy' && (

@@ -5,6 +5,25 @@ apply plugin: 'org.jetbrains.kotlin.android'
 // No endpoint means verification is disabled. This is NOT a credential.
 def billingApiUrl = (project.findProperty('scrollshieldBillingApiUrl') ?: '').toString()
 
+// Firebase Android config is PUBLIC metadata, not a secret. All fields must
+// be provided together; absent configuration keeps authentication off.
+def firebaseProjectId = (project.findProperty('scrollshieldFirebaseProjectId') ?: '').toString()
+def firebaseAppId = (project.findProperty('scrollshieldFirebaseAppId') ?: '').toString()
+def firebaseApiKey = (project.findProperty('scrollshieldFirebaseApiKey') ?: '').toString()
+def firebaseFields = [firebaseProjectId, firebaseAppId, firebaseApiKey]
+if (firebaseFields.any { !it.isEmpty() } && firebaseFields.any { it.isEmpty() }) {
+    throw new GradleException('All ScrollShield Firebase public config fields must be set together')
+}
+if (!firebaseProjectId.isEmpty() && !(firebaseProjectId ==~ /^[a-z0-9-]{4,80}$/)) {
+    throw new GradleException('Invalid Firebase project identifier')
+}
+if (!firebaseAppId.isEmpty() && !(firebaseAppId ==~ /^1:[0-9]+:android:[A-Za-z0-9]+$/)) {
+    throw new GradleException('Invalid Firebase Android App ID')
+}
+if (!firebaseApiKey.isEmpty() && !(firebaseApiKey ==~ /^AIza[A-Za-z0-9_-]{30,60}$/)) {
+    throw new GradleException('Invalid public Firebase Web API key format')
+}
+
 // Base64 DER SubjectPublicKeyInfo from Cloud KMS getPublicKey. Public, not
 // secret. Empty by default: production native Pro can NEVER activate.
 def billingEntitlementSpki = (project.findProperty('scrollshieldEntitlementPublicKeyBase64') ?: '').toString()
@@ -42,6 +61,9 @@ android {
         applicationId "app.scrollshield.mobile"
         buildConfigField "String", "SCROLLSHIELD_BILLING_API_URL", "\"" + billingApiUrl + "\""
         buildConfigField "String", "SCROLLSHIELD_ENTITLEMENT_SPKI", "\"" + billingEntitlementSpki + "\""
+        buildConfigField "String", "SCROLLSHIELD_FIREBASE_PROJECT_ID", "\"" + firebaseProjectId + "\""
+        buildConfigField "String", "SCROLLSHIELD_FIREBASE_APP_ID", "\"" + firebaseAppId + "\""
+        buildConfigField "String", "SCROLLSHIELD_FIREBASE_API_KEY", "\"" + firebaseApiKey + "\""
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -86,6 +108,9 @@ dependencies {
     // read-only purchase observations. Payments remain disabled until secure
     // Play Developer API verification is deployed.
     implementation "com.android.billingclient:billing:9.1.0"
+    // Main Firebase Auth module (the legacy -ktx artifact is no longer used).
+    implementation platform("com.google.firebase:firebase-bom:34.19.0")
+    implementation "com.google.firebase:firebase-auth"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

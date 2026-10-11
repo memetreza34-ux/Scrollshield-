@@ -179,13 +179,31 @@ class ScrollShieldBillingPlugin : Plugin() {
     private val backendHandler = Handler(Looper.getMainLooper())
     private val verificationExecutor = Executors.newSingleThreadExecutor()
 
+    /** A WebView-supplied Firebase JWT must NEVER be treated as login state. */
+    private fun withVerifiedIdentity(call: PluginCall, action: (String) -> Unit) {
+        if (BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI.isBlank() ||
+            NativeBillingPolicy.normalizedHttpsBase(BuildConfig.SCROLLSHIELD_BILLING_API_URL) == null ||
+            NativeBillingIdentity.currentUid(context) == null) {
+            call.reject("Bitte mit bestätigtem E-Mail-Konto anmelden.", "BILLING_NOT_AUTHENTICATED")
+            return
+        }
+        NativeBillingIdentity.getVerifiedIdToken(context) { idToken ->
+            if (idToken.isNullOrBlank()) {
+                call.reject("Anmeldung konnte nicht bestätigt werden.", "BILLING_NOT_AUTHENTICATED")
+            } else {
+                action(idToken)
+            }
+        }
+    }
+
     @PluginMethod
     fun getVerificationReadiness(call: PluginCall) {
         call.resolve(
             JSObject().put(
                 "configured",
                 NativeBillingPolicy.normalizedHttpsBase(BuildConfig.SCROLLSHIELD_BILLING_API_URL) != null &&
-                    BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI.isNotEmpty()
+                    BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI.isNotEmpty() &&
+                    NativeBillingIdentity.auth(context) != null
             )
         )
     }
@@ -196,8 +214,12 @@ class ScrollShieldBillingPlugin : Plugin() {
      */
     @PluginMethod
     fun getNativeProStatus(call: PluginCall) {
+        // Also refresh after the user reopens the app when monitoring had
+        // stopped; this schedules work asynchronously and never trusts JS.
+        NativePlayRefreshCoordinator.maybeRefresh(context)
         val active = NativeProEntitlement.isActive(
-            SecurePrefs.open(context), BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI
+            SecurePrefs.open(context), BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI,
+            NativeBillingIdentity.currentUid(context)
         )
         call.resolve(JSObject().put("verified", active))
     }
@@ -217,24 +239,18 @@ class ScrollShieldBillingPlugin : Plugin() {
      */
     @PluginMethod
     fun getVerifiedAccountBinding(call: PluginCall) {
-        val firebaseIdToken = call.getString("firebaseIdToken")
-        if (!NativeBillingPolicy.canBeginVerification(
-                firebaseIdToken, BuildConfig.SCROLLSHIELD_BILLING_API_URL
-            )
-        ) {
-            call.reject("Firebase-Anmeldung oder Kaufprüfung fehlt.", "BILLING_NOT_CONFIGURED")
-            return
-        }
-        verificationExecutor.execute {
-            try {
-                val id = NativePlayVerificationTransport(BuildConfig.SCROLLSHIELD_BILLING_API_URL)
-                    .accountBinding(firebaseIdToken!!)
-                backendHandler.post {
-                    call.resolve(JSObject().put("obfuscatedAccountId", id))
-                }
-            } catch (_: Exception) {
-                backendHandler.post {
-                    call.reject("Play-Konto konnte nicht sicher verbunden werden.", "BILLING_IDENTITY_FAILED")
+        withVerifiedIdentity(call) { firebaseIdToken ->
+            verificationExecutor.execute {
+                try {
+                    val id = NativePlayVerificationTransport(BuildConfig.SCROLLSHIELD_BILLING_API_URL)
+                        .accountBinding(firebaseIdToken)
+                    backendHandler.post {
+                        call.resolve(JSObject().put("obfuscatedAccountId", id))
+                    }
+                } catch (_: Exception) {
+                    backendHandler.post {
+                        call.reject("Play-Konto konnte nicht sicher verbunden werden.", "BILLING_IDENTITY_FAILED")
+                    }
                 }
             }
         }
@@ -248,16 +264,8 @@ class ScrollShieldBillingPlugin : Plugin() {
      */
     @PluginMethod
     fun verifyExistingPurchases(call: PluginCall) {
-        val firebaseIdToken = call.getString("firebaseIdToken")
-        if (!NativeBillingPolicy.canBeginVerification(
-                firebaseIdToken, BuildConfig.SCROLLSHIELD_BILLING_API_URL
-            )
-        ) {
-            call.reject("Firebase-Anmeldung oder Kaufprüfung fehlt.", "BILLING_NOT_CONFIGURED")
-            return
-        }
-
-        connected(call) { client ->
+        withVerifiedIdentity(call) { firebaseIdToken ->
+            connected(call) { client ->
             val params = QueryPurchasesParams.newBuilder()
                 .setProductType(BillingClient.ProductType.SUBS)
                 .includeSuspendedSubscriptions(true)
@@ -288,13 +296,14 @@ class ScrollShieldBillingPlugin : Plugin() {
                         var installedSignedEntitlement = false
                         for (purchase in eligible) {
                             try {
-                                val status = transport.verify(firebaseIdToken!!, purchase.purchaseToken)
+                                val status = transport.verify(firebaseIdToken, purchase.purchaseToken)
                                 if (status.active) {
                                     val grant = status.entitlementToken
                                     val saved = grant != null && NativeProEntitlement.install(
                                         SecurePrefs.open(context),
                                         grant,
                                         BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI,
+                                        NativeBillingIdentity.currentUid(context),
                                     )
                                     if (saved) {
                                         verifiedActive++
@@ -338,6 +347,7 @@ class ScrollShieldBillingPlugin : Plugin() {
                     }
                 }
             }
+            }
         }
     }
 
@@ -350,7 +360,6 @@ class ScrollShieldBillingPlugin : Plugin() {
      */
     @PluginMethod
     fun prepareVerifiedCheckout(call: PluginCall) {
-        val firebaseIdToken = call.getString("firebaseIdToken")
         val basePlanId = call.getString("basePlanId") ?: ""
         val offerId = call.getString("offerId")
         if (!NativeBillingPolicy.validBasePlan(basePlanId) ||
@@ -358,19 +367,12 @@ class ScrollShieldBillingPlugin : Plugin() {
             call.reject("Ungültiger Google-Play-Tarif.", "BILLING_INVALID_PLAN")
             return
         }
-        if (!NativeBillingPolicy.canBeginVerification(
-                firebaseIdToken, BuildConfig.SCROLLSHIELD_BILLING_API_URL
-            )
-        ) {
-            call.reject("Kauf noch nicht bereit: Anmeldung/Backend fehlt.", "BILLING_NOT_CONFIGURED")
-            return
-        }
-
-        verificationExecutor.execute {
+        withVerifiedIdentity(call) { firebaseIdToken ->
+            verificationExecutor.execute {
             val authenticated = try {
                 // The server verifies the JWT and returns a stable HMAC binding.
                 NativePlayVerificationTransport(BuildConfig.SCROLLSHIELD_BILLING_API_URL)
-                    .accountBinding(firebaseIdToken!!)
+                    .accountBinding(firebaseIdToken)
             } catch (_: Exception) {
                 null
             }
@@ -419,6 +421,7 @@ class ScrollShieldBillingPlugin : Plugin() {
                         }
                     }
                 }
+            }
             }
         }
     }
