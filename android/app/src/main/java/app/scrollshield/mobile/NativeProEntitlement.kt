@@ -100,6 +100,7 @@ internal object NativeProEntitlement {
         prefs: SharedPreferences,
         signed: String,
         publicKeyBase64: String,
+        expectedUid: String?,
         nowMillis: Long = System.currentTimeMillis(),
     ): Boolean {
         if (verifiedExpirationSeconds(signed, publicKeyBase64, nowMillis, expectedUid) == null) return false
