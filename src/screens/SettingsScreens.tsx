@@ -8,6 +8,8 @@ import {
   describePurchaseOverview,
   getPlayCatalog,
   getPlayPurchaseOverview,
+  verifyOwnedPlayPurchases,
+  getNativeVerifiedProStatus,
   isNativePlayBilling,
 } from '../lib/billing';
 import type { PlayCatalog } from '../lib/billing';
@@ -229,7 +231,24 @@ export function PaywallScreen({
     setChecking(true);
     try {
       const overview = await getPlayPurchaseOverview();
-      setRestoreNote(describePurchaseOverview(overview));
+      if (!account?.verified) {
+        setRestoreNote(describePurchaseOverview(overview));
+      } else {
+        // Only Android native code sees Play purchase tokens or the Firebase JWT.
+        // It installs a signed Pro grant only after backend verification.
+        const restored = await verifyOwnedPlayPurchases();
+        const verifiedNow = await getNativeVerifiedProStatus();
+        onBillingIdentityChange?.();
+        setRestoreNote(
+          verifiedNow
+            ? 'Dein vorhandenes Google-Play-Abo wurde sicher überprüft. Pro ist auf diesem Gerät aktiv.'
+            : restored.verificationFailures > 0
+              ? 'Die Kaufprüfung war teilweise nicht verfügbar. Pro bleibt bis zur erfolgreichen Prüfung gesperrt.'
+              : restored.pendingPurchases > 0
+                ? 'Die Zahlung ist noch ausstehend. Pro wird nach Abschluss und Prüfung aktiviert.'
+                : 'Es wurde keine gültige Pro-Berechtigung für dieses Konto bestätigt.',
+        );
+      }
     } catch {
       setRestoreNote('Google Play konnte den Abo-Status gerade nicht abrufen. Bitte versuche es später erneut.');
     } finally {
