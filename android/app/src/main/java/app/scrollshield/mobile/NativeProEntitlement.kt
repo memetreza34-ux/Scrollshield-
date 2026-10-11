@@ -3,10 +3,9 @@ package app.scrollshield.mobile
 import android.content.SharedPreferences
 import org.json.JSONObject
 import java.security.KeyFactory
-import java.security.MessageDigest
+import android.util.Base64
 import java.security.Signature
 import java.security.spec.X509EncodedKeySpec
-import java.util.Base64
 
 /**
  * Production Pro is ONLY enabled by a short-lived server/KMS-signed claim.
@@ -36,13 +35,13 @@ internal object NativeProEntitlement {
             val parts = signed.split('.')
             if (parts.size != 3 || parts[0] != "SS1") return null
             val message = parts[0] + "." + parts[1]
-            val payload = JSONObject(String(Base64.getUrlDecoder().decode(parts[1]), Charsets.UTF_8))
-            val publicKeyBytes = Base64.getDecoder().decode(spkiBase64)
+            val payload = JSONObject(String(Base64.decode(parts[1], Base64.URL_SAFE or Base64.NO_WRAP), Charsets.UTF_8))
+            val publicKeyBytes = Base64.decode(spkiBase64, Base64.DEFAULT)
             val key = KeyFactory.getInstance("RSA").generatePublic(X509EncodedKeySpec(publicKeyBytes))
             val signature = Signature.getInstance("SHA256withRSA")
             signature.initVerify(key)
             signature.update(message.toByteArray(Charsets.UTF_8))
-            if (!signature.verify(Base64.getUrlDecoder().decode(parts[2]))) return null
+            if (!signature.verify(Base64.decode(parts[2], Base64.URL_SAFE or Base64.NO_WRAP))) return null
 
             val issued = payload.optLong("iat", -1L)
             val expiry = payload.optLong("exp", -1L)
