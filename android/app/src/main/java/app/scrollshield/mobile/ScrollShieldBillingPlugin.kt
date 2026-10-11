@@ -184,9 +184,30 @@ class ScrollShieldBillingPlugin : Plugin() {
         call.resolve(
             JSObject().put(
                 "configured",
-                NativeBillingPolicy.normalizedHttpsBase(BuildConfig.SCROLLSHIELD_BILLING_API_URL) != null
+                NativeBillingPolicy.normalizedHttpsBase(BuildConfig.SCROLLSHIELD_BILLING_API_URL) != null &&
+                    BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI.isNotEmpty()
             )
         )
+    }
+
+    /**
+     * A signed token is readable only by the native layer. This UI-facing
+     * status is not itself an entitlement, so no user-controllable pro flag.
+     */
+    @PluginMethod
+    fun getNativeProStatus(call: PluginCall) {
+        val active = NativeProEntitlement.isActive(
+            SecurePrefs.open(context), BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI
+        )
+        call.resolve(JSObject().put("verified", active))
+    }
+
+    /** Call on sign-out, account change or explicit user data removal. */
+    @PluginMethod
+    fun clearVerifiedPro(call: PluginCall) {
+        val success = NativeProEntitlement.clear(SecurePrefs.open(context))
+        if (success) AppMonitorService.notifyConfigUpdate(context)
+        call.resolve(JSObject().put("cleared", success))
     }
 
     /**
@@ -264,16 +285,39 @@ class ScrollShieldBillingPlugin : Plugin() {
                         var verifiedActive = 0
                         var verifiedInactive = 0
                         var rejected = 0
+                        var installedSignedEntitlement = false
                         for (purchase in eligible) {
                             try {
                                 val status = transport.verify(firebaseIdToken!!, purchase.purchaseToken)
-                                if (status.active) verifiedActive++ else verifiedInactive++
+                                if (status.active) {
+                                    val grant = status.entitlementToken
+                                    val saved = grant != null && NativeProEntitlement.install(
+                                        SecurePrefs.open(context),
+                                        grant,
+                                        BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI,
+                                    )
+                                    if (saved) {
+                                        verifiedActive++
+                                        installedSignedEntitlement = true
+                                    } else {
+                                        // Signed response absent, invalid, expired or signing
+                                        // key not configured -> Free, never silent Pro.
+                                        rejected++
+                                    }
+                                } else {
+                                    verifiedInactive++
+                                }
                             } catch (_: Exception) {
                                 // No offline/cached Pro; an unreachable backend is a failure.
                                 rejected++
                             }
                         }
                         backendHandler.post {
+                            if (installedSignedEntitlement) {
+                                // Reload rules on the worker/service: verified signature
+                                // is the ONLY native switch from Free to Pro.
+                                AppMonitorService.notifyConfigUpdate(context)
+                            }
                             call.resolve(
                                 JSObject()
                                     .put("available", true)
@@ -281,6 +325,9 @@ class ScrollShieldBillingPlugin : Plugin() {
                                     .put("verifiedInactiveObservations", verifiedInactive)
                                     .put("pendingPurchases", pendingCount)
                                     .put("verificationFailures", rejected)
+                                    .put("nativeProVerified", installedSignedEntitlement)
+                                    // React's product UI is not yet integrated with
+                                    // user login; do not claim paid UI is enabled.
                                     .put("proActivated", false)
                             )
                         }

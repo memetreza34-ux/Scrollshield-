@@ -94,3 +94,31 @@ test('metadata credential failure cannot fall back to an untrusted token', async
   });
   await assert.rejects(store.queryPlay(token), UpstreamError);
 });
+
+test('Cloud KMS signer sends SHA256 digest with a runtime identity and no private key', async () => {
+  const version = 'projects/test-project/locations/global/keyRings/ss/cryptoKeys/pro/cryptoKeyVersions/1';
+  const calls = [];
+  const { store } = makeStore(async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ name: version, signature: Buffer.alloc(256, 0x41).toString('base64') }),
+      { status: 200 });
+  });
+  const message = Buffer.from('SS1.dGVzdA');
+  const signature = await store.signEntitlement(message, version);
+  assert.equal(signature.length, 256);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(new URL(calls[0].url).host, 'cloudkms.googleapis.com');
+  const body = JSON.parse(calls[0].options.body);
+  assert.equal(Buffer.from(body.digest.sha256, 'base64').length, 32);
+  assert.equal(body.data, undefined);
+});
+
+test('Cloud KMS signer rejects wrong key path and bad upstream signature', async () => {
+  const version = 'projects/test-project/locations/global/keyRings/ss/cryptoKeys/pro/cryptoKeyVersions/1';
+  const { store } = makeStore(async () => new Response(JSON.stringify({
+    name: version, signature: Buffer.alloc(1).toString('base64'),
+  }), { status: 200 }));
+  await assert.rejects(store.signEntitlement(Buffer.from('SS1.aaa'), 'wrong-key'), UpstreamError);
+  await assert.rejects(store.signEntitlement(Buffer.from('SS1.aaa'), version), UpstreamError);
+});

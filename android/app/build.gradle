@@ -4,6 +4,14 @@ apply plugin: 'org.jetbrains.kotlin.android'
 // Public HTTPS endpoint, supplied during a controlled release build.
 // No endpoint means verification is disabled. This is NOT a credential.
 def billingApiUrl = (project.findProperty('scrollshieldBillingApiUrl') ?: '').toString()
+
+// Base64 DER SubjectPublicKeyInfo from Cloud KMS getPublicKey. Public, not
+// secret. Empty by default: production native Pro can NEVER activate.
+def billingEntitlementSpki = (project.findProperty('scrollshieldEntitlementPublicKeyBase64') ?: '').toString()
+if (!billingEntitlementSpki.isEmpty() &&
+    !(billingEntitlementSpki ==~ /^[A-Za-z0-9+\/=]+$/)) {
+    throw new GradleException('scrollshieldEntitlementPublicKeyBase64 must be standard Base64 DER SPKI')
+}
 if (!billingApiUrl.isEmpty() && !(billingApiUrl ==~ /^https:\/\/[a-zA-Z0-9.-]+$/)) {
     throw new GradleException('scrollshieldBillingApiUrl must be an HTTPS hostname without paths or credentials')
 }
@@ -33,6 +41,7 @@ android {
     defaultConfig {
         applicationId "app.scrollshield.mobile"
         buildConfigField "String", "SCROLLSHIELD_BILLING_API_URL", "\"" + billingApiUrl + "\""
+        buildConfigField "String", "SCROLLSHIELD_ENTITLEMENT_SPKI", "\"" + billingEntitlementSpki + "\""
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
