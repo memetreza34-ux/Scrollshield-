@@ -36,15 +36,20 @@ internal object NativeFreeRules {
     fun project(raw: JSONArray, hasSignedPro: Boolean, nowMillis: Long = System.currentTimeMillis()): JSONArray {
         if (hasSignedPro) return raw
 
-        val packages = (0 until raw.length()).mapNotNull {
-            raw.optJSONObject(it)?.optString("packageName")?.takeIf(String::isNotEmpty)
+        val packages = (0 until raw.length()).mapNotNull { index ->
+            val item = raw.optJSONObject(index)
+            val packageName = item?.optString("packageName") ?: raw.optString(index)
+            packageName.takeIf(String::isNotEmpty)
         }
         val allowed = firstTwoSupportedAppIds(packages)
         val output = JSONArray()
         var selectedSchedule: String? = null
 
         for (index in 0 until raw.length()) {
-            val original = raw.optJSONObject(index) ?: continue
+            // V0 contracts stored a plain list of Android package names.
+            // Never bypass Free policy when restoring those legacy records.
+            val original = raw.optJSONObject(index)
+                ?: JSONObject().put("packageName", raw.optString(index))
             val packageName = original.optString("packageName")
             val trustedId = trustedAppId(packageName) ?: continue
             if (trustedId !in allowed) continue
