@@ -20,6 +20,7 @@ const jwks = async () => new Response(JSON.stringify({
 const firebasePayload = () => ({
   sub: 'fake_user_01', iss: 'https://securetoken.google.com/test-project', aud: 'test-project',
   exp: now / 1000 + 3600, iat: now / 1000 - 20, auth_time: now / 1000 - 20,
+  email_verified: true, firebase: { sign_in_provider: 'password' },
 });
 
 test('accepts a Google-signed Firebase account identity', async () => {
@@ -69,4 +70,16 @@ test('checks PubSub push email and exact audience in addition to signature', asy
     UnauthorizedError);
   await assert.rejects(verifyPubSubJwt(tokenFor({ ...claims, email_verified: false }),
     claims.aud, claims.email, opts), UnauthorizedError);
+});
+
+test('unverified email accounts and anonymous users cannot claim paid purchases', async () => {
+  for (const claims of [
+    { ...firebasePayload(), email_verified: false },
+    { ...firebasePayload(), firebase: { sign_in_provider: 'anonymous' } },
+  ]) {
+    await assert.rejects(
+      verifyFirebaseIdToken(tokenFor(claims), 'test-project', { now, fetchImpl: jwks }),
+      UnauthorizedError,
+    );
+  }
 });
