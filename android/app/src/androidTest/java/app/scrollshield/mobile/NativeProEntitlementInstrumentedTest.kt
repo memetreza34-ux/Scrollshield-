@@ -102,6 +102,18 @@ class NativeProEntitlementInstrumentedTest {
     }
 
     @Test
+    fun legacyPackageListStillGetsFreeClamping() {
+        val legacy = org.json.JSONArray()
+            .put("com.instagram.android")
+            .put("com.zhiliaoapp.musically")
+            .put("com.google.android.youtube")
+        val rules = NativeFreeRules.project(legacy, false)
+        assertEquals(2, rules.length())
+        assertEquals("instagram", rules.getJSONObject(0).getString("appId"))
+        assertEquals("tiktok", rules.getJSONObject(1).getString("appId"))
+    }
+
+    @Test
     fun oneFreeScheduleCanApplyToBothAppsButExtraWindowsCannot() {
         val raw = org.json.JSONArray()
         for (pkg in listOf("com.instagram.android", "com.zhiliaoapp.musically")) {
