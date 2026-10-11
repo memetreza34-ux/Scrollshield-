@@ -63,6 +63,11 @@ interface PlayBillingBridge {
   getVerificationReadiness(): Promise<PlayBackendReadiness>;
   getVerifiedAccountBinding(options: { firebaseIdToken: string }): Promise<{ obfuscatedAccountId: string }>;
   verifyExistingPurchases(options: { firebaseIdToken: string }): Promise<VerifiedPlayRestore>;
+  prepareVerifiedCheckout(options: {
+    firebaseIdToken: string;
+    basePlanId: 'monthly' | 'annual';
+    offerId?: string;
+  }): Promise<{ readyForFutureCheckout: boolean; checkoutEnabled: false; basePlanId: string }>;
 }
 
 const bridge = registerPlugin<PlayBillingBridge>('ScrollShieldBilling');
@@ -104,6 +109,22 @@ export async function getVerifiedPlayAccountBinding(firebaseIdToken: string): Pr
   const response = await withBillingReadTimeout(bridge.getVerifiedAccountBinding({ firebaseIdToken }), 18_000);
   if (!/^[a-f0-9]{64}$/.test(response.obfuscatedAccountId)) throw new Error('INVALID_PLAY_ACCOUNT_BINDING');
   return response.obfuscatedAccountId;
+}
+
+/**
+ * Authentication + fresh Google Play offer eligibility preflight.
+ * Launching an actual purchase remains disabled in native Android.
+ */
+export async function prepareVerifiedPlayCheckout(
+  firebaseIdToken: string,
+  basePlanId: 'monthly' | 'annual',
+  offerId?: string,
+): Promise<{ readyForFutureCheckout: boolean; checkoutEnabled: false; basePlanId: string }> {
+  if (!isNativePlayBilling()) throw new Error('PLAY_BILLING_ANDROID_ONLY');
+  return withBillingReadTimeout(
+    bridge.prepareVerifiedCheckout({ firebaseIdToken, basePlanId, offerId }),
+    24_000,
+  );
 }
 
 /** Restore is diagnostic-only until native signed entitlement enforcement ships. */
