@@ -41,7 +41,7 @@ internal object NativeFreeRules {
         }
         val allowed = firstTwoSupportedAppIds(packages)
         val output = JSONArray()
-        var scheduleUsed = false
+        var selectedSchedule: String? = null
 
         for (index in 0 until raw.length()) {
             val original = raw.optJSONObject(index) ?: continue
@@ -71,22 +71,24 @@ internal object NativeFreeRules {
             if (focusUntil > nowMillis && focusUntil <= nowMillis + 3_600_000L) {
                 safe.put("focusUntil", focusUntil)
             }
-            if (!scheduleUsed) {
-                val schedule = original.optJSONObject("timeWindows")
-                val windows = schedule?.optJSONArray("windows")
-                if (windows != null && windows.length() > 0) {
-                    val first = windows.optJSONObject(0)
-                    if (first != null) {
-                        val start = first.optInt("startHour", -1)
-                        val end = first.optInt("endHour", -1)
-                        val mode = first.optString("rule")
-                        if (start in 0..23 && end in 0..24 && start != end &&
-                            mode in setOf("strict", "block")) {
+            val windows = original.optJSONObject("timeWindows")?.optJSONArray("windows")
+            if (windows != null && windows.length() > 0) {
+                val first = windows.optJSONObject(0)
+                if (first != null) {
+                    val start = first.optInt("startHour", -1)
+                    val end = first.optInt("endHour", -1)
+                    val mode = first.optString("rule")
+                    if (start in 0..23 && end in 0..24 && start != end &&
+                        mode in setOf("strict", "block")) {
+                        // Identical schedule applies to BOTH permitted apps,
+                        // while different windows are treated as paid schedules.
+                        val signature = "$start:$end:$mode"
+                        if (selectedSchedule == null) selectedSchedule = signature
+                        if (selectedSchedule == signature) {
                             safe.put("timeWindows", JSONObject()
                                 .put("windows", JSONArray().put(JSONObject()
                                     .put("startHour", start).put("endHour", end).put("rule", mode)))
                                 .put("weekendRule", "normal"))
-                            scheduleUsed = true
                         }
                     }
                 }
