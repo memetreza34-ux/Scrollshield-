@@ -40,9 +40,29 @@ export interface PlayPurchaseOverview {
   purchases: ObservedPlayPurchase[];
 }
 
+/**
+ * Verified purchase observations, NOT an entitlement or automatic Pro grant.
+ * No purchase tokens or original Play receipts are ever returned to React.
+ */
+export interface VerifiedPlayRestore {
+  available: boolean;
+  verifiedActiveObservations: number;
+  verifiedInactiveObservations: number;
+  pendingPurchases: number;
+  verificationFailures: number;
+  proActivated: false;
+}
+
+export interface PlayBackendReadiness {
+  configured: boolean;
+}
+
 interface PlayBillingBridge {
   getCatalog(): Promise<PlayCatalog>;
   getPurchaseOverview(): Promise<PlayPurchaseOverview>;
+  getVerificationReadiness(): Promise<PlayBackendReadiness>;
+  getVerifiedAccountBinding(options: { firebaseIdToken: string }): Promise<{ obfuscatedAccountId: string }>;
+  verifyExistingPurchases(options: { firebaseIdToken: string }): Promise<VerifiedPlayRestore>;
 }
 
 const bridge = registerPlugin<PlayBillingBridge>('ScrollShieldBilling');
@@ -69,6 +89,35 @@ export const getPlayCatalog = async (): Promise<PlayCatalog> =>
 
 export const getPlayPurchaseOverview = async (): Promise<PlayPurchaseOverview> =>
   isNativePlayBilling() ? withBillingReadTimeout(bridge.getPurchaseOverview()) : { available: false, purchases: [] };
+
+/** No server URL built into the APK means all paid verification stays disabled. */
+export const getPlayBackendReadiness = async (): Promise<PlayBackendReadiness> =>
+  isNativePlayBilling() ? withBillingReadTimeout(bridge.getVerificationReadiness()) : { configured: false };
+
+/**
+ * Prepared for a future authenticated native purchase flow. Firebase ID
+ * tokens must be short-lived and obtained through verified user sign-in.
+ * These are not persisted by ScrollShield.
+ */
+export async function getVerifiedPlayAccountBinding(firebaseIdToken: string): Promise<string> {
+  if (!isNativePlayBilling()) throw new Error('PLAY_BILLING_ANDROID_ONLY');
+  const response = await withBillingReadTimeout(bridge.getVerifiedAccountBinding({ firebaseIdToken }), 18_000);
+  if (!/^[a-f0-9]{64}$/.test(response.obfuscatedAccountId)) throw new Error('INVALID_PLAY_ACCOUNT_BINDING');
+  return response.obfuscatedAccountId;
+}
+
+/** Restore is diagnostic-only until native signed entitlement enforcement ships. */
+export const verifyOwnedPlayPurchases = async (firebaseIdToken: string): Promise<VerifiedPlayRestore> =>
+  isNativePlayBilling()
+    ? withBillingReadTimeout(bridge.verifyExistingPurchases({ firebaseIdToken }), 120_000)
+    : {
+        available: false,
+        verifiedActiveObservations: 0,
+        verifiedInactiveObservations: 0,
+        pendingPurchases: 0,
+        verificationFailures: 0,
+        proActivated: false,
+      };
 
 /** Play supplies the price; this only translates its ISO-8601 billing period. */
 export function describeBillingPeriod(period: string): string {
