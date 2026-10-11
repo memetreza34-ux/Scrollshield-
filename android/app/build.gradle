@@ -1,6 +1,13 @@
 apply plugin: 'com.android.application'
 apply plugin: 'org.jetbrains.kotlin.android'
 
+// Public HTTPS endpoint, supplied during a controlled release build.
+// No endpoint means verification is disabled. This is NOT a credential.
+def billingApiUrl = (project.findProperty('scrollshieldBillingApiUrl') ?: '').toString()
+if (!billingApiUrl.isEmpty() && !(billingApiUrl ==~ /^https:\/\/[a-zA-Z0-9.-]+$/)) {
+    throw new GradleException('scrollshieldBillingApiUrl must be an HTTPS hostname without paths or credentials')
+}
+
 def signingPropertiesFile = rootProject.file('signing.properties')
 def signingProperties = new Properties()
 if (signingPropertiesFile.exists()) {
@@ -20,8 +27,12 @@ android {
             }
         }
     }
+    buildFeatures {
+        buildConfig true
+    }
     defaultConfig {
         applicationId "app.scrollshield.mobile"
+        buildConfigField "String", "SCROLLSHIELD_BILLING_API_URL", "\"" + billingApiUrl + "\""
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
