@@ -80,6 +80,29 @@ export class GoogleCloudStore {
     return response;
   }
 
+  /**
+   * KMS RSA_SIGN_PKCS1_2048_SHA256 or RSA_SIGN_PKCS1_3072_SHA256.
+   * Grant runtime identity only cloudkms.cryptoKeyVersions.useToSign.
+   * Private key never enters server memory, repository or Android binary.
+   */
+  async signEntitlement(message, kmsVersionName) {
+    const namePattern = /^projects\/[a-z0-9-]+\/locations\/[a-z0-9-]+\/keyRings\/[A-Za-z0-9_-]+\/cryptoKeys\/[A-Za-z0-9_-]+\/cryptoKeyVersions\/[0-9]+$/;
+    if (!namePattern.test(kmsVersionName ?? '') || !Buffer.isBuffer(message) || message.length > 2048) {
+      throw new UpstreamError();
+    }
+    const digest = createHash('sha256').update(message).digest('base64');
+    const response = await this.googleFetch(
+      `https://cloudkms.googleapis.com/v1/${kmsVersionName}:asymmetricSign`,
+      { method: 'POST', body: { digest: { sha256: digest } } },
+    );
+    if (!response.ok) throw new UpstreamError();
+    const data = await response.json();
+    if (data.name !== kmsVersionName || typeof data.signature !== 'string') throw new UpstreamError();
+    const signature = Buffer.from(data.signature, 'base64');
+    if (signature.length < 256 || signature.length > 512) throw new UpstreamError();
+    return signature;
+  }
+
   async queryPlay(token) {
     const url = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(this.packageName)}/purchases/subscriptionsv2/tokens/${encodeURIComponent(token)}`;
     const response = await this.googleFetch(url);
