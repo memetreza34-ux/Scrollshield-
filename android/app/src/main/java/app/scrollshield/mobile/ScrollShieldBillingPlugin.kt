@@ -202,7 +202,8 @@ class ScrollShieldBillingPlugin : Plugin() {
             JSObject().put(
                 "configured",
                 NativeBillingPolicy.normalizedHttpsBase(BuildConfig.SCROLLSHIELD_BILLING_API_URL) != null &&
-                    BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI.isNotEmpty()
+                    BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI.isNotEmpty() &&
+                    NativeBillingIdentity.auth(context) != null
             )
         )
     }
@@ -213,6 +214,9 @@ class ScrollShieldBillingPlugin : Plugin() {
      */
     @PluginMethod
     fun getNativeProStatus(call: PluginCall) {
+        // Also refresh after the user reopens the app when monitoring had
+        // stopped; this schedules work asynchronously and never trusts JS.
+        NativePlayRefreshCoordinator.maybeRefresh(context)
         val active = NativeProEntitlement.isActive(
             SecurePrefs.open(context), BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI,
             NativeBillingIdentity.currentUid(context)
