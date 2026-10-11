@@ -380,7 +380,7 @@ class AppMonitorService : Service() {
         val raw = prefs.getString(ScrollShieldBridgePlugin.KEY_BLOCKED_RULES, "[]") ?: "[]"
         val parsed = mutableMapOf<String, BlockRule>()
         try {
-            val signedPro = NativeProEntitlement.isActive(prefs, BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI)
+            val signedPro = NativeProEntitlement.isActive(prefs, BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI, NativeBillingIdentity.currentUid(this))
             val array = NativeFreeRules.project(JSONArray(raw), signedPro)
             signedProRulesActive = signedPro
             for (index in 0 until array.length()) {
@@ -474,7 +474,7 @@ class AppMonitorService : Service() {
 
         // The entitlement can expire while the user stays inside a protected
         // app. Reproject from stored rules immediately, without waiting for JS.
-        val signedProNow = NativeProEntitlement.isActive(prefs, BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI)
+        val signedProNow = NativeProEntitlement.isActive(prefs, BuildConfig.SCROLLSHIELD_ENTITLEMENT_SPKI, NativeBillingIdentity.currentUid(this))
         if (signedProNow != signedProRulesActive) {
             loadRules()
             lastForegroundPackage = null
