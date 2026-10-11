@@ -294,4 +294,86 @@ class ScrollShieldBillingPlugin : Plugin() {
         }
     }
 
+
+    /**
+     * Preflight ONLY: authenticate against our server and query a FRESH Play
+     * offer that Google says this user is eligible to buy. No launchBillingFlow
+     * until user sign-in, restore, acknowledgment and enforceable native Pro
+     * entitlements are released together. The offerToken never reaches React.
+     */
+    @PluginMethod
+    fun prepareVerifiedCheckout(call: PluginCall) {
+        val firebaseIdToken = call.getString("firebaseIdToken")
+        val basePlanId = call.getString("basePlanId") ?: ""
+        val offerId = call.getString("offerId")
+        if (!NativeBillingPolicy.validBasePlan(basePlanId) ||
+            !NativeBillingPolicy.validOfferId(offerId)) {
+            call.reject("Ungültiger Google-Play-Tarif.", "BILLING_INVALID_PLAN")
+            return
+        }
+        if (!NativeBillingPolicy.canBeginVerification(
+                firebaseIdToken, BuildConfig.SCROLLSHIELD_BILLING_API_URL
+            )
+        ) {
+            call.reject("Kauf noch nicht bereit: Anmeldung/Backend fehlt.", "BILLING_NOT_CONFIGURED")
+            return
+        }
+
+        verificationExecutor.execute {
+            val authenticated = try {
+                // The server verifies the JWT and returns a stable HMAC binding.
+                NativePlayVerificationTransport(BuildConfig.SCROLLSHIELD_BILLING_API_URL)
+                    .accountBinding(firebaseIdToken!!)
+            } catch (_: Exception) {
+                null
+            }
+
+            backendHandler.post {
+                if (authenticated == null) {
+                    call.reject("Google-Play-Konto nicht überprüfbar.", "BILLING_IDENTITY_FAILED")
+                    return@post
+                }
+
+                connected(call) { client ->
+                    val product = QueryProductDetailsParams.Product.newBuilder()
+                        .setProductId(PRODUCT_ID)
+                        .setProductType(BillingClient.ProductType.SUBS)
+                        .build()
+                    val params = QueryProductDetailsParams.newBuilder()
+                        .setProductList(listOf(product))
+                        .build()
+                    client.queryProductDetailsAsync(params) { result, details ->
+                        try {
+                            if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+                                call.reject("Google Play-Angebote sind nicht verfügbar.", "BILLING_CATALOG_FAILED")
+                                return@queryProductDetailsAsync
+                            }
+                            val eligible = details.productDetailsList
+                                .filter { it.productId == PRODUCT_ID }
+                                .flatMap { it.subscriptionOfferDetails.orEmpty() }
+                                .firstOrNull { it.basePlanId == basePlanId && it.offerId == offerId }
+
+                            if (eligible == null) {
+                                call.reject("Dieses Angebot ist derzeit nicht verfügbar.", "BILLING_OFFER_NOT_ELIGIBLE")
+                                return@queryProductDetailsAsync
+                            }
+                            // No actual purchase/entitlement is possible here.
+                            call.resolve(
+                                JSObject()
+                                    .put("readyForFutureCheckout", true)
+                                    .put("checkoutEnabled", false)
+                                    .put("basePlanId", basePlanId)
+                                    .put("serverIdentityVerified", true)
+                            )
+                        } catch (_: Exception) {
+                            call.reject("Google-Play-Angebot konnte nicht geprüft werden.", "BILLING_CATALOG_FAILED")
+                        } finally {
+                            client.endConnection()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }
