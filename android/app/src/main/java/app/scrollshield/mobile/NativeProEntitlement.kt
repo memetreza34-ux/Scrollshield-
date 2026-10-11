@@ -67,17 +67,20 @@ internal object NativeProEntitlement {
         nowMillis: Long = System.currentTimeMillis(),
     ): Boolean {
         if (publicKeyBase64.isBlank()) return false
-        // The high-water mark prevents extending 15-minute tokens by simply
-        // setting the clock backwards. Written synchronously every minute
-        // while Pro is queried; an unverifiable clock is Free.
-        val high = prefs.getLong(KEY_MAX_WALL_CLOCK, 0L)
-        if (high > nowMillis + 30_000L) return false
-        val token = prefs.getString(KEY_SIGNED_TOKEN, null)
-        if (verifiedExpirationSeconds(token, publicKeyBase64, nowMillis) == null) return false
-        if (nowMillis > high + 60_000L) {
-            if (!prefs.edit().putLong(KEY_MAX_WALL_CLOCK, nowMillis).commit()) return false
+        // A corrupted preference type must NOT leave previously loaded paid
+        // rules active by throwing from the monitor's background poll.
+        return try {
+            val high = prefs.getLong(KEY_MAX_WALL_CLOCK, 0L)
+            if (high > nowMillis + 30_000L) return false
+            val token = prefs.getString(KEY_SIGNED_TOKEN, null)
+            if (verifiedExpirationSeconds(token, publicKeyBase64, nowMillis) == null) return false
+            if (nowMillis > high + 60_000L) {
+                if (!prefs.edit().putLong(KEY_MAX_WALL_CLOCK, nowMillis).commit()) return false
+            }
+            true
+        } catch (_: Exception) {
+            false
         }
-        return true
     }
 
     fun install(
@@ -87,11 +90,15 @@ internal object NativeProEntitlement {
         nowMillis: Long = System.currentTimeMillis(),
     ): Boolean {
         if (verifiedExpirationSeconds(signed, publicKeyBase64, nowMillis) == null) return false
-        if (prefs.getLong(KEY_MAX_WALL_CLOCK, 0L) > nowMillis + 30_000L) return false
-        return prefs.edit()
-            .putString(KEY_SIGNED_TOKEN, signed)
-            .putLong(KEY_MAX_WALL_CLOCK, nowMillis)
-            .commit()
+        return try {
+            if (prefs.getLong(KEY_MAX_WALL_CLOCK, 0L) > nowMillis + 30_000L) return false
+            prefs.edit()
+                .putString(KEY_SIGNED_TOKEN, signed)
+                .putLong(KEY_MAX_WALL_CLOCK, nowMillis)
+                .commit()
+        } catch (_: Exception) {
+            false
+        }
     }
 
     fun clear(prefs: SharedPreferences): Boolean =
