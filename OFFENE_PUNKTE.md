@@ -1,6 +1,6 @@
 # Offene Punkte – Fahrplan bis zur Veröffentlichung
 
-Stand: 28. September 2026. Reihenfolge = Arbeitsreihenfolge. **[Du]** kannst nur du erledigen, **[Claude]** kann im
+Stand: 14. Oktober 2026. Reihenfolge = Arbeitsreihenfolge. **[Du]** kannst nur du erledigen, **[Claude]** kann im
 Code erledigt werden. Erledigtes abhaken oder löschen. Keine Rechtsberatung – die rechtlichen Punkte sind eine
 technische Einschätzung; Details und Fragen für eine Prüfung stehen in `docs/LEGAL_REVIEW_BRIEF.md`.
 
@@ -96,8 +96,9 @@ Vorlagen: `docs/STORE_SUBMISSION_PACKET.md`, `docs/STORE_LISTING_COPY.md`, `STOR
 - [ ] **[Du]** Release-Build erzeugen (`npm run android:bundle`), in den geschlossenen Test hochladen, 14 Tage laufen
       lassen, Abstürze in der Play Console (Android Vitals) ansehen.
 - [ ] Bekannte Grenzen, bewusst in Kauf genommen oder später lösen:
-  - Tageslimit, Anti-Binge und Zeitfenster werden nur beim Öffnen einer App geprüft, nicht während man in ihr bleibt.
-  - Auf dem Handy gibt es keine Notfallfreigabe.
+  - Anti-Binge wird nur beim Öffnen geprüft (gewollt). Tageslimit, Zeitfenster und Fokus werden seit 14.10. auch
+    geprüft, während man in der App bleibt – alle 30 Sekunden, damit der Akku geschont wird. **[Du]** auf dem Handy
+    testen: Tageslimit 1 Min., App offen lassen, nach spätestens 30 Sekunden über dem Limit muss die Sperre kommen.
   - Endet eine Fokus-Sitzung bei geschlossener App, bleibt die Sperre bis zum nächsten Öffnen.
 - [x] **Fehler aus der Code-Analyse vom 27.09.2026** behoben (28.09.): Profilwechsel schaltete den Schutz aus, Profil
       „Kein Endlos-Swipe“ sperrte die ganze App, Export ging in der Android-App nicht, App-Reset ließ Android-Daten

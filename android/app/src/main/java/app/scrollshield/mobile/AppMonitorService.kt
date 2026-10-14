@@ -84,6 +84,9 @@ class AppMonitorService : Service() {
         /** Window of usage events queried on every poll. */
         const val EVENT_LOOKBACK_MS = 15_000L
 
+        /** How often an app that stays in front is checked for a beginning lock. */
+        const val STAY_CHECK_INTERVAL_MS = 30_000L
+
         /** Fallback delay when a rule carries no explicit openDelay. */
         const val DEFAULT_DELAY_SECONDS = 5
 
@@ -262,6 +265,9 @@ class AppMonitorService : Service() {
     private var monitoringEnabled = false
 
     private var lastForegroundPackage: String? = null
+
+    /** Last check for a lock beginning while an app stays in front; poll worker only. */
+    private var lastStayCheckAt = 0L
     /** Written by the overlay buttons on the main thread, read by the poll worker. */
     private val allowedUntil = ConcurrentHashMap<String, Long>()
 
@@ -475,10 +481,11 @@ class AppMonitorService : Service() {
         }
 
         if (foreground == lastForegroundPackage) {
-            checkSessionLimit(foreground, now)
+            if (!checkStayLock(foreground, now)) checkSessionLimit(foreground, now)
             return
         }
         lastForegroundPackage = foreground
+        lastStayCheckAt = now
 
         val rule = rules[foreground] ?: return
         sessionStartedAt[foreground] = now
@@ -499,6 +506,24 @@ class AppMonitorService : Service() {
         }
 
         showInterruptionOverlay(foreground, rule, verdict)
+    }
+
+    /**
+     * Locks the app in front when a lock begins while it stays open. Runs every
+     * STAY_CHECK_INTERVAL_MS only: summing today's usage reads the event
+     * stream since midnight, too costly for every poll. Returns true when it
+     * locked the app.
+     */
+    private fun checkStayLock(packageName: String, now: Long): Boolean {
+        val rule = rules[packageName] ?: return false
+        if (overlayView != null) return false
+        if (now < (emergencyUntil[rule.appId] ?: 0L)) return false
+        if (now - lastStayCheckAt < STAY_CHECK_INTERVAL_MS) return false
+        lastStayCheckAt = now
+
+        val verdict = stayLock(packageName, rule, now) ?: return false
+        showInterruptionOverlay(packageName, rule, verdict)
+        return true
     }
 
     /** The session guard: interrupts after the rule's minutes in the app without a break. */
@@ -529,16 +554,7 @@ class AppMonitorService : Service() {
     private fun evaluate(packageName: String, rule: BlockRule, now: Long): Verdict {
         val appName = getAppName(packageName)
 
-        if (rule.dailyLimitMinutes > 0) {
-            val packages = rules.filterValues { it.appId == rule.appId }.keys
-            val usedMinutes = ForegroundUsage.minutesToday(this, packages).values.sum()
-            if (usedMinutes >= rule.dailyLimitMinutes) {
-                return Verdict(
-                    lockReason = "DAILY_LIMIT",
-                    statusText = getString(R.string.overlay_daily_limit_hint, usedMinutes, rule.dailyLimitMinutes, appName),
-                )
-            }
-        }
+        dailyLimitLock(rule, appName)?.let { return it }
 
         rule.antiBinge?.let { antiBinge ->
             val opens = openLog.count(rule.appId, now, antiBinge.blockTimeframe)
@@ -550,16 +566,8 @@ class AppMonitorService : Service() {
             }
         }
 
-        if (isLockedByTimeWindow(rule)) {
-            return Verdict(lockReason = "TIME_WINDOW", statusText = getString(R.string.overlay_time_window_hint, appName))
-        }
-
-        if (now < rule.focusUntil) {
-            return Verdict(
-                lockReason = "FOCUS",
-                statusText = getString(R.string.overlay_focus_hint, formatTime(rule.focusUntil), appName),
-            )
-        }
+        timeWindowLock(rule, appName)?.let { return it }
+        focusLock(rule, appName, now)?.let { return it }
 
         if (rule.mode == "strict") {
             return Verdict(lockReason = "STRICT", statusText = getString(R.string.overlay_strict_hint, appName))
@@ -577,6 +585,42 @@ class AppMonitorService : Service() {
         }
 
         return Verdict()
+    }
+
+    /**
+     * The locks that can begin while an app stays in front: the daily budget
+     * runs out, a time window or a focus session starts. Anti-binge and strict
+     * mode only concern opening and are left out.
+     */
+    private fun stayLock(packageName: String, rule: BlockRule, now: Long): Verdict? {
+        val appName = getAppName(packageName)
+        return dailyLimitLock(rule, appName)
+            ?: timeWindowLock(rule, appName)
+            ?: focusLock(rule, appName, now)
+    }
+
+    private fun dailyLimitLock(rule: BlockRule, appName: String): Verdict? {
+        if (rule.dailyLimitMinutes <= 0) return null
+        val packages = rules.filterValues { it.appId == rule.appId }.keys
+        val usedMinutes = ForegroundUsage.minutesToday(this, packages).values.sum()
+        if (usedMinutes < rule.dailyLimitMinutes) return null
+        return Verdict(
+            lockReason = "DAILY_LIMIT",
+            statusText = getString(R.string.overlay_daily_limit_hint, usedMinutes, rule.dailyLimitMinutes, appName),
+        )
+    }
+
+    private fun timeWindowLock(rule: BlockRule, appName: String): Verdict? {
+        if (!isLockedByTimeWindow(rule)) return null
+        return Verdict(lockReason = "TIME_WINDOW", statusText = getString(R.string.overlay_time_window_hint, appName))
+    }
+
+    private fun focusLock(rule: BlockRule, appName: String, now: Long): Verdict? {
+        if (now >= rule.focusUntil) return null
+        return Verdict(
+            lockReason = "FOCUS",
+            statusText = getString(R.string.overlay_focus_hint, formatTime(rule.focusUntil), appName),
+        )
     }
 
     private fun formatTime(millis: Long): String = DateFormat.getTimeFormat(this).format(Date(millis))
