@@ -116,7 +116,7 @@ describe('App', () => {
     render(<App />);
 
     expect(await screen.findByText('Fokus läuft')).toBeInTheDocument();
-    expect(screen.getByText('noch 15 Min.')).toBeInTheDocument();
+    expect(screen.getByText(/^noch 15 Min\. · bis \d\d:\d\d$/)).toBeInTheDocument();
   });
 
   /**
@@ -230,11 +230,11 @@ describe('App', () => {
 
     // n1 locked the app, n2 was stopped: both interruptions, one not opened.
     await waitFor(
-      () =>
-        expect(screen.getByText('Öffnungen unterbrochen').parentElement).toHaveTextContent('2 Öffnungen unterbrochen'),
+      () => expect(screen.getByText('Öffnungen heute unterbrochen').previousSibling).toHaveTextContent('2'),
       { timeout: 5000 },
     );
-    expect(screen.getByText('davon 1× nicht geöffnet')).toBeInTheDocument();
+    expect(screen.getByText('bei 2 Öffnungsversuchen')).toBeInTheDocument();
+    expect(screen.getByText('1× nach der Pause nicht geöffnet')).toBeInTheDocument();
     await waitFor(() => expect(nativeEvents.acknowledge).toHaveBeenCalledWith(['n1', 'n2']));
   });
 

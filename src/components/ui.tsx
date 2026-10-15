@@ -4,14 +4,7 @@ import { ArrowLeft, CalendarDays, ChartNoAxesColumn, Check, ChevronRight, Settin
 import type { LucideIcon } from 'lucide-react';
 import { PlatformDefinition, Screen } from '../types';
 import { MessageKey, t } from '../i18n';
-
-/** Pressed state of every control: an 8 % lighter layer over whatever fill it has. */
-const PRESSED = 'active:shadow-[inset_0_0_0_100vmax_rgb(244_244_245/0.08)]';
-/** Keyboard and TalkBack focus: a green ring with a gap. */
-const FOCUS_RING =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ground';
-const FOCUS_RING_INSET =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent';
+import { FOCUS_RING, FOCUS_RING_INSET, PRESSED } from './styles';
 
 /** 52 × 32 inside a 48 px tall target. Off has a visible border, not just a darker fill. */
 export function Switch({
@@ -547,5 +540,38 @@ export function Header({
       </div>
       {rightAction && <div className="flex-shrink-0">{rightAction}</div>}
     </header>
+  );
+}
+
+/** A state in one line under a name: "Gesperrt bis 07:00 · Abend". The dot carries the signal colour. */
+export function StatusChip({ tone, children }: { tone: 'accent' | 'pause' | 'lock'; children: React.ReactNode }) {
+  const dot = { accent: 'bg-accent', pause: 'bg-pause', lock: 'bg-lock' }[tone];
+  return (
+    <span className="inline-flex min-h-7 items-center gap-2 self-start rounded-control bg-raised px-3 py-1 text-label-s text-ink">
+      <span className={`h-2 w-2 flex-shrink-0 rounded-full ${dot}`} aria-hidden="true" />
+      {children}
+    </span>
+  );
+}
+
+/** Why nothing is here: one icon, one sentence, one explanation, at most one button. No illustrations. */
+export function EmptyState({
+  icon: Icon,
+  title,
+  text,
+  action,
+}: {
+  icon: LucideIcon;
+  title: string;
+  text: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-surface border border-line bg-surface px-6 py-8 text-center">
+      <Icon size={40} strokeWidth={1.5} className="text-muted" aria-hidden="true" />
+      <p className="mt-2 text-title-s text-ink">{title}</p>
+      <p className="text-body-s text-muted">{text}</p>
+      {action && <div className="mt-3 w-full">{action}</div>}
+    </div>
   );
 }

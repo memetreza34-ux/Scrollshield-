@@ -35,7 +35,7 @@ export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
           <span className="flex h-12 w-12 items-center justify-center rounded-control border border-line bg-surface">
             <Shield size={28} strokeWidth={1.75} className="text-accent" aria-hidden="true" />
           </span>
-          <span className="text-title-s text-ink">{t('welcome.appName')}</span>
+          <span className="text-title-s text-ink">{t('app.name')}</span>
         </div>
 
         <h1 className="mt-6 text-number text-ink">{t('welcome.title')}</h1>

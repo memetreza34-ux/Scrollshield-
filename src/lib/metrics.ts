@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { AppState, HistoryEvent } from '../types';
 import { getLocalDateKey } from './appUtils';
 import { getShortVideoUsageKey } from './stats';
@@ -97,11 +98,18 @@ export function getDayMetrics(
 }
 
 /** One concrete observation for an app today, or null when nothing stands out. */
-export function describeAppDay(app: AppDayMetrics): string | null {
-  if (app.reopens >= 2) return `${app.reopens}× innerhalb von ${REOPEN_WINDOW_MINUTES} Minuten wieder geöffnet`;
+export type AppDayObservation = { kind: 'reopens' | 'shortVideo' | 'abandoned'; text: string };
+
+/** The one concrete observation for an app's day, if there is one. */
+export function describeAppDay(app: AppDayMetrics): AppDayObservation | null {
+  if (app.reopens >= 2)
+    return {
+      kind: 'reopens',
+      text: t('today.observation.reopens', { count: app.reopens, minutes: REOPEN_WINDOW_MINUTES }),
+    };
   if (app.shortVideoMinutes !== null && app.shortVideoMinutes > 0)
-    return `Kurzvideos heute ${app.shortVideoMinutes} Min.`;
-  if (app.abandoned > 0) return `${app.abandoned}× nach der Pause nicht geöffnet`;
+    return { kind: 'shortVideo', text: t('today.observation.shortVideo', { minutes: app.shortVideoMinutes }) };
+  if (app.abandoned > 0) return { kind: 'abandoned', text: t('today.observation.abandoned', { count: app.abandoned }) };
   return null;
 }
 

@@ -1,9 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { expectNoA11yViolations } from '../test/a11y';
 import { AppState, DEFAULT_APP_CONFIG, DEFAULT_STATE, HistoryEvent } from '../types';
 import { TodayScreen } from './TodayScreen';
 import { getLocalDateKey } from '../lib/appUtils';
+import { setLanguage } from '../i18n';
+
+afterEach(() => setLanguage('de'));
 
 const event = (type: HistoryEvent['type'], minutesAgo: number): HistoryEvent => ({
   id: `${type}-${minutesAgo}`,
@@ -20,8 +23,13 @@ const state = (overrides: Partial<AppState> = {}): AppState => ({
   ...overrides,
 });
 
+const android = (permissions: Partial<AppState['permissions']>): Partial<AppState> => ({
+  operatingSystem: 'android',
+  permissions: { ...DEFAULT_STATE.permissions, ...permissions },
+});
+
 describe('TodayScreen', () => {
-  it('shows measured interruptions and no estimated saved time', () => {
+  it('shows measured interruptions and attempts, and no estimated saved time', () => {
     render(
       <TodayScreen
         state={state({ history: [event('block', 1), event('warning', 2), event('open', 3)] })}
@@ -30,8 +38,17 @@ describe('TodayScreen', () => {
       />,
     );
 
-    expect(screen.getByText('Öffnungen unterbrochen').parentElement).toHaveTextContent('2 Öffnungen unterbrochen');
+    expect(screen.getByText('Öffnungen heute unterbrochen').previousSibling).toHaveTextContent('2');
+    expect(screen.getByText('bei 3 Öffnungsversuchen')).toBeInTheDocument();
     expect(screen.queryByText(/gespart/i)).toBeNull();
+  });
+
+  it('says plainly that nothing happened yet on the first day', () => {
+    render(<TodayScreen state={state()} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    expect(screen.getByText('Noch nichts passiert heute.')).toBeInTheDocument();
+    expect(screen.getByText('Sobald du Instagram öffnest, steht es hier.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Apps heute' })).not.toBeInTheDocument();
   });
 
   it('shows the measured screen time of today and yesterday', () => {
@@ -50,8 +67,7 @@ describe('TodayScreen', () => {
     render(
       <TodayScreen
         state={state({
-          operatingSystem: 'android',
-          permissions: { ...DEFAULT_STATE.permissions, usageAccess: true, overlay: true },
+          ...android({ usageAccess: true, overlay: true }),
           dailyStats: { [getLocalDateKey(today)]: day(today, 192), [getLocalDateKey(yesterday)]: day(yesterday, 220) },
         })}
         updateState={vi.fn()}
@@ -67,6 +83,55 @@ describe('TodayScreen', () => {
   it('says screen time is not measured instead of showing zero', () => {
     render(<TodayScreen state={state()} updateState={vi.fn()} navigate={vi.fn()} />);
     expect(screen.getByText(/Nicht gemessen/)).toBeInTheDocument();
+  });
+
+  it('says protection is off when both required permissions are missing', () => {
+    const navigate = vi.fn();
+    render(<TodayScreen state={state(android({}))} updateState={vi.fn()} navigate={navigate} />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Schutz nicht aktiv');
+    expect(screen.getByText('nicht gemessen')).toBeInTheDocument();
+    // The green button is "Berechtigungen erteilen", so "Fokus starten" steps back.
+    fireEvent.click(screen.getByRole('button', { name: 'Berechtigungen erteilen' }));
+    expect(navigate).toHaveBeenCalledWith('permissions');
+  });
+
+  it('names the one missing permission', () => {
+    render(<TodayScreen state={state(android({ usageAccess: true }))} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Schutz eingeschränkt');
+    expect(screen.getByText('1 Berechtigung fehlt: Über anderen Apps einblenden.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Beheben' })).toBeInTheDocument();
+  });
+
+  it('shows a running rescue and the lock on each app', () => {
+    const startTime = Date.now() - 6 * 60_000;
+    render(
+      <TodayScreen
+        state={state({
+          history: [event('block', 1)],
+          isFocusModeActive: true,
+          focusSessions: [
+            {
+              id: 'rescue',
+              startTime,
+              endTime: null,
+              duration: 30,
+              successful: false,
+              protectedApps: ['instagram'],
+              blocksTriggered: 0,
+              kind: 'rescue',
+            },
+          ],
+        })}
+        updateState={vi.fn()}
+        navigate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Rescue läuft')).toBeInTheDocument();
+    expect(screen.getByText(/^Gesperrt · Rescue bis \d\d:\d\d$/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Fokus starten/ })).not.toBeInTheDocument();
   });
 
   it('offers an evening schedule for late openings and can hide it', () => {
@@ -98,12 +163,23 @@ describe('TodayScreen', () => {
   it('asks to protect an app when none is protected', () => {
     render(<TodayScreen state={state({ appsConfig: {} })} updateState={vi.fn()} navigate={vi.fn()} />);
 
-    expect(screen.getByText('Kein Schutz aktiv')).toBeInTheDocument();
+    expect(screen.getByText('Noch keine App geschützt.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'App schützen' })).toBeInTheDocument();
   });
 
+  it('speaks English on an English phone', () => {
+    setLanguage('en');
+    render(<TodayScreen state={state({ history: [event('block', 1)] })} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    expect(screen.getByText('Open interrupted today')).toBeInTheDocument();
+    expect(screen.getByText('out of 1 attempt to open')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Apps today' })).toBeInTheDocument();
+  });
+
   it('has no obvious accessibility violations', async () => {
-    const { container } = render(<TodayScreen state={state()} updateState={vi.fn()} navigate={vi.fn()} />);
+    const { container } = render(
+      <TodayScreen state={state({ history: [event('block', 1)] })} updateState={vi.fn()} navigate={vi.fn()} />,
+    );
     await expectNoA11yViolations(container);
   });
 });

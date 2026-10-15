@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { AppState } from '../types';
 
 /**
@@ -8,12 +9,15 @@ import type { AppState } from '../types';
 export const isCommitmentActive = (state: Pick<AppState, 'commitment'>, now = Date.now()) =>
   state.commitment !== null && state.commitment !== undefined && state.commitment.until > now;
 
-export const formatClock = (timestamp: number) =>
-  new Date(timestamp).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+/** "15:30" – 24-hour clock in both languages. */
+export const formatClock = (timestamp: number) => {
+  const date = new Date(timestamp);
+  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+};
 
 /** "heute 22:00" or "morgen 07:00". */
 export const formatUntil = (timestamp: number, now = Date.now()) => {
   const today = new Date(now).toDateString();
-  const day = new Date(timestamp).toDateString() === today ? 'heute' : 'morgen';
+  const day = t(new Date(timestamp).toDateString() === today ? 'time.today' : 'time.tomorrow');
   return `${day} ${formatClock(timestamp)}`;
 };
