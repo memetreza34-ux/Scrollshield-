@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import { motion } from 'motion/react';
 import { ArrowLeft, CalendarDays, ChartNoAxesColumn, Check, ChevronRight, Settings, Shield, Timer } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -212,6 +212,7 @@ export function Row({
   pro,
   disabled,
   strong,
+  noChevron,
 }: {
   label: string;
   value?: string;
@@ -223,6 +224,8 @@ export function Row({
   pro?: boolean;
   disabled?: boolean;
   strong?: boolean;
+  /** For rows that add something ("+ Zeitplan") rather than open a page. */
+  noChevron?: boolean;
 }) {
   const content = (
     <>
@@ -236,7 +239,7 @@ export function Row({
       </span>
       {value && <span className="flex-shrink-0 text-body-s text-muted">{value}</span>}
       {trailing}
-      {onClick && !right && !trailing && (
+      {onClick && !right && !trailing && !noChevron && (
         <ChevronRight size={20} strokeWidth={1.75} className="flex-shrink-0 text-muted" aria-hidden="true" />
       )}
     </>
@@ -572,6 +575,94 @@ export function EmptyState({
       <p className="mt-2 text-title-s text-ink">{title}</p>
       <p className="text-body-s text-muted">{text}</p>
       {action && <div className="mt-3 w-full">{action}</div>}
+    </div>
+  );
+}
+
+/**
+ * One option out of a list where each option needs a sentence: presets,
+ * short-video modes, commitment times. The name is the label; the sentence is
+ * its description.
+ */
+export function OptionList<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string; description?: string; tag?: string; pro?: boolean }[];
+  onChange: (value: T) => void;
+}) {
+  const id = useId();
+  return (
+    <div role="radiogroup" aria-label={label}>
+      <List>
+        {options.map((option, index) => {
+          const selected = option.value === value;
+          return (
+            <button
+              key={option.value}
+              role="radio"
+              aria-checked={selected}
+              aria-labelledby={`${id}-${index}`}
+              aria-describedby={option.description ? `${id}-${index}-text` : undefined}
+              onClick={() => onChange(option.value)}
+              className={`flex w-full items-start gap-4 px-4 py-3.5 text-left ${PRESSED} ${FOCUS_RING_INSET}`}
+            >
+              <span
+                aria-hidden="true"
+                className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full ${selected ? 'bg-accent' : 'border-2 border-muted'}`}
+              >
+                {selected && <span className="h-2 w-2 rounded-full bg-ground" />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span id={`${id}-${index}`} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-body font-semibold text-ink">{option.label}</span>
+                  {option.tag && <span className="text-body-s text-muted">· {option.tag}</span>}
+                  {option.pro && <ProBadge />}
+                </span>
+                {option.description && (
+                  <span id={`${id}-${index}-text`} className="mt-0.5 block text-body-s text-muted">
+                    {option.description}
+                  </span>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </List>
+    </div>
+  );
+}
+
+/** A question from below: raised surface, rounded on top, closes with Escape. */
+export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 sm:items-center sm:p-4">
+      <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') onClose();
+        }}
+        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-surface border border-line bg-raised px-5 pb-6 pt-3 focus:outline-none sm:rounded-surface"
+      >
+        <span aria-hidden="true" className="mx-auto mb-4 block h-1 w-10 rounded-full bg-faint" />
+        <h2 id={titleId} className="text-title text-ink">
+          {title}
+        </h2>
+        {children}
+      </div>
     </div>
   );
 }

@@ -104,11 +104,11 @@ describe('PermissionsScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Aktivieren: Kurzvideo-Erkennung (Bedienungshilfe)' }));
 
-    expect(screen.getByRole('dialog', { name: 'Bedienungshilfe für die Kurzvideo-Erkennung' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Bedienungshilfe für den Kurzvideo-Schutz' })).toBeInTheDocument();
     expect(openAccessibilitySettings).not.toHaveBeenCalled();
     await expectNoA11yViolations(container);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Zustimmen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Zustimmen und einschalten' }));
 
     expect(openAccessibilitySettings).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -118,7 +118,7 @@ describe('PermissionsScreen', () => {
     render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Aktivieren: Kurzvideo-Erkennung (Bedienungshilfe)' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Ablehnen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Nicht jetzt' }));
 
     expect(openAccessibilitySettings).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
