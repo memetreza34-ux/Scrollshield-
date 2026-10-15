@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { AppState, Screen, SUPPORTED_APPS, HistoryEvent } from '../types';
-import { X, Clock, AlertTriangle, Pause, Play, Shield } from 'lucide-react';
+import { Pause, Play, Shield, SquarePlay, X } from 'lucide-react';
+import { AppTile, IconButton, SecondaryButton } from '../components/ui';
+import { BackAction, ContinueAction, Countdown, InterruptionScreen } from '../components/Interruption';
+import { t } from '../i18n';
 import { createEventId } from '../lib/appUtils';
 import {
   getSessionElapsedSeconds,
@@ -33,6 +35,8 @@ export function ActiveSessionScreen({
   const swipeStateRef = useRef(createSwipeCounterState());
   const [showReelsInterrupt, setShowReelsInterrupt] = useState(false);
   const [showReelsLimitBlock, setShowReelsLimitBlock] = useState(false);
+  // The session guard is itself a short pause: "Weiter" only after 5 seconds.
+  const [guardWait, setGuardWait] = useState(5);
 
   const sessionLimitMinutes = session?.sessionLimitOverride ?? config?.sessionLimit ?? 15;
   const currentLimitSeconds = session ? getSessionLimitSeconds(session, config?.sessionLimit ?? 15) : 0;
@@ -68,6 +72,16 @@ export function ActiveSessionScreen({
       if (interval) clearInterval(interval);
     };
   }, [session, appInfo, currentLimitSeconds, hasSessionLimit, showWarning, navigate]);
+
+  useEffect(() => {
+    if (!showWarning) {
+      setGuardWait(5);
+      return;
+    }
+    if (guardWait <= 0) return;
+    const timeout = setTimeout(() => setGuardWait((previous) => previous - 1), 1000);
+    return () => clearTimeout(timeout);
+  }, [showWarning, guardWait]);
 
   if (!session || !appInfo) return null;
 
@@ -180,76 +194,56 @@ export function ActiveSessionScreen({
     setShowWarning(false);
   };
 
-  return (
-    <div className="absolute inset-0 z-50 bg-zinc-950 flex flex-col">
-      {/* Simulated App Background */}
-      <div className={`absolute inset-0 opacity-20 ${appInfo.color}`} />
+  const surface = appInfo.shortVideoSurface?.name.split(' ').at(-1) ?? '';
+  const limitShare = hasSessionLimit ? Math.min(1, elapsedSeconds / currentLimitSeconds) : 1;
 
-      <div className="relative z-10 flex-1 flex flex-col p-6">
-        {/* Header / Status Bar */}
-        <div className="flex justify-between items-start mb-auto">
-          <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-3 flex items-center gap-3 shadow-lg">
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm ${appInfo.color}`}>
-              {appInfo.icon}
-            </div>
+  return (
+    <div className="absolute inset-0 z-50 flex flex-col bg-ground text-ink">
+      <div className="flex flex-1 flex-col p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className={`flex items-center gap-3 rounded-surface border border-line bg-surface p-3`}>
+            <AppTile app={appInfo} size="sm" />
             <div>
-              <div className="font-bold text-sm text-zinc-100">{appInfo.name}</div>
-              <div className="text-xs text-zinc-400 flex items-center gap-1">
-                <Shield size={10} /> ScrollShield aktiv
+              <div className="text-label text-ink">{appInfo.name}</div>
+              <div className="flex items-center gap-1 text-caption text-muted">
+                <Shield size={12} strokeWidth={2} aria-hidden="true" /> {t('session.active')}
               </div>
             </div>
           </div>
-
-          <button
-            onClick={closeApp}
-            aria-label="App schließen"
-            className="w-12 h-12 bg-zinc-900/80 backdrop-blur-md border border-zinc-800/50 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-100 transition-colors shadow-lg"
-          >
-            <X size={20} />
-          </button>
+          <IconButton icon={X} label={t('session.close')} onClick={closeApp} />
         </div>
 
-        {/* Timer Widget */}
-        <div className="mt-auto mb-auto flex flex-col items-center justify-center">
-          <div className="bg-zinc-900/90 backdrop-blur-xl border border-zinc-800/50 rounded-[2.5rem] p-8 flex flex-col items-center shadow-2xl w-full max-w-xs">
-            <div className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-2">Aktive Sitzung</div>
-            <div
-              className={`text-6xl font-mono font-bold tracking-tighter mb-6 ${session.isPaused ? 'text-zinc-500' : 'text-zinc-100'}`}
-            >
+        <div className="my-auto flex flex-col items-center">
+          <div className="flex w-full max-w-xs flex-col items-center rounded-surface border border-line bg-surface p-6">
+            <div className="mb-1 text-label-s text-muted">{t('session.title')}</div>
+            <div className={`mb-5 text-display ${session.isPaused ? 'text-muted' : 'text-ink'}`}>
               {formatTime(elapsedSeconds)}
             </div>
 
-            <div className="w-full bg-zinc-800/50 rounded-full h-2 mb-6 overflow-hidden">
-              <motion.div
-                className={`h-full ${hasSessionLimit && elapsedSeconds >= currentLimitSeconds * 0.8 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                initial={{ width: 0 }}
-                animate={{
-                  width: `${hasSessionLimit ? Math.min(100, (elapsedSeconds / currentLimitSeconds) * 100) : 100}%`,
-                }}
-                transition={{ ease: 'linear', duration: 1 }}
+            <div className="mb-5 h-1.5 w-full overflow-hidden rounded-full bg-line" aria-hidden="true">
+              <div
+                className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${hasSessionLimit && limitShare >= 0.8 ? 'bg-pause' : 'bg-accent'}`}
+                style={{ width: `${limitShare * 100}%` }}
               />
             </div>
 
-            <div className="flex gap-3 w-full mb-3">
-              <button
-                onClick={togglePause}
-                className="flex-1 py-3 rounded-xl font-semibold bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors flex items-center justify-center gap-2"
-              >
+            <div className="mb-3 w-full">
+              <SecondaryButton onClick={togglePause}>
                 {session.isPaused ? (
                   <>
-                    <Play size={16} /> Fortsetzen
+                    <Play size={16} aria-hidden="true" /> {t('session.resume')}
                   </>
                 ) : (
                   <>
-                    <Pause size={16} /> Pausieren
+                    <Pause size={16} aria-hidden="true" /> {t('session.pause')}
                   </>
                 )}
-              </button>
+              </SecondaryButton>
             </div>
 
             {config?.reelsProtection?.enabled && (
               <div className="w-full">
-                <button
+                <SecondaryButton
                   onClick={() => {
                     if (isReelsFeedBlocked) {
                       setShowReelsLimitBlock(true);
@@ -261,34 +255,31 @@ export function ActiveSessionScreen({
                       openFeed();
                     }
                   }}
-                  className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${isReelsFeedBlocked ? 'bg-zinc-900/70 border-2 border-zinc-800 text-zinc-500' : isSwipingReels ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 'bg-transparent border-2 border-amber-500/50 text-amber-500 hover:bg-amber-500/10'}`}
                 >
-                  <Play size={18} />
+                  <SquarePlay size={18} aria-hidden="true" />
                   {isReelsFeedBlocked
-                    ? 'Kurzvideo-Limit erreicht'
+                    ? t('session.feed.limit')
                     : isSwipingReels
-                      ? 'Feed schließen'
-                      : 'Kurzvideo Feed öffnen'}
-                </button>
+                      ? t('session.feed.close', { surface })
+                      : t('session.feed.open', { surface })}
+                </SecondaryButton>
 
                 {isSwipingReels && (
                   <div
                     data-testid="reels-swipe-surface"
                     role="group"
-                    aria-label="Kurzvideo-Feed: wische hier, um zu blättern"
+                    aria-label={t('session.feed.surface')}
                     onPointerDown={handleFeedPointerDown}
                     onPointerUp={handleFeedPointerUp}
                     onPointerCancel={closeFeed}
                     onWheel={handleFeedWheel}
-                    className="mt-3 h-40 rounded-xl border-2 border-amber-500/30 bg-zinc-900/60 flex flex-col items-center justify-center gap-2 touch-none select-none"
+                    className="mt-3 flex h-40 touch-none select-none flex-col items-center justify-center gap-2 rounded-control border border-line bg-raised"
                   >
-                    <span className="text-4xl font-bold text-amber-400 tabular-nums">{reelsSwipeCount}</span>
-                    <span className="text-zinc-400 text-xs text-center px-4">
-                      {reelsSwipeCount === 1 ? 'Wischbewegung' : 'Wischbewegungen'} in diesem Feed
+                    <span className="text-number text-ink">{reelsSwipeCount}</span>
+                    <span className="px-4 text-center text-caption text-muted">
+                      {t(reelsSwipeCount === 1 ? 'session.feed.swipeOne' : 'session.feed.swipeMany')}
                     </span>
-                    <span className="text-zinc-600 text-[11px] text-center px-4">
-                      Wische hoch oder runter. Auf Android zählt ScrollShield die echten Wischer im Feed der App.
-                    </span>
+                    <span className="px-4 text-center text-caption text-muted">{t('session.feed.hint')}</span>
                   </div>
                 )}
               </div>
@@ -297,129 +288,70 @@ export function ActiveSessionScreen({
         </div>
       </div>
 
-      {/* Reels/Shorts Interrupt Overlay */}
-      <AnimatePresence>
-        {showReelsInterrupt && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="absolute inset-0 z-[60] bg-zinc-950/95 backdrop-blur-3xl flex flex-col p-6 items-center justify-center"
-          >
-            <div className="w-20 h-20 bg-amber-500/10 rounded-[2rem] flex items-center justify-center mb-8 border border-amber-500/20">
-              <AlertTriangle size={40} className="text-amber-500" />
-            </div>
-            <h3 className="text-3xl font-bold text-center mb-4 tracking-tight">Kurze Pause</h3>
-            <p className="text-zinc-400 text-center text-base mb-10 max-w-sm leading-relaxed">
-              Dein Kurzvideo-Schutz hat unterbrochen. Du bist bereits im Swipe-Modus. Möchtest du wirklich weiter
-              scrollen?
-            </p>
-
-            <div className="w-full max-w-sm space-y-3">
-              <button
-                onClick={() => {
-                  setShowReelsInterrupt(false);
-                  closeApp();
-                }}
-                className="w-full py-4 rounded-[1.5rem] font-bold bg-amber-500 text-white shadow-lg shadow-amber-500/20 active:scale-[0.98] transition-transform"
-              >
-                Feed verlassen (App schließen)
-              </button>
-              <button
+      {showReelsInterrupt && (
+        <InterruptionScreen
+          app={appInfo}
+          chip={t('interrupt.stage.pause')}
+          tone="pause"
+          title={t('session.swipes.title', { count: reelsSwipeCount })}
+          text={t('session.swipes.text', { app: appInfo.name })}
+          footer={
+            <>
+              <BackAction
+                label={t('session.feed.leave', { surface })}
                 onClick={() => {
                   setShowReelsInterrupt(false);
                   setIsSwipingReels(false);
                 }}
-                className="w-full py-4 rounded-[1.5rem] font-semibold bg-zinc-800 text-zinc-100 hover:bg-zinc-700 transition-colors"
-              >
-                Normale App-Nutzung fortsetzen
-              </button>
-              <button
+              />
+              <ContinueAction
+                label={t('session.swipes.continue')}
                 onClick={() => {
                   setShowReelsInterrupt(false);
                   setIsSwipingReels(true);
                 }}
-                className="w-full py-4 rounded-[1.5rem] font-semibold text-zinc-500 hover:text-zinc-400 transition-colors"
-              >
-                Trotzdem weiter swipen (Gefahr)
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              />
+            </>
+          }
+        />
+      )}
 
-      <AnimatePresence>
-        {showReelsLimitBlock && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="absolute inset-0 z-[60] bg-zinc-950/95 backdrop-blur-3xl flex flex-col p-6 items-center justify-center"
-          >
-            <div className="w-20 h-20 bg-red-500/10 rounded-[2rem] flex items-center justify-center mb-8 border border-red-500/20">
-              <Shield size={40} className="text-red-500" />
-            </div>
-            <h3 className="text-3xl font-bold text-center mb-4 tracking-tight">Feed blockiert</h3>
-            <p className="text-zinc-400 text-center text-base mb-10 max-w-sm leading-relaxed">
-              Dein Kurzvideo-Schutz ist aktiv. Heute wurden {reelsUsageToday} von {Math.max(0, reelsDailyLimit)} Minuten
-              genutzt.
-            </p>
+      {showReelsLimitBlock && (
+        <InterruptionScreen
+          app={appInfo}
+          chip={t('session.feed.blockedChip', { surface })}
+          tone="lock"
+          title={t('session.feed.limitTitle', { surface })}
+          text={t('session.feed.limitText', { used: reelsUsageToday, limit: Math.max(0, reelsDailyLimit) })}
+          footer={
+            <BackAction label={t('session.feed.leave', { surface })} onClick={() => setShowReelsLimitBlock(false)} />
+          }
+        >
+          <p className="text-body-s text-muted">{t('session.feed.midnight')}</p>
+        </InterruptionScreen>
+      )}
 
-            <div className="w-full max-w-sm space-y-3">
-              <button
-                onClick={closeApp}
-                className="w-full py-4 rounded-[1.5rem] font-bold bg-zinc-100 text-zinc-950 shadow-lg shadow-zinc-100/10 active:scale-[0.98] transition-transform"
-              >
-                App schließen
-              </button>
-              <button
-                onClick={() => setShowReelsLimitBlock(false)}
-                className="w-full py-4 rounded-[1.5rem] font-semibold bg-zinc-800 text-zinc-100 hover:bg-zinc-700 transition-colors"
-              >
-                Normale App-Nutzung fortsetzen
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Warning Overlay */}
-      <AnimatePresence>
-        {showWarning && (
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-            className="absolute inset-x-0 bottom-0 z-50 p-6"
-          >
-            <div className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-[2rem] p-6 shadow-2xl shadow-black">
-              <div className="w-16 h-16 bg-amber-500/20 rounded-2xl flex items-center justify-center mb-4 text-amber-500 mx-auto">
-                <Clock size={32} />
-              </div>
-              <h3 className="text-2xl font-bold text-center mb-2">Zeitlimit erreicht</h3>
-              <p className="text-zinc-400 text-center text-sm mb-6 leading-relaxed">
-                Du hast dein gesetztes Limit von {sessionLimitMinutes} Minuten für diese Sitzung in {appInfo.name}{' '}
-                erreicht. Zeit für eine Pause?
-              </p>
-
-              <div className="space-y-3">
-                <button
-                  onClick={closeApp}
-                  className="w-full py-4 rounded-[1.5rem] font-bold bg-zinc-100 text-zinc-950 shadow-lg active:scale-[0.98] transition-transform"
-                >
-                  App schließen
-                </button>
-                <button
-                  onClick={extendSession}
-                  className="w-full py-4 rounded-[1.5rem] font-semibold bg-zinc-800 text-zinc-400 hover:text-zinc-300 transition-colors"
-                >
-                  Noch 5 Minuten
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {showWarning && (
+        <InterruptionScreen
+          app={appInfo}
+          chip={t('protect.rule.session')}
+          tone="pause"
+          title={t('session.guard.title', { minutes: sessionLimitMinutes, app: appInfo.name })}
+          text={t('session.guard.text')}
+          footer={
+            <>
+              <BackAction label={t('session.guard.stop')} onClick={closeApp} />
+              <ContinueAction
+                label={guardWait > 0 ? t('interrupt.continueIn', { seconds: guardWait }) : t('session.guard.more')}
+                disabled={guardWait > 0}
+                onClick={extendSession}
+              />
+            </>
+          }
+        >
+          {guardWait > 0 && <Countdown value={guardWait} label={t('session.guard.pause')} />}
+        </InterruptionScreen>
+      )}
     </div>
   );
 }

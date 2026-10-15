@@ -550,7 +550,7 @@ export function Header({
 export function StatusChip({ tone, children }: { tone: 'accent' | 'pause' | 'lock'; children: React.ReactNode }) {
   const dot = { accent: 'bg-accent', pause: 'bg-pause', lock: 'bg-lock' }[tone];
   return (
-    <span className="inline-flex min-h-7 items-center gap-2 self-start rounded-control bg-raised px-3 py-1 text-label-s text-ink">
+    <span className="inline-flex min-h-7 items-center gap-2 rounded-control bg-raised px-3 py-1 text-label-s text-ink">
       <span className={`h-2 w-2 flex-shrink-0 rounded-full ${dot}`} aria-hidden="true" />
       {children}
     </span>

@@ -1,8 +1,7 @@
-import { Check } from 'lucide-react';
 import { AppState, Screen } from '../types';
-import { Choice, Header, List, Page, PrimaryButton, Row, SecondaryButton, Section, Switch } from '../components/ui';
+import { Choice, Header, List, Page, Row, Section, Switch } from '../components/ui';
 import { LanguageSetting, t } from '../i18n';
-import { hasPro, PRO_BENEFITS } from '../lib/entitlements';
+import { hasPro } from '../lib/entitlements';
 import {
   EVENING_REMINDER_HOUR,
   RELAPSE_BLOCK_THRESHOLD,
@@ -128,76 +127,3 @@ export function NotificationsScreen({ state, updateState, navigate }: ScreenProp
  * phase 4; until then the development build can switch Pro on as a preview so
  * every screen can be seen.
  */
-export function PaywallScreen({ state, updateState, navigate }: ScreenProps) {
-  const pro = hasPro(state);
-  const close = () => {
-    updateState({ paywallReason: null });
-    navigate('today');
-  };
-
-  return (
-    <Page>
-      <Header title="ScrollShield Pro" onBack={close} />
-
-      {state.paywallReason && <p className="mb-6 text-lg leading-snug text-zinc-100">{state.paywallReason}</p>}
-
-      <Section title={pro ? 'Pro ist aktiv' : 'Mit Pro bekommst du'}>
-        <ul className="space-y-3 rounded-2xl bg-zinc-900 p-5">
-          {PRO_BENEFITS.map((benefit) => (
-            <li key={benefit} className="flex items-start gap-3 text-zinc-200">
-              <Check size={18} className="mt-0.5 flex-shrink-0 text-emerald-400" aria-hidden="true" />
-              {benefit}
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 px-1 text-sm text-zinc-500">
-          Kostenlos bleiben: 2 Apps, Kurzvideo-Schutz, Pause und Wiederöffnungs-Schutz, 1 Zeitplan, Fokus,
-          Notfallfreigabe und die Zahlen von heute. Keine Werbung.
-        </p>
-      </Section>
-
-      {!pro && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-emerald-500 p-4">
-              <p className="text-sm text-zinc-400">Jährlich</p>
-              <p className="mt-1 text-xl font-semibold text-zinc-50">19,99 €</p>
-              <p className="mt-1 text-xs text-zinc-500">7 Tage gratis testen</p>
-            </div>
-            <div className="rounded-2xl border border-zinc-800 p-4">
-              <p className="text-sm text-zinc-400">Monatlich</p>
-              <p className="mt-1 text-xl font-semibold text-zinc-50">3,49 €</p>
-            </div>
-          </div>
-          <p className="px-1 text-xs text-zinc-500">
-            Preise als Vorschau. Kaufen über Google Play kommt mit der Abrechnung (Roadmap Phase 4).
-          </p>
-          <PrimaryButton onClick={() => undefined} disabled>
-            7 Tage gratis testen
-          </PrimaryButton>
-          <SecondaryButton onClick={close}>Später</SecondaryButton>
-        </div>
-      )}
-
-      {import.meta.env.DEV && (
-        <div className="mt-10">
-          <Section title="Nur in der Entwicklung">
-            <List>
-              <Row
-                label="Pro-Vorschau"
-                description="Schaltet Pro ohne Kauf frei, damit du alle Seiten sehen kannst."
-                right={
-                  <Switch
-                    checked={pro}
-                    ariaLabel="Pro-Vorschau"
-                    onChange={(active) => updateState({ pro: { active } })}
-                  />
-                }
-              />
-            </List>
-          </Section>
-        </div>
-      )}
-    </Page>
-  );
-}

@@ -51,7 +51,8 @@ import { AppDetailScreen, CommitmentScreen, ProtectScreen, ScheduleEditScreen } 
 import { Focus } from './screens/FocusScreens';
 import { RescueScreen } from './screens/RescueScreen';
 import { InsightsScreen } from './screens/InsightsScreen';
-import { NotificationsScreen, PaywallScreen, SettingsScreen } from './screens/SettingsScreens';
+import { NotificationsScreen, SettingsScreen } from './screens/SettingsScreens';
+import { PaywallScreen } from './screens/PaywallScreen';
 import { ProtectionFlow } from './screens/ProtectionFlow';
 import { PermissionsScreen } from './screens/PermissionsScreen';
 import { DebugScreen } from './screens/DebugScreen';

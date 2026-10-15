@@ -19,3 +19,9 @@ export function joinNames(names: string[], word: 'or' | 'and') {
     last: names[names.length - 1],
   });
 }
+
+/** "14:32" – minutes and seconds of a longer lock. */
+export const formatMinutesSeconds = (totalSeconds: number) => {
+  const seconds = Math.max(0, Math.round(totalSeconds));
+  return `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
+};

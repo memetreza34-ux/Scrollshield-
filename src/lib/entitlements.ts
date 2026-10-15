@@ -1,3 +1,4 @@
+import { MessageKey, t } from '../i18n';
 import type { AppState } from '../types';
 
 /**
@@ -27,31 +28,31 @@ export type ProFeature =
   | 'strict_focus'
   | 'feed_extras';
 
-/** The paywall's first sentence for each feature. */
-export const PRO_REASONS: Record<ProFeature, string> = {
-  third_app: `In der kostenlosen Version schützt ScrollShield ${FREE_LIMITS.protectedApps} Apps. Für weitere brauchst du Pro.`,
-  preset_stark: 'Die Voreinstellung „Stark“ gehört zu Pro.',
-  preset_eigene: 'Eigene Regeln gehören zu Pro.',
-  session_guard: 'Der Sitzungs-Wächter gehört zu Pro.',
-  daily_budget: 'Das Tagesbudget gehört zu Pro.',
-  second_schedule: `In der kostenlosen Version gibt es ${FREE_LIMITS.schedules} Zeitplan. Für weitere brauchst du Pro.`,
-  rescue: 'Rescue gehört zu Pro.',
-  commitment: 'Die Selbstverpflichtung gehört zu Pro.',
-  insights_week: 'Wochenansicht und Trends gehören zu Pro.',
-  custom_focus: 'Eine eigene Fokus-Dauer gehört zu Pro.',
-  strict_focus: 'Strenger Fokus gehört zu Pro.',
-  feed_extras: 'Wisch-Unterbrecher und Feed-Sitzungslimit gehören zu Pro.',
+/** The paywall's first sentence for each feature, in the current language. */
+const PRO_REASONS: Record<ProFeature, MessageKey> = {
+  third_app: 'paywall.reason.third_app',
+  preset_stark: 'paywall.reason.preset_stark',
+  preset_eigene: 'paywall.reason.preset_eigene',
+  session_guard: 'paywall.reason.session_guard',
+  daily_budget: 'paywall.reason.daily_budget',
+  second_schedule: 'paywall.reason.second_schedule',
+  rescue: 'paywall.reason.rescue',
+  commitment: 'paywall.reason.commitment',
+  insights_week: 'paywall.reason.insights_week',
+  custom_focus: 'paywall.reason.custom_focus',
+  strict_focus: 'paywall.reason.strict_focus',
+  feed_extras: 'paywall.reason.feed_extras',
 };
 
-export const PRO_BENEFITS = [
-  'Unbegrenzt viele Apps schützen',
-  'Voreinstellung „Stark“ und eigene Regeln',
-  'Sitzungs-Wächter und Tagesbudget',
-  'Unbegrenzt viele Zeitpläne',
-  'Rescue und Selbstverpflichtung',
-  'Eigene Fokus-Dauer und strenger Fokus',
-  'Wisch-Unterbrecher für Kurzvideos',
-  'Woche, Wiederöffnungs-Muster und App-Trends',
+export const PRO_BENEFITS: MessageKey[] = [
+  'paywall.benefit.apps',
+  'paywall.benefit.presets',
+  'paywall.benefit.limits',
+  'paywall.benefit.schedules',
+  'paywall.benefit.rescue',
+  'paywall.benefit.focus',
+  'paywall.benefit.swipes',
+  'paywall.benefit.insights',
 ];
 
 export const hasPro = (state: Pick<AppState, 'pro'>) => state.pro?.active === true;
@@ -68,5 +69,8 @@ export const canAddSchedule = (state: Pick<AppState, 'schedules' | 'pro'>) =>
 
 /** The state change that opens the paywall for a feature; pair it with navigate('paywall'). */
 export const paywallFor = (feature: ProFeature): Pick<AppState, 'paywallReason'> => ({
-  paywallReason: PRO_REASONS[feature],
+  paywallReason: t(PRO_REASONS[feature], {
+    apps: FREE_LIMITS.protectedApps,
+    schedules: FREE_LIMITS.schedules,
+  }),
 });

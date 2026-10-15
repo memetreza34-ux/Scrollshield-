@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarDays, ChartNoAxesColumn, RotateCcw, SquarePlay, TriangleAlert, TrendingDown } from 'lucide-react';
+import { CalendarDays, ChartNoAxesColumn, RotateCcw, TriangleAlert, TrendingDown } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { AppState, Screen, SUPPORTED_APPS } from '../types';
 import {
