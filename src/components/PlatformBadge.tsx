@@ -19,16 +19,14 @@ export function PlatformBadge({ label, packages = [] }: { label: string; package
         alt=""
         aria-hidden="true"
         draggable={false}
-        className="h-full w-full rounded-[inherit] bg-zinc-900 object-cover"
+        className="h-full w-full rounded-[inherit] bg-surface object-cover"
       />
     );
   }
 
+  // Size and weight come from the tile.
   return (
-    <span
-      aria-hidden="true"
-      className="inline-flex h-6 w-6 items-center justify-center text-[11px] font-black leading-none"
-    >
+    <span aria-hidden="true" className="inline-flex items-center justify-center leading-none">
       {label}
     </span>
   );

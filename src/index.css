@@ -1,14 +1,75 @@
 @import 'tailwindcss';
 
+/*
+ * Design system "Ruhige Kontrolle" (Claude Design canvas, page 1). Dark only.
+ * Order comes from lightness steps, not shadows; colour always means
+ * something: green = protection and the main action, orange = pause,
+ * red = hard lock. Text on a coloured fill is always dark (ground).
+ */
 @theme {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: 'Geist Variable', Roboto, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --color-ground: #09090b;
+  --color-surface: #121215;
+  --color-raised: #1c1c22;
+  --color-line: #27272a;
+  --color-ink: #f4f4f5;
+  --color-muted: #a1a1aa;
+  /* Only for disabled things, control borders and text from 24 px up. */
+  --color-faint: #71717a;
+  --color-accent: #10b981;
+  --color-pause: #f59e0b;
+  --color-lock: #f43f5e;
+
+  --radius-control: 0.75rem;
+  --radius-surface: 1rem;
+
+  /* In rem so the system font size can scale them. */
+  --text-display: 3.5rem;
+  --text-display--line-height: 3.75rem;
+  --text-display--letter-spacing: -0.02em;
+  --text-display--font-weight: 600;
+  --text-number: 2.5rem;
+  --text-number--line-height: 2.75rem;
+  --text-number--letter-spacing: -0.02em;
+  --text-number--font-weight: 600;
+  --text-headline: 1.75rem;
+  --text-headline--line-height: 2.125rem;
+  --text-headline--letter-spacing: -0.01em;
+  --text-headline--font-weight: 600;
+  --text-title: 1.25rem;
+  --text-title--line-height: 1.75rem;
+  --text-title--font-weight: 600;
+  --text-title-s: 1.0625rem;
+  --text-title-s--line-height: 1.5rem;
+  --text-title-s--font-weight: 600;
+  --text-body: 1rem;
+  --text-body--line-height: 1.5rem;
+  --text-body-s: 0.875rem;
+  --text-body-s--line-height: 1.25rem;
+  --text-label: 0.9375rem;
+  --text-label--line-height: 1.25rem;
+  --text-label--font-weight: 600;
+  --text-label-s: 0.8125rem;
+  --text-label-s--line-height: 1rem;
+  --text-label-s--font-weight: 500;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-caption--font-weight: 500;
 }
 
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-ground);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
   }
 
   h1,
@@ -35,97 +96,6 @@
 }
 
 @layer utilities {
-  .app-stage {
-    background:
-      radial-gradient(circle at 20% 0%, rgba(20, 184, 166, 0.18), transparent 28rem),
-      radial-gradient(circle at 80% 10%, rgba(59, 130, 246, 0.14), transparent 26rem),
-      linear-gradient(135deg, #020617 0%, #050505 42%, #08111f 100%);
-  }
-
-  .app-device::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background:
-      linear-gradient(120deg, rgba(255, 255, 255, 0.08), transparent 26%, transparent 72%, rgba(20, 184, 166, 0.08)),
-      radial-gradient(circle at 50% -12%, rgba(34, 197, 94, 0.16), transparent 20rem);
-    z-index: 0;
-  }
-
-  .app-device > * {
-    position: relative;
-    z-index: 1;
-  }
-
-  .shield-aura {
-    background:
-      radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.36), transparent 0.35rem),
-      conic-gradient(
-        from 210deg,
-        rgba(16, 185, 129, 0.95),
-        rgba(59, 130, 246, 0.9),
-        rgba(244, 63, 94, 0.78),
-        rgba(16, 185, 129, 0.95)
-      );
-    animation: shield-aura-spin 9s linear infinite;
-  }
-
-  .shield-aura::after {
-    content: '';
-    position: absolute;
-    inset: 0.4rem;
-    border-radius: 1.85rem;
-    background: linear-gradient(145deg, rgba(9, 9, 11, 0.92), rgba(24, 24, 27, 0.98));
-    border: 1px solid rgba(255, 255, 255, 0.12);
-  }
-
-  .signal-ring {
-    animation: signal-ring 2.7s ease-out infinite;
-  }
-
-  .signal-ring:nth-child(2) {
-    animation-delay: 0.9s;
-  }
-
-  .signal-ring:nth-child(3) {
-    animation-delay: 1.8s;
-  }
-
-  .scanline {
-    animation: scanline 4.8s ease-in-out infinite;
-  }
-
-  @keyframes shield-aura-spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  @keyframes signal-ring {
-    0% {
-      opacity: 0.8;
-      transform: scale(0.72);
-    }
-    75%,
-    100% {
-      opacity: 0;
-      transform: scale(1.28);
-    }
-  }
-
-  @keyframes scanline {
-    0%,
-    100% {
-      transform: translateY(-34%);
-      opacity: 0.18;
-    }
-    50% {
-      transform: translateY(34%);
-      opacity: 0.42;
-    }
-  }
-
   /* Keep secondary copy readable on the zinc-950/zinc-900 app surfaces. */
   .text-zinc-500,
   .text-zinc-600 {

@@ -415,7 +415,7 @@ export default function App() {
   }, []);
 
   if (!isLoaded)
-    return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">Laden...</div>;
+    return <div className="flex min-h-screen items-center justify-center bg-ground text-body text-muted">Laden …</div>;
 
   const resetApp = () => {
     skipNextSaveRef.current = true;
@@ -432,8 +432,8 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AppIconsContext.Provider value={appIcons}>
-        <div className="app-stage min-h-screen text-zinc-100 font-sans selection:bg-zinc-800 flex justify-center items-center p-0 sm:p-4">
-          <div className="app-device w-full max-w-md bg-zinc-950 h-[100dvh] sm:h-[850px] sm:max-h-[90vh] relative overflow-hidden flex flex-col sm:rounded-[2.5rem] shadow-2xl shadow-black/80 sm:border border-zinc-800/50">
+        <div className="flex min-h-screen items-center justify-center bg-black p-0 font-sans text-ink selection:bg-raised sm:p-4">
+          <div className="relative flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-ground sm:h-[850px] sm:max-h-[90vh] sm:rounded-[2.5rem] sm:border sm:border-line">
             <div
               ref={screenScrollRef}
               data-testid="screen-scroll"

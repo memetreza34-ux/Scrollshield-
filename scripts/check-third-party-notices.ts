@@ -9,7 +9,8 @@ type PackageJson = {
 const packageJson = JSON.parse(await readFile('package.json', 'utf8')) as PackageJson;
 const notices = await readFile('THIRD_PARTY_NOTICES.md', 'utf8');
 const runtimeDependencies = Object.keys(packageJson.dependencies ?? {}).sort();
-const allowedLicenses = new Set(['MIT', 'ISC', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause']);
+// OFL-1.1 is for fonts only: it allows bundling them with any app.
+const allowedLicenses = new Set(['MIT', 'ISC', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'OFL-1.1']);
 const findings: string[] = [];
 
 for (const dependency of runtimeDependencies) {

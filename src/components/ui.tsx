@@ -1,35 +1,45 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { BarChart3, ChevronRight, Settings, Shield, Sun, Timer } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ChartNoAxesColumn, Check, ChevronRight, Settings, Shield, Timer } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { PlatformDefinition, Screen } from '../types';
 
+/** Pressed state of every control: an 8 % lighter layer over whatever fill it has. */
+const PRESSED = 'active:shadow-[inset_0_0_0_100vmax_rgb(244_244_245/0.08)]';
+/** Keyboard and TalkBack focus: a green ring with a gap. */
+const FOCUS_RING =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ground';
+const FOCUS_RING_INSET =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent';
+
+/** 52 × 32 inside a 48 px tall target. Off has a visible border, not just a darker fill. */
 export function Switch({
   checked,
   onChange,
   ariaLabel,
+  disabled,
 }: {
   checked: boolean;
   onChange: (c: boolean) => void;
   ariaLabel?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
+      type="button"
       role="switch"
       aria-checked={checked}
       aria-label={ariaLabel || (checked ? 'Deaktivieren' : 'Aktivieren')}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="w-12 h-11 relative flex items-center flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 rounded-full"
+      className="group flex h-12 w-[52px] flex-shrink-0 items-center justify-center rounded-full focus-visible:outline-none disabled:opacity-[0.38]"
     >
       <span
-        className={`w-12 h-7 rounded-full p-1 transition-colors duration-300 ease-in-out ${checked ? 'bg-zinc-200' : 'bg-zinc-800'}`}
         aria-hidden="true"
+        className={`relative block h-8 w-[52px] rounded-full transition-colors duration-150 group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-ground ${checked ? 'bg-accent' : 'border-2 border-faint bg-raised'}`}
       >
-        <motion.span
-          layout
-          className={`block w-5 h-5 rounded-full shadow-sm ${checked ? 'bg-zinc-900' : 'bg-zinc-400'}`}
-          animate={{ x: checked ? 20 : 0 }}
-          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+        <span
+          className={`absolute top-1 rounded-full transition-all duration-150 ${checked ? 'left-6 h-6 w-6 bg-ground' : 'left-1 h-4 w-4 bg-muted'}`}
         />
       </span>
     </button>
@@ -54,20 +64,21 @@ const TAB_SCREENS: Record<'today' | 'protect' | 'focus' | 'insights', Screen[]> 
   insights: ['insights'],
 };
 
+/** 80 px, always visible. Active tab: tinted pill, green icon, bright 600 label. */
 export function BottomNav({ currentScreen, navigate }: { currentScreen: Screen; navigate: (s: Screen) => void }) {
   const navItems: { id: keyof typeof TAB_SCREENS; icon: LucideIcon; label: string }[] = [
-    { id: 'today', icon: Sun, label: 'Heute' },
+    { id: 'today', icon: CalendarDays, label: 'Heute' },
     { id: 'protect', icon: Shield, label: 'Schutz' },
     { id: 'focus', icon: Timer, label: 'Fokus' },
-    { id: 'insights', icon: BarChart3, label: 'Einblicke' },
+    { id: 'insights', icon: ChartNoAxesColumn, label: 'Einblicke' },
   ];
 
   return (
     <nav
       aria-label="Hauptnavigation"
-      className="absolute bottom-0 left-0 right-0 z-50 border-t border-zinc-800 bg-zinc-950"
+      className="absolute bottom-0 left-0 right-0 z-50 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]"
     >
-      <div className="flex items-stretch justify-around px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2">
+      <div className="grid h-20 grid-cols-4">
         {navItems.map((item) => {
           const active = TAB_SCREENS[item.id].includes(currentScreen);
           return (
@@ -75,10 +86,14 @@ export function BottomNav({ currentScreen, navigate }: { currentScreen: Screen; 
               key={item.id}
               onClick={() => navigate(item.id)}
               aria-current={active ? 'page' : undefined}
-              className={`flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${active ? 'text-zinc-50' : 'text-zinc-500 hover:text-zinc-300'}`}
+              className={`flex flex-col items-center justify-center gap-1 ${FOCUS_RING_INSET}`}
             >
-              <item.icon size={22} strokeWidth={active ? 2.4 : 1.8} aria-hidden="true" />
-              <span className={`text-[11px] ${active ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>
+              <span
+                className={`flex h-8 w-14 items-center justify-center rounded-full ${active ? 'bg-accent/10 text-accent' : 'text-muted'}`}
+              >
+                <item.icon size={24} strokeWidth={1.75} aria-hidden="true" />
+              </span>
+              <span className={`text-caption ${active ? 'font-semibold text-ink' : 'text-muted'}`}>{item.label}</span>
             </button>
           );
         })}
@@ -87,45 +102,55 @@ export function BottomNav({ currentScreen, navigate }: { currentScreen: Screen; 
   );
 }
 
-/** Page frame for every screen above the tab bar. */
+/** Page frame for every screen above the tab bar: 16 px side margin. */
 export function Page({ children }: { children: React.ReactNode }) {
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-5 pb-32 pt-6">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.25 }}
+      className="px-4 pb-28"
+    >
       {children}
     </motion.div>
   );
 }
 
-/** Title of a tab, with the settings gear on the right. */
+const iconButtonClass = `flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-ink ${PRESSED} ${FOCUS_RING}`;
+
+/** Title of a tab, with the settings gear on the right. 64 px high. */
 export function TabHeader({ title, navigate }: { title: string; navigate: (s: Screen) => void }) {
   return (
-    <header className="mb-6 flex items-center justify-between">
-      <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">{title}</h1>
-      <button
-        onClick={() => navigate('settings')}
-        aria-label="Einstellungen"
-        className="flex h-11 w-11 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-      >
-        <Settings size={22} aria-hidden="true" />
+    <header className="mb-2 flex h-16 items-center justify-between gap-2">
+      <h1 className="min-w-0 text-headline text-ink">{title}</h1>
+      <button onClick={() => navigate('settings')} aria-label="Einstellungen" className={`-mr-3 ${iconButtonClass}`}>
+        <Settings size={24} strokeWidth={1.75} aria-hidden="true" />
       </button>
     </header>
   );
 }
 
+/**
+ * A titled block. `label` is the small grey group heading (settings groups),
+ * `title` the 20 px section heading ("Apps heute", "Zeitpläne").
+ */
 export function Section({
   title,
   children,
   action,
+  kind = 'label',
 }: {
   title?: string;
   children: React.ReactNode;
   action?: React.ReactNode;
+  kind?: 'label' | 'title';
 }) {
   return (
-    <section className="mb-8">
+    <section className="mb-6">
       {(title || action) && (
-        <div className="mb-2 flex items-center justify-between px-1">
-          {title && <h2 className="text-sm font-semibold text-zinc-400">{title}</h2>}
+        <div className={`flex items-center justify-between gap-2 ${kind === 'label' ? 'mb-2 px-4' : 'mb-3'}`}>
+          {title && <h2 className={kind === 'label' ? 'text-label-s text-muted' : 'text-title text-ink'}>{title}</h2>}
           {action}
         </div>
       )}
@@ -134,14 +159,19 @@ export function Section({
   );
 }
 
-/** A group of rows with dividers. */
+/** A card of rows: surface, 1 px line, radius 16; rows are split by an inset line. */
 export function List({ children }: { children: React.ReactNode }) {
-  return <div className="divide-y divide-zinc-800/80 overflow-hidden rounded-2xl bg-zinc-900">{children}</div>;
+  return (
+    <div className="overflow-hidden rounded-surface border border-line bg-surface [&>*+*]:relative [&>*+*]:before:pointer-events-none [&>*+*]:before:absolute [&>*+*]:before:inset-x-4 [&>*+*]:before:top-0 [&>*+*]:before:h-px [&>*+*]:before:bg-line">
+      {children}
+    </div>
+  );
 }
 
+/** Neutral and small, behind the word: "belongs to Pro", not "buy me". */
 export function ProBadge() {
   return (
-    <span className="rounded-md border border-emerald-500/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-400">
+    <span className="inline-flex h-5 flex-shrink-0 items-center rounded-control bg-line px-1.5 text-[0.6875rem] leading-3 font-semibold tracking-[0.06em] text-ink uppercase">
       Pro
     </span>
   );
@@ -150,6 +180,7 @@ export function ProBadge() {
 /**
  * A list row. `right` is a separate control (a switch) and sits next to the
  * row's own button, never inside it; `trailing` is decoration inside it.
+ * `strong` is for app names (17 / 600); settings rows stay at body weight.
  */
 export function Row({
   label,
@@ -161,6 +192,7 @@ export function Row({
   leading,
   pro,
   disabled,
+  strong,
 }: {
   label: string;
   value?: string;
@@ -171,33 +203,32 @@ export function Row({
   leading?: React.ReactNode;
   pro?: boolean;
   disabled?: boolean;
+  strong?: boolean;
 }) {
   const content = (
     <>
       {leading}
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className="font-medium text-zinc-100">{label}</span>
+          <span className={strong ? 'text-title-s text-ink' : 'text-body text-ink'}>{label}</span>
           {pro && <ProBadge />}
         </span>
-        {description && (
-          <span className="mt-0.5 block whitespace-pre-line text-sm leading-snug text-zinc-500">{description}</span>
-        )}
+        {description && <span className="mt-0.5 block whitespace-pre-line text-body-s text-muted">{description}</span>}
       </span>
-      {value && <span className="flex-shrink-0 text-sm text-zinc-400">{value}</span>}
+      {value && <span className="flex-shrink-0 text-body-s text-muted">{value}</span>}
       {trailing}
       {onClick && !right && !trailing && (
-        <ChevronRight size={18} className="flex-shrink-0 text-zinc-600" aria-hidden="true" />
+        <ChevronRight size={20} strokeWidth={1.75} className="flex-shrink-0 text-muted" aria-hidden="true" />
       )}
     </>
   );
-  const layout = 'flex min-h-[56px] items-center gap-3 py-3 text-left';
-  const dimmed = disabled ? 'opacity-50' : '';
+  const layout = 'flex min-h-14 items-center gap-4 py-3 text-left';
+  const dimmed = disabled ? 'opacity-[0.38]' : '';
   const button = onClick && (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`${layout} ${dimmed} ${right ? 'min-w-0 flex-1 pl-4' : 'w-full px-4'} hover:bg-zinc-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500`}
+      className={`${layout} ${dimmed} ${right ? 'min-w-0 flex-1 pl-4' : 'w-full px-4'} ${PRESSED} ${FOCUS_RING_INSET}`}
     >
       {content}
     </button>
@@ -205,7 +236,7 @@ export function Row({
 
   if (button && right) {
     return (
-      <div className="flex items-center gap-2 pr-3">
+      <div className="flex items-center gap-2 pr-4">
         {button}
         {right}
       </div>
@@ -220,6 +251,9 @@ export function Row({
   );
 }
 
+const buttonBase = `flex min-h-12 w-full items-center justify-center gap-2 rounded-control px-4 py-3.5 text-center text-label disabled:opacity-[0.38] ${PRESSED} ${FOCUS_RING}`;
+
+/** The one main action of a screen. At most one green button per screen. */
 export function PrimaryButton({
   children,
   onClick,
@@ -230,11 +264,7 @@ export function PrimaryButton({
   disabled?: boolean;
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="flex min-h-[52px] w-full items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-emerald-500 px-3 font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
-    >
+    <button onClick={onClick} disabled={disabled} className={`${buttonBase} bg-accent text-ground`}>
       {children}
     </button>
   );
@@ -250,17 +280,17 @@ export function SecondaryButton({
   disabled?: boolean;
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="flex min-h-[52px] w-full items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-zinc-800 px-3 font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-    >
+    <button onClick={onClick} disabled={disabled} className={`${buttonBase} border border-line bg-raised text-ink`}>
       {children}
     </button>
   );
 }
 
-/** Choice chips for a single value, e.g. 15 / 30 / 60 minutes. */
+/**
+ * One value out of a few. Up to four short options (eight characters at most)
+ * become a segmented control; anything longer wraps as single chips. The
+ * check mark carries the selection, not the colour.
+ */
 export function Choice<T extends string | number>({
   options,
   value,
@@ -272,19 +302,31 @@ export function Choice<T extends string | number>({
   onChange: (value: T) => void;
   label: string;
 }) {
+  const segmented = options.length <= 4 && options.every((option) => option.label.length <= 8);
+
   return (
-    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
-      {options.map((option) => {
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className={
+        segmented ? 'flex overflow-hidden rounded-control border border-line bg-surface' : 'flex flex-wrap gap-2'
+      }
+    >
+      {options.map((option, index) => {
         const selected = option.value === value;
+        const shape = segmented
+          ? `min-w-0 flex-1 justify-center px-2 ${index > 0 ? 'border-l border-line' : ''} ${FOCUS_RING_INSET}`
+          : `rounded-control border px-4 ${selected ? 'border-accent' : 'border-line bg-surface'} ${FOCUS_RING}`;
         return (
           <button
             key={String(option.value)}
             role="radio"
             aria-checked={selected}
             onClick={() => onChange(option.value)}
-            className={`flex min-h-[44px] items-center gap-2 rounded-xl border px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${selected ? 'border-emerald-500 bg-emerald-500/10 text-zinc-50' : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700'}`}
+            className={`flex min-h-12 items-center gap-1.5 text-label text-ink ${shape} ${selected ? 'bg-accent/10' : 'font-normal'} ${PRESSED}`}
           >
-            {option.label}
+            {selected && <Check size={16} strokeWidth={2.5} className="flex-shrink-0 text-accent" aria-hidden="true" />}
+            <span className="min-w-0">{option.label}</span>
             {option.pro && <ProBadge />}
           </button>
         );
@@ -296,14 +338,14 @@ export function Choice<T extends string | number>({
 /** The app's icon in a tile: launcher icon on Android, initials elsewhere. */
 export function AppTile({ app, size = 'md' }: { app: PlatformDefinition; size?: 'sm' | 'md' | 'lg' }) {
   const sizeClass = {
-    sm: 'h-8 w-8 rounded-lg text-[10px]',
-    md: 'h-11 w-11 rounded-xl text-xs',
-    lg: 'h-20 w-20 rounded-3xl text-lg',
+    sm: 'h-8 w-8 rounded-control text-[0.6875rem]',
+    md: 'h-10 w-10 rounded-control text-[0.9375rem]',
+    lg: 'h-16 w-16 rounded-surface text-[1.375rem]',
   }[size];
   return (
     <span
       aria-hidden="true"
-      className={`flex flex-shrink-0 items-center justify-center overflow-hidden ${sizeClass} ${app.color}`}
+      className={`flex flex-shrink-0 items-center justify-center overflow-hidden font-semibold ${sizeClass} ${app.color}`}
     >
       {app.icon}
     </span>
@@ -333,7 +375,7 @@ export function TimeSelector({
   const selectValue = isCustom ? 'custom' : value.toString();
 
   return (
-    <div className="flex gap-2 items-center">
+    <div className="flex items-center gap-2">
       <select
         aria-label={ariaLabel}
         value={selectValue}
@@ -346,7 +388,7 @@ export function TimeSelector({
             onChange(Number(e.target.value));
           }
         }}
-        className="bg-zinc-800 text-zinc-200 py-2 px-3 rounded-xl text-sm border border-zinc-700 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 font-medium"
+        className={`min-h-12 rounded-control border border-line bg-raised px-3 text-body-s font-medium text-ink ${FOCUS_RING}`}
       >
         {allowDisabled && <option value="0">{disabledLabel}</option>}
         {options.map((opt) => (
@@ -358,7 +400,7 @@ export function TimeSelector({
       </select>
 
       {isCustom && (
-        <div className="flex items-center gap-2 bg-zinc-800 border border-zinc-700 rounded-xl px-2">
+        <div className="flex items-center gap-2 rounded-control border border-line bg-raised px-2">
           <input
             aria-label={`${ariaLabel}: eigener Wert`}
             type="number"
@@ -368,16 +410,17 @@ export function TimeSelector({
               const val = parseInt(e.target.value, 10);
               if (!isNaN(val)) onChange(val);
             }}
-            className="bg-transparent text-zinc-200 outline-none w-14 py-2 text-sm text-center font-mono"
+            className="w-14 bg-transparent py-2 text-center text-body-s text-ink outline-none"
             autoFocus
           />
-          <span className="text-zinc-500 text-xs pr-2">{unit}</span>
+          <span className="pr-2 text-caption text-muted">{unit}</span>
         </div>
       )}
     </div>
   );
 }
 
+/** Header of a sub page: back arrow, 20 px title. Without a back arrow the title is a page title. */
 export function Header({
   title,
   onBack,
@@ -388,30 +431,14 @@ export function Header({
   rightAction?: React.ReactNode;
 }) {
   return (
-    <header className="flex items-start justify-between gap-3 mb-8 mt-2">
-      <div className="flex min-w-0 items-start gap-4">
+    <header className="mb-2 flex min-h-16 items-center justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-1">
         {onBack && (
-          <button
-            onClick={onBack}
-            aria-label="Zurück"
-            className="p-3 -ml-3 bg-zinc-900/50 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-zinc-100 transition-colors border border-zinc-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[44px] min-w-[44px] flex items-center justify-center"
-          >
-            <svg
-              aria-hidden="true"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m15 18-6-6 6-6" />
-            </svg>
+          <button onClick={onBack} aria-label="Zurück" className={`-ml-3 ${iconButtonClass}`}>
+            <ArrowLeft size={24} strokeWidth={1.75} aria-hidden="true" />
           </button>
         )}
-        <h1 className="min-w-0 pt-2 text-2xl font-semibold leading-tight tracking-tight text-zinc-50">{title}</h1>
+        <h1 className={`min-w-0 text-ink ${onBack ? 'text-title' : 'text-headline'}`}>{title}</h1>
       </div>
       {rightAction && <div className="flex-shrink-0">{rightAction}</div>}
     </header>
