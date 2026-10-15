@@ -170,12 +170,13 @@ export function PermissionsScreen({
               {icon}
             </div>
             <div className="flex-1">
-              <div className="flex justify-between items-center mb-1">
-                <h2 id={`permission-${key}-title`} className="font-bold text-lg text-zinc-100">
+              {/* The status label wraps under the title instead of squeezing it; words never break. */}
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                <h2 id={`permission-${key}-title`} className="text-lg font-bold wrap-break-word text-zinc-100">
                   {title}
                 </h2>
                 <span
-                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider border ${getStatusColor(isActive, isOptional)}`}
+                  className={`flex-shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider border ${getStatusColor(isActive, isOptional)}`}
                 >
                   {getStatusText(isActive, isOptional)}
                 </span>
@@ -194,14 +195,21 @@ export function PermissionsScreen({
                   </ul>
                 </div>
 
-                {!isActive && (
-                  <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3">
-                    <h3 className="text-xs font-bold text-amber-500/70 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                      <AlertTriangle size={12} /> Ohne diese Berechtigung
-                    </h3>
-                    <p className="text-sm text-zinc-400 leading-snug">{limitations}</p>
-                  </div>
-                )}
+                {/* Orange only where protection is really missing; an optional permission is a calm note. */}
+                {!isActive &&
+                  (isOptional ? (
+                    <div className="rounded-control bg-raised px-3 py-2">
+                      <h3 className="mb-0.5 text-label-s text-muted">Ohne diese Berechtigung</h3>
+                      <p className="text-body-s text-muted">{limitations}</p>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3">
+                      <h3 className="text-xs font-bold text-amber-500/70 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                        <AlertTriangle size={12} /> Ohne diese Berechtigung
+                      </h3>
+                      <p className="text-sm text-zinc-400 leading-snug">{limitations}</p>
+                    </div>
+                  ))}
               </div>
             </div>
           </div>
@@ -330,7 +338,7 @@ export function PermissionsScreen({
             [
               'Fokus-Erinnerungen senden',
               'Tageszusammenfassungen anzeigen',
-              'Warnungen bei kritischen Rückfallmustern',
+              'Hinweis, wenn du eine App oft hintereinander öffnest',
             ],
             'Du erhältst keine Erinnerungen, Warnhinweise als Mitteilung oder Zusammenfassungen. Die übrigen Schutzregeln bleiben erhalten.',
             true,

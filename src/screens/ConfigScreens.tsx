@@ -120,7 +120,7 @@ export function Help({ navigate }: { navigate: (s: Screen) => void }) {
             </li>
             <li>
               <strong>Nicht frustrieren lassen:</strong> Wenn du eine App wirklich brauchst, nutze die Notfallfreigabe.
-              Bewusster Konsum ist besser als radikaler Entzug.
+              Bewusst nutzen ist besser als ganz verzichten.
             </li>
           </ul>
         </AccordionItem>
