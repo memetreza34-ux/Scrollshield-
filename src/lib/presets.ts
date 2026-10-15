@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { AppConfig } from '../types';
 
 /**
@@ -100,7 +101,9 @@ export const EIGENE_PRESET = {
 
 export const getPreset = (id: PresetId) => PRESETS.find((preset) => preset.id === id);
 
-export const getPresetLabel = (id: PresetId) => getPreset(id)?.label ?? EIGENE_PRESET.label;
+/** In the current language; the German texts above stay as the reference. */
+export const getPresetLabel = (id: PresetId) => t(`preset.${id}.label`);
+export const getPresetSummary = (id: PresetId) => t(`preset.${id}.summary`);
 
 /** The config with a preset's values. Choosing "Eigene" keeps the current values. */
 export function applyPreset(config: AppConfig, id: PresetId): AppConfig {

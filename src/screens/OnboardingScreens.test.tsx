@@ -1,8 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { expectNoA11yViolations } from '../test/a11y';
 import { AppState, DEFAULT_STATE } from '../types';
+import { setLanguage } from '../i18n';
 import { Onboarding, Welcome } from './OnboardingScreens';
+
+afterEach(() => setLanguage('de'));
 
 const androidState: AppState = { ...DEFAULT_STATE, operatingSystem: 'android' };
 
@@ -29,6 +32,25 @@ describe('Welcome', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Mehr erfahren' }));
     expect(navigate).toHaveBeenCalledWith('help');
+  });
+
+  it('shows a still preview of the pause with the countdown at 5', () => {
+    render(<Welcome navigate={vi.fn()} />);
+
+    const preview = screen.getByRole('img', { name: /Vorschau der Pause/ });
+    expect(preview).toHaveTextContent('Kurze Pause vor Instagram.');
+    expect(preview).toHaveTextContent('5');
+  });
+
+  it('speaks English on an English phone', () => {
+    setLanguage('en');
+    render(<Welcome navigate={vi.fn()} />);
+
+    expect(screen.getByRole('heading', { name: 'Instagram yes, Reels no.' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Get started' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Preview of the pause/ })).toHaveTextContent(
+      'A short pause before Instagram.',
+    );
   });
 
   it('has no obvious accessibility violations', async () => {

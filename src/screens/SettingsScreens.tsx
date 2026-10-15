@@ -1,6 +1,7 @@
 import { Check } from 'lucide-react';
 import { AppState, Screen } from '../types';
-import { Header, List, Page, PrimaryButton, Row, SecondaryButton, Section, Switch } from '../components/ui';
+import { Choice, Header, List, Page, PrimaryButton, Row, SecondaryButton, Section, Switch } from '../components/ui';
+import { LanguageSetting, t } from '../i18n';
 import { hasPro, PRO_BENEFITS } from '../lib/entitlements';
 import {
   EVENING_REMINDER_HOUR,
@@ -17,7 +18,7 @@ type ScreenProps = {
 };
 
 /** Einstellungen (docs/V1_MASTER_PLAN.md, 4.9), reached through the gear on every tab. */
-export function SettingsScreen({ state, navigate }: ScreenProps) {
+export function SettingsScreen({ state, updateState, navigate }: ScreenProps) {
   const pro = hasPro(state);
   const permissionsOk = state.permissions.usageAccess && state.permissions.overlay;
 
@@ -29,6 +30,19 @@ export function SettingsScreen({ state, navigate }: ScreenProps) {
         <List>
           <Row label="ScrollShield Pro" value={pro ? 'Aktiv' : 'Kostenlos'} onClick={() => navigate('paywall')} />
         </List>
+      </Section>
+
+      <Section title={t('language.title')}>
+        <Choice<LanguageSetting>
+          label={t('language.title')}
+          value={state.settings.language}
+          onChange={(language) => updateState({ settings: { ...state.settings, language } })}
+          options={[
+            { value: 'system', label: t('language.system') },
+            { value: 'de', label: t('language.de') },
+            { value: 'en', label: t('language.en') },
+          ]}
+        />
       </Section>
 
       <Section title="Schutz">

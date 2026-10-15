@@ -1,6 +1,7 @@
 import React from 'react';
 import type { OperatingSystem } from './lib/platform';
 import type { PresetId } from './lib/presets';
+import type { LanguageSetting } from './i18n';
 import { PlatformBadge } from './components/PlatformBadge';
 
 export type Screen =
@@ -231,7 +232,7 @@ export interface AppState {
   operatingSystem: OperatingSystem;
   permissions: AppPermissions;
   settings: {
-    language: string;
+    language: LanguageSetting;
     theme: 'dark' | 'light' | 'system';
     startScreen: Screen;
     internalAppName: string;
@@ -627,7 +628,7 @@ export const DEFAULT_STATE: AppState = {
     backgroundActivity: false,
   },
   settings: {
-    language: 'de',
+    language: 'system',
     theme: 'dark',
     startScreen: 'today',
     internalAppName: 'ScrollShield',

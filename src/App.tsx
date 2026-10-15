@@ -59,6 +59,7 @@ import { DiagnosticsScreen } from './screens/DiagnosticsScreen';
 import { ActiveSessionScreen } from './screens/ActiveSessionScreen';
 import { SupportScreen, ImprintScreen } from './screens/SupportScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { resolveLanguage, setLanguage, t } from './i18n';
 
 /** When each best-effort notification was last sent, per session of the app. */
 type SentNotifications = {
@@ -410,12 +411,20 @@ export default function App() {
 
   // Stable, and accepts an updater for callers that must merge into the latest
   // state rather than the one they rendered with.
+  // t() reads one module-wide language; setting it on every render keeps all
+  // screens of this render in the language of the setting (or of the phone).
+  setLanguage(resolveLanguage(appState.settings.language));
+
   const updateState = useCallback((updates: Partial<AppState> | ((previous: AppState) => Partial<AppState>)) => {
     setAppState((prev) => ({ ...prev, ...(typeof updates === 'function' ? updates(prev) : updates) }));
   }, []);
 
   if (!isLoaded)
-    return <div className="flex min-h-screen items-center justify-center bg-ground text-body text-muted">Laden …</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-ground text-body text-muted">
+        {t('common.loading')}
+      </div>
+    );
 
   const resetApp = () => {
     skipNextSaveRef.current = true;

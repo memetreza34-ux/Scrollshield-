@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { ArrowLeft, CalendarDays, ChartNoAxesColumn, Check, ChevronRight, Settings, Shield, Timer } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { PlatformDefinition, Screen } from '../types';
+import { MessageKey, t } from '../i18n';
 
 /** Pressed state of every control: an 8 % lighter layer over whatever fill it has. */
 const PRESSED = 'active:shadow-[inset_0_0_0_100vmax_rgb(244_244_245/0.08)]';
@@ -29,7 +30,7 @@ export function Switch({
       type="button"
       role="switch"
       aria-checked={checked}
-      aria-label={ariaLabel || (checked ? 'Deaktivieren' : 'Aktivieren')}
+      aria-label={ariaLabel || t(checked ? 'common.turnOff' : 'common.turnOn')}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className="group flex h-12 w-[52px] flex-shrink-0 items-center justify-center rounded-full focus-visible:outline-none disabled:opacity-[0.38]"
@@ -66,16 +67,16 @@ const TAB_SCREENS: Record<'today' | 'protect' | 'focus' | 'insights', Screen[]> 
 
 /** 80 px, always visible. Active tab: tinted pill, green icon, bright 600 label. */
 export function BottomNav({ currentScreen, navigate }: { currentScreen: Screen; navigate: (s: Screen) => void }) {
-  const navItems: { id: keyof typeof TAB_SCREENS; icon: LucideIcon; label: string }[] = [
-    { id: 'today', icon: CalendarDays, label: 'Heute' },
-    { id: 'protect', icon: Shield, label: 'Schutz' },
-    { id: 'focus', icon: Timer, label: 'Fokus' },
-    { id: 'insights', icon: ChartNoAxesColumn, label: 'Einblicke' },
+  const navItems: { id: keyof typeof TAB_SCREENS; icon: LucideIcon; label: MessageKey }[] = [
+    { id: 'today', icon: CalendarDays, label: 'nav.today' },
+    { id: 'protect', icon: Shield, label: 'nav.protect' },
+    { id: 'focus', icon: Timer, label: 'nav.focus' },
+    { id: 'insights', icon: ChartNoAxesColumn, label: 'nav.insights' },
   ];
 
   return (
     <nav
-      aria-label="Hauptnavigation"
+      aria-label={t('nav.main')}
       className="absolute bottom-0 left-0 right-0 z-50 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]"
     >
       <div className="grid h-20 grid-cols-4">
@@ -93,7 +94,9 @@ export function BottomNav({ currentScreen, navigate }: { currentScreen: Screen; 
               >
                 <item.icon size={24} strokeWidth={1.75} aria-hidden="true" />
               </span>
-              <span className={`text-caption ${active ? 'font-semibold text-ink' : 'text-muted'}`}>{item.label}</span>
+              <span className={`text-caption ${active ? 'font-semibold text-ink' : 'text-muted'}`}>
+                {t(item.label)}
+              </span>
             </button>
           );
         })}
@@ -143,7 +146,11 @@ export function TabHeader({ title, navigate }: { title: string; navigate: (s: Sc
   return (
     <header className="mb-2 flex h-16 items-center justify-between gap-2">
       <h1 className="min-w-0 text-headline text-ink">{title}</h1>
-      <button onClick={() => navigate('settings')} aria-label="Einstellungen" className={`-mr-3 ${iconButtonClass}`}>
+      <button
+        onClick={() => navigate('settings')}
+        aria-label={t('common.settings')}
+        className={`-mr-3 ${iconButtonClass}`}
+      >
         <Settings size={24} strokeWidth={1.75} aria-hidden="true" />
       </button>
     </header>
@@ -454,11 +461,11 @@ export function TimeSelector({
   value,
   onChange,
   options,
-  unit = 'Min',
-  customLabel = 'Eigene',
+  unit = t('common.minutesUnit'),
+  customLabel = t('common.custom'),
   allowDisabled = false,
-  disabledLabel = 'Aus',
-  ariaLabel = 'Zeitwert auswählen',
+  disabledLabel = t('common.off'),
+  ariaLabel = t('common.chooseTime'),
 }: {
   value: number;
   onChange: (v: number) => void;
@@ -500,7 +507,7 @@ export function TimeSelector({
       {isCustom && (
         <div className="flex items-center gap-2 rounded-control border border-line bg-raised px-2">
           <input
-            aria-label={`${ariaLabel}: eigener Wert`}
+            aria-label={t('common.customValue', { label: ariaLabel })}
             type="number"
             min={allowDisabled ? 0 : 1}
             value={value}
@@ -532,7 +539,7 @@ export function Header({
     <header className="mb-2 flex min-h-16 items-center justify-between gap-2">
       <div className="flex min-w-0 items-center gap-1">
         {onBack && (
-          <button onClick={onBack} aria-label="Zurück" className={`-ml-3 ${iconButtonClass}`}>
+          <button onClick={onBack} aria-label={t('common.back')} className={`-ml-3 ${iconButtonClass}`}>
             <ArrowLeft size={24} strokeWidth={1.75} aria-hidden="true" />
           </button>
         )}

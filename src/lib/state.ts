@@ -193,6 +193,8 @@ export const normalizeAppState = (saved: Partial<AppState> | null | undefined): 
     settings: {
       ...DEFAULT_STATE.settings,
       ...saved.settings,
+      // Anything unknown follows the phone's language.
+      language: (['system', 'de', 'en'] as const).find((language) => language === saved.settings?.language) ?? 'system',
       startScreen: OLD_START_SCREENS.has(saved.settings?.startScreen ?? '')
         ? DEFAULT_STATE.settings.startScreen
         : (saved.settings?.startScreen ?? DEFAULT_STATE.settings.startScreen),
