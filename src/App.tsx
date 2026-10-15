@@ -400,7 +400,8 @@ export default function App() {
     skipNextSaveRef.current = true;
     StorageService.clearState();
     void clearNativeData();
-    setAppState(DEFAULT_STATE);
+    // Pro belongs to the Google account, not to the data on this phone.
+    setAppState((previous) => ({ ...DEFAULT_STATE, pro: previous.pro }));
     setCurrentScreen('welcome');
   };
 

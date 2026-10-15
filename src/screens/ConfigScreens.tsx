@@ -2,27 +2,25 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Capacitor } from '@capacitor/core';
 import {
-  Database,
-  FileText,
-  Globe,
-  Cloud,
+  AlertTriangle,
+  Check,
   ChevronDown,
   ChevronUp,
-  Star,
-  ChevronRight,
+  Download,
+  ExternalLink,
+  Lock,
+  Play,
   Shield,
   Smartphone,
-  Lock,
-  AlertTriangle,
-  RefreshCw,
-  Play,
-  Info,
-  Download,
+  Star,
   Upload,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { AppState, Screen } from '../types';
-import { Header } from '../components/ui';
+import { Header, List, Page, Row, Section, Sheet, TextButton } from '../components/ui';
+import { FOCUS_RING, FOCUS_RING_INSET, PRESSED } from '../components/styles';
+import { t } from '../i18n';
 import {
   createExportFilename,
   createScrollShieldExport,
@@ -198,6 +196,12 @@ export function Help({ navigate }: { navigate: (s: Screen) => void }) {
   );
 }
 
+const DANGER_BUTTON = `flex min-h-12 w-full items-center justify-center rounded-control border border-lock px-4 py-3.5 text-label text-lock ${PRESSED} ${FOCUS_RING}`;
+
+/**
+ * Datenschutz & Daten (docs/V1_MASTER_PLAN.md, 4.9): what is stored – only on
+ * the phone – and what never is, export (JSON) and deleting everything.
+ */
 export function PrivacyScreen({
   state,
   updateState,
@@ -209,24 +213,8 @@ export function PrivacyScreen({
   resetApp: () => void;
   navigate: (s: Screen) => void;
 }) {
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [showHistoryConfirm, setShowHistoryConfirm] = useState(false);
-  const [showStatsConfirm, setShowStatsConfirm] = useState(false);
-  const [showDetailedPolicy, setShowDetailedPolicy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [dataStatus, setDataStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-
-  const clearHistory = () => {
-    updateState({ history: [] });
-    setShowHistoryConfirm(false);
-  };
-
-  const clearStats = () => {
-    updateState({
-      dailyStats: {},
-      stats: { currentStreak: 0, bestStreak: 0, totalSavedTime: 0, focusStreak: 0, cleanDaysStreak: 0 },
-    });
-    setShowStatsConfirm(false);
-  };
 
   const exportLocalData = async () => {
     const content = serializeScrollShieldExport(createScrollShieldExport(state, { appVersion: __APP_VERSION__ }));
@@ -237,9 +225,9 @@ export function PrivacyScreen({
     if (Capacitor.isNativePlatform()) {
       try {
         const saved = await saveTextFileNatively({ filename, content, mimeType: 'application/json' });
-        if (saved) setDataStatus({ type: 'success', message: `Gespeichert als ${filename}.` });
+        if (saved) setDataStatus({ type: 'success', message: t('privacy.saved', { file: filename }) });
       } catch {
-        setDataStatus({ type: 'error', message: 'Die Datei konnte nicht gespeichert werden.' });
+        setDataStatus({ type: 'error', message: t('privacy.saveFailed') });
       }
       return;
     }
@@ -258,370 +246,126 @@ export function PrivacyScreen({
     event.target.value = '';
     if (!file) return;
 
-    if (file.size > MAX_IMPORT_BYTES) {
-      setDataStatus({ type: 'error', message: 'Die Importdatei ist größer als 5 MB.' });
-      return;
-    }
-
     try {
+      if (file.size > MAX_IMPORT_BYTES) throw new Error('too large');
       const imported = parseScrollShieldExport(await file.text());
-      const normalized = normalizeAppState({
-        ...state,
-        ...imported.state,
-        operatingSystem: state.operatingSystem,
-        permissions: state.permissions,
-        activeSession: null,
-        simulatedAppToOpen: null,
-      });
-
-      updateState(normalized);
-      setDataStatus({ type: 'success', message: 'Lokale Daten wurden erfolgreich importiert.' });
-    } catch (error) {
-      setDataStatus({
-        type: 'error',
-        message: error instanceof Error ? error.message : 'Die Importdatei konnte nicht gelesen werden.',
-      });
+      updateState(
+        normalizeAppState({
+          ...state,
+          ...imported.state,
+          operatingSystem: state.operatingSystem,
+          permissions: state.permissions,
+          activeSession: null,
+          simulatedAppToOpen: null,
+        }),
+      );
+      setDataStatus({ type: 'success', message: t('privacy.imported') });
+    } catch {
+      setDataStatus({ type: 'error', message: t('privacy.importFailed') });
     }
   };
 
-  if (showDetailedPolicy) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -20 }}
-        className="p-6 pb-32 flex flex-col h-full bg-zinc-950 absolute inset-0 z-50"
-      >
-        <Header title="Datenschutzerklärung" onBack={() => setShowDetailedPolicy(false)} />
-        <div className="space-y-6 flex-1 overflow-y-auto scrollbar-hide text-zinc-300 leading-relaxed mt-4">
-          <div>
-            <h3 className="text-lg font-bold text-zinc-100 mb-2">Präambel</h3>
-            <p className="text-sm text-zinc-400">
-              Wir haben ScrollShield entwickelt, um dir die Kontrolle über deine Zeit zurückzugeben – nicht, um deine
-              Daten zu sammeln. Diese Erklärung zeigt in einfachen Worten, was mit deinen Daten passiert. Die
-              Kurzfassung: Was auf deinem Gerät passiert, bleibt auf deinem Gerät.
-            </p>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-bold text-zinc-100 mb-2">1. Lokale Daten</h3>
-            <p className="text-sm text-zinc-400">
-              ScrollShield speichert, wie oft du Apps öffnest, wie oft du blockiert wurdest und wie viel Zeit du gespart
-              hast. Diese Daten werden <strong>ausschließlich lokal</strong> in der sicheren Sandbox deines Smartphones
-              gespeichert.
-            </p>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-bold text-zinc-100 mb-2">2. Keine Server-Übertragung</h3>
-            <p className="text-sm text-zinc-400">
-              Wir übertragen aktuell keinerlei Nutzungsdaten, App-Historien oder Statistiken an unsere Server. Wir haben
-              keinen Zugriff auf dein Verhalten.
-            </p>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-bold text-zinc-100 mb-2">3. Systemberechtigungen</h3>
-            <p className="text-sm text-zinc-400 mb-2">
-              Um zu funktionieren, benötigt ScrollShield bestimmte Systemrechte. Wir nutzen diese streng zweckgebunden:
-            </p>
-            <ul className="list-disc pl-4 text-sm text-zinc-400 space-y-1">
-              <li>
-                <strong>App-Nutzungsdaten / Screen Time:</strong> Wird ausschließlich genutzt, um den Start einer von
-                dir ausgewählten App zu erkennen und den Timer auszulösen.
-              </li>
-              <li>
-                <strong>Bildschirm-Überlagerung:</strong> Wird genutzt, um den Verzögerungs-Timer über der ablenkenden
-                App anzuzeigen.
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-bold text-zinc-100 mb-2">4. Kein Tracking & Keine Werbung</h3>
-            <p className="text-sm text-zinc-400">
-              ScrollShield nutzt keine Tracking-Tools von Drittanbietern, um dein Verhalten über andere Apps hinweg für
-              Werbezwecke zu verfolgen. Es gibt keine Werbung und keine Datenweitergabe an Datenbroker oder
-              Werbenetzwerke.
-            </p>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-bold text-zinc-100 mb-2">5. Datenlöschung</h3>
-            <p className="text-sm text-zinc-400">
-              Da deine Daten lokal gespeichert sind, hast du die volle Kontrolle. Ein Klick auf "App komplett
-              zurücksetzen" oder die Deinstallation der App löscht alle Daten unwiderruflich von deinem Gerät.
-            </p>
-          </div>
-        </div>
-      </motion.div>
-    );
-  }
+  const item = (Icon: LucideIcon, text: string) => (
+    <li className="flex items-start gap-3 text-body text-ink">
+      <Icon size={20} strokeWidth={2} className="mt-0.5 flex-shrink-0 text-muted" aria-hidden="true" />
+      {text}
+    </li>
+  );
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      className="p-6 pb-32 flex flex-col h-full bg-zinc-950"
-    >
-      <Header title="Datenschutz & Transparenz" onBack={() => navigate('settings')} />
+    <Page>
+      <Header title={t('privacy.title')} onBack={() => navigate('settings')} />
 
-      <div className="space-y-6 flex-1 overflow-y-auto scrollbar-hide">
-        {/* Intro */}
-        <div className="text-center py-4">
-          <div
-            className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/20"
-            aria-hidden="true"
-          >
-            <Shield size={32} className="text-emerald-400" />
-          </div>
-          <h2 className="text-xl font-bold text-zinc-100 mb-2">Deine Daten gehören dir.</h2>
-          <p className="text-sm text-zinc-400 leading-relaxed max-w-[280px] mx-auto">
-            ScrollShield arbeitet mit sensiblen Nutzungsdaten. Wir glauben an absolute Transparenz und lokale Kontrolle.
-          </p>
+      <div className="mb-6 flex items-center gap-3 rounded-surface border border-line bg-surface p-4">
+        <Smartphone size={24} strokeWidth={1.75} className="flex-shrink-0 text-ink" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <p className="text-title-s text-ink">{t('privacy.local')}</p>
+          <p className="mt-0.5 text-body-s text-muted">{t('privacy.localText')}</p>
         </div>
+      </div>
 
-        {/* 1. Datenübersicht */}
-        <section aria-labelledby="privacy-data-overview">
-          <h2
-            id="privacy-data-overview"
-            className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2"
+      <Section title={t('privacy.stored')} kind="title">
+        <ul className="flex flex-col gap-2">
+          {item(Check, t('privacy.stored.rules'))}
+          {item(Check, t('privacy.stored.events'))}
+          {item(Check, t('privacy.stored.minutes'))}
+        </ul>
+      </Section>
+
+      <Section title={t('privacy.never')} kind="title">
+        <ul className="flex flex-col gap-2">
+          {item(X, t('privacy.never.content'))}
+          {item(X, t('privacy.never.messages'))}
+        </ul>
+      </Section>
+
+      <Section>
+        <List>
+          <Row
+            leading={<Download size={24} strokeWidth={1.75} className="flex-shrink-0 text-ink" aria-hidden="true" />}
+            label={t('privacy.export')}
+            description={t('privacy.exportSub')}
+            noChevron
+            onClick={() => void exportLocalData()}
+          />
+          <label
+            className={`flex min-h-14 w-full cursor-pointer items-center gap-4 px-4 py-3 text-left ${PRESSED} focus-within:ring-2 focus-within:ring-inset focus-within:ring-accent`}
           >
-            Was wir speichern
-          </h2>
-          <div className="bg-zinc-900/80 border border-zinc-800/50 rounded-[2rem] p-5 space-y-4">
-            <div className="flex items-start gap-3">
-              <Database size={18} className="text-blue-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
-              <div>
-                <h3 className="font-semibold text-zinc-200 text-sm mb-1">Lokal auf deinem Gerät</h3>
-                <p className="text-xs text-zinc-400 leading-relaxed">
-                  Dein Nutzungsverlauf, deine Statistiken und deine App-Regeln werden ausschließlich auf diesem Gerät
-                  gespeichert.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Cloud size={18} className="text-zinc-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
-              <div>
-                <h3 className="font-semibold text-zinc-200 text-sm mb-1">Was nicht gesendet wird</h3>
-                <p className="text-xs text-zinc-400 leading-relaxed">
-                  Wir senden keine Nutzungsdaten an externe Server. Dein Verhalten bleibt strikt privat auf deinem
-                  Gerät.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* 2. Berechtigungen */}
-        <section aria-labelledby="privacy-permissions">
-          <h2 id="privacy-permissions" className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2">
-            Warum Berechtigungen?
-          </h2>
-          <div className="bg-zinc-900/80 border border-zinc-800/50 rounded-[2rem] p-5 space-y-4">
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Um dich vor impulsivem Öffnen zu schützen, muss ScrollShield erkennen können, wann du eine bestimmte App
-              startest. Dafür benötigen wir Systemberechtigungen (wie Screen Time oder Nutzungsdatenzugriff). Diese
-              Rechte werden <strong className="text-zinc-300">ausschließlich</strong> für die Blockier-Logik verwendet,
-              nicht um dich auszuspionieren.
-            </p>
-          </div>
-        </section>
-
-        {/* 2.5 Ausführliche Erklärung */}
-        <section aria-label="Ausführliche Datenschutzerklärung">
-          <button
-            onClick={() => setShowDetailedPolicy(true)}
-            className="w-full bg-zinc-900/80 border border-zinc-800/50 rounded-[1.5rem] p-5 flex items-center justify-between hover:bg-zinc-800/40 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[48px]"
-          >
-            <div className="flex items-center gap-3">
-              <Info size={18} className="text-zinc-400" aria-hidden="true" />
-              <span className="font-semibold text-zinc-200 text-sm">Ausführliche Datenschutzerklärung</span>
-            </div>
-            <ChevronRight size={18} className="text-zinc-500" aria-hidden="true" />
-          </button>
+            <Upload size={24} strokeWidth={1.75} className="flex-shrink-0 text-ink" aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-body text-ink">{t('privacy.import')}</span>
+              <span className="mt-0.5 block text-body-s text-muted">{t('privacy.importSub')}</span>
+            </span>
+            <input
+              type="file"
+              accept="application/json,.json"
+              onChange={importLocalData}
+              className="sr-only"
+              aria-label={t('privacy.import')}
+            />
+          </label>
           <a
             href="/privacy.html"
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 w-full bg-zinc-900/60 border border-zinc-800/50 rounded-[1.5rem] p-5 flex items-center justify-between hover:bg-zinc-800/40 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[48px]"
+            className={`flex min-h-14 w-full items-center gap-4 px-4 py-3 text-left ${PRESSED} ${FOCUS_RING_INSET}`}
           >
-            <div className="flex items-center gap-3">
-              <Globe size={18} className="text-zinc-400" aria-hidden="true" />
-              <span className="font-semibold text-zinc-200 text-sm">Öffentliche Datenschutzseite</span>
-            </div>
-            <ChevronRight size={18} className="text-zinc-500" aria-hidden="true" />
+            <ExternalLink size={24} strokeWidth={1.75} className="flex-shrink-0 text-ink" aria-hidden="true" />
+            <span className="flex-1 text-body text-ink">{t('privacy.policy')}</span>
           </a>
-          <a
-            href="/third-party-licenses.txt"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 w-full bg-zinc-900/60 border border-zinc-800/50 rounded-[1.5rem] p-5 flex items-center justify-between hover:bg-zinc-800/40 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[48px]"
+        </List>
+        {dataStatus && (
+          <p
+            role={dataStatus.type === 'error' ? 'alert' : 'status'}
+            className={`mt-2 px-1 text-body-s ${dataStatus.type === 'error' ? 'text-lock' : 'text-muted'}`}
           >
-            <div className="flex items-center gap-3">
-              <FileText size={18} className="text-zinc-400" aria-hidden="true" />
-              <span className="font-semibold text-zinc-200 text-sm">Open-Source-Lizenzen</span>
-            </div>
-            <ChevronRight size={18} className="text-zinc-500" aria-hidden="true" />
-          </a>
-        </section>
+            {dataStatus.message}
+          </p>
+        )}
+      </Section>
 
-        {/* 3. Kontrolle & Löschen */}
-        <section aria-labelledby="privacy-data-management">
-          <h2
-            id="privacy-data-management"
-            className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2"
-          >
-            Lokale Daten verwalten
-          </h2>
-          <div className="bg-zinc-900/80 border border-zinc-800/50 rounded-[2rem] overflow-hidden">
+      <button onClick={() => setConfirmDelete(true)} className={DANGER_BUTTON}>
+        {t('privacy.deleteAll')}
+      </button>
+
+      {confirmDelete && (
+        <Sheet title={t('privacy.deleteTitle')} onClose={() => setConfirmDelete(false)}>
+          <p className="mt-2 text-body text-ink">{t('privacy.deleteText')}</p>
+          <p className="mt-3 text-body-s text-muted">{t('privacy.deletePro')}</p>
+          <div className="mt-6 flex flex-col gap-1">
             <button
-              onClick={() => void exportLocalData()}
-              className="w-full p-5 flex items-center justify-between border-b border-zinc-800/50 hover:bg-zinc-800/40 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[48px]"
+              onClick={() => {
+                setConfirmDelete(false);
+                resetApp();
+              }}
+              className={DANGER_BUTTON}
             >
-              <div>
-                <div className="font-semibold text-zinc-200 text-sm">Lokale Daten exportieren</div>
-                <div className="text-xs text-zinc-500 mt-1">Speichert Regeln, Verlauf und Statistiken als JSON.</div>
-              </div>
-              <Download size={18} className="text-zinc-500" aria-hidden="true" />
+              {t('privacy.deleteConfirm')}
             </button>
-
-            <label className="w-full p-5 flex items-center justify-between border-b border-zinc-800/50 hover:bg-zinc-800/40 transition-colors text-left cursor-pointer focus-within:ring-2 focus-within:ring-emerald-500 min-h-[48px]">
-              <div>
-                <div className="font-semibold text-zinc-200 text-sm">Lokale Daten importieren</div>
-                <div className="text-xs text-zinc-500 mt-1">
-                  Stellt Regeln, Verlauf und Statistiken aus JSON wieder her.
-                </div>
-              </div>
-              <Upload size={18} className="text-zinc-500" aria-hidden="true" />
-              <input
-                type="file"
-                accept="application/json,.json"
-                onChange={importLocalData}
-                className="sr-only"
-                aria-label="ScrollShield JSON-Export importieren"
-              />
-            </label>
-
-            {dataStatus && (
-              <div
-                role={dataStatus.type === 'error' ? 'alert' : 'status'}
-                className={`px-5 py-3 text-xs border-b ${
-                  dataStatus.type === 'error'
-                    ? 'text-red-300 bg-red-500/10 border-red-500/20'
-                    : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'
-                }`}
-              >
-                {dataStatus.message}
-              </div>
-            )}
-
-            {/* Verlauf löschen */}
-            {showHistoryConfirm ? (
-              <div className="p-5 bg-amber-500/10 border-b border-amber-500/20" role="alert">
-                <p className="text-sm text-amber-400 mb-3 font-medium text-center">Nutzungsverlauf wirklich löschen?</p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowHistoryConfirm(false)}
-                    className="flex-1 py-2 bg-zinc-800 text-zinc-300 rounded-xl text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 min-h-[44px]"
-                  >
-                    Abbrechen
-                  </button>
-                  <button
-                    onClick={clearHistory}
-                    className="flex-1 py-2 bg-amber-500 text-amber-950 rounded-xl text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 min-h-[44px]"
-                  >
-                    Ja, leeren
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowHistoryConfirm(true)}
-                className="w-full p-5 flex items-center justify-between border-b border-zinc-800/50 hover:bg-zinc-800/40 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[48px]"
-              >
-                <div>
-                  <div className="font-semibold text-zinc-200 text-sm">Verlauf leeren</div>
-                  <div className="text-xs text-zinc-500 mt-1">Löscht die Historie der blockierten Apps.</div>
-                </div>
-                <RefreshCw size={18} className="text-zinc-500" aria-hidden="true" />
-              </button>
-            )}
-
-            {/* Statistiken zurücksetzen */}
-            {showStatsConfirm ? (
-              <div className="p-5 bg-amber-500/10 border-b border-amber-500/20" role="alert">
-                <p className="text-sm text-amber-400 mb-3 font-medium text-center">
-                  Alle Statistiken & Streaks auf 0 setzen?
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowStatsConfirm(false)}
-                    className="flex-1 py-2 bg-zinc-800 text-zinc-300 rounded-xl text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 min-h-[44px]"
-                  >
-                    Abbrechen
-                  </button>
-                  <button
-                    onClick={clearStats}
-                    className="flex-1 py-2 bg-amber-500 text-amber-950 rounded-xl text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 min-h-[44px]"
-                  >
-                    Ja, zurücksetzen
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowStatsConfirm(true)}
-                className="w-full p-5 flex items-center justify-between border-b border-zinc-800/50 hover:bg-zinc-800/40 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-h-[48px]"
-              >
-                <div>
-                  <div className="font-semibold text-zinc-200 text-sm">Statistiken zurücksetzen</div>
-                  <div className="text-xs text-zinc-500 mt-1">Setzt Streaks und gesparte Zeit auf null.</div>
-                </div>
-                <RefreshCw size={18} className="text-zinc-500" aria-hidden="true" />
-              </button>
-            )}
-
-            {/* App zurücksetzen */}
-            {showResetConfirm ? (
-              <div className="p-5 bg-red-500/10" role="alert">
-                <p className="text-sm text-red-400 mb-3 font-medium text-center">
-                  App auf Werkseinstellungen zurücksetzen?
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowResetConfirm(false)}
-                    className="flex-1 py-2 bg-zinc-800 text-zinc-300 rounded-xl text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 min-h-[44px]"
-                  >
-                    Abbrechen
-                  </button>
-                  <button
-                    onClick={() => {
-                      resetApp();
-                      setShowResetConfirm(false);
-                    }}
-                    className="flex-1 py-2 bg-red-500 text-white rounded-xl text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 min-h-[44px]"
-                  >
-                    Ja, Reset
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowResetConfirm(true)}
-                className="w-full p-5 flex items-center justify-between hover:bg-zinc-800/40 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 min-h-[48px]"
-              >
-                <div>
-                  <div className="font-semibold text-red-400 text-sm">App zurücksetzen</div>
-                  <div className="text-xs text-zinc-500 mt-1">Löscht alle Regeln, Profile und lokale Daten.</div>
-                </div>
-                <AlertTriangle size={18} className="text-red-400" aria-hidden="true" />
-              </button>
-            )}
+            <TextButton onClick={() => setConfirmDelete(false)}>{t('common.cancel')}</TextButton>
           </div>
-        </section>
-      </div>
-    </motion.div>
+        </Sheet>
+      )}
+    </Page>
   );
 }

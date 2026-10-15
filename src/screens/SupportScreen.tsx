@@ -1,7 +1,19 @@
 import { motion } from 'motion/react';
-import { LifeBuoy, MessageSquare, Bug, ShieldAlert, FileText, ChevronRight, Info, Trash2 } from 'lucide-react';
+import {
+  LifeBuoy,
+  MessageSquare,
+  Bug,
+  ShieldAlert,
+  FileText,
+  ChevronRight,
+  Info,
+  Trash2,
+  ExternalLink,
+} from 'lucide-react';
 import { Screen } from '../types';
-import { Header } from '../components/ui';
+import { Header, List, Page, Section } from '../components/ui';
+import { FOCUS_RING_INSET, PRESSED } from '../components/styles';
+import { t } from '../i18n';
 import { createDeletionRequestMailto, createPrivacyRequestMailto, createSupportMailto } from '../lib/contact';
 
 export function SupportScreen({ navigate }: { navigate: (s: Screen) => void }) {
@@ -157,36 +169,55 @@ export function SupportScreen({ navigate }: { navigate: (s: Screen) => void }) {
   );
 }
 
+/**
+ * The provider's details, filled in before the release; until then the
+ * placeholders show what is missing.
+ */
+const PROVIDER = {
+  name: '[NAME DES ANBIETERS]',
+  street: '[STRASSE UND HAUSNUMMER]',
+  city: '[PLZ ORT]',
+  email: '[KONTAKT-E-MAIL]',
+};
+
+/** Impressum & Lizenzen (docs/V1_MASTER_PLAN.md, 4.9). */
 export function ImprintScreen({ navigate }: { navigate: (s: Screen) => void }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      className="p-6 pb-32 flex flex-col h-full bg-zinc-950"
+  const link = (href: string, label: string) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`flex min-h-14 w-full items-center gap-4 px-4 py-3 text-left ${PRESSED} ${FOCUS_RING_INSET}`}
     >
-      <Header title="Impressum" onBack={() => navigate('support')} />
+      <span className="flex-1 text-body text-ink">{label}</span>
+      <ExternalLink size={20} strokeWidth={1.75} className="flex-shrink-0 text-muted" aria-hidden="true" />
+    </a>
+  );
 
-      <div className="space-y-6 flex-1 overflow-y-auto scrollbar-hide text-zinc-300 text-sm leading-relaxed">
-        <section className="bg-amber-500/10 border border-amber-500/30 rounded-[2rem] p-6">
-          <h2 className="text-lg font-bold text-amber-300 mb-3">Angaben vor Release ergänzen</h2>
-          <p className="text-amber-200/80">
-            Für eine Veröffentlichung müssen hier die echten Anbieterangaben, Kontaktwege und rechtlich erforderlichen
-            Registrierungsdaten hinterlegt werden.
-          </p>
-        </section>
+  return (
+    <Page>
+      <Header title={t('imprint.title')} onBack={() => navigate('settings')} />
 
-        <section className="bg-zinc-900/80 border border-zinc-800/50 rounded-[2rem] p-6">
-          <h3 className="font-bold text-zinc-100 mb-2">Kontakt</h3>
-          <p className="mb-6">E-Mail: support@scrollshield.app</p>
+      <Section title={t('imprint.provider')}>
+        <address className="flex flex-col gap-0.5 rounded-surface border border-line bg-surface p-4 text-body not-italic text-ink">
+          <span>{PROVIDER.name}</span>
+          <span>{PROVIDER.street}</span>
+          <span>
+            {PROVIDER.city}, {t('imprint.country')}
+          </span>
+          <span>{PROVIDER.email}</span>
+        </address>
+      </Section>
 
-          <h3 className="font-bold text-zinc-100 mb-2">Markenrechtlicher Hinweis</h3>
-          <p className="mb-6 text-xs text-zinc-400">
-            Alle genannten Produktnamen, Logos und Marken wie Instagram, TikTok, YouTube, X, Snapchat und Facebook sind
-            Eigentum der jeweiligen Rechteinhaber. ScrollShield steht in keiner Verbindung zu diesen Unternehmen.
-          </p>
-        </section>
-      </div>
-    </motion.div>
+      <Section>
+        <List>
+          {link('/privacy.html', t('privacy.policy'))}
+          {link('/third-party-licenses.txt', t('imprint.licenses'))}
+        </List>
+      </Section>
+
+      <p className="mb-4 text-body-s text-muted">{t('imprint.trademarks')}</p>
+      <p className="text-caption text-muted">{t('imprint.version', { version: __APP_VERSION__ })}</p>
+    </Page>
   );
 }

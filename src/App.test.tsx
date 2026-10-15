@@ -254,9 +254,9 @@ describe('App', () => {
         name: /Datenschutz & Daten/,
       }),
     );
-    expect(await screen.findByRole('heading', { name: 'Datenschutz & Transparenz' })).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole('button', { name: /App zurücksetzen/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Ja, Reset' }));
+    expect(await screen.findByRole('heading', { name: 'Datenschutz & Daten' })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Alle Daten löschen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Alles löschen' }));
 
     expect(
       await screen.findByRole('heading', { name: 'Instagram ja, Reels nein.' }, { timeout: 5000 }),

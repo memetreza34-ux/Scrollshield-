@@ -25,7 +25,7 @@ const BACK_TARGETS: Partial<Record<Screen, Screen>> = {
   diagnostics: 'permissions',
   debug: 'settings',
   help: 'support',
-  imprint: 'support',
+  imprint: 'settings',
 };
 
 /**

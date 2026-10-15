@@ -5,7 +5,7 @@ describe('getBackTarget', () => {
   it('goes one step up, like the header arrow', () => {
     expect(getBackTarget('app_detail', true)).toBe('protect');
     expect(getBackTarget('insights', true)).toBe('today');
-    expect(getBackTarget('imprint', true)).toBe('support');
+    expect(getBackTarget('imprint', true)).toBe('settings');
     expect(getBackTarget('privacy', true)).toBe('settings');
   });
 
