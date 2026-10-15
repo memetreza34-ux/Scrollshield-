@@ -24,25 +24,16 @@ const BACK_TARGETS: Partial<Record<Screen, Screen>> = {
   support: 'settings',
   diagnostics: 'permissions',
   debug: 'settings',
-  help: 'support',
   imprint: 'settings',
 };
 
 /**
  * Screens reachable before the onboarding is done. "Mehr erfahren" on the
- * welcome screen leads to the help, and help, support, imprint and privacy
+ * welcome screen leads to the help, and help, imprint and privacy
  * must be readable before anyone agrees to anything; with only the three
  * setup screens allowed, the app bounced straight back to the welcome screen.
  */
-const PRE_ONBOARDING_SCREENS: Screen[] = [
-  'welcome',
-  'onboarding',
-  'permissions',
-  'help',
-  'support',
-  'imprint',
-  'privacy',
-];
+const PRE_ONBOARDING_SCREENS: Screen[] = ['welcome', 'onboarding', 'permissions', 'support', 'imprint', 'privacy'];
 
 export const isAllowedBeforeOnboarding = (screen: Screen) => PRE_ONBOARDING_SCREENS.includes(screen);
 

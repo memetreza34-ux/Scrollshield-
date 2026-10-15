@@ -16,7 +16,6 @@ describe('getBackTarget', () => {
 
   it('returns to the welcome screen from the pages readable before the onboarding', () => {
     expect(getBackTarget('support', false)).toBe('welcome');
-    expect(getBackTarget('help', false)).toBe('support');
     expect(getBackTarget('support', true)).toBe('settings');
   });
 

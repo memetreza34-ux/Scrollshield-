@@ -38,7 +38,7 @@ import {
 } from './lib/notifications';
 import { BottomNav } from './components/ui';
 import { Welcome, Onboarding } from './screens/OnboardingScreens';
-import { Help, PrivacyScreen } from './screens/ConfigScreens';
+import { PrivacyScreen } from './screens/ConfigScreens';
 import { TodayScreen } from './screens/TodayScreen';
 import { AppDetailScreen, CommitmentScreen, ProtectScreen, ScheduleEditScreen } from './screens/ProtectScreens';
 import { Focus } from './screens/FocusScreens';
@@ -482,7 +482,6 @@ export default function App() {
                     navigate={navigate}
                   />
                 )}
-                {currentScreen === 'help' && <Help key="help" navigate={navigate} />}
                 {currentScreen === 'protection_flow' && (
                   <ProtectionFlow
                     key="protection_flow"
@@ -500,7 +499,13 @@ export default function App() {
                   />
                 )}
                 {currentScreen === 'diagnostics' && <DiagnosticsScreen key="diagnostics" navigate={navigate} />}
-                {currentScreen === 'support' && <SupportScreen key="support" navigate={navigate} />}
+                {currentScreen === 'support' && (
+                  <SupportScreen
+                    key="support"
+                    navigate={navigate}
+                    backTo={appState.hasCompletedOnboarding ? 'settings' : 'welcome'}
+                  />
+                )}
                 {currentScreen === 'imprint' && <ImprintScreen key="imprint" navigate={navigate} />}
                 {currentScreen === 'debug' && !import.meta.env.PROD && (
                   <DebugScreen key="debug" state={appState} updateState={updateState} navigate={navigate} />

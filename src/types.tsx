@@ -21,7 +21,6 @@ export type Screen =
   | 'settings'
   | 'pro_status'
   | 'notifications'
-  | 'help'
   | 'protection_flow'
   | 'permissions'
   | 'debug'

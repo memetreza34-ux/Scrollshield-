@@ -713,4 +713,35 @@ export const de = {
   'imprint.trademarks':
     'Instagram, TikTok, YouTube, Facebook, X, Snapchat, Reddit und Pinterest gehören ihren Inhabern. ScrollShield steht in keiner Verbindung zu ihnen.',
   'imprint.version': 'Version {version} · Schrift Geist (SIL Open Font License)',
+  // Hilfe & Support
+  'help.title': 'Hilfe & Support',
+  'help.guides': 'Kurz erklärt',
+  'help.guide.pause': 'So funktioniert die Pause',
+  'help.guide.pauseText':
+    'Wenn du eine geschützte App öffnest, kommt zuerst eine kurze Pause. „Zurück“ geht immer. „Weiter“ geht erst, wenn die Pause vorbei ist. Wie lang sie dauert, hängt von der Voreinstellung der App ab.',
+  'help.guide.reopen': 'Wiederöffnungs-Schutz und Abkühlzeit',
+  'help.guide.reopenText':
+    'Öffnest du dieselbe App kurz hintereinander wieder, wird die Pause länger. Mit „Stark“ folgt danach die Abkühlzeit: Die App ist eine Weile gesperrt und dann wieder offen. Brauchst du sie dringend, gibt es die Notfallfreigabe.',
+  'help.guide.shortVideo': 'Kurzvideo-Schutz und seine Grenzen',
+  'help.guide.shortVideoText':
+    'Mit der Bedienungshilfe erkennt ScrollShield Reels, Shorts und den TikTok-Feed. So lässt sich nur der Feed begrenzen, Nachrichten und Profile bleiben frei. Die Erkennung hängt an technischen Kennungen der Apps und kann nach einem App-Update ausfallen. Unter „Erkennung prüfen“ siehst du, ob sie noch greift.',
+  'help.guide.plans': 'Was Free kann, was Pro kann',
+  'help.guide.plansText':
+    'Free schützt {apps} Apps mit Pause, Wiederöffnungs-Schutz und einem Zeitplan, dazu Fokus bis 60 Minuten und die Einblicke für heute. Pro bringt beliebig viele Apps, „Stark“ und eigene Regeln, Sitzungs-Wächter, Tagesbudget, Rescue, Selbstverpflichtung, mehrere Zeitpläne, strengen Fokus und die Woche in den Einblicken.',
+  'help.makers': 'Schutz stoppt von selbst?',
+  'help.makersText': 'Manche Hersteller beenden Apps im Hintergrund. So erlaubst du ScrollShield, weiterzulaufen.',
+  'help.maker.samsung': '[Platzhalter: Anleitung für Samsung. Text folgt.]',
+  'help.maker.xiaomi': '[Platzhalter: Anleitung für Xiaomi, Redmi und POCO. Text folgt.]',
+  'help.maker.huawei': '[Platzhalter: Anleitung für Huawei und Honor. Text folgt.]',
+  'help.maker.oneplus': '[Platzhalter: Anleitung für OnePlus, OPPO und realme. Text folgt.]',
+  'help.maker.pixel': '[Platzhalter: Anleitung für Google Pixel. Text folgt.]',
+  'help.maker.other': 'Andere Geräte',
+  'help.maker.otherText': '[Platzhalter: Anleitung für andere Geräte. Text folgt.]',
+  'help.contact': 'Kontakt',
+  'help.report': 'Problem melden',
+  'help.reportSub': 'Öffnet deine E-Mail-App mit Gerätedaten, die du vorher siehst.',
+  'help.reportSubject': 'Problem mit ScrollShield',
+  'help.feedback': 'Feedback senden',
+  'help.feedbackSubject': 'Feedback zu ScrollShield',
+  'help.deviceData': 'Gerätedaten (du kannst sie vor dem Senden löschen):',
 } as const;

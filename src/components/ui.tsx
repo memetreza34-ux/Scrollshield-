@@ -49,7 +49,6 @@ const TAB_SCREENS: Record<'today' | 'protect' | 'focus' | 'insights', Screen[]> 
     'notifications',
     'privacy',
     'support',
-    'help',
     'imprint',
     'diagnostics',
     'paywall',

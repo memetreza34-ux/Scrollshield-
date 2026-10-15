@@ -1,171 +1,125 @@
-import { motion } from 'motion/react';
-import {
-  LifeBuoy,
-  MessageSquare,
-  Bug,
-  ShieldAlert,
-  FileText,
-  ChevronRight,
-  Info,
-  Trash2,
-  ExternalLink,
-} from 'lucide-react';
+import { useId, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { ChevronDown, ExternalLink } from 'lucide-react';
 import { Screen } from '../types';
-import { Header, List, Page, Section } from '../components/ui';
+import { Header, List, Page, Row, Section, Sheet } from '../components/ui';
 import { FOCUS_RING_INSET, PRESSED } from '../components/styles';
-import { t } from '../i18n';
-import { createDeletionRequestMailto, createPrivacyRequestMailto, createSupportMailto } from '../lib/contact';
+import { MessageKey, t } from '../i18n';
+import { FREE_LIMITS } from '../lib/entitlements';
+import { createSupportMailto } from '../lib/contact';
 
-export function SupportScreen({ navigate }: { navigate: (s: Screen) => void }) {
-  const handleEmail = (subject: string) => {
-    window.location.assign(createSupportMailto(subject));
-  };
+const GUIDES: { title: MessageKey; text: MessageKey }[] = [
+  { title: 'help.guide.pause', text: 'help.guide.pauseText' },
+  { title: 'help.guide.reopen', text: 'help.guide.reopenText' },
+  { title: 'help.guide.shortVideo', text: 'help.guide.shortVideoText' },
+  { title: 'help.guide.plans', text: 'help.guide.plansText' },
+];
 
-  const openMailto = (href: string) => {
-    window.location.assign(href);
-  };
+/** Phone makers that stop apps in the background, each with its own section. Brand names stay as they are. */
+const MAKERS: { id: string; name: string | MessageKey; text: MessageKey }[] = [
+  { id: 'samsung', name: 'Samsung', text: 'help.maker.samsung' },
+  { id: 'xiaomi', name: 'Xiaomi, Redmi, POCO', text: 'help.maker.xiaomi' },
+  { id: 'huawei', name: 'Huawei, Honor', text: 'help.maker.huawei' },
+  { id: 'oneplus', name: 'OnePlus, OPPO, realme', text: 'help.maker.oneplus' },
+  { id: 'pixel', name: 'Google Pixel', text: 'help.maker.pixel' },
+  { id: 'other', name: 'help.maker.other', text: 'help.maker.otherText' },
+];
+
+const makerName = (name: string) => (name === 'help.maker.other' ? t('help.maker.other') : name);
+
+/** What the problem mail carries, visible in the mail app before anything is sent. */
+const deviceDetails = () =>
+  [
+    '',
+    '',
+    '---',
+    t('help.deviceData'),
+    `ScrollShield ${__APP_VERSION__}`,
+    Capacitor.getPlatform(),
+    typeof navigator === 'undefined' ? '' : navigator.userAgent,
+  ].join('\n');
+
+/**
+ * Hilfe & Support (docs/V1_MASTER_PLAN.md, 4.9): a short guide, what to do
+ * when a phone maker stops the protection, and contact. Readable before the
+ * onboarding, so `backTo` is the welcome screen there.
+ */
+export function SupportScreen({ navigate, backTo = 'settings' }: { navigate: (s: Screen) => void; backTo?: Screen }) {
+  const [guide, setGuide] = useState<(typeof GUIDES)[number] | null>(null);
+  const [openMaker, setOpenMaker] = useState<string | null>(null);
+  const baseId = useId();
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      className="p-6 pb-32 flex flex-col h-full bg-zinc-950"
-    >
-      <Header title="Support & Kontakt" onBack={() => navigate('settings')} />
+    <Page>
+      <Header title={t('help.title')} onBack={() => navigate(backTo)} />
 
-      <div className="space-y-6 flex-1 overflow-y-auto scrollbar-hide">
-        <section>
-          <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2">Hilfe</h2>
-          <div className="bg-zinc-900/80 border border-zinc-800/50 rounded-[1.5rem] overflow-hidden">
-            <button
-              onClick={() => navigate('help')}
-              className="w-full p-4 flex items-center justify-between hover:bg-zinc-800/40 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-            >
-              <div className="flex items-center gap-3">
-                <LifeBuoy size={20} className="text-blue-400" />
-                <div>
-                  <div className="font-semibold text-zinc-200 text-sm">FAQ & Hilfe-Center</div>
-                  <div className="text-xs text-zinc-500 mt-0.5">Antworten auf häufige Fragen</div>
-                </div>
-              </div>
-              <ChevronRight size={18} className="text-zinc-600" />
-            </button>
-          </div>
-        </section>
+      <Section title={t('help.guides')} kind="title">
+        <List>
+          {GUIDES.map((item) => (
+            <Row key={item.title} label={t(item.title)} onClick={() => setGuide(item)} />
+          ))}
+        </List>
+      </Section>
 
-        <section>
-          <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2">Kontakt</h2>
-          <div className="bg-zinc-900/80 border border-zinc-800/50 rounded-[1.5rem] overflow-hidden flex flex-col">
-            <button
-              onClick={() => handleEmail('Feedback zu ScrollShield')}
-              className="w-full p-4 flex items-center justify-between hover:bg-zinc-800/40 transition-colors text-left border-b border-zinc-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-            >
-              <div className="flex items-center gap-3">
-                <MessageSquare size={20} className="text-emerald-400" />
-                <div>
-                  <div className="font-semibold text-zinc-200 text-sm">Feedback senden</div>
-                  <div className="text-xs text-zinc-500 mt-0.5">Ideen oder Wünsche teilen</div>
-                </div>
-              </div>
-              <ChevronRight size={18} className="text-zinc-600" />
-            </button>
-            <button
-              onClick={() => handleEmail('Problem melden: ScrollShield')}
-              className="w-full p-4 flex items-center justify-between hover:bg-zinc-800/40 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-            >
-              <div className="flex items-center gap-3">
-                <Bug size={20} className="text-amber-400" />
-                <div>
-                  <div className="font-semibold text-zinc-200 text-sm">Problem melden</div>
-                  <div className="text-xs text-zinc-500 mt-0.5">Fehler oder Abstürze melden</div>
-                </div>
-              </div>
-              <ChevronRight size={18} className="text-zinc-600" />
-            </button>
-          </div>
-        </section>
-
-        <section>
-          <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2">Datenschutz</h2>
-          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-[1.5rem] overflow-hidden">
-            <div className="flex items-start gap-3 p-5 border-b border-emerald-500/20">
-              <ShieldAlert size={20} className="text-emerald-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <h3 className="font-semibold text-emerald-400 text-sm mb-1">Offline-First</h3>
-                <p className="text-xs text-emerald-300/80 leading-relaxed">
-                  ScrollShield speichert Regeln, Verlauf und Statistiken lokal auf diesem Gerät. In der aktuellen
-                  Version gibt es keinen Cloud-Sync und keine Serverübertragung deiner Nutzungsdaten.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => openMailto(createPrivacyRequestMailto())}
-              className="w-full p-4 flex items-center justify-between hover:bg-emerald-500/10 transition-colors text-left border-b border-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-            >
-              <div className="flex items-center gap-3">
-                <FileText size={20} className="text-emerald-400" />
-                <div>
-                  <div className="font-semibold text-zinc-200 text-sm">Datenschutzanfrage senden</div>
-                  <div className="text-xs text-emerald-300/70 mt-0.5">Fragen zur Datenverarbeitung stellen</div>
-                </div>
-              </div>
-              <ChevronRight size={18} className="text-emerald-500/70" />
-            </button>
-            <button
-              onClick={() => openMailto(createDeletionRequestMailto())}
-              className="w-full p-4 flex items-center justify-between hover:bg-emerald-500/10 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-            >
-              <div className="flex items-center gap-3">
-                <Trash2 size={20} className="text-emerald-400" />
-                <div>
-                  <div className="font-semibold text-zinc-200 text-sm">Datenlöschanfrage senden</div>
-                  <div className="text-xs text-emerald-300/70 mt-0.5">
-                    Serverseitige Daten prüfen und löschen lassen
+      <Section title={t('help.makers')} kind="title">
+        <p className="-mt-1 mb-3 text-body-s text-muted">{t('help.makersText')}</p>
+        <List>
+          {MAKERS.map((maker) => {
+            const open = openMaker === maker.id;
+            const panelId = `${baseId}-${maker.id}`;
+            return (
+              <div key={maker.id}>
+                <button
+                  onClick={() => setOpenMaker(open ? null : maker.id)}
+                  aria-expanded={open}
+                  aria-controls={panelId}
+                  className={`flex min-h-14 w-full items-center gap-4 px-4 py-3 text-left ${PRESSED} ${FOCUS_RING_INSET}`}
+                >
+                  <span className="flex-1 text-body text-ink">{makerName(maker.name)}</span>
+                  <ChevronDown
+                    size={20}
+                    strokeWidth={1.75}
+                    className={`flex-shrink-0 text-muted transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+                {open && (
+                  <div id={panelId} className="px-4 pb-4">
+                    <p className="whitespace-pre-line text-body-s text-ink">{t(maker.text)}</p>
                   </div>
-                </div>
+                )}
               </div>
-              <ChevronRight size={18} className="text-emerald-500/70" />
-            </button>
-          </div>
-        </section>
+            );
+          })}
+        </List>
+      </Section>
 
-        <section>
-          <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2">Rechtliches</h2>
-          <div className="bg-zinc-900/80 border border-zinc-800/50 rounded-[1.5rem] overflow-hidden flex flex-col">
-            <button
-              onClick={() => navigate('imprint')}
-              className="w-full p-4 flex items-center justify-between hover:bg-zinc-800/40 transition-colors text-left border-b border-zinc-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-            >
-              <div className="flex items-center gap-3">
-                <FileText size={20} className="text-zinc-400" />
-                <div className="font-semibold text-zinc-200 text-sm">Impressum</div>
-              </div>
-              <ChevronRight size={18} className="text-zinc-600" />
-            </button>
-            <button
-              onClick={() => navigate('privacy')}
-              className="w-full p-4 flex items-center justify-between hover:bg-zinc-800/40 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-            >
-              <div className="flex items-center gap-3">
-                <FileText size={20} className="text-zinc-400" />
-                <div className="font-semibold text-zinc-200 text-sm">Datenschutzerklärung</div>
-              </div>
-              <ChevronRight size={18} className="text-zinc-600" />
-            </button>
-          </div>
-        </section>
+      <Section title={t('help.contact')} kind="title">
+        <List>
+          <Row
+            label={t('help.report')}
+            description={t('help.reportSub')}
+            trailing={
+              <ExternalLink size={20} strokeWidth={1.75} className="flex-shrink-0 text-muted" aria-hidden="true" />
+            }
+            onClick={() => window.location.assign(createSupportMailto(t('help.reportSubject'), deviceDetails()))}
+          />
+          <Row
+            label={t('help.feedback')}
+            trailing={
+              <ExternalLink size={20} strokeWidth={1.75} className="flex-shrink-0 text-muted" aria-hidden="true" />
+            }
+            onClick={() => window.location.assign(createSupportMailto(t('help.feedbackSubject')))}
+          />
+        </List>
+      </Section>
 
-        <div className="pt-6 pb-12 flex flex-col items-center justify-center text-center opacity-60">
-          <div className="w-12 h-12 bg-zinc-900 rounded-2xl flex items-center justify-center mb-3 border border-zinc-800">
-            <Info size={24} className="text-zinc-500" />
-          </div>
-          <div className="text-sm font-bold text-zinc-400">ScrollShield</div>
-          <div className="text-xs text-zinc-500 font-mono mt-1">Version {__APP_VERSION__}</div>
-          <div className="text-xs text-zinc-600 mt-2">2026 ScrollShield</div>
-        </div>
-      </div>
-    </motion.div>
+      {guide && (
+        <Sheet title={t(guide.title)} onClose={() => setGuide(null)}>
+          <p className="mt-3 text-body text-ink">{t(guide.text, { apps: FREE_LIMITS.protectedApps })}</p>
+        </Sheet>
+      )}
+    </Page>
   );
 }
 

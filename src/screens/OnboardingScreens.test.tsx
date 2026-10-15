@@ -31,7 +31,7 @@ describe('Welcome', () => {
     expect(navigate).toHaveBeenCalledWith('onboarding');
 
     fireEvent.click(screen.getByRole('button', { name: 'Mehr erfahren' }));
-    expect(navigate).toHaveBeenCalledWith('help');
+    expect(navigate).toHaveBeenCalledWith('support');
   });
 
   it('shows a still preview of the pause with the countdown at 5', () => {

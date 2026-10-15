@@ -82,7 +82,7 @@ describe('App', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Mehr erfahren' }));
 
-    expect(await screen.findByRole('heading', { name: 'Hilfe & FAQ' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Hilfe & Support' }, { timeout: 5000 })).toBeInTheDocument();
   });
 
   it('has no obvious accessibility violations on the welcome screen', async () => {

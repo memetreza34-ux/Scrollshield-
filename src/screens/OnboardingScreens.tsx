@@ -59,7 +59,7 @@ export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
 
       <div className="flex flex-col gap-1">
         <PrimaryButton onClick={() => navigate('onboarding')}>{t('welcome.start')}</PrimaryButton>
-        <TextButton onClick={() => navigate('help')}>{t('welcome.learnMore')}</TextButton>
+        <TextButton onClick={() => navigate('support')}>{t('welcome.learnMore')}</TextButton>
         <p className="text-center text-caption text-muted">{t('welcome.age')}</p>
       </div>
     </motion.div>

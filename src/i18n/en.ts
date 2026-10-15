@@ -703,4 +703,35 @@ export const en: Messages = {
   'imprint.trademarks':
     'Instagram, TikTok, YouTube, Facebook, X, Snapchat, Reddit and Pinterest belong to their owners. ScrollShield is not affiliated with them.',
   'imprint.version': 'Version {version} · Geist typeface (SIL Open Font License)',
+  // Help & support
+  'help.title': 'Help & support',
+  'help.guides': 'In short',
+  'help.guide.pause': 'How the pause works',
+  'help.guide.pauseText':
+    'When you open a protected app, a short pause comes first. “Back” always works. “Continue” only works once the pause is over. How long it lasts depends on the app’s preset.',
+  'help.guide.reopen': 'Reopen protection and cooldown',
+  'help.guide.reopenText':
+    'If you open the same app again shortly after, the pause gets longer. With “Strong”, a cooldown follows: the app is blocked for a while and then open again. If you really need it, there is the emergency unlock.',
+  'help.guide.shortVideo': 'Short-video protection and its limits',
+  'help.guide.shortVideoText':
+    'With the accessibility service, ScrollShield recognises Reels, Shorts and the TikTok feed. That way only the feed is limited; messages and profiles stay open. Detection relies on technical identifiers of the apps and can stop working after an app update. “Check detection” shows whether it still works.',
+  'help.guide.plans': 'What Free does, what Pro does',
+  'help.guide.plansText':
+    'Free protects {apps} apps with the pause, reopen protection and one schedule, plus focus up to 60 minutes and the insights for today. Pro adds any number of apps, “Strong” and custom rules, session guard, daily budget, Rescue, self-commitment, several schedules, strict focus and the week in insights.',
+  'help.makers': 'Protection stops by itself?',
+  'help.makersText': 'Some phone makers stop apps in the background. This is how you let ScrollShield keep running.',
+  'help.maker.samsung': '[Placeholder: guide for Samsung. Text to follow.]',
+  'help.maker.xiaomi': '[Placeholder: guide for Xiaomi, Redmi and POCO. Text to follow.]',
+  'help.maker.huawei': '[Placeholder: guide for Huawei and Honor. Text to follow.]',
+  'help.maker.oneplus': '[Placeholder: guide for OnePlus, OPPO and realme. Text to follow.]',
+  'help.maker.pixel': '[Placeholder: guide for Google Pixel. Text to follow.]',
+  'help.maker.other': 'Other phones',
+  'help.maker.otherText': '[Placeholder: guide for other phones. Text to follow.]',
+  'help.contact': 'Contact',
+  'help.report': 'Report a problem',
+  'help.reportSub': 'Opens your email app with device details you see first.',
+  'help.reportSubject': 'Problem with ScrollShield',
+  'help.feedback': 'Send feedback',
+  'help.feedbackSubject': 'Feedback on ScrollShield',
+  'help.deviceData': 'Device details (you can delete them before sending):',
 };
