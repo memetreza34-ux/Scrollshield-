@@ -22,7 +22,7 @@ const BACK_TARGETS: Partial<Record<Screen, Screen>> = {
   notifications: 'settings',
   privacy: 'settings',
   support: 'settings',
-  diagnostics: 'settings',
+  diagnostics: 'permissions',
   debug: 'settings',
   help: 'support',
   imprint: 'support',

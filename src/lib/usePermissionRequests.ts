@@ -17,6 +17,8 @@ type UpdateState = (u: Partial<AppState> | ((previous: AppState) => Partial<AppS
  */
 export function usePermissionRequests(updateState: UpdateState) {
   const [isNative, setIsNative] = useState(false);
+  // Whether the protection service runs; null until Android has answered (and in the browser).
+  const [monitoringActive, setMonitoringActive] = useState<boolean | null>(null);
 
   const refreshNativeStatus = useCallback(async () => {
     // The web fallback reports everything as false; applying it would wipe the
@@ -26,6 +28,7 @@ export function usePermissionRequests(updateState: UpdateState) {
     try {
       const status = await ScrollShieldBridge.getPermissionStatus();
       setIsNative(true);
+      setMonitoringActive(status.monitoringActive);
 
       // Merged into the latest state, not the one this callback was created
       // with: otherwise every return from a settings screen would reset the
@@ -81,5 +84,5 @@ export function usePermissionRequests(updateState: UpdateState) {
     [updateState],
   );
 
-  return { isNative, requestPermission };
+  return { isNative, monitoringActive, refreshNativeStatus, requestPermission };
 }

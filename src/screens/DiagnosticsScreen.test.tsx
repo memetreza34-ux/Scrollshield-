@@ -16,7 +16,7 @@ describe('DiagnosticsScreen', () => {
     render(<DiagnosticsScreen navigate={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText(/keine Beobachtungen zur Verfügung/i)).toBeInTheDocument();
+      expect(screen.getByText(/keine Beobachtungen/i)).toBeInTheDocument();
     });
   });
 

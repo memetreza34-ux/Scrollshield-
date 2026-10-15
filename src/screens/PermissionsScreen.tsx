@@ -1,12 +1,83 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Eye, Layers, Bell, Activity, CheckCircle2, Settings, AlertTriangle, Info, Film } from 'lucide-react';
-import { AppState, Screen, AppPermissions } from '../types';
-import { Header } from '../components/ui';
+import { useState } from 'react';
+import {
+  Battery,
+  Bell,
+  Check,
+  Info,
+  Layers,
+  OctagonAlert,
+  PersonStanding,
+  ShieldCheck,
+  Smartphone,
+  type LucideIcon,
+} from 'lucide-react';
+import { AppPermissions, AppState, Screen } from '../types';
+import {
+  Header,
+  InlineButton,
+  List,
+  Notice,
+  Page,
+  PrimaryButton,
+  SecondaryButton,
+  Section,
+  StatusChip,
+} from '../components/ui';
+import { FOCUS_RING_INSET, PRESSED } from '../components/styles';
 import { AccessibilityDisclosure } from '../components/AccessibilityDisclosure';
+import { MessageKey, t } from '../i18n';
+import { countProtectedApps } from '../lib/entitlements';
 import { ScrollShieldBridge } from '../lib/nativeBridge';
 import { usePermissionRequests } from '../lib/usePermissionRequests';
 
+type PermissionKey = 'usageAccess' | 'overlay' | 'accessibility' | 'backgroundActivity' | 'notifications';
+
+interface PermissionRow {
+  key: PermissionKey;
+  icon: LucideIcon;
+  title: MessageKey;
+  need: MessageKey;
+  /** Only Android has these; the browser shows notifications alone. */
+  androidOnly: boolean;
+}
+
+const ROWS: PermissionRow[] = [
+  {
+    key: 'usageAccess',
+    icon: Smartphone,
+    title: 'permission.usageAccess.title',
+    need: 'status.need.required',
+    androidOnly: true,
+  },
+  { key: 'overlay', icon: Layers, title: 'permission.overlay.title', need: 'status.need.required', androidOnly: true },
+  {
+    key: 'accessibility',
+    icon: PersonStanding,
+    title: 'status.accessibility',
+    need: 'status.need.shortVideo',
+    androidOnly: true,
+  },
+  {
+    key: 'backgroundActivity',
+    icon: Battery,
+    title: 'permission.battery.title',
+    need: 'status.need.recommended',
+    androidOnly: true,
+  },
+  {
+    key: 'notifications',
+    icon: Bell,
+    title: 'permission.notifications.title',
+    need: 'status.need.optional',
+    androidOnly: false,
+  },
+];
+
+/**
+ * Berechtigungen & Zustand (docs/V1_MASTER_PLAN.md, 4.9): whether the
+ * protection service runs, every permission with its state and a button, and
+ * the check of the short-video detection. The state is what Android reports.
+ */
 export function PermissionsScreen({
   state,
   updateState,
@@ -17,297 +88,187 @@ export function PermissionsScreen({
   navigate: (s: Screen) => void;
 }) {
   const { permissions, operatingSystem } = state;
-  const [expandedInfo, setExpandedInfo] = useState<keyof AppPermissions | null>(null);
-  const { isNative, requestPermission: requestSystemPermission } = usePermissionRequests(updateState);
-  const [showAccessibilityDisclosure, setShowAccessibilityDisclosure] = useState(false);
-
-  const togglePermission = (key: keyof AppPermissions, forceState?: boolean) => {
-    updateState({
-      permissions: {
-        ...permissions,
-        [key]: forceState !== undefined ? forceState : !permissions[key],
-      },
-    });
-  };
+  const android = operatingSystem === 'android';
+  const { isNative, monitoringActive, refreshNativeStatus, requestPermission } = usePermissionRequests(updateState);
+  const [showDisclosure, setShowDisclosure] = useState(false);
 
   const openAccessibilitySettings = () => {
-    setShowAccessibilityDisclosure(false);
+    setShowDisclosure(false);
     void ScrollShieldBridge.openAccessibilitySettings().catch(() => undefined);
   };
 
-  const requestPermission = (key: keyof AppPermissions) => {
+  const ask = (key: PermissionKey) => {
     // Google Play requires the disclosure and an explicit "yes" before the
     // service is switched on; managing a running one needs neither.
     if (key === 'accessibility') {
       if (permissions.accessibility) openAccessibilitySettings();
-      else setShowAccessibilityDisclosure(true);
+      else setShowDisclosure(true);
       return;
     }
-    void requestSystemPermission(key);
+    void requestPermission(key);
   };
 
-  const getStatusText = (isActive: boolean, isOptional: boolean = false) => {
-    if (isActive) return 'AKTIV';
-    if (isOptional) return 'OPTIONAL';
-    return 'FEHLT';
+  const restart = async () => {
+    try {
+      await ScrollShieldBridge.startMonitoring();
+    } catch {
+      // Still stopped; the card stays.
+    }
+    await refreshNativeStatus();
   };
 
-  const getStatusColor = (isActive: boolean, isOptional: boolean = false) => {
-    if (isActive) return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
-    if (isOptional) return 'text-zinc-400 bg-zinc-500/10 border-zinc-500/30';
-    return 'text-amber-500 bg-amber-500/10 border-amber-500/30';
-  };
-
-  const renderPermissionCard = (
-    key: keyof AppPermissions,
-    icon: React.ReactNode,
-    title: string,
-    purpose: string[],
-    limitations: string,
-    isOptional = false,
-    isIosOnly = false,
-    isAndroidOnly = false,
-    detailedExplanation?: string,
-  ) => {
-    if (isIosOnly && operatingSystem !== 'ios') return null;
-    if (isAndroidOnly && operatingSystem !== 'android') return null;
-
-    const isActive = permissions[key];
-    const isExpanded = expandedInfo === key;
-
-    return (
-      <section
-        aria-labelledby={`permission-${key}-title`}
-        className={`bg-zinc-900/80 backdrop-blur-md border ${isActive ? 'border-emerald-500/30' : 'border-zinc-800/50'} rounded-[2rem] overflow-hidden transition-all shadow-lg`}
-      >
-        <div className="p-5 border-b border-zinc-800/50">
-          <div className="flex gap-4 items-start">
-            <div
-              className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 mt-1 ${isActive ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-zinc-800 border border-zinc-700 text-zinc-400'}`}
-            >
-              {icon}
-            </div>
-            <div className="flex-1">
-              {/* The status label wraps under the title instead of squeezing it; words never break. */}
-              <div className="mb-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                <h2 id={`permission-${key}-title`} className="text-lg font-bold wrap-break-word text-zinc-100">
-                  {title}
-                </h2>
-                <span
-                  className={`flex-shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider border ${getStatusColor(isActive, isOptional)}`}
-                >
-                  {getStatusText(isActive, isOptional)}
-                </span>
-              </div>
-
-              <div className="mb-4 mt-3 space-y-3">
-                <div>
-                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">Zweck</h3>
-                  <ul className="space-y-1.5 text-sm text-zinc-300">
-                    {purpose.map((p, i) => (
-                      <li key={i} className="flex gap-2 items-start">
-                        <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
-                        <span className="leading-snug">{p}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Orange only where protection is really missing; an optional permission is a calm note. */}
-                {!isActive &&
-                  (isOptional ? (
-                    <div className="rounded-control bg-raised px-3 py-2">
-                      <h3 className="mb-0.5 text-label-s text-muted">Ohne diese Berechtigung</h3>
-                      <p className="text-body-s text-muted">{limitations}</p>
-                    </div>
-                  ) : (
-                    <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3">
-                      <h3 className="text-xs font-bold text-amber-500/70 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                        <AlertTriangle size={12} /> Ohne diese Berechtigung
-                      </h3>
-                      <p className="text-sm text-zinc-400 leading-snug">{limitations}</p>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <AnimatePresence>
-          {isExpanded && detailedExplanation && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="bg-zinc-950 px-5 py-4 border-b border-zinc-800/50"
-            >
-              <div className="flex gap-3 text-sm text-zinc-300">
-                <Info size={16} className="text-blue-400 flex-shrink-0 mt-0.5" />
-                <div className="space-y-2 leading-relaxed whitespace-pre-line">{detailedExplanation}</div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="p-4 bg-zinc-900/50 flex flex-wrap gap-2 sm:gap-3">
-          <button
-            onClick={() => requestPermission(key)}
-            aria-label={`${isActive ? 'In Systemeinstellungen verwalten' : 'Aktivieren'}: ${title}`}
-            className={`flex-1 py-3 px-4 rounded-[1.25rem] text-sm font-bold transition-all ${isActive ? 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700' : 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.2)]'}`}
-          >
-            {isActive ? (isNative ? 'In Einstellungen verwalten' : 'Deaktivieren') : 'Aktivieren'}
-          </button>
-
-          {!isActive && (
-            <button
-              onClick={() => togglePermission(key, false)}
-              aria-label={`Später: ${title}`}
-              className="px-4 py-3 rounded-[1.25rem] text-sm font-semibold bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
-            >
-              Später
-            </button>
-          )}
-
-          {detailedExplanation && (
-            <button
-              onClick={() => setExpandedInfo(isExpanded ? null : key)}
-              aria-label={`${isExpanded ? 'Weniger Infos' : 'Mehr erfahren'}: ${title}`}
-              aria-expanded={isExpanded}
-              className={`px-4 py-3 rounded-[1.25rem] text-sm font-semibold border transition-colors ${isExpanded ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-transparent border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300'}`}
-            >
-              {isExpanded ? 'Weniger Infos' : 'Mehr erfahren'}
-            </button>
-          )}
-        </div>
-      </section>
-    );
-  };
+  const rows = ROWS.filter((row) => android || !row.androidOnly);
+  const serviceStopped = isNative && monitoringActive === false && countProtectedApps(state) > 0;
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6 pb-32">
-      {showAccessibilityDisclosure && (
-        <AccessibilityDisclosure
-          onAccept={openAccessibilitySettings}
-          onDecline={() => setShowAccessibilityDisclosure(false)}
-        />
+    <Page>
+      {showDisclosure && (
+        <AccessibilityDisclosure onAccept={openAccessibilitySettings} onDecline={() => setShowDisclosure(false)} />
       )}
-      <Header title="Berechtigungen" onBack={() => navigate('settings')} />
+      <Header title={t('status.title')} onBack={() => navigate('settings')} />
 
-      <div className="space-y-6">
-        <div className="text-center mb-8 -mt-2">
-          <p className="text-zinc-400 text-sm max-w-sm mx-auto">
-            Verwalte, welche Funktionen deines Geräts ScrollShield verwenden darf. Du behältst jederzeit die volle
-            Kontrolle.
-          </p>
-        </div>
-
-        {operatingSystem === 'web' && (
-          <section
-            aria-labelledby="permissions-web-note"
-            className="rounded-[1.5rem] border border-zinc-800/50 bg-zinc-900/80 p-5"
-          >
-            <h2 id="permissions-web-note" className="mb-2 font-bold text-zinc-100">
-              Du nutzt die Webversion
-            </h2>
-            <p className="text-sm leading-relaxed text-zinc-400">
-              Ein Browser kann andere Apps weder erkennen noch sperren. Systemberechtigungen gibt es deshalb erst in der
-              Android-App. Regeln, Fokuszeiten, Verlauf und Statistiken funktionieren hier vollständig.
-            </p>
-          </section>
+      <div className="mb-6">
+        {!isNative ? (
+          <Notice icon={Info} title={t('status.web')}>
+            {t('status.webText')}
+          </Notice>
+        ) : serviceStopped ? (
+          <div role="alert" className="flex flex-col gap-3.5 rounded-surface bg-lock/10 p-4">
+            <div className="flex items-start gap-3">
+              <OctagonAlert size={24} strokeWidth={1.75} className="flex-shrink-0 text-lock" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="text-title-s text-ink">{t('status.stopped')}</p>
+                <p className="mt-0.5 text-body-s text-ink">{t('status.stoppedText')}</p>
+              </div>
+            </div>
+            <PrimaryButton onClick={() => void restart()}>{t('status.restart')}</PrimaryButton>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 rounded-surface border border-line bg-surface p-4">
+            <ShieldCheck
+              size={24}
+              strokeWidth={1.75}
+              className={`flex-shrink-0 ${monitoringActive ? 'text-accent' : 'text-muted'}`}
+              aria-hidden="true"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-title-s text-ink">{t(monitoringActive ? 'status.running' : 'status.idle')}</p>
+              <p className="mt-0.5 text-body-s text-muted">
+                {t(monitoringActive ? 'status.runningText' : 'status.idleText')}
+              </p>
+            </div>
+          </div>
         )}
-
-        <div className="space-y-6">
-          {renderPermissionCard(
-            'usageAccess',
-            <Eye size={24} />,
-            'App-Nutzungszugriff',
-            [
-              'Erkennen, welche geschützte App geöffnet wurde',
-              'Timer und App-Limits ermöglichen',
-              'Statistiken für dich berechnen',
-            ],
-            'Die App kann nicht feststellen, wann du z.B. Instagram öffnest, und der Schutz kann nicht ausgelöst werden.',
-            false,
-            false,
-            true,
-            'Warum wird das gebraucht?\nScrollShield muss erkennen, wann eine geschützte App geöffnet wird. Android stellt dafür den Nutzungszugriff bereit.\n\nWas wir nicht tun:\nWir lesen keine Bildschirminhalte. Wir protokollieren nicht, was du in den Apps machst. Wir senden keine Nutzungsdaten an Entwickler-Server.',
-          )}
-
-          {renderPermissionCard(
-            'notifications',
-            <Bell size={24} />,
-            'Benachrichtigungen',
-            [
-              'Fokus-Erinnerungen senden',
-              'Tageszusammenfassungen anzeigen',
-              'Hinweis, wenn du eine App oft hintereinander öffnest',
-            ],
-            'Du erhältst keine Erinnerungen, Warnhinweise als Mitteilung oder Zusammenfassungen. Die übrigen Schutzregeln bleiben erhalten.',
-            true,
-            false,
-            false,
-          )}
-
-          {renderPermissionCard(
-            'overlay',
-            <Layers size={24} />,
-            'Hinweis über anderen Apps',
-            [
-              'Unterbrechungsbildschirm über einer geschützten App anzeigen',
-              'Zeitlimit erreicht anzeigen',
-              'Sicherstellen, dass der Warnhinweis immer sichtbar ist',
-            ],
-            'ScrollShield kann weiterhin erinnern und Aktivitäten lokal erfassen, aber keinen Hinweis über einer anderen App anzeigen.',
-            false,
-            false,
-            true,
-          )}
-
-          {renderPermissionCard(
-            'accessibility',
-            <Film size={24} />,
-            'Kurzvideo-Erkennung (Bedienungshilfe)',
-            [
-              'Erkennen, ob gerade Reels, Shorts oder der TikTok-Feed offen ist',
-              'Deine Wischbewegungen im Feed zählen',
-              'Feed-Limits und Wisch-Unterbrechungen ermöglichen',
-            ],
-            'App-Limits und Verzögerungen funktionieren weiter. Regeln, die sich nur auf den Kurzvideo-Feed beziehen (Tageslimit für Reels, Stopp nach X Wischern), bleiben wirkungslos.',
-            true,
-            false,
-            true,
-            'Was der Dienst liest:\nNur technische Kennungen der angezeigten Oberfläche (Bezeichner von Bildschirmelementen). Daran erkennt ScrollShield, ob ein Kurzvideo-Feed offen ist.\n\nWas der Dienst NICHT liest:\nKeine Texte, keine Nachrichten, keine Passwörter, keine Sucheingaben, keine Bildschirminhalte. Diese Funktionen sind im Code nicht vorhanden.\n\nWohin die Daten gehen:\nNirgendwohin. Zähler und Zeiten bleiben verschlüsselt auf deinem Gerät. ScrollShield hat keinen Server.\n\nDu kannst den Dienst jederzeit in den Android-Einstellungen wieder abschalten.',
-          )}
-
-          {renderPermissionCard(
-            'screenTime',
-            <Settings size={24} />,
-            'Bildschirmzeit-Zugriff (iPhone/iPad)',
-            ['Geschützte Apps auswählen', 'App-Limits anwenden', 'Apps während einer Fokuszeit einschränken'],
-            'ScrollShield kann Apps auf dem iPhone oder iPad nicht über die Bildschirmzeit-Funktion einschränken.',
-            false,
-            true, // iOS only
-            false,
-            'Apple stellt dafür die Bildschirmzeit-Schnittstelle bereit. ScrollShield erhält nur die für Auswahl und Limits nötigen Informationen, nicht den Inhalt anderer Apps.',
-          )}
-
-          {renderPermissionCard(
-            'backgroundActivity',
-            <Activity size={24} />,
-            'Zuverlässiger Schutz im Hintergrund',
-            [
-              'Timer für App-Nutzung stabil weiterführen',
-              'Limits sauber überwachen, auch wenn das Display zwischendurch aus (oder im Hintergrund) war',
-              'Verhindert, dass das Handy die App "schlafen" legt',
-            ],
-            'Timer können ungenau werden oder pausieren, wenn das Gerät ScrollShield im Hintergrund beendet.',
-            true, // optional
-            false,
-            true,
-            'Einige Geräte beenden Apps im Hintergrund besonders schnell, um Akku zu sparen. Eine Ausnahme in den Akku-Einstellungen sorgt dafür, dass Timer und Schutzregeln zuverlässig weiterlaufen.',
-          )}
-        </div>
       </div>
-    </motion.div>
+
+      <Section title={t('status.permissions')} kind="title">
+        <List>
+          {rows.map((row) => (
+            <PermissionStateRow
+              key={row.key}
+              row={row}
+              granted={permissions[row.key as keyof AppPermissions]}
+              // Android has no screen of its own for a granted notification permission.
+              canManage={isNative && row.key !== 'notifications'}
+              onAsk={() => ask(row.key)}
+            />
+          ))}
+        </List>
+        {isNative && <p className="mt-2 px-1 text-caption text-muted">{t('status.tapHint')}</p>}
+      </Section>
+
+      {serviceStopped && (
+        <div className="mb-6">
+          <Notice
+            icon={Info}
+            action={
+              <button
+                onClick={() => navigate('support')}
+                className={`min-h-10 text-label text-ink underline underline-offset-[3px] ${FOCUS_RING_INSET}`}
+              >
+                {t('status.makerLink')}
+              </button>
+            }
+          >
+            {t('status.maker')}
+          </Notice>
+        </div>
+      )}
+
+      {android && (
+        <Section title={t('status.detection')} kind="title">
+          <div className="flex flex-col gap-3.5 rounded-surface border border-line bg-surface p-4">
+            <p className="text-body text-ink">
+              {permissions.accessibility ? t('status.detectionText') : t('status.detectionOff')}
+            </p>
+            <SecondaryButton onClick={() => navigate('diagnostics')}>{t('status.check')}</SecondaryButton>
+            <p className="text-caption text-muted">{t('status.checkHint')}</p>
+          </div>
+        </Section>
+      )}
+    </Page>
+  );
+}
+
+/**
+ * One permission: granted rows show a check and open the Android setting when
+ * tapped; a missing one shows its state in a chip and a button.
+ */
+function PermissionStateRow({
+  row,
+  granted,
+  canManage,
+  onAsk,
+}: {
+  row: PermissionRow;
+  granted: boolean;
+  canManage: boolean;
+  onAsk: () => void;
+}) {
+  const Icon = row.icon;
+  const isService = row.key === 'accessibility';
+  const title = t(row.title);
+  const leading = <Icon size={24} strokeWidth={1.75} className="flex-shrink-0 text-ink" aria-hidden="true" />;
+
+  if (granted) {
+    const content = (
+      <>
+        {leading}
+        <span className="min-w-0 flex-1">
+          <span className="block text-body text-ink">{title}</span>
+          <span className="block text-caption text-muted">{t(row.need)}</span>
+        </span>
+        <span className="flex flex-shrink-0 items-center gap-1.5 text-label-s text-ink">
+          <Check size={18} strokeWidth={2} className="text-accent" aria-hidden="true" />
+          {t(isService ? 'status.on' : 'permission.granted')}
+        </span>
+      </>
+    );
+    const layout = 'flex min-h-16 w-full items-center gap-4 px-4 py-2 text-left';
+    return canManage ? (
+      <button onClick={onAsk} className={`${layout} ${PRESSED} ${FOCUS_RING_INSET}`}>
+        {content}
+      </button>
+    ) : (
+      <div className={layout}>{content}</div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-16 items-center gap-4 px-4 py-3">
+      {leading}
+      <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
+        <span className="text-body text-ink">{title}</span>
+        {/* Orange only where protection is really missing; an optional permission stays calm. */}
+        {row.need === 'status.need.optional' ? (
+          <span className="text-caption text-muted">{t(row.need)}</span>
+        ) : (
+          <StatusChip tone="pause">{t(isService ? 'status.off' : 'status.missing')}</StatusChip>
+        )}
+      </span>
+      <InlineButton onClick={onAsk} ariaLabel={`${t(isService ? 'status.switchOn' : 'permission.allow')}: ${title}`}>
+        {t(isService ? 'status.switchOn' : 'permission.allow')}
+      </InlineButton>
+    </div>
   );
 }
