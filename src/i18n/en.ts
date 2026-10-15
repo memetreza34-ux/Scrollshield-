@@ -734,4 +734,18 @@ export const en: Messages = {
   'help.feedback': 'Send feedback',
   'help.feedbackSubject': 'Feedback on ScrollShield',
   'help.deviceData': 'Device details (you can delete them before sending):',
+  // Pro ended
+  'proExpired.chip': 'Pro ended',
+  'proExpired.title': 'Which {count} apps should stay protected?',
+  'proExpired.text': 'Free protects {count} apps. The others are paused, not deleted. Their rules stay saved.',
+  'proExpired.legend': 'Apps that stay protected',
+  'proExpired.keeps': 'stays protected',
+  'proExpired.paused': 'will be paused',
+  'proExpired.rest':
+    'Pro rules such as the daily budget and “Strong” rest until you have Pro again. Until then “Balanced” applies.',
+  'proExpired.count': '{chosen} of {count} chosen',
+  'proExpired.pausedOne': '{names} will be paused',
+  'proExpired.pausedMany': '{names} will be paused',
+  'proExpired.continue': 'Continue with Free',
+  'proExpired.renew': 'Renew Pro',
 };

@@ -33,6 +33,7 @@ import { FREE_LIMITS, hasPro, paywallFor, PRO_BENEFITS } from '../lib/entitlemen
 import { formatHour } from '../lib/format';
 import { SUMMARY_HOUR, usesNativeNotifications, WEEKLY_REVIEW_HOUR } from '../lib/notifications';
 import { normalizePauseLine, PAUSE_LINE_MAX_LENGTH } from '../lib/state';
+import { DevProSwitch } from './PaywallScreen';
 
 type ScreenProps = {
   state: AppState;
@@ -337,6 +338,7 @@ export function ProStatusScreen({ state, updateState, navigate }: ScreenProps) {
         </>
       )}
       <p className="mt-2 px-1 text-caption text-muted">{t('pro.billingNote')}</p>
+      <DevProSwitch pro={pro} updateState={updateState} />
     </Page>
   );
 }

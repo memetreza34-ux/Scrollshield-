@@ -46,6 +46,8 @@ import { RescueScreen } from './screens/RescueScreen';
 import { InsightsScreen } from './screens/InsightsScreen';
 import { NotificationsScreen, ProStatusScreen, SettingsScreen } from './screens/SettingsScreens';
 import { PaywallScreen } from './screens/PaywallScreen';
+import { ProExpiredScreen } from './screens/ProExpiredScreen';
+import { effectiveAppsConfig, mustChooseFreeApps } from './lib/entitlements';
 import { ProtectionFlow } from './screens/ProtectionFlow';
 import { PermissionsScreen } from './screens/PermissionsScreen';
 import { DebugScreen } from './screens/DebugScreen';
@@ -359,7 +361,7 @@ export default function App() {
   useEffect(() => {
     if (!isLoaded) return;
     const running = getRunningFocusSession({ focusSessions: appState.focusSessions });
-    void syncNativeBlockList(appState.appsConfig, SUPPORTED_APPS, {
+    void syncNativeBlockList(effectiveAppsConfig(appState), SUPPORTED_APPS, {
       isFocusModeActive: appState.isFocusModeActive,
       focusBlockedAppIds: getFocusBlockedAppIds({
         focusSessions: appState.focusSessions,
@@ -372,6 +374,7 @@ export default function App() {
     });
   }, [
     appState.appsConfig,
+    appState.pro,
     appState.isFocusModeActive,
     appState.focusSessions,
     appState.schedules,
@@ -409,6 +412,10 @@ export default function App() {
     setCurrentScreen(screen);
   };
 
+  // Pro ended with more apps than Free protects: the choice comes first; only
+  // the paywall ("Pro erneuern") may open on top of it.
+  const choosingFreeApps = mustChooseFreeApps(appState) && currentScreen !== 'paywall';
+
   return (
     <ErrorBoundary>
       <AppIconsContext.Provider value={appIcons}>
@@ -419,101 +426,111 @@ export default function App() {
               data-testid="screen-scroll"
               className="flex-1 overflow-y-auto overflow-x-hidden relative scrollbar-hide"
             >
-              <AnimatePresence mode="wait">
-                {currentScreen === 'welcome' && <Welcome key="welcome" navigate={navigate} />}
-                {currentScreen === 'onboarding' && (
-                  <Onboarding key="onboarding" state={appState} updateState={updateState} navigate={navigate} />
-                )}
-                {currentScreen === 'permissions' && (
-                  <PermissionsScreen key="permissions" state={appState} updateState={updateState} navigate={navigate} />
-                )}
-                {currentScreen === 'today' && (
-                  <TodayScreen key="today" state={appState} updateState={updateState} navigate={navigate} />
-                )}
-                {currentScreen === 'protect' && (
-                  <ProtectScreen key="protect" state={appState} updateState={updateState} navigate={navigate} />
-                )}
-                {currentScreen === 'app_detail' && (
-                  <AppDetailScreen key="app_detail" state={appState} updateState={updateState} navigate={navigate} />
-                )}
-                {currentScreen === 'schedule_edit' && (
-                  <ScheduleEditScreen
-                    key="schedule_edit"
-                    state={appState}
-                    updateState={updateState}
-                    navigate={navigate}
-                  />
-                )}
-                {currentScreen === 'commitment' && (
-                  <CommitmentScreen key="commitment" state={appState} updateState={updateState} navigate={navigate} />
-                )}
-                {currentScreen === 'focus' && (
-                  <Focus key="focus" state={appState} updateState={updateState} navigate={navigate} />
-                )}
-                {currentScreen === 'rescue' && (
-                  <RescueScreen key="rescue" state={appState} updateState={updateState} navigate={navigate} />
-                )}
-                {currentScreen === 'insights' && (
-                  <InsightsScreen key="insights" state={appState} updateState={updateState} navigate={navigate} />
-                )}
-                {currentScreen === 'settings' && (
-                  <SettingsScreen key="settings" state={appState} updateState={updateState} navigate={navigate} />
-                )}
-                {currentScreen === 'pro_status' && (
-                  <ProStatusScreen key="pro_status" state={appState} updateState={updateState} navigate={navigate} />
-                )}
-                {currentScreen === 'notifications' && (
-                  <NotificationsScreen
-                    key="notifications"
-                    state={appState}
-                    updateState={updateState}
-                    navigate={navigate}
-                  />
-                )}
-                {currentScreen === 'paywall' && (
-                  <PaywallScreen key="paywall" state={appState} updateState={updateState} navigate={navigate} />
-                )}
-                {currentScreen === 'privacy' && (
-                  <PrivacyScreen
-                    key="privacy"
-                    state={appState}
-                    updateState={updateState}
-                    resetApp={resetApp}
-                    navigate={navigate}
-                  />
-                )}
-                {currentScreen === 'protection_flow' && (
-                  <ProtectionFlow
-                    key="protection_flow"
-                    state={appState}
-                    updateState={updateState}
-                    navigate={navigate}
-                  />
-                )}
-                {currentScreen === 'active_session' && (
-                  <ActiveSessionScreen
-                    key="active_session"
-                    state={appState}
-                    updateState={updateState}
-                    navigate={navigate}
-                  />
-                )}
-                {currentScreen === 'diagnostics' && <DiagnosticsScreen key="diagnostics" navigate={navigate} />}
-                {currentScreen === 'support' && (
-                  <SupportScreen
-                    key="support"
-                    navigate={navigate}
-                    backTo={appState.hasCompletedOnboarding ? 'settings' : 'welcome'}
-                  />
-                )}
-                {currentScreen === 'imprint' && <ImprintScreen key="imprint" navigate={navigate} />}
-                {currentScreen === 'debug' && !import.meta.env.PROD && (
-                  <DebugScreen key="debug" state={appState} updateState={updateState} navigate={navigate} />
-                )}
-              </AnimatePresence>
+              {choosingFreeApps ? (
+                <ProExpiredScreen state={appState} updateState={updateState} navigate={navigate} />
+              ) : (
+                <AnimatePresence mode="wait">
+                  {currentScreen === 'welcome' && <Welcome key="welcome" navigate={navigate} />}
+                  {currentScreen === 'onboarding' && (
+                    <Onboarding key="onboarding" state={appState} updateState={updateState} navigate={navigate} />
+                  )}
+                  {currentScreen === 'permissions' && (
+                    <PermissionsScreen
+                      key="permissions"
+                      state={appState}
+                      updateState={updateState}
+                      navigate={navigate}
+                    />
+                  )}
+                  {currentScreen === 'today' && (
+                    <TodayScreen key="today" state={appState} updateState={updateState} navigate={navigate} />
+                  )}
+                  {currentScreen === 'protect' && (
+                    <ProtectScreen key="protect" state={appState} updateState={updateState} navigate={navigate} />
+                  )}
+                  {currentScreen === 'app_detail' && (
+                    <AppDetailScreen key="app_detail" state={appState} updateState={updateState} navigate={navigate} />
+                  )}
+                  {currentScreen === 'schedule_edit' && (
+                    <ScheduleEditScreen
+                      key="schedule_edit"
+                      state={appState}
+                      updateState={updateState}
+                      navigate={navigate}
+                    />
+                  )}
+                  {currentScreen === 'commitment' && (
+                    <CommitmentScreen key="commitment" state={appState} updateState={updateState} navigate={navigate} />
+                  )}
+                  {currentScreen === 'focus' && (
+                    <Focus key="focus" state={appState} updateState={updateState} navigate={navigate} />
+                  )}
+                  {currentScreen === 'rescue' && (
+                    <RescueScreen key="rescue" state={appState} updateState={updateState} navigate={navigate} />
+                  )}
+                  {currentScreen === 'insights' && (
+                    <InsightsScreen key="insights" state={appState} updateState={updateState} navigate={navigate} />
+                  )}
+                  {currentScreen === 'settings' && (
+                    <SettingsScreen key="settings" state={appState} updateState={updateState} navigate={navigate} />
+                  )}
+                  {currentScreen === 'pro_status' && (
+                    <ProStatusScreen key="pro_status" state={appState} updateState={updateState} navigate={navigate} />
+                  )}
+                  {currentScreen === 'notifications' && (
+                    <NotificationsScreen
+                      key="notifications"
+                      state={appState}
+                      updateState={updateState}
+                      navigate={navigate}
+                    />
+                  )}
+                  {currentScreen === 'paywall' && (
+                    <PaywallScreen key="paywall" state={appState} updateState={updateState} navigate={navigate} />
+                  )}
+                  {currentScreen === 'privacy' && (
+                    <PrivacyScreen
+                      key="privacy"
+                      state={appState}
+                      updateState={updateState}
+                      resetApp={resetApp}
+                      navigate={navigate}
+                    />
+                  )}
+                  {currentScreen === 'protection_flow' && (
+                    <ProtectionFlow
+                      key="protection_flow"
+                      state={appState}
+                      updateState={updateState}
+                      navigate={navigate}
+                    />
+                  )}
+                  {currentScreen === 'active_session' && (
+                    <ActiveSessionScreen
+                      key="active_session"
+                      state={appState}
+                      updateState={updateState}
+                      navigate={navigate}
+                    />
+                  )}
+                  {currentScreen === 'diagnostics' && <DiagnosticsScreen key="diagnostics" navigate={navigate} />}
+                  {currentScreen === 'support' && (
+                    <SupportScreen
+                      key="support"
+                      navigate={navigate}
+                      backTo={appState.hasCompletedOnboarding ? 'settings' : 'welcome'}
+                    />
+                  )}
+                  {currentScreen === 'imprint' && <ImprintScreen key="imprint" navigate={navigate} />}
+                  {currentScreen === 'debug' && !import.meta.env.PROD && (
+                    <DebugScreen key="debug" state={appState} updateState={updateState} navigate={navigate} />
+                  )}
+                </AnimatePresence>
+              )}
             </div>
 
             {appState.hasCompletedOnboarding &&
+              !choosingFreeApps &&
               !['welcome', 'onboarding', 'protection_flow', 'active_session', 'permissions'].includes(
                 currentScreen,
               ) && <BottomNav currentScreen={currentScreen} navigate={navigate} />}

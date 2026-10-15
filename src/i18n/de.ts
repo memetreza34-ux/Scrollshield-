@@ -744,4 +744,19 @@ export const de = {
   'help.feedback': 'Feedback senden',
   'help.feedbackSubject': 'Feedback zu ScrollShield',
   'help.deviceData': 'Gerätedaten (du kannst sie vor dem Senden löschen):',
+  // Pro abgelaufen
+  'proExpired.chip': 'Pro abgelaufen',
+  'proExpired.title': 'Welche {count} Apps sollen geschützt bleiben?',
+  'proExpired.text':
+    'Free schützt {count} Apps. Die anderen werden pausiert, nicht gelöscht. Ihre Regeln bleiben gespeichert.',
+  'proExpired.legend': 'Apps, die geschützt bleiben',
+  'proExpired.keeps': 'bleibt geschützt',
+  'proExpired.paused': 'wird pausiert',
+  'proExpired.rest':
+    'Pro-Regeln wie Tagesbudget und „Stark“ ruhen, bis du Pro wieder hast. Bis dahin gilt „Ausgewogen“.',
+  'proExpired.count': '{chosen} von {count} gewählt',
+  'proExpired.pausedOne': '{names} wird pausiert',
+  'proExpired.pausedMany': '{names} werden pausiert',
+  'proExpired.continue': 'Mit Free weitermachen',
+  'proExpired.renew': 'Pro erneuern',
 } as const;

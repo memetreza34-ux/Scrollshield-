@@ -76,25 +76,27 @@ export function PaywallScreen({ state, updateState, navigate }: ScreenProps) {
         </>
       )}
 
-      {import.meta.env.DEV && (
-        <div className="mt-10">
-          <Section title="Nur in der Entwicklung">
-            <List>
-              <Row
-                label="Pro-Vorschau"
-                description="Schaltet Pro ohne Kauf frei, damit du alle Seiten sehen kannst."
-                right={
-                  <Switch
-                    checked={pro}
-                    ariaLabel="Pro-Vorschau"
-                    onChange={(active) => updateState({ pro: { active } })}
-                  />
-                }
-              />
-            </List>
-          </Section>
-        </div>
-      )}
+      <DevProSwitch pro={pro} updateState={updateState} />
     </Page>
+  );
+}
+
+/** Development builds only: switches Pro on without a purchase so every screen can be seen. */
+export function DevProSwitch({ pro, updateState }: { pro: boolean; updateState: (u: Partial<AppState>) => void }) {
+  if (!import.meta.env.DEV) return null;
+  return (
+    <div className="mt-10">
+      <Section title="Nur in der Entwicklung">
+        <List>
+          <Row
+            label="Pro-Vorschau"
+            description="Schaltet Pro ohne Kauf frei, damit du alle Seiten sehen kannst."
+            right={
+              <Switch checked={pro} ariaLabel="Pro-Vorschau" onChange={(active) => updateState({ pro: { active } })} />
+            }
+          />
+        </List>
+      </Section>
+    </div>
   );
 }

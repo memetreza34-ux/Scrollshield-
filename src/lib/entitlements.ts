@@ -1,5 +1,6 @@
 import { MessageKey, t } from '../i18n';
 import type { AppState } from '../types';
+import { applyPreset, getPresetId } from './presets';
 
 /**
  * Free and Pro (docs/V1_MASTER_PLAN.md, section 10)
@@ -74,3 +75,21 @@ export const paywallFor = (feature: ProFeature): Pick<AppState, 'paywallReason'>
     schedules: FREE_LIMITS.schedules,
   }),
 });
+
+/**
+ * Without Pro the Pro rules rest: an app set to "Stark" or to own rules is
+ * protected as "Ausgewogen". The stored values stay for when Pro returns.
+ */
+export function effectiveAppsConfig(state: Pick<AppState, 'appsConfig' | 'pro'>): AppState['appsConfig'] {
+  if (hasPro(state)) return state.appsConfig;
+  return Object.fromEntries(
+    Object.entries(state.appsConfig).map(([id, config]) => {
+      const preset = getPresetId(config);
+      return [id, preset === 'stark' || preset === 'eigene' ? applyPreset(config, 'ausgewogen') : config];
+    }),
+  );
+}
+
+/** Pro ended with more apps protected than Free allows: the user picks which stay. */
+export const mustChooseFreeApps = (state: Pick<AppState, 'appsConfig' | 'pro' | 'hasCompletedOnboarding'>) =>
+  state.hasCompletedOnboarding && !hasPro(state) && countProtectedApps(state) > FREE_LIMITS.protectedApps;

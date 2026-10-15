@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Info } from 'lucide-react';
 import { AppState, HistoryEvent, Screen, SUPPORTED_APPS } from '../types';
 import { createEventId } from '../lib/appUtils';
@@ -15,6 +15,7 @@ import { formatClock, isCommitmentActive } from '../lib/commitment';
 import { recordProtectionEventStats } from '../lib/session';
 import { formatHour, formatMinutesSeconds } from '../lib/format';
 import { MessageKey, t } from '../i18n';
+import { effectiveAppsConfig } from '../lib/entitlements';
 import { Choice, PrimaryButton, Sheet, TextButton } from '../components/ui';
 import {
   BackAction,
@@ -57,7 +58,11 @@ export function ProtectionFlow({
 }) {
   const appId = state.simulatedAppToOpen;
   const appInfo = SUPPORTED_APPS.find((app) => app.id === appId);
-  const config = state.appsConfig[appId || ''];
+  // Without Pro, "Stark" and own rules rest and the app behaves as "Ausgewogen".
+  const config = useMemo(
+    () => effectiveAppsConfig({ appsConfig: state.appsConfig, pro: state.pro })[appId || ''],
+    [state.appsConfig, state.pro, appId],
+  );
 
   const [step, setStep] = useState<ProtectionFlowStep>('init');
   const [blockReason, setBlockReason] = useState<ProtectionBlockReason | undefined>();
