@@ -361,17 +361,21 @@ export default function App() {
   useEffect(() => {
     if (!isLoaded) return;
     const running = getRunningFocusSession({ focusSessions: appState.focusSessions });
-    void syncNativeBlockList(effectiveAppsConfig(appState), SUPPORTED_APPS, {
-      isFocusModeActive: appState.isFocusModeActive,
-      focusBlockedAppIds: getFocusBlockedAppIds({
-        focusSessions: appState.focusSessions,
+    void syncNativeBlockList(
+      effectiveAppsConfig({ appsConfig: appState.appsConfig, pro: appState.pro }),
+      SUPPORTED_APPS,
+      {
         isFocusModeActive: appState.isFocusModeActive,
-      }),
-      focusUntil: running ? running.startTime + running.duration * 60_000 : undefined,
-      focusStrict: running?.strict === true,
-      commitmentUntil: appState.commitment?.until,
-      schedules: appState.schedules,
-    });
+        focusBlockedAppIds: getFocusBlockedAppIds({
+          focusSessions: appState.focusSessions,
+          isFocusModeActive: appState.isFocusModeActive,
+        }),
+        focusUntil: running ? running.startTime + running.duration * 60_000 : undefined,
+        focusStrict: running?.strict === true,
+        commitmentUntil: appState.commitment?.until,
+        schedules: appState.schedules,
+      },
+    );
   }, [
     appState.appsConfig,
     appState.pro,
