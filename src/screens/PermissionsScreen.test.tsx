@@ -29,9 +29,7 @@ const androidState = { ...DEFAULT_STATE, operatingSystem: 'android' as const };
 
 describe('PermissionsScreen', () => {
   it('labels permission actions with their context for screen readers', async () => {
-    const { container } = render(
-      <PermissionsScreen state={iosState} updateState={vi.fn()} navigate={vi.fn()} isOnboarding />,
-    );
+    const { container } = render(<PermissionsScreen state={iosState} updateState={vi.fn()} navigate={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Aktivieren: Benachrichtigungen' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Später: Benachrichtigungen' })).toBeInTheDocument();
@@ -44,23 +42,10 @@ describe('PermissionsScreen', () => {
     await expectNoA11yViolations(container);
   });
 
-  it('allows onboarding to finish without granting optional or required permissions', () => {
-    const updateState = vi.fn();
-    const navigate = vi.fn();
-
-    render(<PermissionsScreen state={DEFAULT_STATE} updateState={updateState} navigate={navigate} isOnboarding />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Schutzschirm ist bereit' }));
-
-    expect(updateState).toHaveBeenCalledWith({ hasCompletedOnboarding: true });
-    expect(updateState).not.toHaveBeenCalledWith(expect.objectContaining({ permissions: expect.anything() }));
-    expect(navigate).toHaveBeenCalledWith('today');
-  });
-
   it('keeps a skipped permission disabled', () => {
     const updateState = vi.fn();
 
-    render(<PermissionsScreen state={DEFAULT_STATE} updateState={updateState} navigate={vi.fn()} isOnboarding />);
+    render(<PermissionsScreen state={DEFAULT_STATE} updateState={updateState} navigate={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Später: Benachrichtigungen' }));
 
     expect(updateState).toHaveBeenCalledWith({
@@ -69,7 +54,7 @@ describe('PermissionsScreen', () => {
   });
 
   it('does not offer system permissions in the browser', () => {
-    render(<PermissionsScreen state={DEFAULT_STATE} updateState={vi.fn()} navigate={vi.fn()} isOnboarding />);
+    render(<PermissionsScreen state={DEFAULT_STATE} updateState={vi.fn()} navigate={vi.fn()} />);
 
     expect(screen.getByRole('heading', { name: 'Du nutzt die Webversion' })).toBeInTheDocument();
     expect(screen.queryByText('Bildschirmzeit-Zugriff (iPhone/iPad)')).not.toBeInTheDocument();
@@ -77,7 +62,7 @@ describe('PermissionsScreen', () => {
   });
 
   it('offers the Android permissions including short-video detection on Android', () => {
-    render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} isOnboarding />);
+    render(<PermissionsScreen state={androidState} updateState={vi.fn()} navigate={vi.fn()} />);
 
     expect(screen.getByText('App-Nutzungszugriff')).toBeInTheDocument();
     expect(screen.getByText('Kurzvideo-Erkennung (Bedienungshilfe)')).toBeInTheDocument();

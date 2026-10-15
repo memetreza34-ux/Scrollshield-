@@ -119,6 +119,25 @@ export function Page({ children }: { children: React.ReactNode }) {
 
 const iconButtonClass = `flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-ink ${PRESSED} ${FOCUS_RING}`;
 
+/** Icon 24 in a 48 × 48 target, always with a label for TalkBack. */
+export function IconButton({
+  icon: Icon,
+  label,
+  onClick,
+  className = '',
+}: {
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button onClick={onClick} aria-label={label} className={`${iconButtonClass} ${className}`}>
+      <Icon size={24} strokeWidth={1.75} aria-hidden="true" />
+    </button>
+  );
+}
+
 /** Title of a tab, with the settings gear on the right. 64 px high. */
 export function TabHeader({ title, navigate }: { title: string; navigate: (s: Screen) => void }) {
   return (
@@ -283,6 +302,85 @@ export function SecondaryButton({
     <button onClick={onClick} disabled={disabled} className={`${buttonBase} border border-line bg-raised text-ink`}>
       {children}
     </button>
+  );
+}
+
+/** Steps aside or cancels ("Später", "Ohne Schutz weiter"). Never green. */
+export function TextButton({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button onClick={onClick} disabled={disabled} className={`${buttonBase} text-ink`}>
+      {children}
+    </button>
+  );
+}
+
+/** A compact button at the end of a row ("Erlauben"). `primary` only for the screen's one main action. */
+export function InlineButton({
+  children,
+  onClick,
+  primary,
+  ariaLabel,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  primary?: boolean;
+  ariaLabel?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={ariaLabel}
+      className={`flex min-h-12 flex-shrink-0 items-center rounded-control px-3.5 text-label ${primary ? 'bg-accent text-ground' : 'border border-line bg-raised text-ink'} ${PRESSED} ${FOCUS_RING}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+const NOTICE_TONES = {
+  neutral: { box: 'bg-raised', icon: 'text-muted' },
+  pause: { box: 'bg-pause/10', icon: 'text-pause' },
+  lock: { box: 'bg-lock/10', icon: 'text-lock' },
+  calm: { box: 'bg-accent/10', icon: 'text-accent' },
+};
+
+/**
+ * A notice: what is going on and what can be done. Radius 12, 10 % tint, the
+ * icon in the signal colour, the text always bright. At most one per screen.
+ */
+export function Notice({
+  tone = 'neutral',
+  icon: Icon,
+  title,
+  children,
+  action,
+  role,
+}: {
+  tone?: keyof typeof NOTICE_TONES;
+  icon: LucideIcon;
+  title?: string;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+  role?: 'status' | 'alert';
+}) {
+  const colors = NOTICE_TONES[tone];
+  return (
+    <div role={role} className={`flex items-start gap-3 rounded-control px-4 py-3 ${colors.box}`}>
+      <Icon size={20} strokeWidth={1.75} className={`mt-0.5 flex-shrink-0 ${colors.icon}`} aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        {title && <p className="text-label text-ink">{title}</p>}
+        <div className="text-body-s text-ink">{children}</div>
+        {action && <div className="mt-1">{action}</div>}
+      </div>
+    </div>
   );
 }
 

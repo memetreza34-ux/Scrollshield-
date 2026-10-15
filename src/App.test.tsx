@@ -62,7 +62,7 @@ describe('App', () => {
   it('starts on the welcome screen without saved state', async () => {
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'ScrollShield' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Instagram ja, Reels nein.' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Loslegen' })).toBeInTheDocument();
   });
 
@@ -88,7 +88,7 @@ describe('App', () => {
   it('has no obvious accessibility violations on the welcome screen', async () => {
     const { container } = render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'ScrollShield' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Instagram ja, Reels nein.' })).toBeInTheDocument();
     await expectNoA11yViolations(container);
   });
 
@@ -258,7 +258,9 @@ describe('App', () => {
     fireEvent.click(await screen.findByRole('button', { name: /App zurücksetzen/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Ja, Reset' }));
 
-    expect(await screen.findByRole('heading', { name: 'ScrollShield' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Instagram ja, Reels nein.' }, { timeout: 5000 }),
+    ).toBeInTheDocument();
     await waitFor(() => {
       expect(Object.keys(localStorage).filter((key) => key.startsWith('scrollshield_'))).toEqual([]);
     });

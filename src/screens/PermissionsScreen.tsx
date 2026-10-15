@@ -1,38 +1,24 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Capacitor } from '@capacitor/core';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import {
-  ShieldCheck,
-  Eye,
-  Layers,
-  Bell,
-  Activity,
-  CheckCircle2,
-  Settings,
-  AlertTriangle,
-  Info,
-  Film,
-} from 'lucide-react';
+import { Eye, Layers, Bell, Activity, CheckCircle2, Settings, AlertTriangle, Info, Film } from 'lucide-react';
 import { AppState, Screen, AppPermissions } from '../types';
 import { Header } from '../components/ui';
 import { AccessibilityDisclosure } from '../components/AccessibilityDisclosure';
 import { ScrollShieldBridge } from '../lib/nativeBridge';
-import { requestNotificationPermission } from '../lib/notifications';
+import { usePermissionRequests } from '../lib/usePermissionRequests';
 
 export function PermissionsScreen({
   state,
   updateState,
   navigate,
-  isOnboarding = false,
 }: {
   state: AppState;
   updateState: (u: Partial<AppState> | ((previous: AppState) => Partial<AppState>)) => void;
   navigate: (s: Screen) => void;
-  isOnboarding?: boolean;
 }) {
   const { permissions, operatingSystem } = state;
   const [expandedInfo, setExpandedInfo] = useState<keyof AppPermissions | null>(null);
-  const [isNative, setIsNative] = useState(false);
+  const { isNative, requestPermission: requestSystemPermission } = usePermissionRequests(updateState);
   const [showAccessibilityDisclosure, setShowAccessibilityDisclosure] = useState(false);
 
   const togglePermission = (key: keyof AppPermissions, forceState?: boolean) => {
@@ -44,66 +30,12 @@ export function PermissionsScreen({
     });
   };
 
-  /**
-   * Reads the permissions the operating system actually granted. Without this
-   * the screen only ever showed what the user tapped in ScrollShield, which
-   * could claim "AKTIV" while Android had granted nothing.
-   */
-  const refreshNativeStatus = useCallback(async () => {
-    // The web fallback reports everything as false; applying it would wipe the
-    // switches of the browser demo on every tab change.
-    if (!Capacitor.isNativePlatform()) return;
-
-    try {
-      const status = await ScrollShieldBridge.getPermissionStatus();
-      setIsNative(true);
-
-      // Merged into the latest state, not the one this callback was created
-      // with: otherwise every return from a settings screen would reset the
-      // switches that only exist in ScrollShield (e.g. background activity).
-      updateState((previous) => ({
-        permissions: {
-          ...previous.permissions,
-          usageAccess: status.usageStats,
-          overlay: status.overlay,
-          notifications: status.notifications,
-          accessibility: status.accessibility,
-          backgroundActivity: status.batteryOptimizationIgnored ?? previous.permissions.backgroundActivity,
-          ignoreBatteryOptimization:
-            status.batteryOptimizationIgnored ?? previous.permissions.ignoreBatteryOptimization,
-        },
-      }));
-    } catch {
-      // Plugin not available on this platform – keep the locally stored switches.
-    }
-  }, [updateState]);
-
-  useEffect(() => {
-    void refreshNativeStatus();
-  }, [refreshNativeStatus]);
-
-  // Android sends the user to a system settings screen; pick the result up when
-  // they come back.
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') void refreshNativeStatus();
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [refreshNativeStatus]);
-
   const openAccessibilitySettings = () => {
     setShowAccessibilityDisclosure(false);
     void ScrollShieldBridge.openAccessibilitySettings().catch(() => undefined);
   };
 
-  /**
-   * Opens the matching system settings screen; Android grants none of these
-   * programmatically. The status shown afterwards is what Android reports on
-   * return – never a local switch, which used to say "AKTIV" for a permission
-   * the system had not granted.
-   */
-  const requestPermission = async (key: keyof AppPermissions) => {
+  const requestPermission = (key: keyof AppPermissions) => {
     // Google Play requires the disclosure and an explicit "yes" before the
     // service is switched on; managing a running one needs neither.
     if (key === 'accessibility') {
@@ -111,21 +43,7 @@ export function PermissionsScreen({
       else setShowAccessibilityDisclosure(true);
       return;
     }
-
-    try {
-      // Notifications are a browser-level permission, not a system settings screen.
-      if (key === 'notifications') {
-        const granted = await requestNotificationPermission();
-        togglePermission(key, granted);
-        return;
-      }
-
-      if (key === 'usageAccess') await ScrollShieldBridge.requestUsageStatsPermission();
-      else if (key === 'overlay') await ScrollShieldBridge.requestOverlayPermission();
-      else if (key === 'backgroundActivity') await ScrollShieldBridge.openBatteryOptimizationSettings();
-    } catch {
-      // Plugin unavailable; the status stays as Android reports it.
-    }
+    void requestSystemPermission(key);
   };
 
   const getStatusText = (isActive: boolean, isOptional: boolean = false) => {
@@ -233,7 +151,7 @@ export function PermissionsScreen({
 
         <div className="p-4 bg-zinc-900/50 flex flex-wrap gap-2 sm:gap-3">
           <button
-            onClick={() => void requestPermission(key)}
+            onClick={() => requestPermission(key)}
             aria-label={`${isActive ? 'In Systemeinstellungen verwalten' : 'Aktivieren'}: ${title}`}
             className={`flex-1 py-3 px-4 rounded-[1.25rem] text-sm font-bold transition-all ${isActive ? 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700' : 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.2)]'}`}
           >
@@ -273,30 +191,14 @@ export function PermissionsScreen({
           onDecline={() => setShowAccessibilityDisclosure(false)}
         />
       )}
-      <Header
-        title={isOnboarding ? 'Setup' : 'Berechtigungen'}
-        onBack={() => navigate(isOnboarding ? 'onboarding' : 'settings')}
-      />
+      <Header title="Berechtigungen" onBack={() => navigate('settings')} />
 
       <div className="space-y-6">
         <div className="text-center mb-8 -mt-2">
-          {!isOnboarding ? (
-            <p className="text-zinc-400 text-sm max-w-sm mx-auto">
-              Verwalte, welche Funktionen deines Geräts ScrollShield verwenden darf. Du behältst jederzeit die volle
-              Kontrolle.
-            </p>
-          ) : (
-            <>
-              <div className="w-16 h-16 bg-blue-500/20 rounded-[2rem] flex items-center justify-center mx-auto mb-4 border border-blue-500/30">
-                <ShieldCheck size={32} className="text-blue-400" />
-              </div>
-              <h2 className="text-2xl font-bold tracking-tight mb-2">Schutzschild konfigurieren</h2>
-              <p className="text-zinc-400 text-sm max-w-xs mx-auto">
-                ScrollShield benötigt ausgewählte Zugriffe, um dich schützen zu können. Bitte lies genau durch, warum
-                wir welche Berechtigung brauchen.
-              </p>
-            </>
-          )}
+          <p className="text-zinc-400 text-sm max-w-sm mx-auto">
+            Verwalte, welche Funktionen deines Geräts ScrollShield verwenden darf. Du behältst jederzeit die volle
+            Kontrolle.
+          </p>
         </div>
 
         {operatingSystem === 'web' && (
@@ -405,23 +307,6 @@ export function PermissionsScreen({
             'Einige Geräte beenden Apps im Hintergrund besonders schnell, um Akku zu sparen. Eine Ausnahme in den Akku-Einstellungen sorgt dafür, dass Timer und Schutzregeln zuverlässig weiterlaufen.',
           )}
         </div>
-
-        {isOnboarding && (
-          <div className="pt-8">
-            <button
-              onClick={() => {
-                updateState({ hasCompletedOnboarding: true });
-                navigate('today');
-              }}
-              className="w-full bg-zinc-100 text-zinc-950 font-bold py-4 rounded-[1.5rem] active:scale-[0.98] transition-transform shadow-lg shadow-zinc-100/10"
-            >
-              Schutzschirm ist bereit
-            </button>
-            <p className="text-center text-xs text-zinc-500 mt-4 leading-relaxed max-w-xs mx-auto">
-              Keine Sorge: Du kannst alle Berechtigungen jederzeit in den Einstellungen nachträglich ändern.
-            </p>
-          </div>
-        )}
       </div>
     </motion.div>
   );

@@ -445,13 +445,7 @@ export default function App() {
                   <Onboarding key="onboarding" state={appState} updateState={updateState} navigate={navigate} />
                 )}
                 {currentScreen === 'permissions' && (
-                  <PermissionsScreen
-                    key="permissions"
-                    state={appState}
-                    updateState={updateState}
-                    navigate={navigate}
-                    isOnboarding={!appState.hasCompletedOnboarding}
-                  />
+                  <PermissionsScreen key="permissions" state={appState} updateState={updateState} navigate={navigate} />
                 )}
                 {currentScreen === 'today' && (
                   <TodayScreen key="today" state={appState} updateState={updateState} navigate={navigate} />
