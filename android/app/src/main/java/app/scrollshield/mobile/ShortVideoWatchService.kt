@@ -357,6 +357,10 @@ class ShortVideoWatchService : AccessibilityService() {
     private enum class InterventionReason { SWIPES, SESSION_LIMIT, DAILY_LIMIT, BLOCKED }
 
     private fun intervene(packageName: String, rule: ShortVideoRule, reason: InterventionReason) {
+        // No overlay and no "back" during a call; the next event after it
+        // intervenes again if the limit still applies.
+        if (CallState.isActive(this)) return
+
         val now = System.currentTimeMillis()
         if (now - lastInterventionAt < INTERVENTION_COOLDOWN_MS) return
         lastInterventionAt = now

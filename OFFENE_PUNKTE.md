@@ -1,6 +1,6 @@
 # Offene Punkte – Fahrplan bis zur Veröffentlichung
 
-Stand: 14. Oktober 2026. Reihenfolge = Arbeitsreihenfolge. **[Du]** kannst nur du erledigen, **[Claude]** kann im
+Stand: 15. Oktober 2026. Reihenfolge = Arbeitsreihenfolge. **[Du]** kannst nur du erledigen, **[Claude]** kann im
 Code erledigt werden. Erledigtes abhaken oder löschen. Keine Rechtsberatung – die rechtlichen Punkte sind eine
 technische Einschätzung; Details und Fragen für eine Prüfung stehen in `docs/LEGAL_REVIEW_BRIEF.md`.
 
@@ -100,6 +100,19 @@ Vorlagen: `docs/STORE_SUBMISSION_PACKET.md`, `docs/STORE_LISTING_COPY.md`, `STOR
     geprüft, während man in der App bleibt – alle 30 Sekunden, damit der Akku geschont wird. **[Du]** auf dem Handy
     testen: Tageslimit 1 Min., App offen lassen, nach spätestens 30 Sekunden über dem Limit muss die Sperre kommen.
   - Endet eine Fokus-Sitzung bei geschlossener App, bleibt die Sperre bis zum nächsten Öffnen.
+  - **Seit 15.10.: keine Unterbrechung während Anrufen.** Klingelt das Telefon oder läuft ein Telefonat oder
+    Video-Call (WhatsApp, Zoom …), zeigt die App nichts an und schließt einen offenen Pause-Bildschirm. Danach erscheint
+    die Pause oder Sperre, wenn sie noch gilt. Grenze: Apps, die denselben Gesprächsmodus nutzen (z. B. ein
+    Discord-Sprachkanal), schalten die Unterbrechung ebenfalls ab. **[Du]** testen: während eines Anrufs Instagram
+    öffnen → keine Pause; auflegen → Pause erscheint.
+  - **Seit 15.10.: Vorwarnung vor Sperren.** Zeitplan und Tagesbudget kündigen sich mit einem kleinen Hinweis oben an
+    (4 Sekunden, ohne Ton, antippen schließt ihn): Zeitplan 30–60 Sekunden vorher, Tagesbudget ein bis zwei Minuten
+    vorher. **[Claude]** Das Kurzvideo-Tageslimit hat noch keine Vorwarnung. **[Du]** testen: Zeitplan zur nächsten
+    vollen Stunde, kurz vorher in der App bleiben.
+- [ ] **[Claude] Englisch für die Android-Teile.** Pause-Bildschirm, Vorwarnung und Benachrichtigung haben nur
+      deutsche Texte (`android/app/src/main/res/values/strings.xml`). Für V1 (Deutsch + Englisch) fehlt `values-en`.
+- [ ] **[Claude] Rest der Ergänzungen vom 15.10.** (Master-Plan): Lebenszeichen der Reels-Erkennung mit Warnung auf
+      „Heute“, eigener Satz in der Pause, Berechtigungen beim Zurückkehren neu prüfen.
 - [x] **Fehler aus der Code-Analyse vom 27.09.2026** behoben (28.09.): Profilwechsel schaltete den Schutz aus, Profil
       „Kein Endlos-Swipe“ sperrte die ganze App, Export ging in der Android-App nicht, App-Reset ließ Android-Daten
       liegen, Zurück-Taste schloss die App, Schein-Schalter „Schutz im Hintergrund“, falsche Plattform im Handy-Browser,

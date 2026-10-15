@@ -22,6 +22,8 @@
     <string name="overlay_focus_hint">Fokus läuft bis %1$s. Bis dahin ist %2$s gesperrt.</string>
     <string name="overlay_time_window_hint">Gerade läuft ein Zeitplan. Bis zu seinem Ende ist %1$s gesperrt.</string>
     <string name="overlay_daily_limit_hint">Tagesbudget aufgebraucht: heute %1$d von %2$d Minuten. Morgen ist %3$s wieder frei.</string>
+    <string name="lock_warning_time_window">Ab %1$s läuft ein Zeitplan: %2$s wird gleich gesperrt.</string>
+    <string name="lock_warning_daily_limit">Tagesbudget fast aufgebraucht: %1$s wird in ein bis zwei Minuten gesperrt.</string>
     <string name="overlay_anti_binge_block_hint">Abkühlzeit: %1$d-mal geöffnet in %2$d Minuten. Später geht es wieder.</string>
     <string name="overlay_ready_hint">Du kannst weiter – oder zurück.</string>
     <string name="overlay_continue">Weiter</string>

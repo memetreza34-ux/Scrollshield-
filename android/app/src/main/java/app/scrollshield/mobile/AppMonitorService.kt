@@ -87,6 +87,12 @@ class AppMonitorService : Service() {
         /** How often an app that stays in front is checked for a beginning lock. */
         const val STAY_CHECK_INTERVAL_MS = 30_000L
 
+        /** How far ahead a beginning lock is announced. */
+        const val LOCK_WARNING_MS = 60_000L
+
+        /** How long the lock warning banner stays visible. */
+        const val LOCK_WARNING_VISIBLE_MS = 4_000L
+
         /** Fallback delay when a rule carries no explicit openDelay. */
         const val DEFAULT_DELAY_SECONDS = 5
 
@@ -268,6 +274,13 @@ class AppMonitorService : Service() {
 
     /** Last check for a lock beginning while an app stays in front; poll worker only. */
     private var lastStayCheckAt = 0L
+
+    /** Announced lock starts per "appId:reason", so each is warned about once; poll worker only. */
+    private val warnedLocks = HashMap<String, Long>()
+
+    /** The banner announcing a lock; main thread only. */
+    private var warningView: View? = null
+
     /** Written by the overlay buttons on the main thread, read by the poll worker. */
     private val allowedUntil = ConcurrentHashMap<String, Long>()
 
@@ -464,6 +477,14 @@ class AppMonitorService : Service() {
             return
         }
 
+        // During a call nothing is shown. Afterwards the app in front counts as
+        // newly opened, so a pause or lock that still applies appears then.
+        if (CallState.isActive(this)) {
+            dismissOverlay()
+            lastForegroundPackage = null
+            return
+        }
+
         // The event stream only reports switches. While an app stays in front
         // there may be no new event for minutes; then the last switch holds.
         val foreground = queryForegroundPackage() ?: lastForegroundPackage ?: return
@@ -509,10 +530,11 @@ class AppMonitorService : Service() {
     }
 
     /**
-     * Locks the app in front when a lock begins while it stays open. Runs every
-     * STAY_CHECK_INTERVAL_MS only: summing today's usage reads the event
-     * stream since midnight, too costly for every poll. Returns true when it
-     * locked the app.
+     * Locks the app in front when a lock begins while it stays open: the daily
+     * budget runs out, a time window or a focus session starts. Anti-binge and
+     * strict mode only concern opening. Runs every STAY_CHECK_INTERVAL_MS only:
+     * summing today's usage reads the event stream since midnight, too costly
+     * for every poll. Returns true when it locked the app.
      */
     private fun checkStayLock(packageName: String, now: Long): Boolean {
         val rule = rules[packageName] ?: return false
@@ -521,9 +543,49 @@ class AppMonitorService : Service() {
         if (now - lastStayCheckAt < STAY_CHECK_INTERVAL_MS) return false
         lastStayCheckAt = now
 
-        val verdict = stayLock(packageName, rule, now) ?: return false
-        showInterruptionOverlay(packageName, rule, verdict)
-        return true
+        val appName = getAppName(packageName)
+        val usedMinutes = if (rule.dailyLimitMinutes > 0) usedMinutesToday(rule) else 0
+        val verdict = dailyLimitLock(rule, appName, usedMinutes)
+            ?: timeWindowLock(rule, appName)
+            ?: focusLock(rule, appName, now)
+        if (verdict != null) {
+            showInterruptionOverlay(packageName, rule, verdict)
+            return true
+        }
+
+        warnBeforeLock(rule, appName, usedMinutes, now)
+        return false
+    }
+
+    /**
+     * Announces a lock that begins within LOCK_WARNING_MS while the app stays
+     * open: a time window starting or the daily budget running out. Each lock
+     * start is announced once. Focus sessions are started by the user and need
+     * no warning.
+     */
+    private fun warnBeforeLock(rule: BlockRule, appName: String, usedMinutes: Int, now: Long) {
+        val soon = Calendar.getInstance().apply { timeInMillis = now + LOCK_WARNING_MS }
+        if (!isLockedByTimeWindow(rule) && isLockedByTimeWindow(rule, soon)) {
+            // Time windows begin on the full hour.
+            val start = (soon.clone() as Calendar).apply {
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            if (warnedLocks.put("${rule.appId}:TIME_WINDOW", start) != start) {
+                showLockWarning(getString(R.string.lock_warning_time_window, formatTime(start), appName))
+            }
+            return
+        }
+
+        // Minutes are rounded down: at one minute below the budget, one to two
+        // minutes remain.
+        if (rule.dailyLimitMinutes > 0 && usedMinutes == rule.dailyLimitMinutes - 1) {
+            val today = ForegroundUsage.startOfToday()
+            if (warnedLocks.put("${rule.appId}:DAILY_LIMIT", today) != today) {
+                showLockWarning(getString(R.string.lock_warning_daily_limit, appName))
+            }
+        }
     }
 
     /** The session guard: interrupts after the rule's minutes in the app without a break. */
@@ -554,7 +616,9 @@ class AppMonitorService : Service() {
     private fun evaluate(packageName: String, rule: BlockRule, now: Long): Verdict {
         val appName = getAppName(packageName)
 
-        dailyLimitLock(rule, appName)?.let { return it }
+        if (rule.dailyLimitMinutes > 0) {
+            dailyLimitLock(rule, appName, usedMinutesToday(rule))?.let { return it }
+        }
 
         rule.antiBinge?.let { antiBinge ->
             val opens = openLog.count(rule.appId, now, antiBinge.blockTimeframe)
@@ -587,23 +651,14 @@ class AppMonitorService : Service() {
         return Verdict()
     }
 
-    /**
-     * The locks that can begin while an app stays in front: the daily budget
-     * runs out, a time window or a focus session starts. Anti-binge and strict
-     * mode only concern opening and are left out.
-     */
-    private fun stayLock(packageName: String, rule: BlockRule, now: Long): Verdict? {
-        val appName = getAppName(packageName)
-        return dailyLimitLock(rule, appName)
-            ?: timeWindowLock(rule, appName)
-            ?: focusLock(rule, appName, now)
+    /** Minutes today across all packages of the rule's app. Reads the event stream since midnight. */
+    private fun usedMinutesToday(rule: BlockRule): Int {
+        val packages = rules.filterValues { it.appId == rule.appId }.keys
+        return ForegroundUsage.minutesToday(this, packages).values.sum()
     }
 
-    private fun dailyLimitLock(rule: BlockRule, appName: String): Verdict? {
-        if (rule.dailyLimitMinutes <= 0) return null
-        val packages = rules.filterValues { it.appId == rule.appId }.keys
-        val usedMinutes = ForegroundUsage.minutesToday(this, packages).values.sum()
-        if (usedMinutes < rule.dailyLimitMinutes) return null
+    private fun dailyLimitLock(rule: BlockRule, appName: String, usedMinutes: Int): Verdict? {
+        if (rule.dailyLimitMinutes <= 0 || usedMinutes < rule.dailyLimitMinutes) return null
         return Verdict(
             lockReason = "DAILY_LIMIT",
             statusText = getString(R.string.overlay_daily_limit_hint, usedMinutes, rule.dailyLimitMinutes, appName),
@@ -840,7 +895,7 @@ class AppMonitorService : Service() {
         onGoHome: () -> Unit = {},
         configure: (OverlayViews) -> Unit,
     ) {
-        if (!Settings.canDrawOverlays(this)) return
+        if (!Settings.canDrawOverlays(this) || CallState.isActive(this)) return
 
         mainHandler.post {
             if (overlayView != null) return@post
@@ -950,6 +1005,7 @@ class AppMonitorService : Service() {
             }
 
             try {
+                removeLockWarning()
                 windowManager?.addView(root, params)
                 overlayView = root
                 overlayPackage = blockedPackage
@@ -1009,8 +1065,77 @@ class AppMonitorService : Service() {
         mainHandler.post(tick)
     }
 
+    /**
+     * A small banner at the top that announces a lock: no sound, touches
+     * outside it reach the app below, a tap closes it, and it goes away by
+     * itself after LOCK_WARNING_VISIBLE_MS.
+     */
+    private fun showLockWarning(text: String) {
+        if (!Settings.canDrawOverlays(this) || CallState.isActive(this)) return
+
+        mainHandler.post {
+            if (overlayView != null) return@post
+            removeLockWarning()
+
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                else
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP
+                y = dp(32)
+            }
+
+            val banner = TextView(this).apply {
+                this.text = text
+                textSize = 15f
+                setTextColor(colorText)
+                setLineSpacing(0f, 1.15f)
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+                background = GradientDrawable().apply {
+                    cornerRadius = dp(16).toFloat()
+                    setColor(colorBackground)
+                }
+                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                setOnClickListener { removeLockWarning() }
+            }
+            val root = LinearLayout(this).apply {
+                setPadding(dp(16), 0, dp(16), 0)
+                addView(banner, fullWidth())
+            }
+
+            try {
+                windowManager?.addView(root, params)
+                warningView = root
+                mainHandler.postDelayed({ if (warningView === root) removeLockWarning() }, LOCK_WARNING_VISIBLE_MS)
+            } catch (_: Exception) {
+                warningView = null
+            }
+        }
+    }
+
+    /** Main thread only. */
+    private fun removeLockWarning() {
+        warningView?.let { view ->
+            try {
+                windowManager?.removeView(view)
+            } catch (_: Exception) {
+                // View was already detached.
+            }
+        }
+        warningView = null
+    }
+
     private fun dismissOverlay() {
         mainHandler.post {
+            removeLockWarning()
             overlayView?.let { view ->
                 try {
                     windowManager?.removeView(view)
