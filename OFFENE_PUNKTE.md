@@ -16,8 +16,10 @@ technische Einschätzung; Details und Fragen für eine Prüfung stehen in `docs/
       `e15ff43`) steht ein Firebase-API-Schlüssel des Google-Projekts `gen-lang-client-0871665296`, das Google AI Studio
       angelegt hat. Google Cloud Console → „APIs & Dienste → Anmeldedaten“ → löschen. Wird das Projekt nicht gebraucht,
       ganz löschen (Firebase Console → Projekteinstellungen); damit ist auch die alte Datenbank weg.
-- [ ] **[Du] Android Studio installieren** und die App bauen. Der Android-Teil ist noch nie kompiliert worden. Danach
-      **[Claude]** Kompilierfehler beheben.
+- [x] **App bauen** (15.10.): Java 21, Android SDK 36 und Build-Tools sind auf dem Mac installiert (ohne Android
+      Studio). Die App kompiliert ohne Fehler, Android-Lint meldet 0 Fehler. Bauen: `npm run android:sync`, dann
+      `cd android && ./gradlew assembleDebug` (vorher `JAVA_HOME` auf Java 21 setzen). Die Test-App liegt danach in
+      `android/app/build/outputs/apk/debug/app-debug.apk`.
 - [ ] **[Du] Auf einem echten Handy testen:** `docs/DEVICE_TEST_CHECKLIST.md`.
 - [x] **Funde vom 28.09.2026 behoben** (29.09.): App-Symbol und Startbild waren das Logo von Capacitor – jetzt das
       eigene Schild (`npm run generate:android-icons`). Die gespielte „Instagram autorisieren … Filter-Hook
@@ -92,7 +94,6 @@ Vorlagen: `docs/STORE_SUBMISSION_PACKET.md`, `docs/STORE_LISTING_COPY.md`, `STOR
 
 ## 5. Technik vor dem Release
 
-- [ ] **[Claude]** Kompilierfehler beheben, sobald Android Studio läuft.
 - [ ] **[Du]** Release-Build erzeugen (`npm run android:bundle`), in den geschlossenen Test hochladen, 14 Tage laufen
       lassen, Abstürze in der Play Console (Android Vitals) ansehen.
 - [ ] Bekannte Grenzen, bewusst in Kauf genommen oder später lösen:

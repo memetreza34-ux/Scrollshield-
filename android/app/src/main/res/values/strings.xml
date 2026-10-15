@@ -1,9 +1,9 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">ScrollShield</string>
-    <string name="title_activity_main">ScrollShield</string>
-    <string name="package_name">app.scrollshield.mobile</string>
-    <string name="custom_url_scheme">app.scrollshield.mobile</string>
+    <string name="app_name" translatable="false">ScrollShield</string>
+    <string name="title_activity_main" translatable="false">ScrollShield</string>
+    <string name="package_name" translatable="false">app.scrollshield.mobile</string>
+    <string name="custom_url_scheme" translatable="false">app.scrollshield.mobile</string>
     <string name="accessibility_service_label">ScrollShield Kurzvideo-Erkennung</string>
     <string name="accessibility_service_description">ScrollShield erkennt damit, ob ein Kurzvideo-Feed (Reels, Shorts, TikTok) geöffnet ist, und zählt deine Wischbewegungen darin. Der Dienst liest ausschließlich technische Kennungen der Oberfläche – niemals Texte, Nachrichten oder Eingaben. Alle Daten bleiben auf deinem Gerät.</string>
 
@@ -14,7 +14,7 @@
     <string name="monitor_notification_text">Deine geschützten Apps werden überwacht.</string>
 
     <!-- Interruption overlay -->
-    <string name="overlay_title">ScrollShield</string>
+    <string name="overlay_title" translatable="false">ScrollShield</string>
     <string name="overlay_body">Kurze Pause vor %1$s.</string>
     <string name="overlay_reopen_body">Du hast %1$s vor Kurzem schon geöffnet. Die Pause ist diesmal länger.</string>
     <string name="overlay_session_body">%1$d Minuten %2$s am Stück. Weiter oder Schluss?</string>

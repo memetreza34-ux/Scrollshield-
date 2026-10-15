@@ -58,8 +58,8 @@ for (const candidate of androidGradleCandidates) {
 const androidStringsPath = path.join('android', 'app', 'src', 'main', 'res', 'values', 'strings.xml');
 if (capacitorAppId && existsSync(androidStringsPath)) {
   const androidStrings = await readFile(androidStringsPath, 'utf8');
-  const packageName = androidStrings.match(/<string name="package_name">([^<]+)<\/string>/)?.[1];
-  const customUrlScheme = androidStrings.match(/<string name="custom_url_scheme">([^<]+)<\/string>/)?.[1];
+  const packageName = androidStrings.match(/<string name="package_name"[^>]*>([^<]+)<\/string>/)?.[1];
+  const customUrlScheme = androidStrings.match(/<string name="custom_url_scheme"[^>]*>([^<]+)<\/string>/)?.[1];
 
   if (packageName !== capacitorAppId) {
     throw new Error(`${androidStringsPath} package_name (${packageName ?? 'missing'}) must equal ${capacitorAppId}.`);
