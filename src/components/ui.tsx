@@ -45,6 +45,7 @@ const TAB_SCREENS: Record<'today' | 'protect' | 'focus' | 'insights', Screen[]> 
     'today',
     'rescue',
     'settings',
+    'pro_status',
     'notifications',
     'privacy',
     'support',

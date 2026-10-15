@@ -17,6 +17,7 @@ const BACK_TARGETS: Partial<Record<Screen, Screen>> = {
   rescue: 'today',
   paywall: 'today',
   settings: 'today',
+  pro_status: 'settings',
   protection_flow: 'today',
   notifications: 'settings',
   privacy: 'settings',

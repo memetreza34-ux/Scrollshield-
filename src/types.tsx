@@ -19,6 +19,7 @@ export type Screen =
   | 'rescue'
   | 'paywall'
   | 'settings'
+  | 'pro_status'
   | 'notifications'
   | 'help'
   | 'protection_flow'
@@ -241,10 +242,11 @@ export interface AppState {
     defaultDelay: number;
     defaultEmergencyUnlock: number;
     focusPresets: number[];
+    /** A sentence of the user's own, shown in every pause below the reason; empty when off. */
+    pauseLine: string;
+    /** The three of docs/V1_MASTER_PLAN.md, 4.9; nothing that only pulls back into the app. */
     notifications: {
       focusReminders: boolean;
-      eveningReminder: boolean;
-      relapseWarning: boolean;
       dailySummary: boolean;
       weeklyReview: boolean;
     };
@@ -637,10 +639,9 @@ export const DEFAULT_STATE: AppState = {
     defaultDelay: 5,
     defaultEmergencyUnlock: 5,
     focusPresets: [15, 30, 45, 60],
+    pauseLine: '',
     notifications: {
       focusReminders: true,
-      eveningReminder: true,
-      relapseWarning: true,
       dailySummary: false,
       weeklyReview: true,
     },

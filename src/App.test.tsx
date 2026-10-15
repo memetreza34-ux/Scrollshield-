@@ -191,7 +191,7 @@ describe('App', () => {
   };
 
   it('notifies exactly once when a focus session runs out while the app is open', async () => {
-    expect(await runFocusSessionPastItsEnd(true)).toEqual(['Fokuszeit beendet']);
+    expect(await runFocusSessionPastItsEnd(true)).toEqual(['Fokus beendet']);
   });
 
   it('respects a switched-off focus reminder', async () => {

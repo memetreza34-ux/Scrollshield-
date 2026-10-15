@@ -92,6 +92,17 @@ export function EmergencyLink({ onClick }: { onClick: () => void }) {
 }
 
 /** Seconds of a pause, large and calm: no ring that fills, no pulsing. */
+/** The user's own sentence (settings), on pauses only, never on a lock. */
+export function PauseLine({ line }: { line: string }) {
+  if (!line) return null;
+  return (
+    <div className="mt-2 flex flex-col items-center gap-1">
+      <span className="text-label-s text-muted">{t('pauseLine.label')}</span>
+      <p className="text-[1.125rem] font-medium leading-[1.625rem] text-ink">{t('pauseLine.quoted', { line })}</p>
+    </div>
+  );
+}
+
 export function Countdown({ value, label }: { value: string | number; label: string }) {
   return (
     <div className="mt-4 flex flex-col items-center gap-1">

@@ -1,38 +1,33 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
-import { AppState, DailyStats, HistoryEvent } from '../types';
+import { AppState } from '../types';
+import { t } from '../i18n';
 import { getLocalDateKey } from './appUtils';
-import { compareWeeks } from './insights';
+import { formatMinutes } from './format';
+import { hasPro } from './entitlements';
+import { getDayMetrics } from './metrics';
 
 /**
- * Notifications
+ * Notifications (docs/V1_MASTER_PLAN.md, 4.9)
  * ═════════════
- * The five switches in the settings ("Fokus-Erinnerungen", "Abend-Erinnerung",
- * "Rückfall-Warnung", "Tageszusammenfassung", "Wochenrückblick") existed since
- * the first release, together with a system permission card — but nothing in
- * the codebase ever called the Notification API. Users granted a permission and
- * enabled reminders that could never fire.
+ * Three kinds, all quiet and factual: focus end, daily summary (off by
+ * default) and weekly review (Pro). Real numbers only, never a nudge back into
+ * the app, no streaks, no praise. The ongoing "Schutz aktiv" notification
+ * belongs to the native service and is not built here.
  *
  * Two delivery paths:
  *  - Browser: the Notification API. Without a push server a web app can only
  *    notify while it is running (an open tab, including in the background).
  *  - Native app: @capacitor/local-notifications. The Android WebView has no
- *    Notification API at all, so without this path nothing was ever shown on
- *    the phone. The focus-end reminder and the evening reminder are scheduled
- *    with the system and arrive even when ScrollShield is closed. Daily
- *    summary, weekly review and relapse warning depend on the day's data and
- *    stay best-effort while the app runs.
+ *    Notification API at all. The focus end is scheduled with the system and
+ *    arrives even when ScrollShield is closed; the summaries depend on the
+ *    day's data and stay best-effort while the app runs.
  *
  * The decision logic lives here as pure functions so the timing rules are
  * testable without a browser.
  */
 
-export type NotificationKind =
-  | 'focus_finished'
-  | 'evening_reminder'
-  | 'daily_summary'
-  | 'weekly_review'
-  | 'relapse_warning';
+export type NotificationKind = 'focus_finished' | 'daily_summary' | 'weekly_review';
 
 export interface NotificationPayload {
   kind: NotificationKind;
@@ -42,15 +37,17 @@ export interface NotificationPayload {
   tag: string;
 }
 
-/** Hour from which the daily summary and, on Sundays, the weekly review may be shown. */
-export const SUMMARY_HOUR = 20;
+/** Hour from which the daily summary may be shown. */
+export const SUMMARY_HOUR = 21;
 
-/** Hour of the wind-down reminder; the night time window starts here too. */
-export const EVENING_REMINDER_HOUR = 22;
+/** Hour from which the weekly review may be shown on Sundays. */
+export const WEEKLY_REVIEW_HOUR = 18;
 
-/** Blocks within this window that trigger a relapse warning. */
-export const RELAPSE_WINDOW_MINUTES = 30;
-export const RELAPSE_BLOCK_THRESHOLD = 3;
+/**
+ * Tag of the evening reminder older versions scheduled as a daily alarm. The
+ * reminder is gone; the tag stays so the alarm can be cancelled on start.
+ */
+export const LEGACY_EVENING_REMINDER_TAG = 'evening-reminder';
 
 /** True inside the native app, where the local-notifications plugin delivers. */
 export function usesNativeNotifications(): boolean {
@@ -157,32 +154,6 @@ export async function scheduleNotification(payload: NotificationPayload, at: Dat
   return scheduleNative(payload, at);
 }
 
-/**
- * Schedules a notification every day at `hour`:00 with the system. Only the
- * native app can do this. Without boot access (see the manifest) the alarm
- * does not survive a reboot; the app schedules it again on every start.
- */
-export async function scheduleDailyNotification(payload: NotificationPayload, hour: number): Promise<boolean> {
-  if (!usesNativeNotifications() || !(await hasNativePermission())) return false;
-
-  try {
-    await LocalNotifications.schedule({
-      notifications: [
-        {
-          id: notificationIdForTag(payload.tag),
-          title: payload.title,
-          body: payload.body,
-          isExactNotification: false,
-          schedule: { on: { hour, minute: 0 }, allowWhileIdle: true },
-        },
-      ],
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /** Withdraws a scheduled or shown notification. */
 export async function cancelNotification(tag: string): Promise<void> {
   if (!usesNativeNotifications()) return;
@@ -195,168 +166,98 @@ export async function cancelNotification(tag: string): Promise<void> {
 
 // ── Decision logic ────────────────────────────────────────────────────────────
 
-const hasActivity = (stats: DailyStats | undefined) =>
-  !!stats && (stats.blockedOpens > 0 || Object.keys(stats.usageMinutes ?? {}).length > 0);
+type SummaryState = Pick<AppState, 'settings' | 'pro' | 'history' | 'dailyStats' | 'appsConfig'>;
 
-const lastSevenDayKeys = (now: Date) =>
+const lastSevenDays = (now: Date) =>
   Array.from({ length: 7 }, (_, index) => {
     const date = new Date(now);
     date.setDate(date.getDate() - index);
-    return getLocalDateKey(date);
+    return date;
   });
 
-/** The weekly review is due on Sundays; it then takes the daily summary's place. */
-const isWeeklyReviewDay = (state: Pick<AppState, 'settings'>, now: Date) =>
-  state.settings.notifications.weeklyReview && now.getDay() === 0;
+/** Interruptions and "Zurück" over some days, as the summaries report them. */
+const countInterruptions = (state: Pick<AppState, 'history' | 'dailyStats' | 'appsConfig'>, days: Date[]) =>
+  days.reduce(
+    (total, day) => {
+      const metrics = getDayMetrics(state, day);
+      return { interrupted: total.interrupted + metrics.interruptions, back: total.back + metrics.abandoned };
+    },
+    { interrupted: 0, back: 0 },
+  );
+
+/** The weekly review (Pro) is due on Sundays; it then takes the daily summary's place. */
+const isWeeklyReviewDay = (state: Pick<AppState, 'settings' | 'pro'>, now: Date) =>
+  hasPro(state) && state.settings.notifications.weeklyReview && now.getDay() === 0;
 
 /**
- * The daily summary ("Tageszusammenfassung") is shown once per day, from
- * SUMMARY_HOUR onwards, and only when there is something to report. It used to
- * hang off the "Abend-Erinnerung" switch, which left the summary switch
- * without any effect.
+ * The daily summary ("Tageszusammenfassung"): once per day from SUMMARY_HOUR,
+ * only when it is switched on and something was interrupted. On days without
+ * an event nothing comes.
  */
 export function shouldSendDailySummary(
-  state: Pick<AppState, 'settings' | 'dailyStats'>,
+  state: SummaryState,
   lastSentDateKey: string | null,
   now: Date = new Date(),
 ): boolean {
   if (!state.settings.notifications.dailySummary) return false;
   if (now.getHours() < SUMMARY_HOUR) return false;
   if (isWeeklyReviewDay(state, now)) return false;
+  if (lastSentDateKey === getLocalDateKey(now)) return false;
 
-  const today = getLocalDateKey(now);
-  if (lastSentDateKey === today) return false;
-
-  return hasActivity(state.dailyStats[today]);
+  return countInterruptions(state, [now]).interrupted > 0;
 }
 
-export function buildDailySummary(state: Pick<AppState, 'dailyStats'>, now: Date = new Date()): NotificationPayload {
-  const today = getLocalDateKey(now);
-  const stats = state.dailyStats[today];
-  const blocks = stats?.blockedOpens ?? 0;
-  const savedMinutes = stats?.savedTimeMinutes ?? 0;
-
+export function buildDailySummary(
+  state: Pick<AppState, 'history' | 'dailyStats' | 'appsConfig'>,
+  now: Date = new Date(),
+): NotificationPayload {
+  const { interrupted, back } = countInterruptions(state, [now]);
   return {
     kind: 'daily_summary',
-    title: 'Dein Tag mit ScrollShield',
-    body:
-      blocks > 0
-        ? `${blocks} Mal hast du heute innegehalten, rund ${savedMinutes} Minuten gespart.`
-        : 'Heute keine Unterbrechungen nötig. Wie war dein Tag?',
-    tag: `daily-summary-${today}`,
+    title: t('notify.dailyTitle'),
+    body: t('notify.dailyBody', { interrupted, back }),
+    tag: `daily-summary-${getLocalDateKey(now)}`,
   };
 }
 
 /**
- * The weekly review ("Wochenrückblick") is shown on Sundays from SUMMARY_HOUR,
- * once, when the past seven days carry any data.
+ * The weekly review ("Wochenrückblick", Pro): Sundays from WEEKLY_REVIEW_HOUR,
+ * once, when the past seven days had an interruption. No comparison with
+ * anyone else.
  */
 export function shouldSendWeeklyReview(
-  state: Pick<AppState, 'settings' | 'dailyStats'>,
+  state: SummaryState,
   lastSentDateKey: string | null,
   now: Date = new Date(),
 ): boolean {
   if (!isWeeklyReviewDay(state, now)) return false;
-  if (now.getHours() < SUMMARY_HOUR) return false;
+  if (now.getHours() < WEEKLY_REVIEW_HOUR) return false;
   if (lastSentDateKey === getLocalDateKey(now)) return false;
 
-  return lastSevenDayKeys(now).some((key) => hasActivity(state.dailyStats[key]));
+  return countInterruptions(state, lastSevenDays(now)).interrupted > 0;
 }
 
-export function buildWeeklyReview(state: Pick<AppState, 'dailyStats'>, now: Date = new Date()): NotificationPayload {
-  const days = lastSevenDayKeys(now).map((key) => state.dailyStats[key]);
-  const blocks = days.reduce((total, stats) => total + (stats?.blockedOpens ?? 0), 0);
-  const savedMinutes = days.reduce((total, stats) => total + (stats?.savedTimeMinutes ?? 0), 0);
-
-  const lines = [
-    blocks > 0
-      ? `${blocks} Mal hast du diese Woche innegehalten, rund ${savedMinutes} Minuten gespart.`
-      : 'Diese Woche waren keine Unterbrechungen nötig.',
-  ];
-
-  // Only with enough days on both sides; compareWeeks returns null otherwise.
-  const trend = compareWeeks(state.dailyStats, now);
-  if (trend && trend.deltaMinutes !== 0) {
-    const minutes = Math.abs(trend.deltaMinutes);
-    lines.push(
-      trend.deltaMinutes < 0
-        ? `${minutes} Minuten weniger in geschützten Apps als letzte Woche.`
-        : `${minutes} Minuten mehr in geschützten Apps als letzte Woche.`,
-    );
-  }
-
+export function buildWeeklyReview(
+  state: Pick<AppState, 'history' | 'dailyStats' | 'appsConfig'>,
+  now: Date = new Date(),
+): NotificationPayload {
+  const { interrupted, back } = countInterruptions(state, lastSevenDays(now));
   return {
     kind: 'weekly_review',
-    title: 'Deine Woche mit ScrollShield',
-    body: lines.join(' '),
+    title: t('notify.weeklyTitle'),
+    body: t('notify.weeklyBody', { interrupted, back }),
     tag: `weekly-review-${getLocalDateKey(now)}`,
-  };
-}
-
-export const EVENING_REMINDER_TAG = 'evening-reminder';
-
-/**
- * The wind-down reminder ("Abend-Erinnerung"). Its text does not depend on
- * the day, so the native app schedules it once as a daily alarm; the browser
- * sends it while running, once per day from EVENING_REMINDER_HOUR.
- */
-export function buildEveningReminder(): NotificationPayload {
-  return {
-    kind: 'evening_reminder',
-    title: 'Zeit zum Abschalten',
-    body: 'Leg das Handy für heute beiseite. Was noch kommt, ist morgen auch noch da.',
-    tag: EVENING_REMINDER_TAG,
-  };
-}
-
-export function shouldSendEveningReminder(
-  state: Pick<AppState, 'settings'>,
-  lastSentDateKey: string | null,
-  now: Date = new Date(),
-): boolean {
-  if (!state.settings.notifications.eveningReminder) return false;
-  if (now.getHours() < EVENING_REMINDER_HOUR) return false;
-  return lastSentDateKey !== getLocalDateKey(now);
-}
-
-/**
- * Warns when blocks cluster: several interruptions in a short window are the
- * signal that someone is fighting the same impulse over and over.
- */
-export function shouldSendRelapseWarning(
-  state: Pick<AppState, 'settings'>,
-  history: HistoryEvent[],
-  lastSentAt: number | null,
-  now = Date.now(),
-): boolean {
-  if (!state.settings.notifications.relapseWarning) return false;
-
-  // Never warn twice inside the same window.
-  if (lastSentAt !== null && now - lastSentAt < RELAPSE_WINDOW_MINUTES * 60_000) return false;
-
-  const recentBlocks = history.filter(
-    (event) => event.type === 'block' && now - event.timestamp < RELAPSE_WINDOW_MINUTES * 60_000,
-  );
-
-  return recentBlocks.length >= RELAPSE_BLOCK_THRESHOLD;
-}
-
-export function buildRelapseWarning(blockCount: number): NotificationPayload {
-  return {
-    kind: 'relapse_warning',
-    title: 'Schwieriger Moment?',
-    body: `${blockCount} Versuche in der letzten halben Stunde. Vielleicht hilft eine kurze Pause vom Handy.`,
-    tag: 'relapse-warning',
   };
 }
 
 export const FOCUS_FINISHED_TAG = 'focus-finished';
 
+/** Once at the end of a focus; never a reminder to focus again. */
 export function buildFocusFinished(minutes: number): NotificationPayload {
   return {
     kind: 'focus_finished',
-    title: 'Fokuszeit beendet',
-    body: `${minutes} Minuten durchgehalten. Gut gemacht.`,
+    title: t('notify.focusTitle'),
+    body: t('notify.focusBody', { duration: formatMinutes(minutes) }),
     tag: FOCUS_FINISHED_TAG,
   };
 }

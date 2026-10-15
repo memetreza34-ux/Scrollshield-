@@ -22,6 +22,7 @@ import {
   Countdown,
   EmergencyLink,
   InterruptionScreen,
+  PauseLine,
   ReopenStages,
 } from '../components/Interruption';
 
@@ -351,6 +352,7 @@ export function ProtectionFlow({
           </>
         }
       >
+        <PauseLine line={state.settings.pauseLine} />
         {!done && <Countdown value={delayRemaining} label={t('pause.seconds')} />}
         {longer && <ReopenStages stage={2} />}
       </InterruptionScreen>

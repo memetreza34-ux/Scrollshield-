@@ -23,23 +23,16 @@ import { getLocalDateKey } from './lib/appUtils';
 import { detectOperatingSystem } from './lib/platform';
 import { AppIconsContext } from './lib/appIcons';
 import {
-  EVENING_REMINDER_HOUR,
-  EVENING_REMINDER_TAG,
   FOCUS_FINISHED_TAG,
+  LEGACY_EVENING_REMINDER_TAG,
   NotificationPayload,
-  RELAPSE_WINDOW_MINUTES,
   buildDailySummary,
-  buildEveningReminder,
   buildFocusFinished,
-  buildRelapseWarning,
   buildWeeklyReview,
   cancelNotification,
-  scheduleDailyNotification,
   scheduleNotification,
   sendNotification,
   shouldSendDailySummary,
-  shouldSendEveningReminder,
-  shouldSendRelapseWarning,
   shouldSendWeeklyReview,
   usesNativeNotifications,
 } from './lib/notifications';
@@ -51,7 +44,7 @@ import { AppDetailScreen, CommitmentScreen, ProtectScreen, ScheduleEditScreen } 
 import { Focus } from './screens/FocusScreens';
 import { RescueScreen } from './screens/RescueScreen';
 import { InsightsScreen } from './screens/InsightsScreen';
-import { NotificationsScreen, SettingsScreen } from './screens/SettingsScreens';
+import { NotificationsScreen, ProStatusScreen, SettingsScreen } from './screens/SettingsScreens';
 import { PaywallScreen } from './screens/PaywallScreen';
 import { ProtectionFlow } from './screens/ProtectionFlow';
 import { PermissionsScreen } from './screens/PermissionsScreen';
@@ -66,8 +59,6 @@ import { resolveLanguage, setLanguage, t } from './i18n';
 type SentNotifications = {
   dailySummarySentOn: string | null;
   weeklyReviewSentOn: string | null;
-  eveningReminderSentOn: string | null;
-  relapseSentAt: number | null;
 };
 
 export default function App() {
@@ -82,8 +73,6 @@ export default function App() {
   const notificationStateRef = useRef<SentNotifications>({
     dailySummarySentOn: null,
     weeklyReviewSentOn: null,
-    eveningReminderSentOn: null,
-    relapseSentAt: null,
   });
 
   useEffect(() => {
@@ -268,23 +257,14 @@ export default function App() {
     };
   }, []);
 
-  // The evening reminder has a fixed text, so the native app hands it to the
-  // system as a daily alarm. Re-done on every start (an alarm does not survive
-  // a reboot) and when the permission arrives later.
-  const eveningReminderEnabled = appState.settings.notifications.eveningReminder;
-  const notificationsPermitted = appState.permissions.notifications;
+  // Older versions scheduled an evening reminder as a daily alarm; it is not
+  // part of V1, so a leftover alarm is cancelled once per start.
   useEffect(() => {
-    if (!isLoaded || !usesNativeNotifications()) return;
-    if (eveningReminderEnabled) {
-      void scheduleDailyNotification(buildEveningReminder(), EVENING_REMINDER_HOUR);
-    } else {
-      void cancelNotification(EVENING_REMINDER_TAG);
-    }
-  }, [isLoaded, eveningReminderEnabled, notificationsPermitted]);
+    if (isLoaded && usesNativeNotifications()) void cancelNotification(LEGACY_EVENING_REMINDER_TAG);
+  }, [isLoaded]);
 
   // Everything that depends on the day's data can only be sent while the app
-  // runs: daily summary, weekly review and relapse warning – plus the evening
-  // reminder in the browser, where nothing can be scheduled. The "sent" mark
+  // runs: the daily summary and the weekly review. The "sent" mark
   // is set before the asynchronous send so a state change in between cannot
   // send twice; a failed send clears it again.
   useEffect(() => {
@@ -314,17 +294,6 @@ export default function App() {
 
       if (shouldSendDailySummary(appState, sent.dailySummarySentOn, now)) {
         sendMarked('dailySummarySentOn', today, buildDailySummary(appState, now));
-      }
-
-      if (!usesNativeNotifications() && shouldSendEveningReminder(appState, sent.eveningReminderSentOn, now)) {
-        sendMarked('eveningReminderSentOn', today, buildEveningReminder());
-      }
-
-      if (shouldSendRelapseWarning(appState, appState.history, sent.relapseSentAt)) {
-        const recentBlocks = appState.history.filter(
-          (event) => event.type === 'block' && Date.now() - event.timestamp < RELAPSE_WINDOW_MINUTES * 60_000,
-        ).length;
-        sendMarked('relapseSentAt', Date.now(), buildRelapseWarning(recentBlocks));
       }
     };
 
@@ -488,6 +457,9 @@ export default function App() {
                 )}
                 {currentScreen === 'settings' && (
                   <SettingsScreen key="settings" state={appState} updateState={updateState} navigate={navigate} />
+                )}
+                {currentScreen === 'pro_status' && (
+                  <ProStatusScreen key="pro_status" state={appState} updateState={updateState} navigate={navigate} />
                 )}
                 {currentScreen === 'notifications' && (
                   <NotificationsScreen

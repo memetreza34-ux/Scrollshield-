@@ -169,6 +169,13 @@ export const migrateTimeWindowsToSchedules = (appsConfig: Partial<AppState['apps
 
 const OLD_START_SCREENS = new Set(['dashboard', 'apps', 'rules', 'history', 'reels_protection']);
 
+/** Longest own sentence for the pause: it has to fit the native screen in two or three lines. */
+export const PAUSE_LINE_MAX_LENGTH = 80;
+
+/** One line of plain text, trimmed and cut to the limit; anything else turns the line off. */
+export const normalizePauseLine = (line: unknown): string =>
+  typeof line === 'string' ? line.replace(/\s+/g, ' ').trim().slice(0, PAUSE_LINE_MAX_LENGTH) : '';
+
 export const normalizeAppState = (saved: Partial<AppState> | null | undefined): AppState => {
   if (!saved) return DEFAULT_STATE;
 
@@ -198,9 +205,14 @@ export const normalizeAppState = (saved: Partial<AppState> | null | undefined): 
       startScreen: OLD_START_SCREENS.has(saved.settings?.startScreen ?? '')
         ? DEFAULT_STATE.settings.startScreen
         : (saved.settings?.startScreen ?? DEFAULT_STATE.settings.startScreen),
+      pauseLine: normalizePauseLine(saved.settings?.pauseLine),
+      // Only the known switches: the evening reminder and the warning after
+      // several blocks are gone (not part of V1).
       notifications: {
-        ...DEFAULT_STATE.settings.notifications,
-        ...saved.settings?.notifications,
+        focusReminders:
+          saved.settings?.notifications?.focusReminders ?? DEFAULT_STATE.settings.notifications.focusReminders,
+        dailySummary: saved.settings?.notifications?.dailySummary ?? DEFAULT_STATE.settings.notifications.dailySummary,
+        weeklyReview: saved.settings?.notifications?.weeklyReview ?? DEFAULT_STATE.settings.notifications.weeklyReview,
       },
       privacy: normalizePrivacySettings(saved.settings?.privacy),
     },
