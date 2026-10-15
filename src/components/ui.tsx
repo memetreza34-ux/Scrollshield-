@@ -1,5 +1,4 @@
 import React, { useEffect, useId, useRef } from 'react';
-import { motion } from 'motion/react';
 import { ArrowLeft, CalendarDays, ChartNoAxesColumn, Check, ChevronRight, Settings, Shield, Timer } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { PlatformDefinition, Screen } from '../types';
@@ -100,17 +99,7 @@ export function BottomNav({ currentScreen, navigate }: { currentScreen: Screen; 
 
 /** Page frame for every screen above the tab bar: 16 px side margin. */
 export function Page({ children }: { children: React.ReactNode }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.25 }}
-      className="px-4 pb-28"
-    >
-      {children}
-    </motion.div>
-  );
+  return <div className="fade-in px-4 pb-28">{children}</div>;
 }
 
 const iconButtonClass = `flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-ink ${PRESSED} ${FOCUS_RING}`;
@@ -416,7 +405,7 @@ export function Choice<T extends string | number>({
       {options.map((option, index) => {
         const selected = option.value === value;
         const shape = segmented
-          ? `flex-auto justify-center whitespace-nowrap px-2 ${index > 0 ? 'border-l border-line' : ''} ${FOCUS_RING_INSET}`
+          ? `flex-auto justify-center px-2 text-center ${index > 0 ? 'border-l border-line' : ''} ${FOCUS_RING_INSET}`
           : `rounded-control border px-4 ${selected ? 'border-accent' : 'border-line bg-surface'} ${FOCUS_RING}`;
         return (
           <button

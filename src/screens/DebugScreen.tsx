@@ -1,4 +1,3 @@
-import { motion } from 'motion/react';
 import { Terminal, Shield, Activity, AlertTriangle, Database, Play, RefreshCw, XCircle } from 'lucide-react';
 import { AppState, Screen, HistoryEvent } from '../types';
 import { Header } from '../components/ui';
@@ -49,12 +48,7 @@ export function DebugScreen({
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 20 }}
-      className="p-6 pb-32 flex flex-col h-full bg-zinc-950"
-    >
+    <div className="fade-in p-6 pb-32 flex flex-col h-full bg-zinc-950">
       <Header title="Developer / Debug" onBack={() => navigate('settings')} />
 
       <div className="space-y-6 flex-1 overflow-y-auto scrollbar-hide">
@@ -183,6 +177,6 @@ export function DebugScreen({
           </div>
         </section>
       </div>
-    </motion.div>
+    </div>
   );
 }

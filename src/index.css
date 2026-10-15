@@ -112,6 +112,16 @@
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }
+  /* A screen fades in when it appears; reduced motion turns it off below. */
+  .fade-in {
+    animation: fade-in 0.25s ease-out both;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

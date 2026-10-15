@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { readFileSync } from 'node:fs';
 import path from 'path';
 import { defineConfig } from 'vite';
+import { configDefaults } from 'vitest/config';
 import { VitePWA } from 'vite-plugin-pwa';
 import { visualizer } from 'rollup-plugin-visualizer';
 
@@ -115,6 +116,8 @@ export default defineConfig(({ mode }) => ({
   test: {
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    // Agent worktrees under .claude/ hold full copies of the repository.
+    exclude: [...configDefaults.exclude, '.claude/**'],
     testTimeout: 10000,
     coverage: {
       provider: 'v8',

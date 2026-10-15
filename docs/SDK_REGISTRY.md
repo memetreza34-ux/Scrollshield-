@@ -10,8 +10,8 @@ are not shipped in the app bundle.
 | `@capacitor/local-notifications` | On-device reminders in the native app (focus end, evening summary, relapse warning) | None                | None        | Notification switches in the settings; system notification permission |
 | `react`                          | User-interface runtime                                                              | None                | None        | Not applicable                                                        |
 | `react-dom`                      | Browser rendering                                                                   | None                | None        | Not applicable                                                        |
-| `motion`                         | Local UI animations                                                                 | None                | None        | Not applicable                                                        |
 | `lucide-react`                   | Local interface icons                                                               | None                | None        | Not applicable                                                        |
+| `@fontsource-variable/geist`     | Interface font, bundled with the app                                                | None                | None        | Not applicable                                                        |
 
 ## Release Rule
 

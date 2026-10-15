@@ -401,7 +401,7 @@ export function AppDetailScreen({ state, updateState, navigate }: ScreenProps) {
         <div className="flex items-center gap-4 border-b border-line p-4">
           <AppTile app={app} />
           <div className="min-w-0">
-            <p className="truncate text-title-s text-ink">{app.name}</p>
+            <p className="text-title-s text-ink">{app.name}</p>
             <p className="text-body-s text-muted">{todayLine}</p>
           </div>
         </div>

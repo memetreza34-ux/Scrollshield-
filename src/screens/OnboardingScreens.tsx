@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { motion } from 'motion/react';
 import { ArrowLeft, Battery, Bell, Check, Info, Layers, RotateCcw, Shield, Smartphone, SquarePlay } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { AppPermissions, AppState, Screen, SUPPORTED_APPS } from '../types';
@@ -24,12 +23,7 @@ const WELCOME_POINTS: { icon: LucideIcon; title: MessageKey; text: MessageKey }[
 /** Willkommen (docs/V1_MASTER_PLAN.md, 4.1). */
 export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex min-h-full flex-col px-4 pb-6 pt-10"
-    >
+    <div className="fade-in flex min-h-full flex-col px-4 pb-6 pt-10">
       <div className="flex flex-1 flex-col">
         <div className="flex items-center gap-3">
           <span className="flex h-12 w-12 items-center justify-center rounded-control border border-line bg-surface">
@@ -62,7 +56,7 @@ export function Welcome({ navigate }: { navigate: (s: Screen) => void }) {
         <TextButton onClick={() => navigate('support')}>{t('welcome.learnMore')}</TextButton>
         <p className="text-center text-caption text-muted">{t('welcome.age')}</p>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -118,12 +112,7 @@ export function Onboarding({
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex min-h-full flex-col"
-    >
+    <div className="fade-in flex min-h-full flex-col">
       <div className="flex-shrink-0">
         <div className="flex h-14 items-center gap-1 pl-1 pr-4">
           <IconButton
@@ -147,7 +136,7 @@ export function Onboarding({
       {step === 3 && (
         <SetupPermissions state={state} updateState={updateState} appNames={selectedNames} onFinish={finish} />
       )}
-    </motion.div>
+    </div>
   );
 }
 
@@ -183,7 +172,7 @@ function ChooseApps({
                 >
                   <AppTile app={app} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-title-s text-ink">{app.name}</span>
+                    <span className="block text-title-s text-ink">{app.name}</span>
                     <span id={`app-hint-${app.id}`} className="block text-body-s text-muted">
                       {appHint(app.id)}
                     </span>

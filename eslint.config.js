@@ -14,6 +14,7 @@ export default tseslint.config(
       'android/build/**',
       'android/app/build/**',
       'android/app/src/main/assets/**',
+      '.claude/**',
     ],
   },
   js.configs.recommended,

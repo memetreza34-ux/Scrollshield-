@@ -56,7 +56,7 @@ export function ProExpiredScreen({
                 >
                   <AppTile app={app} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-title-s text-ink">{app.name}</span>
+                    <span className="block text-title-s text-ink">{app.name}</span>
                     <span id={hintId} className="block text-body-s text-muted">
                       {t(checked ? 'proExpired.keeps' : 'proExpired.paused')}
                     </span>

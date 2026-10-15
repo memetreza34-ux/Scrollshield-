@@ -434,7 +434,7 @@ function AppDayRow({
     >
       <AppTile app={app} />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-title-s text-ink">{app.name}</span>
+        <span className="min-w-0 text-title-s text-ink">{app.name}</span>
         <span className="text-body-s text-muted">{summary}</span>
         {lock && (
           <span className="mt-1 flex">

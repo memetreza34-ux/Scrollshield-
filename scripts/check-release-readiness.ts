@@ -105,7 +105,6 @@ if (!existsSync(storeCopyPath)) {
     { label: 'focus keyword', pattern: /\bFokus\b/i },
     { label: 'screen-time keyword', pattern: /\bBildschirmzeit\b/i },
     { label: 'digital-wellbeing keyword', pattern: /\bDigital Wellbeing\b/i },
-    { label: 'ADHD keyword', pattern: /\bADHS\b/i },
     { label: 'procrastination keyword', pattern: /\bProkrastination\b/i },
   ];
 
@@ -204,20 +203,23 @@ if (existsSync(androidManifestPath)) {
     }
 
     // Google requires the disclosure in the app itself, before the user is sent
-    // to the system settings — not only in the store listing.
-    const permissionsScreenPath = path.join(repoRoot, 'src/screens/PermissionsScreen.tsx');
-    const permissionsScreen = existsSync(permissionsScreenPath) ? readFileSync(permissionsScreenPath, 'utf-8') : '';
+    // to the system settings — not only in the store listing. The dialog takes
+    // its texts from the German message file.
+    const disclosurePath = path.join(repoRoot, 'src/components/AccessibilityDisclosure.tsx');
+    const messagesPath = path.join(repoRoot, 'src/i18n/de.ts');
+    const disclosure = existsSync(disclosurePath) ? readFileSync(disclosurePath, 'utf-8') : '';
+    const messages = existsSync(messagesPath) ? readFileSync(messagesPath, 'utf-8') : '';
 
     const disclosureSignals = [
-      { label: 'what is read', pattern: /Was der Dienst liest/i },
-      { label: 'what is not read', pattern: /NICHT liest/i },
-      { label: 'where the data goes', pattern: /Wohin die Daten gehen/i },
+      { label: 'what is read', key: 'accessibility.sees', pattern: /Was ScrollShield damit sieht/i },
+      { label: 'what is not read', key: 'accessibility.notSees', pattern: /Was ScrollShield nicht sieht/i },
+      { label: 'where the data goes', key: 'accessibility.notSees.leaves', pattern: /verlässt dein Handy/i },
     ];
 
     for (const signal of disclosureSignals) {
-      if (signal.pattern.test(permissionsScreen)) continue;
+      if (disclosure.includes(signal.key) && signal.pattern.test(messages)) continue;
       findings.push({
-        file: 'src/screens/PermissionsScreen.tsx',
+        file: 'src/components/AccessibilityDisclosure.tsx',
         line: 1,
         label: 'Prominent disclosure incomplete',
         text: `The accessibility disclosure must state: ${signal.label}.`,

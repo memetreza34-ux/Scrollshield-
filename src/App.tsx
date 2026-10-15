@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { AnimatePresence } from 'motion/react';
 import { AppState, Screen, DEFAULT_STATE, SUPPORTED_APPS } from './types';
 import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
@@ -433,7 +432,7 @@ export default function App() {
               {choosingFreeApps ? (
                 <ProExpiredScreen state={appState} updateState={updateState} navigate={navigate} />
               ) : (
-                <AnimatePresence mode="wait">
+                <>
                   {currentScreen === 'welcome' && <Welcome key="welcome" navigate={navigate} />}
                   {currentScreen === 'onboarding' && (
                     <Onboarding key="onboarding" state={appState} updateState={updateState} navigate={navigate} />
@@ -529,7 +528,7 @@ export default function App() {
                   {currentScreen === 'debug' && !import.meta.env.PROD && (
                     <DebugScreen key="debug" state={appState} updateState={updateState} navigate={navigate} />
                   )}
-                </AnimatePresence>
+                </>
               )}
             </div>
 

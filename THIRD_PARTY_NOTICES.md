@@ -10,7 +10,6 @@ are excluded.
 | `@capacitor/local-notifications` | MIT     |
 | `@fontsource-variable/geist`     | OFL-1.1 |
 | `lucide-react`                   | ISC     |
-| `motion`                         | MIT     |
 | `react`                          | MIT     |
 | `react-dom`                      | MIT     |
 

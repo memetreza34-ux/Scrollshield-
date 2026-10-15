@@ -1,6 +1,5 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MotionConfig } from 'motion/react';
 import { Capacitor } from '@capacitor/core';
 import App from './App.tsx';
 // Bundled, not loaded from Google: the app makes no network requests.
@@ -24,8 +23,6 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <MotionConfig reducedMotion="user">
-      <App />
-    </MotionConfig>
+    <App />
   </StrictMode>,
 );
