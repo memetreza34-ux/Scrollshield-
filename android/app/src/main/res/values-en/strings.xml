@@ -1,0 +1,46 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="accessibility_service_label">ScrollShield short video detection</string>
+    <string name="accessibility_service_description">ScrollShield uses this to detect whether a short video feed (Reels, Shorts, TikTok) is open and to count your swipes in it. The service only reads technical identifiers of the screen – never texts, messages or input. All data stays on your device.</string>
+
+    <!-- Foreground service notification -->
+    <string name="monitor_channel_name">ScrollShield protection</string>
+    <string name="monitor_channel_description">ScrollShield is actively watching protected apps.</string>
+    <string name="monitor_notification_title">ScrollShield is active</string>
+    <string name="monitor_notification_text">Your protected apps are being watched.</string>
+
+    <!-- Interruption overlay -->
+    <string name="overlay_body">A short pause before %1$s.</string>
+    <string name="overlay_reopen_body">You opened %1$s a moment ago. The pause is longer this time.</string>
+    <string name="overlay_session_body">%1$d minutes of %2$s without a break. Go on or stop?</string>
+    <string name="overlay_strict_hint">%1$s is locked in strict mode.</string>
+    <string name="overlay_focus_hint">Focus runs until %1$s. Until then %2$s is locked.</string>
+    <string name="overlay_time_window_hint">A schedule is running. %1$s is locked until it ends.</string>
+    <string name="overlay_daily_limit_hint">Daily budget used up: %1$d of %2$d minutes today. %3$s is free again tomorrow.</string>
+    <string name="lock_warning_time_window">A schedule starts at %1$s: %2$s will be locked shortly.</string>
+    <string name="lock_warning_daily_limit">Daily budget almost used up: %1$s will be locked in one to two minutes.</string>
+    <string name="overlay_anti_binge_block_hint">Cooldown: opened %1$d times in %2$d minutes. Try again later.</string>
+    <string name="overlay_ready_hint">You can go on – or go back.</string>
+    <string name="overlay_continue">Continue</string>
+    <string name="overlay_continue_to">Continue to %1$s</string>
+    <string name="overlay_go_home">Back</string>
+    <string name="overlay_emergency">Emergency unlock (%1$d left today)</string>
+    <string name="overlay_emergency_confirm">Unlock %1$s for %2$d minutes</string>
+    <plurals name="overlay_emergency_wait">
+        <item quantity="one">Unlocking in %d second …</item>
+        <item quantity="other">Unlocking in %d seconds …</item>
+    </plurals>
+    <string name="overlay_feed_blocked">The short video feed of %1$s is locked.</string>
+    <string name="overlay_feed_daily_limit">Your daily limit for short videos in %1$s is reached.</string>
+    <string name="overlay_feed_session_limit">You have been in the %1$s feed long enough.</string>
+    <string name="overlay_feed_hard_hint">You left the feed. Change the rule in ScrollShield if you want to go on.</string>
+    <string name="overlay_feed_soft_hint">A short pause – do you really want to keep scrolling?</string>
+    <plurals name="overlay_feed_swipes">
+        <item quantity="one">You swiped %1$d time in %2$s.</item>
+        <item quantity="other">You swiped %1$d times in %2$s.</item>
+    </plurals>
+    <plurals name="overlay_countdown">
+        <item quantity="one">%d second</item>
+        <item quantity="other">%d seconds</item>
+    </plurals>
+</resources>

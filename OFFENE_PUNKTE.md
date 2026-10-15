@@ -109,8 +109,9 @@ Vorlagen: `docs/STORE_SUBMISSION_PACKET.md`, `docs/STORE_LISTING_COPY.md`, `STOR
     (4 Sekunden, ohne Ton, antippen schließt ihn): Zeitplan 30–60 Sekunden vorher, Tagesbudget ein bis zwei Minuten
     vorher. **[Claude]** Das Kurzvideo-Tageslimit hat noch keine Vorwarnung. **[Du]** testen: Zeitplan zur nächsten
     vollen Stunde, kurz vorher in der App bleiben.
-- [ ] **[Claude] Englisch für die Android-Teile.** Pause-Bildschirm, Vorwarnung und Benachrichtigung haben nur
-      deutsche Texte (`android/app/src/main/res/values/strings.xml`). Für V1 (Deutsch + Englisch) fehlt `values-en`.
+- [x] **Englisch für die Android-Teile** (15.10.): `values-en/strings.xml`. Handys auf Englisch zeigen Pause-Bildschirm,
+      Vorwarnung und Benachrichtigung auf Englisch, alle anderen Sprachen auf Deutsch. Die App-Oberfläche selbst (Web-Teil)
+      ist noch nur Deutsch – das kommt mit der Umsetzung des Designs.
 - [ ] **[Claude] Rest der Ergänzungen vom 15.10.** (Master-Plan): Lebenszeichen der Reels-Erkennung mit Warnung auf
       „Heute“, eigener Satz in der Pause, Berechtigungen beim Zurückkehren neu prüfen.
 - [x] **Fehler aus der Code-Analyse vom 27.09.2026** behoben (28.09.): Profilwechsel schaltete den Schutz aus, Profil
