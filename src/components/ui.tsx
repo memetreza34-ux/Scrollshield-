@@ -416,7 +416,7 @@ export function Choice<T extends string | number>({
       {options.map((option, index) => {
         const selected = option.value === value;
         const shape = segmented
-          ? `min-w-0 flex-1 justify-center px-2 ${index > 0 ? 'border-l border-line' : ''} ${FOCUS_RING_INSET}`
+          ? `flex-auto justify-center whitespace-nowrap px-2 ${index > 0 ? 'border-l border-line' : ''} ${FOCUS_RING_INSET}`
           : `rounded-control border px-4 ${selected ? 'border-accent' : 'border-line bg-surface'} ${FOCUS_RING}`;
         return (
           <button
@@ -427,7 +427,7 @@ export function Choice<T extends string | number>({
             className={`flex min-h-12 items-center gap-1.5 text-label text-ink ${shape} ${selected ? 'bg-accent/10' : 'font-normal'} ${PRESSED}`}
           >
             {selected && <Check size={16} strokeWidth={2.5} className="flex-shrink-0 text-accent" aria-hidden="true" />}
-            <span className="min-w-0">{option.label}</span>
+            <span className={segmented ? '[overflow-wrap:normal]' : 'min-w-0'}>{option.label}</span>
             {option.pro && <ProBadge />}
           </button>
         );
