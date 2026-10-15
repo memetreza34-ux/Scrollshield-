@@ -62,7 +62,7 @@ describe('App', () => {
   it('starts on the welcome screen without saved state', async () => {
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'ScrollShield' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Instagram ja, Reels nein.' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Loslegen' })).toBeInTheDocument();
   });
 
@@ -82,13 +82,13 @@ describe('App', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Mehr erfahren' }));
 
-    expect(await screen.findByRole('heading', { name: 'Hilfe & FAQ' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Hilfe & Support' }, { timeout: 5000 })).toBeInTheDocument();
   });
 
   it('has no obvious accessibility violations on the welcome screen', async () => {
     const { container } = render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'ScrollShield' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Instagram ja, Reels nein.' })).toBeInTheDocument();
     await expectNoA11yViolations(container);
   });
 
@@ -116,7 +116,7 @@ describe('App', () => {
     render(<App />);
 
     expect(await screen.findByText('Fokus läuft')).toBeInTheDocument();
-    expect(screen.getByText('noch 15 Min.')).toBeInTheDocument();
+    expect(screen.getByText(/^noch 15 Min\. · bis \d\d:\d\d$/)).toBeInTheDocument();
   });
 
   /**
@@ -191,7 +191,7 @@ describe('App', () => {
   };
 
   it('notifies exactly once when a focus session runs out while the app is open', async () => {
-    expect(await runFocusSessionPastItsEnd(true)).toEqual(['Fokuszeit beendet']);
+    expect(await runFocusSessionPastItsEnd(true)).toEqual(['Fokus beendet']);
   });
 
   it('respects a switched-off focus reminder', async () => {
@@ -230,11 +230,11 @@ describe('App', () => {
 
     // n1 locked the app, n2 was stopped: both interruptions, one not opened.
     await waitFor(
-      () =>
-        expect(screen.getByText('Öffnungen unterbrochen').parentElement).toHaveTextContent('2 Öffnungen unterbrochen'),
+      () => expect(screen.getByText('Öffnungen heute unterbrochen').previousSibling).toHaveTextContent('2'),
       { timeout: 5000 },
     );
-    expect(screen.getByText('davon 1× nicht geöffnet')).toBeInTheDocument();
+    expect(screen.getByText('bei 2 Öffnungsversuchen')).toBeInTheDocument();
+    expect(screen.getByText('1× nach der Pause nicht geöffnet')).toBeInTheDocument();
     await waitFor(() => expect(nativeEvents.acknowledge).toHaveBeenCalledWith(['n1', 'n2']));
   });
 
@@ -254,11 +254,13 @@ describe('App', () => {
         name: /Datenschutz & Daten/,
       }),
     );
-    expect(await screen.findByRole('heading', { name: 'Datenschutz & Transparenz' })).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole('button', { name: /App zurücksetzen/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Ja, Reset' }));
+    expect(await screen.findByRole('heading', { name: 'Datenschutz & Daten' })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Alle Daten löschen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Alles löschen' }));
 
-    expect(await screen.findByRole('heading', { name: 'ScrollShield' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Instagram ja, Reels nein.' }, { timeout: 5000 }),
+    ).toBeInTheDocument();
     await waitFor(() => {
       expect(Object.keys(localStorage).filter((key) => key.startsWith('scrollshield_'))).toEqual([]);
     });

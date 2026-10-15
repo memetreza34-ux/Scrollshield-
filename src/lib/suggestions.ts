@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { AppState, SUPPORTED_APPS } from '../types';
 import { getLocalDateKey } from './appUtils';
 import { countReopens, eventsOnDay } from './metrics';
@@ -53,8 +54,8 @@ export function getSuggestion(state: AppState, now = new Date()): Suggestion | n
     if (lateOpens >= MIN_LATE_OPENS && !covered) {
       candidates.push({
         id: `evening-${app.id}`,
-        text: `Du öffnest ${app.name} oft nach ${LATE_HOUR} Uhr (${lateOpens}× in 7 Tagen). Ein Zeitplan sperrt die App abends von 21 bis 7 Uhr.`,
-        actionLabel: 'Abends sperren',
+        text: t('suggestion.evening.text', { app: app.name, hour: LATE_HOUR, count: lateOpens }),
+        actionLabel: t('suggestion.evening.action'),
         action: { kind: 'evening_schedule', appId: app.id },
       });
     }
@@ -70,8 +71,8 @@ export function getSuggestion(state: AppState, now = new Date()): Suggestion | n
     if (minutes >= FEED_MINUTES_FOR_LIMIT && !limited) {
       candidates.push({
         id: `feed-${app.id}`,
-        text: `${app.shortVideoSurface.name} heute schon ${minutes} Min.`,
-        actionLabel: 'Auf 15 Min. begrenzen',
+        text: t('suggestion.feed.text', { surface: app.shortVideoSurface.name, minutes }),
+        actionLabel: t('suggestion.feed.action'),
         action: { kind: 'feed_limit', appId: app.id, minutes: 15 },
       });
     }
@@ -86,8 +87,8 @@ export function getSuggestion(state: AppState, now = new Date()): Suggestion | n
     if (reopens >= MIN_REOPENS_FOR_PRESET) {
       candidates.push({
         id: `preset-${app.id}`,
-        text: `${app.name} heute ${reopens}× kurz nacheinander wieder geöffnet.`,
-        actionLabel: 'Ausgewogen wählen',
+        text: t('suggestion.preset.text', { app: app.name, count: reopens }),
+        actionLabel: t('suggestion.preset.action'),
         action: { kind: 'preset_ausgewogen', appId: app.id },
       });
     }

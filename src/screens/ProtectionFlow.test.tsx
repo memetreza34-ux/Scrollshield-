@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { getLocalDateKey } from '../lib/appUtils';
 import { AppConfig, AppState, DEFAULT_APP_CONFIG, DEFAULT_STATE, HistoryEvent } from '../types';
@@ -39,7 +39,7 @@ describe('ProtectionFlow', () => {
       ],
     });
 
-    expect(screen.getByText(/im Zeitplan „Abend“ gesperrt/)).toBeInTheDocument();
+    expect(screen.getByText(/^Zeitplan „Abend“ bis \d\d:00\.$/)).toBeInTheDocument();
   });
 
   it('offers no emergency unlock during a self-commitment', () => {
@@ -48,7 +48,7 @@ describe('ProtectionFlow', () => {
       commitment: { until: Date.now() + 60 * 60_000 },
     });
 
-    expect(screen.queryByRole('button', { name: 'Notfallfreigabe anfordern' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Notfallfreigabe' })).toBeNull();
   });
 
   it('locks only the apps the running focus chose', () => {
@@ -67,7 +67,7 @@ describe('ProtectionFlow', () => {
       focusSessions: [session],
     });
 
-    expect(screen.queryByText('Blockiert')).toBeNull();
+    expect(screen.queryByText('Gesperrt · Fokus')).toBeNull();
   });
 
   it('makes the pause longer with every reopen', () => {
@@ -77,10 +77,9 @@ describe('ProtectionFlow', () => {
       history: recentOpens(3),
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Trotzdem weiter' }));
-
-    expect(screen.getByText('42')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Trotzdem öffnen' })).toBeDisabled();
+    expect(screen.getAllByText('Längere Pause').length).toBeGreaterThan(0);
+    expect(screen.getByRole('timer')).toHaveTextContent('42');
+    expect(screen.getByRole('button', { name: 'Weiter in 42 s' })).toBeDisabled();
   });
 
   it('names the daily limit as the reason, not too many openings', () => {
@@ -98,7 +97,7 @@ describe('ProtectionFlow', () => {
       },
     });
 
-    expect(screen.getByText(/Tageslimit für Instagram ist für heute aufgebraucht/)).toBeInTheDocument();
+    expect(screen.getByText('Dein Tagesbudget für Instagram ist aufgebraucht.')).toBeInTheDocument();
     expect(screen.queryByText(/zu oft geöffnet/)).not.toBeInTheDocument();
   });
 
@@ -118,6 +117,27 @@ describe('ProtectionFlow', () => {
       history: recentOpens(3),
     });
 
-    expect(screen.getByText(/in den letzten 30 Minuten zu oft geöffnet/)).toBeInTheDocument();
+    expect(screen.getByText('Du hast Instagram in 30 Minuten 3× geöffnet.')).toBeInTheDocument();
+  });
+
+  it('unlocks in an emergency only after a reason and a wait', () => {
+    vi.useFakeTimers();
+    const hour = new Date().getHours();
+    renderFlow({
+      appsConfig: { instagram: instagram() },
+      schedules: [
+        { id: 's', name: 'Abend', startHour: hour, endHour: (hour + 1) % 24, appIds: ['instagram'], active: true },
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notfallfreigabe' }));
+    expect(screen.getByRole('button', { name: 'Weiter' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('radio', { name: 'Nachricht' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Weiter' }));
+
+    expect(screen.getByText('Gleich ist Instagram 5 Minuten frei.')).toBeInTheDocument();
+    for (let second = 0; second <= 10; second++) act(() => vi.advanceTimersByTime(1000));
+    expect(screen.getByRole('button', { name: 'Instagram öffnen' })).toBeInTheDocument();
+    vi.useRealTimers();
   });
 });

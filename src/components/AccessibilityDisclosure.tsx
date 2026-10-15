@@ -1,12 +1,39 @@
 import { useEffect, useRef } from 'react';
-import { Film } from 'lucide-react';
+import { Check, SquarePlay, X } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { MessageKey, t } from '../i18n';
+import { SecondaryButton } from './ui';
+
+const SEES: MessageKey[] = ['accessibility.sees.feed', 'accessibility.sees.swipes'];
+const DOES_NOT_SEE: MessageKey[] = [
+  'accessibility.notSees.text',
+  'accessibility.notSees.media',
+  'accessibility.notSees.leaves',
+];
+
+function Points({ title, items, icon: Icon }: { title: MessageKey; items: MessageKey[]; icon: LucideIcon }) {
+  return (
+    <section className="mt-6">
+      <h3 className="text-label-s text-muted">{t(title)}</h3>
+      <ul className="mt-2 flex flex-col gap-2">
+        {items.map((item) => (
+          <li key={item} className="flex items-start gap-3 text-body text-ink">
+            <Icon size={20} strokeWidth={2} className="mt-0.5 flex-shrink-0 text-muted" aria-hidden="true" />
+            {t(item)}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 /**
  * Prominent disclosure in front of the accessibility settings. Google Play
  * requires it for apps that use the accessibility API without being an
  * accessibility tool: shown in the normal flow, stating what is read and what
- * happens with it, and ending in an explicit choice. Only "Zustimmen" leads to
- * the Android settings; closing the dialog in any other way is a no.
+ * happens with it, and ending in a real choice – both buttons the same size,
+ * shape and colour. Only agreeing leads to the Android settings; closing it in
+ * any other way is a no.
  */
 export function AccessibilityDisclosure({ onAccept, onDecline }: { onAccept: () => void; onDecline: () => void }) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -16,65 +43,38 @@ export function AccessibilityDisclosure({ onAccept, onDecline }: { onAccept: () 
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-4 sm:items-center">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="accessibility-disclosure-title"
-        tabIndex={-1}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') onDecline();
-        }}
-        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 text-left shadow-2xl focus:outline-none"
-      >
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400">
-          <Film size={24} aria-hidden="true" />
-        </div>
-        <h2 id="accessibility-disclosure-title" className="mb-3 text-xl font-bold text-zinc-100">
-          Bedienungshilfe für die Kurzvideo-Erkennung
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="accessibility-disclosure-title"
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') onDecline();
+      }}
+      className="fixed inset-0 z-[60] flex flex-col overflow-y-auto bg-ground text-left focus:outline-none"
+    >
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pb-6 pt-10">
+        <span className="flex h-12 w-12 items-center justify-center rounded-control border border-line bg-surface">
+          <SquarePlay size={24} strokeWidth={1.75} className="text-ink" aria-hidden="true" />
+        </span>
+        <h2 id="accessibility-disclosure-title" className="mt-6 text-headline text-ink">
+          {t('accessibility.title')}
         </h2>
-        <p className="mb-4 text-sm leading-relaxed text-zinc-300">
-          ScrollShield nutzt die Bedienungshilfe-Schnittstelle von Android, um zu erkennen, ob in einer von dir
-          geschützten App gerade ein Kurzvideo-Feed wie Reels, Shorts oder TikTok offen ist, und um deine
-          Wischbewegungen darin zu zählen. Nur so können deine Feed-Limits greifen.
-        </p>
-        <ul className="mb-4 space-y-3 text-sm leading-relaxed text-zinc-400">
-          <li>
-            <span className="font-semibold text-zinc-200">Was gelesen wird:</span> technische Kennungen der
-            Bildschirmelemente und Scroll-Ereignisse. Ausgewertet werden nur Apps, die du in ScrollShield schützt.
-          </li>
-          <li>
-            <span className="font-semibold text-zinc-200">Was nicht gelesen wird:</span> keine Texte, Nachrichten,
-            Passwörter, Eingaben oder sonstigen Bildschirminhalte.
-          </li>
-          <li>
-            <span className="font-semibold text-zinc-200">Was gespeichert wird:</span> die Zeit im Feed pro App und Tag
-            und die letzten 20 Beobachtungen für die Diagnose – verschlüsselt und nur auf deinem Gerät. Nichts davon
-            wird übertragen oder weitergegeben.
-          </li>
-          <li>
-            <span className="font-semibold text-zinc-200">Was der Dienst auslöst:</span> nur „Zurück“, wenn du eine
-            harte Unterbrechung eingestellt oder einen Feed gesperrt hast. Er tippt und wischt nie in anderen Apps.
-          </li>
-        </ul>
-        <p className="mb-6 text-xs leading-relaxed text-zinc-500">
-          Nach deiner Zustimmung öffnen sich die Android-Einstellungen. Wähle dort „ScrollShield Kurzvideo-Erkennung“.
-          Du kannst den Dienst jederzeit wieder abschalten.
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={onDecline}
-            className="min-h-[48px] flex-1 rounded-[1.25rem] border border-zinc-800 bg-zinc-900 py-3 text-sm font-semibold text-zinc-300"
-          >
-            Ablehnen
-          </button>
-          <button
-            onClick={onAccept}
-            className="min-h-[48px] flex-1 rounded-[1.25rem] bg-zinc-100 py-3 text-sm font-bold text-zinc-950"
-          >
-            Zustimmen
-          </button>
+        <p className="mt-2 text-body text-muted">{t('accessibility.intro')}</p>
+
+        <Points title="accessibility.sees" items={SEES} icon={Check} />
+        <Points title="accessibility.notSees" items={DOES_NOT_SEE} icon={X} />
+
+        <div className="mt-6 flex flex-col gap-2 text-body-s text-muted">
+          <p>{t('accessibility.stored')}</p>
+          <p>{t('accessibility.action')}</p>
+          <p>{t('accessibility.footnote')}</p>
+        </div>
+
+        <div className="mt-auto flex flex-col gap-3 pt-8">
+          <SecondaryButton onClick={onAccept}>{t('accessibility.accept')}</SecondaryButton>
+          <SecondaryButton onClick={onDecline}>{t('accessibility.decline')}</SecondaryButton>
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import React from 'react';
 import type { OperatingSystem } from './lib/platform';
 import type { PresetId } from './lib/presets';
+import type { LanguageSetting } from './i18n';
 import { PlatformBadge } from './components/PlatformBadge';
 
 export type Screen =
@@ -18,8 +19,8 @@ export type Screen =
   | 'rescue'
   | 'paywall'
   | 'settings'
+  | 'pro_status'
   | 'notifications'
-  | 'help'
   | 'protection_flow'
   | 'permissions'
   | 'debug'
@@ -231,7 +232,7 @@ export interface AppState {
   operatingSystem: OperatingSystem;
   permissions: AppPermissions;
   settings: {
-    language: string;
+    language: LanguageSetting;
     theme: 'dark' | 'light' | 'system';
     startScreen: Screen;
     internalAppName: string;
@@ -240,10 +241,11 @@ export interface AppState {
     defaultDelay: number;
     defaultEmergencyUnlock: number;
     focusPresets: number[];
+    /** A sentence of the user's own, shown in every pause below the reason; empty when off. */
+    pauseLine: string;
+    /** The three of docs/V1_MASTER_PLAN.md, 4.9; nothing that only pulls back into the app. */
     notifications: {
       focusReminders: boolean;
-      eveningReminder: boolean;
-      relapseWarning: boolean;
       dailySummary: boolean;
       weeklyReview: boolean;
     };
@@ -287,11 +289,13 @@ export interface PlatformDefinition {
 }
 
 /** A built-in platform as written below; `badge` holds the initials for its tile. */
-type BuiltinPlatform = Omit<PlatformDefinition, 'icon'> & { badge: string };
+type BuiltinPlatform = Omit<PlatformDefinition, 'icon' | 'color'> & { badge: string };
 
 /** Adds the tile icon: the installed app's launcher icon on Android, else the initials. */
 const withIcon = ({ badge, ...platform }: BuiltinPlatform): PlatformDefinition => ({
   ...platform,
+  // Neutral for every app: brand colours would compete with the signal colours.
+  color: 'border border-line bg-raised text-ink',
   icon: <PlatformBadge label={badge} packages={platform.androidPackages} />,
 });
 
@@ -302,7 +306,6 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = (
       name: 'Instagram',
       category: 'social',
       badge: 'IG',
-      color: 'bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 text-white shadow-lg',
       androidPackages: ['com.instagram.android', 'com.instagram.lite'],
       iosBundleIds: ['com.burbn.instagram'],
       hasShortVideoFeed: true,
@@ -314,7 +317,6 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = (
       name: 'TikTok',
       category: 'short_video',
       badge: 'TT',
-      color: 'bg-black text-white border border-zinc-800 shadow-md',
       androidPackages: ['com.zhiliaoapp.musically', 'com.ss.android.ugc.trill', 'com.zhiliaoapp.musically.go'],
       iosBundleIds: ['com.zhiliaoapp.musically'],
       hasShortVideoFeed: true,
@@ -326,7 +328,6 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = (
       name: 'YouTube',
       category: 'entertainment',
       badge: 'YT',
-      color: 'bg-[#FF0000] text-white shadow-md',
       androidPackages: ['com.google.android.youtube', 'com.google.android.apps.youtube.mango'],
       iosBundleIds: ['com.google.ios.youtube'],
       hasShortVideoFeed: true,
@@ -338,7 +339,6 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = (
       name: 'Facebook',
       category: 'social',
       badge: 'FB',
-      color: 'bg-[#1877F2] text-white shadow-md',
       androidPackages: ['com.facebook.katana', 'com.facebook.lite'],
       iosBundleIds: ['com.facebook.Facebook'],
       hasShortVideoFeed: true,
@@ -355,7 +355,6 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = (
       name: 'X',
       category: 'social',
       badge: 'X',
-      color: 'bg-black text-white border border-zinc-800 shadow-md',
       androidPackages: ['com.twitter.android', 'com.twitter.android.lite'],
       iosBundleIds: ['com.atebits.Tweetie2'],
       hasShortVideoFeed: true,
@@ -372,7 +371,6 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = (
       name: 'Snapchat',
       category: 'social',
       badge: 'SC',
-      color: 'bg-[#FFFC00] text-black shadow-md',
       androidPackages: ['com.snapchat.android'],
       iosBundleIds: ['com.toyopagroup.picaboo'],
       hasShortVideoFeed: true,
@@ -389,7 +387,6 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = (
       name: 'Reddit',
       category: 'social',
       badge: 'R',
-      color: 'bg-[#FF4500] text-white shadow-md',
       androidPackages: ['com.reddit.frontpage', 'com.reddit.frontpage.lite'],
       iosBundleIds: ['com.reddit.Reddit'],
       hasShortVideoFeed: true,
@@ -406,7 +403,6 @@ export const BUILTIN_PLATFORMS: PlatformDefinition[] = (
       name: 'Pinterest',
       category: 'social',
       badge: 'P',
-      color: 'bg-[#E60023] text-white shadow-md',
       androidPackages: ['com.pinterest'],
       iosBundleIds: ['pinterest'],
       hasShortVideoFeed: true,
@@ -633,7 +629,7 @@ export const DEFAULT_STATE: AppState = {
     backgroundActivity: false,
   },
   settings: {
-    language: 'de',
+    language: 'system',
     theme: 'dark',
     startScreen: 'today',
     internalAppName: 'ScrollShield',
@@ -642,10 +638,9 @@ export const DEFAULT_STATE: AppState = {
     defaultDelay: 5,
     defaultEmergencyUnlock: 5,
     focusPresets: [15, 30, 45, 60],
+    pauseLine: '',
     notifications: {
       focusReminders: true,
-      eveningReminder: true,
-      relapseWarning: true,
       dailySummary: false,
       weeklyReview: true,
     },

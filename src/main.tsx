@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { MotionConfig } from 'motion/react';
 import { Capacitor } from '@capacitor/core';
 import App from './App.tsx';
+// Bundled, not loaded from Google: the app makes no network requests.
+import '@fontsource-variable/geist';
 import './index.css';
 
 // Offline support for the web version only. Inside the Android app the files

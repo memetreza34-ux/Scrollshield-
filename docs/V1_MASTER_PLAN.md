@@ -1,6 +1,6 @@
 # ScrollShield V1 – Master-Plan
 
-Stand: 05.10.2026. **Dieses Dokument ist die verbindliche Produktbeschreibung für Version 1.** Widerspricht ein
+Stand: 05.10.2026, ergänzt am 15.10.2026 (Ideen aus Play-Store-Rezensionen von one sec, ScreenZen und Opal). **Dieses Dokument ist die verbindliche Produktbeschreibung für Version 1.** Widerspricht ein
 anderes Dokument diesem Plan, gilt dieser Plan; das andere Dokument wird angepasst oder als veraltet markiert.
 
 Grundlage: externer Deep-Research-Bericht (Oktober 2026) plus eigene Markt- und Konkurrenzprüfung (Abschnitt 2). In
@@ -197,6 +197,8 @@ Ziel: In unter zwei Minuten zum ersten echten Schutz. **Keine Paywall im Onboard
    - Über anderen Apps einblenden (Pflicht für den Unterbrechungs-Bildschirm)
    - Benachrichtigungen (optional)
    - Akku-Ausnahme (empfohlen)
+   - Steht eine Berechtigung nach dem Erlauben noch auf „Nicht erteilt“, prüft die App beim Zurückkehren neu. Bleibt
+     es dabei, führt der Link „Schon erlaubt, aber nicht erkannt?“ zur Hilfe mit Hersteller-Besonderheiten.
    - Bedienungshilfe **nicht hier**: erst wenn der Nutzer Kurzvideo-Schutz einschaltet, mit eigenem Hinweis-Dialog.
      Ohne Pflicht-Berechtigungen kann man trotzdem weiter; „Heute“ zeigt dann deutlich „Schutz nicht aktiv“.
 
@@ -225,6 +227,10 @@ Zweck: auf einen Blick sehen, ob alles läuft und was heute passiert ist.
 
 - Keine App geschützt: kurzer Text, Knopf „App schützen“.
 - Noch keine Daten heute: „Noch nichts passiert heute.“ statt Nullen-Wand.
+- Kurzvideo-Erkennung reagiert nicht (Android hat die Bedienungshilfe beendet): Status „Reels-Erkennung reagiert
+  nicht“ mit Uhrzeit und Knopf „Erkennung prüfen“; betroffene Werte zeigen „nicht gemessen seit 13:40“ statt einer
+  Zahl. Die Pause beim Öffnen läuft weiter. Grund: Bei Mitbewerbern fällt der Kurzvideo-Schutz laut Rezensionen still
+  aus.
 - Webversion: Hinweis „Vorschau – echte Sperren nur in der Android-App“.
 
 **Nicht zeigen:** gesparte Zeit, Produktivitäts-Punkte, Sprüche, Streaks, Deko-Diagramme.
@@ -305,9 +311,17 @@ Erscheint über der geschützten App. Inhalt:
 4. Knöpfe: **„Zurück“** (immer, hervorgehoben) und **„Weiter zu Instagram“** (erst nach Ablauf der Pause; fehlt bei
    Sperre).
 5. Bei Sperre: „Notfallfreigabe“ als kleiner Text-Link, falls verfügbar.
+6. Falls gesetzt: der **eigene Satz** aus den Einstellungen unter dem Grund („Abends lieber lesen als scrollen.“).
 
 Bei Kurzvideo-Schutz: Statt die ganze App zu sperren, führt „Zurück“ aus dem Feed heraus; der Rest der App bleibt
 nutzbar.
+
+**Regeln für jede Unterbrechung:**
+
+- **Nie während eines Telefonats oder Video-Calls.** Gilt die Sperre danach noch, erscheint sie dann.
+- **Vorwarnung:** Sperren, die mitten in der Nutzung beginnen (Zeitplan, Tagesbudget, Kurzvideo-Tageslimit), kündigen
+  sich 1 Minute vorher an: kleiner Hinweis oben über der App („Abend-Schutz ab 21:00 · Instagram wird in 1 Minute
+  gesperrt.“), 4 Sekunden, ohne Ton, schließbar. Läuft über die Einblende-Berechtigung, nicht als Benachrichtigung.
 
 ### 4.8 Notfallfreigabe
 
@@ -320,14 +334,21 @@ Hinweis: Heute existiert die Notfallfreigabe nur in der Web-Schicht; für V1 mus
 
 ### 4.9 Einstellungen (Zahnrad)
 
+Oben die Pro-Karte, darunter drei Gruppen mit kleiner Zwischenüberschrift.
+
 1. **ScrollShield Pro:** Status, Vorteile, Abo verwalten, Käufe wiederherstellen.
-2. **Berechtigungen & Zustand:** jede Berechtigung mit Status und Knopf; Dienst-Zustand („Schutz-Dienst läuft“,
-   „Bedienungshilfe aktiv“, „Akku-Ausnahme fehlt“); Knopf „Erkennung prüfen“ für Kurzvideos.
-3. **Benachrichtigungen:** Fokus-Ende, Tageszusammenfassung (Standard aus), Wochenrückblick [PRO]. Keine
-   Benachrichtigungen, die nur zum Öffnen von ScrollShield verleiten.
-4. **Datenschutz & Daten:** was gespeichert wird (nur auf dem Gerät), Daten exportieren (JSON), alles löschen.
-5. **Hilfe & Support:** kurze Anleitung, Probleme mit Herstellern (Samsung, Xiaomi …), Kontakt.
-6. **Impressum & Lizenzen.**
+2. **Gruppe „Schutz“:**
+   - **Berechtigungen & Zustand:** jede Berechtigung mit Status und Knopf; Dienst-Zustand („Schutz-Dienst läuft“,
+     „Bedienungshilfe aktiv“, „Akku-Ausnahme fehlt“); Knopf „Erkennung prüfen“ für Kurzvideos.
+   - **Eigener Satz in der Pause:** ein selbst geschriebener Satz, der in jeder Pause unter dem Grund steht. Standard
+     aus, auch in Free.
+3. **Gruppe „Mitteilungen & Daten“:**
+   - **Benachrichtigungen:** Fokus-Ende, Tageszusammenfassung (Standard aus), Wochenrückblick [PRO]. Keine
+     Benachrichtigungen, die nur zum Öffnen von ScrollShield verleiten.
+   - **Datenschutz & Daten:** was gespeichert wird (nur auf dem Gerät), Daten exportieren (JSON), alles löschen.
+4. **Gruppe „Hilfe & Rechtliches“:**
+   - **Hilfe & Support:** kurze Anleitung, Probleme mit Herstellern (Samsung, Xiaomi …), Kontakt.
+   - **Impressum & Lizenzen.**
 
 ### 4.10 Paywall
 
@@ -434,6 +455,7 @@ Ohne Messquelle (z. B. Bedienungshilfe aus) wird „nicht gemessen“ angezeigt,
 | Rescue                                       | –                            | ✓                              |
 | Selbstverpflichtung                          | –                            | ✓                              |
 | Notfallfreigabe                              | ✓                            | ✓                              |
+| Eigener Satz, Vorwarnung vor Sperren         | ✓                            | ✓                              |
 | Einblicke                                    | Heute                        | + Woche, Muster, Trends        |
 | Berechtigungen & Zustand                     | ✓                            | ✓                              |
 | Datenschutz (lokal), keine Werbung           | ✓                            | ✓                              |
@@ -464,8 +486,9 @@ Lebenszeit-Kauf zum Start. Preise kommen aus dem Play Store und stehen nicht im 
 - Zeitpläne
 - Fokus, Rescue, Selbstverpflichtung
 - Notfallfreigabe auf dem Handy
+- Vorwarnung vor Sperren, keine Unterbrechung während Anrufen, eigener Satz in der Pause
 - Heute-Zahlen und Einblicke mit echten Daten
-- Berechtigungen & Dienst-Zustand
+- Berechtigungen & Dienst-Zustand, Warnung bei ausgefallener Kurzvideo-Erkennung
 - Pro-Abo über Google Play (mit Testphase, Wiederherstellen, Verwalten)
 - Daten-Export und Löschen, alles lokal
 
@@ -575,6 +598,9 @@ Arbeitsliste für den Umbau (Schritt nach diesem Plan):
 9. Verlauf-Seite → Einblicke (Heute frei, Rest Pro).
 10. Zentrale Pro-Abfrage („hat Pro?“) mit Free-Grenzen; Paywall-Seite; Abrechnung über Google Play.
 11. Schutzprofile („Arbeit“, „Schlaf“ usw.) ersetzen durch Voreinstellungen + Zeitpläne.
+12. Neu (15.10.): Vorwarnung 1 Minute vor Sperren; Anruf-Erkennung (keine Sperre während Telefonat oder Video-Call);
+    Lebenszeichen der Kurzvideo-Erkennung mit Warnung auf „Heute“; eigener Satz in der Pause; Berechtigungen beim
+    Zurückkehren in die App neu prüfen.
 
 ---
 
@@ -584,3 +610,5 @@ Arbeitsliste für den Umbau (Schritt nach diesem Plan):
 - Preise final festlegen (Empfehlung oben).
 - Ob Kurzvideo-Tageslimit in Free frei einstellbar sein soll oder nur feste Werte.
 - Mindestalter (16+) rechtlich bestätigen.
+- one sec nennt im Play Store ein US-Patent (12,468,828 B2) auf seinen Ansatz. Vor einem Start in den USA von
+  Fachleuten prüfen lassen.

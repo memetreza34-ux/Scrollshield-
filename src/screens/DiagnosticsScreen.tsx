@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { motion } from 'motion/react';
-import { AlertTriangle, CheckCircle2, Film, RefreshCw, Smartphone } from 'lucide-react';
+import { CircleCheck, Film, RefreshCw, Smartphone, TriangleAlert } from 'lucide-react';
 import { Screen, SUPPORTED_APPS } from '../types';
-import { Header } from '../components/ui';
+import { Header, Page, Section, SecondaryButton } from '../components/ui';
+import { t } from '../i18n';
+import { formatClock } from '../lib/commitment';
 import { AccessibilityDisclosure } from '../components/AccessibilityDisclosure';
 import { CalibrationSample, ScrollShieldBridge, ShortVideoUsageEntry, readShortVideoUsage } from '../lib/nativeBridge';
 import { SHORT_VIDEO_SIGNATURES, getShortVideoSignature, matchesShortVideoSurface } from '../lib/shortVideoSignatures';
@@ -58,11 +59,12 @@ export function DiagnosticsScreen({ navigate }: { navigate: (screen: Screen) => 
     void refresh();
   }, [refresh]);
 
-  const formatTime = (timestamp: number) =>
-    timestamp > 0 ? new Date(timestamp).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '–';
+  const formatTime = (timestamp: number) => (timestamp > 0 ? formatClock(timestamp) : '–');
+  const card = 'rounded-surface border border-line bg-surface p-4';
+  const code = 'text-[0.6875rem] leading-relaxed text-muted';
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6 pb-32">
+    <Page>
       {showDisclosure && (
         <AccessibilityDisclosure
           onAccept={() => {
@@ -72,95 +74,68 @@ export function DiagnosticsScreen({ navigate }: { navigate: (screen: Screen) => 
           onDecline={() => setShowDisclosure(false)}
         />
       )}
-      <Header title="Erkennung prüfen" onBack={() => navigate('settings')} />
+      <Header title={t('diag.title')} onBack={() => navigate('permissions')} />
 
-      <p className="mb-6 text-sm leading-relaxed text-zinc-400">
-        Kurzvideo-Regeln funktionieren nur, wenn ScrollShield den Feed der jeweiligen App erkennt. Die Erkennung stützt
-        sich auf technische Kennungen, die die Apps jederzeit umbenennen können. Hier siehst du, was auf diesem Gerät
-        wirklich ankommt.
-      </p>
+      <p className="mb-6 text-body-s text-muted">{t('diag.intro')}</p>
 
       <section
         aria-labelledby="diagnostics-status"
-        className={`mb-6 rounded-[1.5rem] border p-5 ${accessibilityActive ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}
+        className={`mb-4 flex flex-col gap-3 rounded-surface p-4 ${accessibilityActive ? 'bg-accent/10' : 'bg-pause/10'}`}
       >
-        <h2 id="diagnostics-status" className="mb-2 flex items-center gap-2 font-bold text-zinc-100">
+        <h2 id="diagnostics-status" className="flex items-center gap-2 text-title-s text-ink">
           {accessibilityActive ? (
-            <CheckCircle2 size={18} className="text-emerald-400" aria-hidden="true" />
+            <CircleCheck size={20} strokeWidth={1.75} className="text-accent" aria-hidden="true" />
           ) : (
-            <AlertTriangle size={18} className="text-amber-400" aria-hidden="true" />
+            <TriangleAlert size={20} strokeWidth={1.75} className="text-pause" aria-hidden="true" />
           )}
-          Kurzvideo-Erkennung {accessibilityActive ? 'aktiv' : 'inaktiv'}
+          {t(accessibilityActive ? 'diag.active' : 'diag.inactive')}
         </h2>
-        <p className="text-sm leading-relaxed text-zinc-300">
-          {accessibilityActive
-            ? 'Der Dienst läuft. Öffne den Feed einer geschützten App und komm hierher zurück.'
-            : 'Ohne aktivierte Bedienungshilfe kann ScrollShield keinen Kurzvideo-Feed erkennen. App-Verzögerungen und Sperren funktionieren weiterhin.'}
-        </p>
+        <p className="text-body-s text-ink">{t(accessibilityActive ? 'diag.activeText' : 'diag.inactiveText')}</p>
         {!accessibilityActive && (
-          <button
-            onClick={() => setShowDisclosure(true)}
-            className="mt-4 w-full rounded-[1.25rem] bg-zinc-100 py-3 text-sm font-bold text-zinc-950"
-          >
-            In den Einstellungen aktivieren
-          </button>
+          <SecondaryButton onClick={() => setShowDisclosure(true)}>{t('status.switchOn')}</SecondaryButton>
         )}
       </section>
 
-      <button
-        onClick={() => void refresh()}
-        className="mb-6 flex w-full items-center justify-center gap-2 rounded-[1.25rem] border border-zinc-800 bg-zinc-900/70 py-3 text-sm font-semibold text-zinc-300"
-      >
-        <RefreshCw size={16} aria-hidden="true" />
-        {isLoading ? 'Wird geladen …' : 'Neu laden'}
-      </button>
+      <div className="mb-6">
+        <SecondaryButton onClick={() => void refresh()}>
+          <RefreshCw size={16} strokeWidth={2} aria-hidden="true" />
+          {isLoading ? t('diag.loading') : t('diag.reload')}
+        </SecondaryButton>
+      </div>
 
       {usage.length > 0 && (
-        <section aria-labelledby="diagnostics-usage" className="mb-6">
-          <h2 id="diagnostics-usage" className="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">
-            Kurzvideo-Zeit heute
-          </h2>
-          <div className="space-y-2">
+        <Section title={t('diag.usage')}>
+          <div className="flex flex-col gap-2">
             {usage.map((entry) => (
-              <div
-                key={entry.packageName}
-                className="flex items-center justify-between rounded-2xl border border-zinc-800/50 bg-zinc-900/70 p-4"
-              >
-                <div>
-                  <div className="text-sm font-semibold text-zinc-200">
+              <div key={entry.packageName} className={`flex items-center justify-between gap-3 ${card}`}>
+                <div className="min-w-0">
+                  <p className="text-body text-ink">
                     {platformNameByPackage.get(entry.packageName) ?? entry.packageName}
-                  </div>
-                  <div className="text-xs text-zinc-500">
-                    {entry.surfaceId} · zuletzt {formatTime(entry.lastSeenAt)}
-                  </div>
+                  </p>
+                  <p className="text-caption text-muted">
+                    {t('diag.lastSeen', { surface: entry.surfaceId, time: formatTime(entry.lastSeenAt) })}
+                  </p>
                 </div>
-                <div className="text-lg font-bold tabular-nums text-zinc-100">{entry.minutesToday} Min</div>
+                <p className="flex-shrink-0 text-title-s text-ink">
+                  {t('time.minutes', { minutes: entry.minutesToday })}
+                </p>
               </div>
             ))}
           </div>
-        </section>
+        </Section>
       )}
 
-      <section aria-labelledby="diagnostics-samples" className="mb-6">
-        <h2 id="diagnostics-samples" className="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">
-          Zuletzt beobachtet
-        </h2>
-
+      <Section title={t('diag.samples')}>
         {!available && (
-          <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/70 p-5 text-sm leading-relaxed text-zinc-400">
-            <Smartphone size={18} className="mb-3 text-zinc-500" aria-hidden="true" />
-            Auf diesem Gerät stehen keine Beobachtungen zur Verfügung. Im Browser gibt es keine Bedienungshilfe – öffne
-            diese Seite in der Android-App.
+          <div className={`flex flex-col gap-3 ${card}`}>
+            <Smartphone size={20} strokeWidth={1.75} className="text-muted" aria-hidden="true" />
+            <p className="text-body-s text-muted">{t('diag.noSamplesWeb')}</p>
           </div>
         )}
 
-        {available && samples.length === 0 && (
-          <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/70 p-5 text-sm leading-relaxed text-zinc-400">
-            Noch nichts beobachtet. Öffne eine geschützte App, wechsle in ihren Kurzvideo-Feed und lade hier neu.
-          </div>
-        )}
+        {available && samples.length === 0 && <p className={`text-body-s text-muted ${card}`}>{t('diag.noSamples')}</p>}
 
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           {samples.map((sample, index) => {
             const platformId = platformIdByPackage.get(sample.packageName);
             const signature = platformId ? getShortVideoSignature(platformId) : undefined;
@@ -172,40 +147,39 @@ export function DiagnosticsScreen({ navigate }: { navigate: (screen: Screen) => 
             return (
               <div
                 key={`${sample.packageName}-${sample.observedAt}-${index}`}
-                className={`rounded-2xl border p-4 ${matched ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-zinc-800/50 bg-zinc-900/70'}`}
+                className={`rounded-surface border p-4 ${matched ? 'border-accent/40 bg-accent/5' : 'border-line bg-surface'}`}
               >
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Film size={14} className={matched ? 'text-emerald-400' : 'text-zinc-600'} aria-hidden="true" />
-                    <span className="text-sm font-semibold text-zinc-200">
-                      {platformNameByPackage.get(sample.packageName) ?? sample.packageName}
-                    </span>
-                  </div>
-                  <span className={`text-xs font-bold ${matched ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                    {matched ? 'ERKANNT' : 'kein Treffer'}
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-2 text-body text-ink">
+                    <Film
+                      size={16}
+                      strokeWidth={2}
+                      className={matched ? 'text-accent' : 'text-muted'}
+                      aria-hidden="true"
+                    />
+                    {platformNameByPackage.get(sample.packageName) ?? sample.packageName}
+                  </span>
+                  <span className={`text-label-s ${matched ? 'text-accent' : 'text-muted'}`}>
+                    {t(matched ? 'diag.matched' : 'diag.noMatch')}
                   </span>
                 </div>
 
-                <div className="mb-2 text-[11px] text-zinc-500">{formatTime(sample.observedAt)}</div>
+                <p className="mb-2 text-caption text-muted">{formatTime(sample.observedAt)}</p>
 
                 {sample.classNames.length > 0 && (
                   <div className="mb-2">
-                    <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-zinc-600">Klasse</div>
+                    <p className="mb-1 text-label-s text-muted">{t('diag.class')}</p>
                     <div className="overflow-x-auto">
-                      <code className="text-[11px] leading-relaxed text-zinc-400">{sample.classNames.join(', ')}</code>
+                      <code className={code}>{sample.classNames.join(', ')}</code>
                     </div>
                   </div>
                 )}
 
                 {sample.viewIds.length > 0 && (
                   <div>
-                    <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-zinc-600">
-                      Kennungen ({sample.viewIds.length})
-                    </div>
-                    <div className="max-h-32 overflow-y-auto overflow-x-auto">
-                      <code className="text-[11px] leading-relaxed text-zinc-400">
-                        {sample.viewIds.map((viewId) => viewId.split('/').pop()).join(', ')}
-                      </code>
+                    <p className="mb-1 text-label-s text-muted">{t('diag.ids', { count: sample.viewIds.length })}</p>
+                    <div className="max-h-32 overflow-x-auto overflow-y-auto">
+                      <code className={code}>{sample.viewIds.map((viewId) => viewId.split('/').pop()).join(', ')}</code>
                     </div>
                   </div>
                 )}
@@ -213,41 +187,29 @@ export function DiagnosticsScreen({ navigate }: { navigate: (screen: Screen) => 
             );
           })}
         </div>
-      </section>
+      </Section>
 
-      <section aria-labelledby="diagnostics-signatures" className="mb-6">
-        <h2 id="diagnostics-signatures" className="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">
-          Hinterlegte Erkennung
-        </h2>
-        <div className="space-y-2">
+      <Section title={t('diag.signatures')}>
+        <div className="flex flex-col gap-2">
           {SHORT_VIDEO_SIGNATURES.map((signature) => {
             const platform = SUPPORTED_APPS.find((app) => app.id === signature.platformId);
             return (
-              <div
-                key={signature.platformId}
-                className="rounded-2xl border border-zinc-800/50 bg-zinc-900/70 p-4 text-sm"
-              >
-                <div className="mb-1 font-semibold text-zinc-200">{platform?.name ?? signature.platformId}</div>
+              <div key={signature.platformId} className={card}>
+                <p className="mb-1 text-body text-ink">{platform?.name ?? signature.platformId}</p>
                 {signature.alwaysShortVideo ? (
-                  <div className="text-xs text-emerald-400">Ganze App ist ein Kurzvideo-Feed – kann nicht brechen.</div>
+                  <p className="text-caption text-muted">{t('diag.wholeApp')}</p>
                 ) : (
                   <div className="overflow-x-auto">
-                    <code className="text-[11px] leading-relaxed text-zinc-500">
-                      {[...signature.viewIdHints, ...signature.classNameHints].join(', ')}
-                    </code>
+                    <code className={code}>{[...signature.viewIdHints, ...signature.classNameHints].join(', ')}</code>
                   </div>
                 )}
               </div>
             );
           })}
         </div>
-      </section>
+      </Section>
 
-      <p className="text-xs leading-relaxed text-zinc-600">
-        Wenn ein Feed offen war und trotzdem „kein Treffer" steht, passt die hinterlegte Erkennung nicht mehr zur
-        installierten App-Version. Die Kennungen oben zeigen, woran ScrollShield den Feed stattdessen erkennen könnte.
-        ScrollShield liest dabei ausschließlich diese technischen Kennungen – keine Texte, Nachrichten oder Eingaben.
-      </p>
-    </motion.div>
+      <p className="text-caption text-muted">{t('diag.footer')}</p>
+    </Page>
   );
 }
