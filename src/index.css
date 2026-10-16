@@ -112,9 +112,11 @@
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }
-  /* A screen fades in when it appears; reduced motion turns it off below. */
+  /* A screen fades in when it appears; reduced motion turns it off below. No
+     fill mode: an animation that keeps filling forms a stacking context, and
+     the sheets inside a page would end up below the tab bar. */
   .fade-in {
-    animation: fade-in 0.25s ease-out both;
+    animation: fade-in 0.25s ease-out;
   }
 }
 
