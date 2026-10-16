@@ -14,4 +14,5 @@ ext {
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
     androidxSecurityCryptoVersion = '1.1.0-alpha06'
+    billingVersion = '8.0.0'
 }

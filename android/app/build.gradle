@@ -62,6 +62,8 @@ dependencies {
     // EncryptedSharedPreferences for the native blocked-app list.
     // Jetpack Security is in maintenance mode; revisit before adding new usage.
     implementation "androidx.security:security-crypto:$androidxSecurityCryptoVersion"
+    // Google Play Billing for ScrollShield Pro (ProBillingPlugin); no third-party SDK.
+    implementation "com.android.billingclient:billing:$billingVersion"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

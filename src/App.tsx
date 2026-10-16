@@ -17,6 +17,7 @@ import {
 } from './lib/nativeBridge';
 import { getBackTarget, isAllowedBeforeOnboarding } from './lib/navigation';
 import { mergeNativeInterruptions } from './lib/nativeEvents';
+import { proAfterStatus, readProStatus } from './lib/billing';
 import { mergeNativeAppUsage, mergeNativeShortVideoUsage, mergeScreenTime } from './lib/stats';
 import { getLocalDateKey } from './lib/appUtils';
 import { detectOperatingSystem } from './lib/platform';
@@ -257,6 +258,33 @@ export default function App() {
       document.removeEventListener('visibilitychange', read);
     };
   }, []);
+
+  // Pro follows Google Play: checked on start and on every return to the app,
+  // so a purchase confirmed later, a renewal or an ended subscription shows up.
+  // An ended one leads to the choice of the free apps (ProExpiredScreen).
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    let cancelled = false;
+    const check = () => {
+      if (document.visibilityState !== 'visible') return;
+      void readProStatus().then((status) => {
+        if (cancelled || !status.available) return;
+        setAppState((prev) =>
+          proAfterStatus(status, prev.pro.active) === prev.pro.active
+            ? prev
+            : { ...prev, pro: { active: status.active } },
+        );
+      });
+    };
+
+    check();
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [isLoaded]);
 
   // Older versions scheduled an evening reminder as a daily alarm; it is not
   // part of V1, so a leftover alarm is cancelled once per start.

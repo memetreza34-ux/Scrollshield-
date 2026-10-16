@@ -47,7 +47,19 @@ technische Einschätzung; Details und Fragen für eine Prüfung stehen in `docs/
 
 ## 3. Recht und Geld
 
-- [ ] **[Du] Klären: kostenlos oder mit Einnahmen?** Davon hängen fast alle folgenden Punkte ab.
+- [x] **Kostenlos oder mit Einnahmen?** Entschieden: Free + Pro-Abo (Master-Plan Abschnitt 10). Damit gelten die
+      Punkte zu Gewerbe und Steuern unten.
+- [ ] **[Du] Pro-Abo in der Play Console anlegen** (Monetarisieren → Abos), sobald die App dort angelegt ist:
+  - Abo mit der Produkt-ID **`pro`** (genau so, die App fragt danach).
+  - Basis-Abo **`yearly`** (jährlich, automatisch verlängert) mit einem Angebot „7 Tage kostenlos“ nur für neue Kunden.
+  - Basis-Abo **`monthly`** (monatlich, automatisch verlängert).
+  - Preise festlegen (Plan: 19,99 € / Jahr, 3,49 € / Monat). Die App zeigt die Preise, die Google Play liefert.
+  - Unter „Lizenztests“ deine Google-Adresse eintragen: Dann kannst du kaufen, ohne zu zahlen.
+  - **[Claude]** Die Abrechnung ist seit 16.10. eingebaut (Googles eigene Bibliothek, kein Fremdanbieter). Testen geht
+    erst, wenn die App im Play Store (geschlossener Test) liegt und das Abo dort angelegt ist.
+- [ ] **[Du] Datensicherheit-Formular wegen Pro:** Käufe laufen über Google Play, die App sendet nichts an uns. Ob
+      der Kauf über Google Play im Formular als „erfasst“ gilt, beim Ausfüllen in Googles Hilfe zum Formular nachlesen
+      (nicht geprüft).
 - [ ] **Bei Einnahmen [Du]:** Gewerbe anmelden, Finanzamt (Fragebogen zur steuerlichen Erfassung), Kleinunternehmer-
       regelung prüfen, Steuerangaben in der Play Console. IHK oder Steuerberater fragen.
 - [ ] **[Du] Impressum** ausfüllen (`src/screens/SupportScreen.tsx`). Ob es auch für eine kostenlose App Pflicht ist,

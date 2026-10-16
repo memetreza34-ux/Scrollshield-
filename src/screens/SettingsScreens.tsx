@@ -28,20 +28,19 @@ import {
   TextButton,
 } from '../components/ui';
 import { FOCUS_RING_INSET } from '../components/styles';
-import { detectLanguage, LanguageSetting, t } from '../i18n';
+import { detectLanguage, LanguageSetting, MessageKey, t } from '../i18n';
 import { FREE_LIMITS, hasPro, paywallFor, PRO_BENEFITS } from '../lib/entitlements';
 import { formatHour } from '../lib/format';
 import { SUMMARY_HOUR, usesNativeNotifications, WEEKLY_REVIEW_HOUR } from '../lib/notifications';
 import { normalizePauseLine, PAUSE_LINE_MAX_LENGTH } from '../lib/state';
 import { DevProSwitch } from './PaywallScreen';
+import { manageSubscription, readProStatus } from '../lib/billing';
 
 type ScreenProps = {
   state: AppState;
   updateState: (u: Partial<AppState>) => void;
   navigate: (s: Screen) => void;
 };
-
-const GOOGLE_PLAY_SUBSCRIPTIONS = 'https://play.google.com/store/account/subscriptions';
 
 const RowIcon = ({ icon: Icon }: { icon: LucideIcon }) => (
   <Icon size={24} strokeWidth={1.75} className="flex-shrink-0 text-ink" aria-hidden="true" />
@@ -264,10 +263,22 @@ function PauseLineSheet({
 
 /**
  * ScrollShield Pro in the settings: what you have, what Pro adds, and the
- * subscription. Buying and restoring arrive with Google Play billing.
+ * subscription in Google Play (src/lib/billing.ts).
  */
 export function ProStatusScreen({ state, updateState, navigate }: ScreenProps) {
   const pro = hasPro(state);
+  const [restoreMessage, setRestoreMessage] = useState<MessageKey | null>(null);
+
+  // Restoring asks Google Play again; Pro then follows its answer.
+  const restore = async () => {
+    const status = await readProStatus();
+    if (!status.available) {
+      setRestoreMessage('pro.storeUnavailable');
+      return;
+    }
+    updateState({ pro: { active: status.active } });
+    setRestoreMessage(status.active ? 'pro.restored' : 'pro.nothingToRestore');
+  };
 
   return (
     <Page>
@@ -296,9 +307,9 @@ export function ProStatusScreen({ state, updateState, navigate }: ScreenProps) {
                 trailing={
                   <ExternalLink size={20} strokeWidth={1.75} className="flex-shrink-0 text-muted" aria-hidden="true" />
                 }
-                onClick={() => window.open(GOOGLE_PLAY_SUBSCRIPTIONS, '_blank', 'noopener,noreferrer')}
+                onClick={() => void manageSubscription()}
               />
-              <Row label={t('pro.restore')} onClick={() => undefined} disabled noChevron />
+              <Row label={t('pro.restore')} onClick={() => void restore()} noChevron />
             </List>
           </Section>
           <div className="flex flex-col gap-3">
@@ -332,10 +343,13 @@ export function ProStatusScreen({ state, updateState, navigate }: ScreenProps) {
           >
             {t('pro.seePrices')}
           </SecondaryButton>
-          <TextButton onClick={() => undefined} disabled>
-            {t('pro.restore')}
-          </TextButton>
+          <TextButton onClick={() => void restore()}>{t('pro.restore')}</TextButton>
         </>
+      )}
+      {restoreMessage && (
+        <p role="status" className="mt-2 px-1 text-body-s text-ink">
+          {t(restoreMessage)}
+        </p>
       )}
       <p className="mt-2 px-1 text-caption text-muted">{t('pro.billingNote')}</p>
       <DevProSwitch pro={pro} updateState={updateState} />

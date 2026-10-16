@@ -13,6 +13,14 @@ are not shipped in the app bundle.
 | `lucide-react`                   | Local interface icons                                                               | None                | None        | Not applicable                                                        |
 | `@fontsource-variable/geist`     | Interface font, bundled with the app                                                | None                | None        | Not applicable                                                        |
 
+## Native Android libraries
+
+Not npm packages, so outside the table above; added in `android/app/build.gradle`.
+
+- Google Play Billing Library (com.android.billingclient:billing): ScrollShield Pro subscription through Google
+  Play (`ProBillingPlugin.kt`). Payment data stays with Google Play; the app only asks whether Pro is active and
+  acknowledges purchases. No data goes to a ScrollShield server. Opt-out: do not buy Pro.
+
 ## Release Rule
 
 Any new runtime dependency must be added to this registry and reviewed against `docs/SDK_POLICY.md` before release.
