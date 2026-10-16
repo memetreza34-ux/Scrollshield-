@@ -729,14 +729,21 @@ export const de = {
   'help.guide.plansText':
     'Free schützt {apps} Apps mit Pause, Wiederöffnungs-Schutz und einem Zeitplan, dazu Fokus bis 60 Minuten und die Einblicke für heute. Pro bringt beliebig viele Apps, „Stark“ und eigene Regeln, Sitzungs-Wächter, Tagesbudget, Rescue, Selbstverpflichtung, mehrere Zeitpläne, strengen Fokus und die Woche in den Einblicken.',
   'help.makers': 'Schutz stoppt von selbst?',
-  'help.makersText': 'Manche Hersteller beenden Apps im Hintergrund. So erlaubst du ScrollShield, weiterzulaufen.',
-  'help.maker.samsung': '[Platzhalter: Anleitung für Samsung. Text folgt.]',
-  'help.maker.xiaomi': '[Platzhalter: Anleitung für Xiaomi, Redmi und POCO. Text folgt.]',
-  'help.maker.huawei': '[Platzhalter: Anleitung für Huawei und Honor. Text folgt.]',
-  'help.maker.oneplus': '[Platzhalter: Anleitung für OnePlus, OPPO und realme. Text folgt.]',
-  'help.maker.pixel': '[Platzhalter: Anleitung für Google Pixel. Text folgt.]',
+  'help.makersText':
+    'Manche Hersteller beenden Apps im Hintergrund. So erlaubst du ScrollShield, weiterzulaufen. Je nach Android-Version heißen die Menüs etwas anders.',
+  'help.maker.samsung':
+    '1. Einstellungen → Apps → ScrollShield → Akku: „Nicht eingeschränkt“ wählen.\n2. Einstellungen → Akku → Limits für Hintergrundnutzung: ScrollShield zu den Apps hinzufügen, die nie in den Standby-Modus wechseln.\n3. Im selben Menü „Nicht verwendete Apps in Standby versetzen“ ausschalten.\nNach einem System-Update kurz nachsehen: Samsung setzt diese Einstellungen manchmal zurück.',
+  'help.maker.xiaomi':
+    '1. Einstellungen → Apps → Apps verwalten → ScrollShield: „Autostart“ einschalten.\n2. Im selben Menü: Akkusparmodus → „Keine Einschränkungen“.\n3. Die Übersicht der offenen Apps öffnen, ScrollShield lange drücken und das Schloss antippen. Dann beendet „Alle schließen“ die App nicht mehr.',
+  'help.maker.huawei':
+    '1. Einstellungen → Akku → App-Start → ScrollShield: „Automatisch verwalten“ ausschalten.\n2. Im Fenster danach alle drei Schalter einschalten: automatischer Start, sekundärer Start, im Hintergrund ausführen.\n3. Die Übersicht der offenen Apps öffnen und ScrollShield sperren (nach unten ziehen oder das Schloss antippen).',
+  'help.maker.oneplus':
+    '1. Einstellungen → Apps → App-Verwaltung → ScrollShield → Akkunutzung: „Hintergrundaktivität zulassen“ und, falls vorhanden, „Automatischer Start“ einschalten.\n2. Die Übersicht der offenen Apps öffnen, ScrollShield lange drücken und „Sperren“ wählen.',
+  'help.maker.pixel':
+    'Auf Pixel-Handys läuft ScrollShield meist ohne Änderung. Stoppt der Schutz doch:\n1. Einstellungen → Apps → ScrollShield → Akkunutzung der App: „Uneingeschränkt“ wählen.\n2. Auf derselben Seite „App-Aktivität pausieren, wenn nicht verwendet“ ausschalten.',
   'help.maker.other': 'Andere Geräte',
-  'help.maker.otherText': '[Platzhalter: Anleitung für andere Geräte. Text folgt.]',
+  'help.maker.otherText':
+    '1. Einstellungen → Apps → ScrollShield → Akku: „Uneingeschränkt“ oder „Nicht optimieren“ wählen.\n2. Gibt es einen Punkt wie „Autostart“ oder „Im Hintergrund ausführen“, einschalten.\n3. ScrollShield in der Übersicht der offenen Apps sperren, falls dein Handy das anbietet.\nAnleitungen für viele weitere Geräte: dontkillmyapp.com',
   'help.contact': 'Kontakt',
   'help.report': 'Problem melden',
   'help.reportSub': 'Öffnet deine E-Mail-App mit Gerätedaten, die du vorher siehst.',

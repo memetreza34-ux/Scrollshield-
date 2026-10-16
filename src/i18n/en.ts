@@ -719,14 +719,21 @@ export const en: Messages = {
   'help.guide.plansText':
     'Free protects {apps} apps with the pause, reopen protection and one schedule, plus focus up to 60 minutes and the insights for today. Pro adds any number of apps, “Strong” and custom rules, session guard, daily budget, Rescue, self-commitment, several schedules, strict focus and the week in insights.',
   'help.makers': 'Protection stops by itself?',
-  'help.makersText': 'Some phone makers stop apps in the background. This is how you let ScrollShield keep running.',
-  'help.maker.samsung': '[Placeholder: guide for Samsung. Text to follow.]',
-  'help.maker.xiaomi': '[Placeholder: guide for Xiaomi, Redmi and POCO. Text to follow.]',
-  'help.maker.huawei': '[Placeholder: guide for Huawei and Honor. Text to follow.]',
-  'help.maker.oneplus': '[Placeholder: guide for OnePlus, OPPO and realme. Text to follow.]',
-  'help.maker.pixel': '[Placeholder: guide for Google Pixel. Text to follow.]',
+  'help.makersText':
+    'Some phone makers stop apps in the background. This is how you let ScrollShield keep running. Menu names differ a little between Android versions.',
+  'help.maker.samsung':
+    '1. Settings → Apps → ScrollShield → Battery: choose “Unrestricted”.\n2. Settings → Battery → Background usage limits: add ScrollShield to “Never sleeping apps”.\n3. In the same menu, turn off “Put unused apps to sleep”.\nCheck again after a system update: Samsung sometimes resets these settings.',
+  'help.maker.xiaomi':
+    '1. Settings → Apps → Manage apps → ScrollShield: turn on “Autostart”.\n2. In the same menu: Battery saver → “No restrictions”.\n3. Open the recent apps, long-press ScrollShield and tap the lock. “Clear all” then leaves it running.',
+  'help.maker.huawei':
+    '1. Settings → Battery → App launch → ScrollShield: turn off “Manage automatically”.\n2. In the dialog that follows, turn on all three switches: auto-launch, secondary launch, run in background.\n3. Open the recent apps and lock ScrollShield (pull it down or tap the lock).',
+  'help.maker.oneplus':
+    '1. Settings → Apps → App management → ScrollShield → Battery usage: turn on “Allow background activity” and, if present, “Auto launch”.\n2. Open the recent apps, long-press ScrollShield and choose “Lock”.',
+  'help.maker.pixel':
+    'On Pixel phones ScrollShield usually runs without changes. If protection stops anyway:\n1. Settings → Apps → ScrollShield → App battery usage: choose “Unrestricted”.\n2. On the same page, turn off “Pause app activity if unused”.',
   'help.maker.other': 'Other phones',
-  'help.maker.otherText': '[Placeholder: guide for other phones. Text to follow.]',
+  'help.maker.otherText':
+    '1. Settings → Apps → ScrollShield → Battery: choose “Unrestricted” or “Don’t optimize”.\n2. If there is an option like “Autostart” or “Run in background”, turn it on.\n3. Lock ScrollShield in the recent apps if your phone offers it.\nGuides for many more phones: dontkillmyapp.com',
   'help.contact': 'Contact',
   'help.report': 'Report a problem',
   'help.reportSub': 'Opens your email app with device details you see first.',

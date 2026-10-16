@@ -13,7 +13,7 @@ describe('SupportScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Samsung' }));
     expect(screen.getByRole('button', { name: 'Samsung' })).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText(/Anleitung für Samsung/)).toBeInTheDocument();
+    expect(screen.getByText(/Limits für Hintergrundnutzung/)).toBeInTheDocument();
     await expectNoA11yViolations(container);
   });
 
