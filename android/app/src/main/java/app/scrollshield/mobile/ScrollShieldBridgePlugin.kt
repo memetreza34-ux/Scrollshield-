@@ -57,6 +57,10 @@ class ScrollShieldBridgePlugin : Plugin() {
         /** JSON array of { packageName, mode, delaySeconds } objects. */
         const val KEY_BLOCKED_RULES = "blocked_rules"
         const val KEY_MONITORING_ENABLED = "monitoring_enabled"
+        const val KEY_PAUSE_LINE = "pause_line"
+
+        /** PAUSE_LINE_MAX_LENGTH in src/lib/state.ts. */
+        const val PAUSE_LINE_MAX_LENGTH = 80
 
         /** Sent to the web layer when the user presses Android's back button. */
         const val EVENT_BACK_BUTTON = "backButton"
@@ -254,12 +258,19 @@ class ScrollShieldBridgePlugin : Plugin() {
      *   rules: [{ packageName, appId, mode, delaySeconds, dailyLimitMinutes?, antiBinge?, timeWindows?, shortVideo?,
      *             focusUntil?, sessionLimitMinutes?, emergencyUnlock?, emergencyLockedUntil? }],
      *   monitoringEnabled: boolean,
+     *   pauseLine?: string,
      * })
      */
     @PluginMethod
     fun syncBlockedApps(call: PluginCall) {
         val incoming = call.getArray("rules") ?: JSONArray()
         val monitoringEnabled = call.getBoolean("monitoringEnabled", false) ?: false
+        // One line of plain text, as normalizePauseLine() in src/lib/state.ts.
+        val pauseLine = (call.getString("pauseLine") ?: "")
+            .replace(Regex("\\s+"), " ")
+            .filterNot { it.isISOControl() }
+            .trim()
+            .take(PAUSE_LINE_MAX_LENGTH)
 
         val normalized = JSONArray()
         for (index in 0 until incoming.length()) {
@@ -298,6 +309,7 @@ class ScrollShieldBridgePlugin : Plugin() {
         encryptedPrefs.edit()
             .putString(KEY_BLOCKED_RULES, normalized.toString())
             .putBoolean(KEY_MONITORING_ENABLED, monitoringEnabled)
+            .putString(KEY_PAUSE_LINE, pauseLine)
             .apply()
 
         // Let running services pick the change up without a restart. The

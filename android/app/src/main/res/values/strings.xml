@@ -25,6 +25,22 @@
     <string name="lock_warning_time_window">Ab %1$s läuft ein Zeitplan: %2$s wird gleich gesperrt.</string>
     <string name="lock_warning_daily_limit">Tagesbudget fast aufgebraucht: %1$s wird in ein bis zwei Minuten gesperrt.</string>
     <string name="overlay_anti_binge_block_hint">Abkühlzeit: %1$d-mal geöffnet in %2$d Minuten. Später geht es wieder.</string>
+    <string name="overlay_chip_pause">Pause</string>
+    <string name="overlay_chip_longer">Längere Pause</string>
+    <string name="overlay_chip_cooldown">Abkühlzeit</string>
+    <string name="overlay_chip_locked">Gesperrt</string>
+    <string name="overlay_chip_budget">Gesperrt · Tagesbudget</string>
+    <string name="overlay_chip_schedule">Gesperrt · Zeitplan</string>
+    <string name="overlay_chip_focus">Gesperrt · Fokus</string>
+    <string name="overlay_chip_feed">Kurzvideos</string>
+    <string name="overlay_pause_text">Du kannst jederzeit zurück.</string>
+    <string name="overlay_pause_line_label">Dein Satz</string>
+    <string name="overlay_pause_line_quoted">„%1$s“</string>
+    <string name="overlay_continue_in">Weiter in %1$d s</string>
+    <plurals name="overlay_seconds">
+        <item quantity="one">Sekunde</item>
+        <item quantity="other">Sekunden</item>
+    </plurals>
     <string name="overlay_ready_hint">Du kannst weiter – oder zurück.</string>
     <string name="overlay_continue">Weiter</string>
     <string name="overlay_continue_to">Weiter zu %1$s</string>
@@ -43,9 +59,5 @@
     <plurals name="overlay_feed_swipes">
         <item quantity="one">Du hast %1$d Mal in %2$s gewischt.</item>
         <item quantity="other">Du hast %1$d Mal in %2$s gewischt.</item>
-    </plurals>
-    <plurals name="overlay_countdown">
-        <item quantity="one">%d Sekunde</item>
-        <item quantity="other">%d Sekunden</item>
     </plurals>
 </resources>

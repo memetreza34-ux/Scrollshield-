@@ -219,6 +219,8 @@ export interface SyncBlockedAppsOptions {
   rules: NativeProtectionRule[];
   /** Master switch – if false the service won't intervene */
   monitoringEnabled: boolean;
+  /** The user's own sentence for the pause screen; empty turns it off. */
+  pauseLine?: string;
 }
 
 export interface SyncResult {
@@ -377,6 +379,8 @@ export interface NativeProtectionOptions {
   focusStrict?: boolean;
   /** End of a self-commitment: no emergency unlock before it. */
   commitmentUntil?: number;
+  /** The user's own sentence, shown on every pause (never on a lock). */
+  pauseLine?: string;
   now?: number;
 }
 
@@ -531,7 +535,7 @@ export async function syncNativeBlockList(
   const monitoringEnabled = rules.length > 0;
 
   try {
-    await ScrollShieldBridgeNative.syncBlockedApps({ rules, monitoringEnabled });
+    await ScrollShieldBridgeNative.syncBlockedApps({ rules, monitoringEnabled, pauseLine: options.pauseLine ?? '' });
     if (monitoringEnabled) {
       await ScrollShieldBridgeNative.startMonitoring();
     } else {

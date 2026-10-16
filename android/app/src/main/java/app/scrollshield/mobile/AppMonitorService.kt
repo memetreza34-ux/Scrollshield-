@@ -13,6 +13,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -28,12 +29,15 @@ import android.text.format.DateFormat
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
+import androidx.core.view.ViewCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
@@ -247,6 +251,8 @@ class AppMonitorService : Service() {
         val countdown: TextView,
         val continueButton: Button,
         val emergencyButton: Button,
+        /** The label "continue" gets back once the pause is over. */
+        val continueText: String,
     )
 
     // ── State ─────────────────────────────────────────────────────────────────
@@ -290,12 +296,21 @@ class AppMonitorService : Service() {
     /** When the current session without a break began, per protected package. */
     private val sessionStartedAt = ConcurrentHashMap<String, Long>()
 
-    private val colorBackground = Color.parseColor("#F70A0A0A")
-    private val colorText = Color.parseColor("#FAFAFA")
-    private val colorBody = Color.parseColor("#D4D4D8")
+    // The design tokens of src/index.css.
+    private val colorBackground = Color.parseColor("#09090B")
+    private val colorRaised = Color.parseColor("#1C1C22")
+    private val colorLine = Color.parseColor("#27272A")
+    private val colorText = Color.parseColor("#F4F4F5")
     private val colorMuted = Color.parseColor("#A1A1AA")
     private val colorAccent = Color.parseColor("#10B981")
-    private val colorOnAccent = Color.parseColor("#052E1F")
+    private val colorOnAccent = Color.parseColor("#09090B")
+    private val colorPause = Color.parseColor("#F59E0B")
+    private val colorLock = Color.parseColor("#F43F5E")
+    private val fontMedium: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+
+    /** The user's own sentence for pauses; empty when none is set. */
+    @Volatile
+    private var pauseLine = ""
 
     private val prefs: SharedPreferences by lazy { SecurePrefs.open(this) }
     private val openLog: OpenLog by lazy { OpenLog(prefs) }
@@ -375,6 +390,7 @@ class AppMonitorService : Service() {
 
     private fun loadRules() {
         monitoringEnabled = prefs.getBoolean(ScrollShieldBridgePlugin.KEY_MONITORING_ENABLED, false)
+        pauseLine = prefs.getString(ScrollShieldBridgePlugin.KEY_PAUSE_LINE, "") ?: ""
 
         val raw = prefs.getString(ScrollShieldBridgePlugin.KEY_BLOCKED_RULES, "[]") ?: "[]"
         val parsed = mutableMapOf<String, BlockRule>()
@@ -718,9 +734,24 @@ class AppMonitorService : Service() {
             rule.mode == "soft" -> "SOFT"
             else -> "STANDARD"
         }
+        val chipText = getString(
+            when (verdict.lockReason) {
+                null -> if (reopened) R.string.overlay_chip_longer else R.string.overlay_chip_pause
+                "DAILY_LIMIT" -> R.string.overlay_chip_budget
+                "TIME_WINDOW" -> R.string.overlay_chip_schedule
+                "FOCUS" -> R.string.overlay_chip_focus
+                "ANTI_BINGE" -> R.string.overlay_chip_cooldown
+                else -> R.string.overlay_chip_locked
+            }
+        )
         presentOverlay(
             blockedPackage = blockedPackage,
-            bodyText = verdict.statusText ?: verdict.reopenText ?: getString(R.string.overlay_body, appName),
+            chipText = chipText,
+            // The cooldown belongs to the reopen protection: amber like a pause.
+            tone = if (locked && verdict.lockReason != "ANTI_BINGE") Tone.LOCK else Tone.PAUSE,
+            titleText = verdict.statusText ?: verdict.reopenText ?: getString(R.string.overlay_body, appName),
+            bodyText = if (!locked && !reopened) getString(R.string.overlay_pause_text) else null,
+            showPauseLine = !locked,
             continueText = getString(R.string.overlay_continue_to, appName),
             showContinue = !locked,
             onShown = {
@@ -761,7 +792,10 @@ class AppMonitorService : Service() {
         val appName = getAppName(packageName)
         presentOverlay(
             blockedPackage = packageName,
-            bodyText = getString(R.string.overlay_session_body, rule.sessionLimitMinutes, appName),
+            chipText = getString(R.string.overlay_chip_pause),
+            tone = Tone.PAUSE,
+            titleText = getString(R.string.overlay_session_body, rule.sessionLimitMinutes, appName),
+            showPauseLine = true,
             continueText = getString(R.string.overlay_continue),
             showContinue = true,
             onShown = {
@@ -848,7 +882,11 @@ class AppMonitorService : Service() {
 
         presentOverlay(
             blockedPackage = packageName,
-            bodyText = body,
+            chipText = getString(R.string.overlay_chip_feed),
+            tone = if (hardInterrupt) Tone.LOCK else Tone.PAUSE,
+            titleText = body,
+            bodyText = getString(if (hardInterrupt) R.string.overlay_feed_hard_hint else R.string.overlay_feed_soft_hint),
+            showPauseLine = !hardInterrupt,
             continueText = getString(R.string.overlay_continue),
             showContinue = !hardInterrupt,
             onShown = {
@@ -865,11 +903,6 @@ class AppMonitorService : Service() {
                 dismissOverlay()
             },
         ) { views ->
-            views.status.text = if (hardInterrupt) {
-                getString(R.string.overlay_feed_hard_hint)
-            } else {
-                getString(R.string.overlay_feed_soft_hint)
-            }
             setButtonEnabled(views.continueButton, true)
         }
     }
@@ -878,16 +911,25 @@ class AppMonitorService : Service() {
         InterruptionLog.record(prefs, packageName, kind, outcome, reason, swipes)
     }
 
+    /** Colour of the status chip: pause and reopen amber, locks rose, the feed hint green. */
+    private enum class Tone { PAUSE, LOCK, ACCENT }
+
     /**
-     * Shared overlay: the app's icon and name, one sentence why, a countdown
-     * when there is a pause, "back" as the main button, "continue" below it
-     * and, on a lock, the emergency unlock. `configure` drives the countdown
-     * or hint; `onShown` runs only when the overlay really appeared;
-     * `onGoHome` when the user leaves through "back" or the back key.
+     * Shared overlay, built like the in-app preview (src/components/Interruption.tsx):
+     * the app's icon, a status chip, the reason as title, an optional line
+     * below, the user's own sentence on pauses, a large countdown, "back" as
+     * the main button, "continue" below it and, on a lock, the emergency
+     * unlock as a text link. `configure` drives the countdown or hint;
+     * `onShown` runs only when the overlay really appeared; `onGoHome` when
+     * the user leaves through "back" or the back key.
      */
     private fun presentOverlay(
         blockedPackage: String,
-        bodyText: String,
+        chipText: String,
+        tone: Tone,
+        titleText: String,
+        bodyText: String? = null,
+        showPauseLine: Boolean = false,
         continueText: String,
         showContinue: Boolean,
         onShown: () -> Unit = {},
@@ -896,6 +938,7 @@ class AppMonitorService : Service() {
         configure: (OverlayViews) -> Unit,
     ) {
         if (!Settings.canDrawOverlays(this) || CallState.isActive(this)) return
+        val line = if (showPauseLine) pauseLine else ""
 
         mainHandler.post {
             if (overlayView != null) return@post
@@ -915,6 +958,13 @@ class AppMonitorService : Service() {
                 gravity = Gravity.CENTER
             }
 
+            val header = TextView(this).apply {
+                text = getString(R.string.app_name)
+                textSize = 13f
+                setTextColor(colorMuted)
+                setPadding(dp(16), dp(16), dp(16), dp(8))
+            }
+
             val icon = ImageView(this).apply {
                 val drawable = try {
                     packageManager.getApplicationIcon(blockedPackage)
@@ -922,29 +972,88 @@ class AppMonitorService : Service() {
                     null
                 }
                 if (drawable != null) setImageDrawable(drawable) else visibility = View.GONE
+                contentDescription = getAppName(blockedPackage)
             }
 
-            val nameView = TextView(this).apply {
-                text = getAppName(blockedPackage)
-                textSize = 22f
-                typeface = Typeface.DEFAULT_BOLD
+            val toneColor = when (tone) {
+                Tone.PAUSE -> colorPause
+                Tone.LOCK -> colorLock
+                Tone.ACCENT -> colorAccent
+            }
+            val chip = TextView(this).apply {
+                text = chipText
+                textSize = 12f
+                typeface = fontMedium
+                setTextColor(toneColor)
+                setPadding(dp(10), dp(4), dp(10), dp(4))
+                compoundDrawablePadding = dp(6)
+                setCompoundDrawablesRelativeWithIntrinsicBounds(
+                    GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(toneColor)
+                        setSize(dp(6), dp(6))
+                    },
+                    null,
+                    null,
+                    null,
+                )
+                background = GradientDrawable().apply {
+                    cornerRadius = dp(999).toFloat()
+                    // The tone at about 12 % over the dark ground.
+                    setColor((toneColor and 0x00FFFFFF) or 0x1F000000)
+                }
+            }
+
+            val titleView = TextView(this).apply {
+                text = titleText
+                textSize = 24f
+                typeface = fontMedium
                 gravity = Gravity.CENTER
                 setTextColor(colorText)
+                setLineSpacing(0f, 1.15f)
                 setPadding(0, dp(16), 0, 0)
+                ViewCompat.setAccessibilityHeading(this, true)
             }
 
             val bodyView = TextView(this).apply {
                 text = bodyText
-                textSize = 17f
+                textSize = 16f
                 gravity = Gravity.CENTER
-                setTextColor(colorBody)
+                setTextColor(colorMuted)
                 setLineSpacing(0f, 1.15f)
-                setPadding(0, dp(12), 0, 0)
+                setPadding(0, dp(8), 0, 0)
+                visibility = if (bodyText.isNullOrEmpty()) View.GONE else View.VISIBLE
+            }
+
+            val lineView = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(0, dp(20), 0, 0)
+                visibility = if (line.isEmpty()) View.GONE else View.VISIBLE
+                addView(
+                    TextView(this@AppMonitorService).apply {
+                        text = getString(R.string.overlay_pause_line_label)
+                        textSize = 13f
+                        gravity = Gravity.CENTER
+                        setTextColor(colorMuted)
+                    },
+                    fullWidth(),
+                )
+                addView(
+                    TextView(this@AppMonitorService).apply {
+                        text = getString(R.string.overlay_pause_line_quoted, line)
+                        textSize = 18f
+                        typeface = fontMedium
+                        gravity = Gravity.CENTER
+                        setTextColor(colorText)
+                        setLineSpacing(0f, 1.15f)
+                    },
+                    fullWidth(top = dp(4)),
+                )
             }
 
             val countdownView = TextView(this).apply {
                 textSize = 56f
-                typeface = Typeface.DEFAULT_BOLD
+                typeface = fontMedium
                 gravity = Gravity.CENTER
                 setTextColor(colorText)
                 setPadding(0, dp(24), 0, 0)
@@ -952,10 +1061,11 @@ class AppMonitorService : Service() {
             }
 
             val statusView = TextView(this).apply {
-                textSize = 15f
+                textSize = 14f
                 gravity = Gravity.CENTER
                 setTextColor(colorMuted)
-                setPadding(0, dp(12), 0, dp(32))
+                setPadding(0, dp(4), 0, 0)
+                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             }
 
             val homeButton = overlayButton(getString(R.string.overlay_go_home), primary = true).apply {
@@ -971,27 +1081,55 @@ class AppMonitorService : Service() {
             }
             setButtonEnabled(continueButton, false)
 
-            val emergencyButton = overlayButton("", primary = false).apply {
+            val emergencyButton = Button(this).apply {
+                isAllCaps = false
                 textSize = 14f
-                setTextColor(colorMuted)
+                stateListAnimator = null
+                minHeight = dp(44)
+                minimumHeight = dp(44)
+                setTextColor(colorText)
+                paintFlags = paintFlags or Paint.UNDERLINE_TEXT_FLAG
+                setBackgroundColor(Color.TRANSPARENT)
                 visibility = View.GONE
             }
 
-            val root = LinearLayout(this).apply {
+            val content = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setBackgroundColor(colorBackground)
-                setPadding(dp(28), dp(48), dp(28), dp(48))
-                isFocusableInTouchMode = true
-
-                addView(icon, LinearLayout.LayoutParams(dp(72), dp(72)))
-                addView(nameView, fullWidth())
+                setPadding(dp(24), dp(16), dp(24), dp(16))
+                addView(icon, LinearLayout.LayoutParams(dp(64), dp(64)))
+                addView(chip, centered(top = dp(16)))
+                addView(titleView, fullWidth())
                 addView(bodyView, fullWidth())
+                addView(lineView, fullWidth())
                 addView(countdownView, fullWidth())
                 addView(statusView, fullWidth())
+            }
+
+            val footer = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(16), dp(16), dp(16), dp(32))
                 addView(homeButton, fullWidth())
-                addView(continueButton, fullWidth(top = dp(8)))
-                addView(emergencyButton, fullWidth(top = dp(16)))
+                addView(continueButton, fullWidth(top = dp(12)))
+                addView(emergencyButton, centered(top = dp(8)))
+            }
+
+            val column = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(header, fullWidth())
+                addView(content, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+                addView(footer, fullWidth())
+            }
+
+            // Scrolls when large system fonts make the content taller than the screen.
+            val root = ScrollView(this).apply {
+                isFillViewport = true
+                setBackgroundColor(colorBackground)
+                isFocusableInTouchMode = true
+                addView(
+                    column,
+                    ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
+                )
 
                 setOnKeyListener { _, keyCode, event ->
                     if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
@@ -1010,7 +1148,7 @@ class AppMonitorService : Service() {
                 overlayView = root
                 overlayPackage = blockedPackage
                 root.requestFocus()
-                configure(OverlayViews(statusView, countdownView, continueButton, emergencyButton))
+                configure(OverlayViews(statusView, countdownView, continueButton, emergencyButton, continueText))
                 onShown()
             } catch (_: Exception) {
                 overlayView = null
@@ -1019,16 +1157,20 @@ class AppMonitorService : Service() {
         }
     }
 
+    /** "Back": 56 dp, green, the main action. "Continue": 48 dp, raised with a border. */
     private fun overlayButton(label: String, primary: Boolean): Button = Button(this).apply {
         text = label
         isAllCaps = false
-        textSize = 16f
+        textSize = if (primary) 16f else 15f
+        typeface = fontMedium
         stateListAnimator = null
-        minHeight = dp(56)
+        minHeight = dp(if (primary) 56 else 48)
+        minimumHeight = dp(if (primary) 56 else 48)
         setTextColor(if (primary) colorOnAccent else colorText)
         background = GradientDrawable().apply {
-            cornerRadius = dp(16).toFloat()
-            setColor(if (primary) colorAccent else Color.TRANSPARENT)
+            cornerRadius = dp(12).toFloat()
+            setColor(if (primary) colorAccent else colorRaised)
+            if (!primary) setStroke(dp(1), colorLine)
         }
     }
 
@@ -1037,9 +1179,17 @@ class AppMonitorService : Service() {
         LinearLayout.LayoutParams.WRAP_CONTENT,
     ).apply { topMargin = top }
 
+    private fun centered(top: Int = 0) = LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.WRAP_CONTENT,
+        LinearLayout.LayoutParams.WRAP_CONTENT,
+    ).apply {
+        topMargin = top
+        gravity = Gravity.CENTER_HORIZONTAL
+    }
+
     private fun setButtonEnabled(button: Button, enabled: Boolean) {
         button.isEnabled = enabled
-        button.alpha = if (enabled) 1f else 0.4f
+        button.alpha = if (enabled) 1f else 0.38f
     }
 
     /** The pause before "continue"; locks never get here. */
@@ -1052,12 +1202,14 @@ class AppMonitorService : Service() {
                 if (remaining <= 0) {
                     views.countdown.visibility = View.GONE
                     views.status.text = getString(R.string.overlay_ready_hint)
+                    views.continueButton.text = views.continueText
                     setButtonEnabled(views.continueButton, true)
                     return
                 }
                 views.countdown.visibility = View.VISIBLE
                 views.countdown.text = remaining.toString()
-                views.status.text = resources.getQuantityString(R.plurals.overlay_countdown, remaining, remaining)
+                views.status.text = resources.getQuantityString(R.plurals.overlay_seconds, remaining)
+                views.continueButton.text = getString(R.string.overlay_continue_in, remaining)
                 remaining--
                 mainHandler.postDelayed(this, 1000L)
             }
@@ -1100,8 +1252,9 @@ class AppMonitorService : Service() {
                 setLineSpacing(0f, 1.15f)
                 setPadding(dp(16), dp(14), dp(16), dp(14))
                 background = GradientDrawable().apply {
-                    cornerRadius = dp(16).toFloat()
-                    setColor(colorBackground)
+                    cornerRadius = dp(12).toFloat()
+                    setColor(colorRaised)
+                    setStroke(dp(1), colorLine)
                 }
                 accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
                 setOnClickListener { removeLockWarning() }

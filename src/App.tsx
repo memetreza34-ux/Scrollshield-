@@ -373,6 +373,7 @@ export default function App() {
         focusStrict: running?.strict === true,
         commitmentUntil: appState.commitment?.until,
         schedules: appState.schedules,
+        pauseLine: appState.settings.pauseLine,
       },
     );
   }, [
@@ -382,6 +383,7 @@ export default function App() {
     appState.focusSessions,
     appState.schedules,
     appState.commitment,
+    appState.settings.pauseLine,
     isLoaded,
   ]);
 
