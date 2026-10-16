@@ -96,6 +96,11 @@ Vorlagen: `docs/STORE_SUBMISSION_PACKET.md`, `docs/STORE_LISTING_COPY.md`, `STOR
       dann den Nutzen.
 - [ ] **[Du] Erklärung zum Vordergrunddienst** (`specialUse`) mit Demo-Video.
 - [ ] **[Du] Nutzungsdatenzugriff und Überlagerung** im Video zeigen und in der Beschreibung erklären.
+- [ ] **[Du] Bildschirmzeit auf „Start“ (seit 16.10.):** Die App liest jetzt die Nutzungszeit *aller* Apps (gesamt, pro
+      Stunde, die fünf meistgenutzten mit Namen) und die Entsperrungen. Alles bleibt auf dem Handy, die
+      Datenschutzerklärung ist angepasst. Für die App-Namen und -Symbole sieht die App alle Apps mit Startbildschirm-
+      Symbol (`<queries>` im Manifest, nicht die eingeschränkte Berechtigung QUERY_ALL_PACKAGES). Im
+      Datensicherheit-Formular „App-Aktivität“ prüfen: nichts verlässt das Gerät.
 - [ ] **[Du] Inhaltseinstufung** (Fragebogen), Zielgruppe, Werbung „nein“, und die weiteren Fragen unter
       „App-Inhalte“ ehrlich beantworten.
 - [ ] **[Du] Anleitung für die Prüfer:** wie man die App ohne Konto testet und welche Berechtigungen nötig sind.

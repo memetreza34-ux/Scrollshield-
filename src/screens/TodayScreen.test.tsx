@@ -39,14 +39,16 @@ describe('TodayScreen', () => {
     );
 
     // The lock counts as "went back", the pause without a decision as "opened anyway".
-    expect(screen.getByText('2× gebremst · 1× zurück')).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', { name: 'Bremsungen heute: 2, davon 1-mal zurück, 1-mal geöffnet.' }),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/gespart/i)).toBeNull();
   });
 
   it('says plainly that it is quiet on the first day', () => {
     render(<TodayScreen state={state()} updateState={vi.fn()} navigate={vi.fn()} />);
 
-    expect(screen.getByText('Noch ruhig heute.')).toBeInTheDocument();
+    expect(screen.getByText('Noch keine Bremsung heute.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Deine Apps' })).toBeInTheDocument();
   });
 
@@ -73,8 +75,42 @@ describe('TodayScreen', () => {
 
     expect(screen.getByRole('button', { name: /48 Min\. von 1 Std\. in geschützten Apps/ })).toBeInTheDocument();
     expect(screen.getByText('Noch 12 Min. im Ziel')).toBeInTheDocument();
-    expect(screen.getByText('Handy gesamt 3 Std. 12 Min.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Bildschirmzeit' })).toBeInTheDocument();
+    expect(screen.getByText('3 Std. 12 Min.')).toBeInTheDocument();
     expect(screen.getByText('Schutz aktiv')).toBeInTheDocument();
+  });
+
+  it('shows screen time like the system: per hour, most used apps and unlocks', () => {
+    const base = usageToday(48);
+    const today = getLocalDateKey(new Date());
+    const stats = base.dailyStats[today];
+    render(
+      <TodayScreen
+        state={state({
+          ...base,
+          dailyStats: {
+            [today]: {
+              ...stats,
+              screenTimePerHour: Array.from({ length: 24 }, (_, hour) => (hour === 8 ? 40 : 0)),
+              usagePerHour: Array.from({ length: 24 }, (_, hour) => (hour === 8 ? 20 : 0)),
+              topApps: [
+                { packageName: 'com.instagram.android', label: 'Instagram', minutes: 48 },
+                { packageName: 'com.whatsapp', label: 'WhatsApp', minutes: 31 },
+              ],
+              unlocks: 54,
+            },
+          },
+        })}
+        updateState={vi.fn()}
+        navigate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('img', { name: /Bildschirmzeit pro Stunde heute: 3 Std\. 12 Min\./ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Meistgenutzt' })).toBeInTheDocument();
+    expect(screen.getByText('WhatsApp')).toBeInTheDocument();
+    expect(screen.getByLabelText('geschützt')).toBeInTheDocument();
+    expect(screen.getByText('54×')).toBeInTheDocument();
   });
 
   it('says plainly when the goal is passed, and lets the goal be changed', () => {
@@ -181,7 +217,9 @@ describe('TodayScreen', () => {
     setLanguage('en');
     render(<TodayScreen state={state({ history: [event('block', 1)] })} updateState={vi.fn()} navigate={vi.fn()} />);
 
-    expect(screen.getByText('Slowed 1× · went back 1×')).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', { name: 'Slow-downs today: 1, went back 1 times, opened 0 times.' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Your apps' })).toBeInTheDocument();
   });
 

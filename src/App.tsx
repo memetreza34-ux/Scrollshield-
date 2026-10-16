@@ -253,13 +253,19 @@ export default function App() {
     };
   }, [isLoaded]);
 
-  // Launcher icons of the installed protected apps for the app tiles. Read on
-  // start and on return to the app, which is where a new app gets installed.
+  // Launcher icons of the installed protected apps for the app tiles, and of
+  // today's most used apps on "Start". Read on start, on return to the app
+  // (where a new app gets installed) and when the most used apps change.
+  const topAppPackages =
+    appState.dailyStats[getLocalDateKey(new Date())]?.topApps?.map((app) => app.packageName).join(',') ?? '';
   useEffect(() => {
     if (detectOperatingSystem() !== 'android') return;
 
     let cancelled = false;
-    const packages = SUPPORTED_APPS.flatMap((app) => app.androidPackages);
+    const packages = [
+      ...SUPPORTED_APPS.flatMap((app) => app.androidPackages),
+      ...topAppPackages.split(',').filter(Boolean),
+    ];
     const read = () => {
       if (document.visibilityState !== 'visible') return;
       void readAppIcons(packages).then((icons) => {
@@ -273,7 +279,7 @@ export default function App() {
       cancelled = true;
       document.removeEventListener('visibilitychange', read);
     };
-  }, []);
+  }, [topAppPackages]);
 
   // Pro follows Google Play: checked on start and on every return to the app,
   // so a purchase confirmed later, a renewal or an ended subscription shows up.

@@ -149,6 +149,12 @@
         <package android:name="com.reddit.frontpage" />
         <package android:name="com.reddit.frontpage.lite" />
         <package android:name="com.pinterest" />
+        <!-- Apps with a launcher icon: names and icons for "Most used" on "Start"
+             (getScreenTime, getAppIcons). Nothing about them leaves the phone. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
         <!-- Home screens, so their time does not count as screen time (ForegroundUsage). -->
         <intent>
             <action android:name="android.intent.action.MAIN" />

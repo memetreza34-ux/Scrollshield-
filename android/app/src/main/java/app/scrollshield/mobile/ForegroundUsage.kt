@@ -59,14 +59,7 @@ object ForegroundUsage {
         fun add(packageName: String, start: Long, end: Long) {
             if (end <= start) return
             totals[packageName] = (totals[packageName] ?: 0L) + (end - start)
-            var from = start
-            while (from < end) {
-                val hour = ((from - dayStart) / 3_600_000L).toInt().coerceIn(0, 23)
-                val hourEnd = minOf(end, dayStart + (hour + 1) * 3_600_000L)
-                perHour[hour] += (hourEnd - from).coerceAtLeast(0L)
-                if (hour == 23 && hourEnd == end) break
-                from = if (hourEnd > from) hourEnd else end
-            }
+            splitIntoHours(perHour, dayStart, start, end)
         }
 
         // Closes every running interval at `end`. Android does not always log
@@ -134,30 +127,69 @@ object ForegroundUsage {
         add(Calendar.DAY_OF_YEAR, -daysBack)
     }.timeInMillis
 
+    /** Adds the interval [start, end) to the local hours of the day that starts at `dayStart`. */
+    private fun splitIntoHours(perHour: LongArray, dayStart: Long, start: Long, end: Long) {
+        var from = start
+        while (from < end) {
+            val hour = ((from - dayStart) / 3_600_000L).toInt().coerceIn(0, 23)
+            val hourEnd = minOf(end, dayStart + (hour + 1) * 3_600_000L)
+            perHour[hour] += (hourEnd - from).coerceAtLeast(0L)
+            if (hour == 23 && hourEnd == end) break
+            from = if (hourEnd > from) hourEnd else end
+        }
+    }
+
     /**
-     * Total screen time between two moments: the time any app was in front,
-     * except home screens and the system UI, like Android's own Digital
-     * Wellbeing counts it. Nothing is stored; only the sum is returned.
+     * A day of screen time, for "Start": the total, per local hour, per app,
+     * and how often the phone was unlocked. Hours count from `from`, which
+     * should be a local midnight.
+     */
+    class ScreenDay(
+        val totalMinutes: Int,
+        val minutesPerHour: IntArray,
+        val minutesPerApp: Map<String, Int>,
+        val unlocks: Int,
+        val firstUnlockAt: Long?,
+    )
+
+    /** Total screen time between two moments in minutes; see screenDay(). */
+    fun screenTimeMinutes(context: Context, from: Long, to: Long): Int = screenDay(context, from, to).totalMinutes
+
+    /**
+     * Screen time between two moments: the time any app was in front, except
+     * home screens and the system UI, like Android's own Digital Wellbeing
+     * counts it. Unlocks are the times the keyguard went away (Android 9 and
+     * later). Nothing is stored here; only the sums are returned.
      */
     @Suppress("DEPRECATION") // MOVE_TO_* equal ACTIVITY_RESUMED/PAUSED and also cover Android 9.
-    fun screenTimeMinutes(context: Context, from: Long, to: Long): Int {
+    fun screenDay(context: Context, from: Long, to: Long): ScreenDay {
+        val empty = ScreenDay(0, IntArray(24), emptyMap(), 0, null)
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-            ?: return 0
+            ?: return empty
         val events = try {
             usageStatsManager.queryEvents(from, to)
         } catch (_: Exception) {
             null
-        } ?: return 0
+        } ?: return empty
 
         val excluded = homeScreenPackages(context) + setOf("com.android.systemui", "android")
         var current: String? = null
         var resumedCount = 0
         var since = 0L
         var total = 0L
+        val perHour = LongArray(24)
+        val perApp = mutableMapOf<String, Long>()
+        var unlocks = 0
+        var firstUnlockAt: Long? = null
         val event = UsageEvents.Event()
 
         fun close(end: Long) {
-            if (current != null) total += (end - since).coerceAtLeast(0L)
+            val packageName = current
+            if (packageName != null && end > since) {
+                total += end - since
+                perApp[packageName] = (perApp[packageName] ?: 0L) + (end - since)
+                splitIntoHours(perHour, from, since, end)
+            }
             current = null
             resumedCount = 0
         }
@@ -165,6 +197,12 @@ object ForegroundUsage {
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
             val packageName = event.packageName ?: continue
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && event.eventType == UsageEvents.Event.KEYGUARD_HIDDEN) {
+                unlocks++
+                if (firstUnlockAt == null) firstUnlockAt = event.timeStamp
+                continue
+            }
 
             val endsEverything = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
                 (event.eventType == UsageEvents.Event.SCREEN_NON_INTERACTIVE ||
@@ -198,7 +236,13 @@ object ForegroundUsage {
         }
 
         close(to)
-        return (total / 60_000L).toInt()
+        return ScreenDay(
+            totalMinutes = (total / 60_000L).toInt(),
+            minutesPerHour = IntArray(24) { hour -> ((perHour[hour] + 30_000L) / 60_000L).toInt() },
+            minutesPerApp = perApp.mapValues { (_, millis) -> (millis / 60_000L).toInt() }.filterValues { it > 0 },
+            unlocks = unlocks,
+            firstUnlockAt = firstUnlockAt,
+        )
     }
 
     /** The installed home screens; listed under <queries> so Android shows them. */

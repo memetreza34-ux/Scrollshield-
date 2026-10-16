@@ -123,17 +123,21 @@ export function getDayMarks(history: HistoryEvent[], date = new Date()): DayMark
 }
 
 /**
- * Minutes the protected apps usually had by this time of day: the average
+ * Minutes the protected apps (or, with `field`, the whole phone) usually had by this time of day: the average
  * over the last 7 days that have an hourly record, counting the current hour
  * in proportion. Undefined with fewer than 3 such days – too few to compare.
  */
-export function usualMinutesByNow(dailyStats: AppState['dailyStats'], now = new Date()): number | undefined {
+export function usualMinutesByNow(
+  dailyStats: AppState['dailyStats'],
+  now = new Date(),
+  field: 'usagePerHour' | 'screenTimePerHour' = 'usagePerHour',
+): number | undefined {
   const hour = now.getHours();
   const sums: number[] = [];
   for (let back = 1; back <= 7; back++) {
     const day = new Date(now);
     day.setDate(day.getDate() - back);
-    const perHour = dailyStats[getLocalDateKey(day)]?.usagePerHour;
+    const perHour = dailyStats[getLocalDateKey(day)]?.[field];
     if (!perHour || perHour.length !== 24) continue;
     const fullHours = perHour.slice(0, hour).reduce((sum, minutes) => sum + minutes, 0);
     sums.push(fullHours + perHour[hour] * (now.getMinutes() / 60));

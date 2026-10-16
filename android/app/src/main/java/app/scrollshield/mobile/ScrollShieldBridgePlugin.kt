@@ -68,6 +68,9 @@ class ScrollShieldBridgePlugin : Plugin() {
         /** Largest tile that shows an app icon (the interruption screen) is 96 dp. */
         const val APP_ICON_SIZE_DP = 96
         const val MAX_APP_ICONS = 32
+
+        /** How many apps "Most used" on "Start" lists. */
+        const val TOP_APPS = 5
     }
 
     // ── Encrypted SharedPreferences ───────────────────────────────────────────
@@ -591,8 +594,10 @@ class ScrollShieldBridgePlugin : Plugin() {
     }
 
     /**
-     * Returns today's and yesterday's total screen time in minutes, for the
-     * "Heute" tab. Needs Usage Access; only the two sums leave this method.
+     * Today's screen time for "Start": the total, per hour, the unlocks and
+     * the five most used apps (name and minutes), plus yesterday's total.
+     * Needs Usage Access. The results go to the app's own storage on this
+     * phone, nowhere else.
      */
     @PluginMethod
     fun getScreenTime(call: PluginCall) {
@@ -604,10 +609,31 @@ class ScrollShieldBridgePlugin : Plugin() {
 
         val now = System.currentTimeMillis()
         val today = ForegroundUsage.startOfToday()
+        val day = ForegroundUsage.screenDay(context, today, now)
         result.put("available", true)
         result.put("date", SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date()))
-        result.put("todayMinutes", ForegroundUsage.screenTimeMinutes(context, today, now))
+        result.put("todayMinutes", day.totalMinutes)
         result.put("yesterdayMinutes", ForegroundUsage.screenTimeMinutes(context, ForegroundUsage.startOfDay(1), today))
+        result.put("minutesPerHour", JSArray(day.minutesPerHour.toList()))
+        result.put("unlocks", day.unlocks)
+        day.firstUnlockAt?.let { result.put("firstUnlockAt", it) }
+
+        // The most used apps of the day with their names, for "Most used".
+        val topApps = JSArray()
+        day.minutesPerApp.entries
+            .filter { it.key != context.packageName }
+            .sortedByDescending { it.value }
+            .take(TOP_APPS)
+            .forEach { (packageName, minutes) ->
+                val label = try {
+                    val info = context.packageManager.getApplicationInfo(packageName, 0)
+                    context.packageManager.getApplicationLabel(info).toString()
+                } catch (_: Exception) {
+                    packageName
+                }
+                topApps.put(JSObject().put("packageName", packageName).put("label", label).put("minutes", minutes))
+            }
+        result.put("topApps", topApps)
         call.resolve(result)
     }
 

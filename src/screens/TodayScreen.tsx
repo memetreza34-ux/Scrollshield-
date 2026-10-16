@@ -27,7 +27,7 @@ import {
   Section,
   StatusChip,
 } from '../components/ui';
-import { DayTimeline, GoalCard, GoalSheet, StartHero, StartStatus } from '../components/StartParts';
+import { BrakesCard, GoalCard, GoalSheet, ScreenTimeCard, StartHero, StartStatus } from '../components/StartParts';
 import { FOCUS_RING_INSET, PRESSED } from '../components/styles';
 import { MessageKey, t } from '../i18n';
 import {
@@ -198,52 +198,76 @@ export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
     <Page>
       {hero}
 
-      <div className="mb-6 flex flex-col gap-3">
-        {missing.length > 0 && (
-          <div role="alert" className="rise flex flex-col gap-4 rounded-surface bg-pause/10 p-4">
-            <div className="flex items-start gap-3">
-              <TriangleAlert size={24} strokeWidth={1.75} className="flex-shrink-0 text-pause" aria-hidden="true" />
-              <div className="flex flex-col gap-0.5">
-                <p className="text-title-s text-ink">
-                  {t(missing.length > 1 ? 'today.notActive.title' : 'today.limited.title')}
-                </p>
-                <p className="text-body-s text-ink">
-                  {missing.length > 1
-                    ? t('today.notActive.text')
-                    : t('today.limited.text', { permission: t(missing[0].title) })}
-                </p>
+      {(missing.length > 0 || running) && (
+        <div className="mb-6 flex flex-col gap-3">
+          {missing.length > 0 && (
+            <div role="alert" className="rise flex flex-col gap-4 rounded-surface bg-pause/10 p-4">
+              <div className="flex items-start gap-3">
+                <TriangleAlert size={24} strokeWidth={1.75} className="flex-shrink-0 text-pause" aria-hidden="true" />
+                <div className="flex flex-col gap-0.5">
+                  <p className="text-title-s text-ink">
+                    {t(missing.length > 1 ? 'today.notActive.title' : 'today.limited.title')}
+                  </p>
+                  <p className="text-body-s text-ink">
+                    {missing.length > 1
+                      ? t('today.notActive.text')
+                      : t('today.limited.text', { permission: t(missing[0].title) })}
+                  </p>
+                </div>
               </div>
+              <PrimaryButton onClick={() => navigate('permissions')}>
+                {t(missing.length > 1 ? 'today.notActive.action' : 'today.limited.action')}
+              </PrimaryButton>
             </div>
-            <PrimaryButton onClick={() => navigate('permissions')}>
-              {t(missing.length > 1 ? 'today.notActive.action' : 'today.limited.action')}
-            </PrimaryButton>
-          </div>
-        )}
+          )}
 
-        {running && (
-          <div className="rise">
-            <RunningCard session={running} now={now} navigate={navigate} />
-          </div>
-        )}
+          {running && (
+            <div className="rise">
+              <RunningCard session={running} now={now} navigate={navigate} />
+            </div>
+          )}
+        </div>
+      )}
 
-        <div className="rise" style={{ animationDelay: '0.05s' }}>
+      <div className="rise" style={{ animationDelay: '0.05s' }}>
+        <Section title={t('start.section.screenTime')} kind="title">
+          <ScreenTimeCard
+            total={todayStats?.screenTimeMinutes}
+            perHour={todayStats?.screenTimePerHour}
+            socialPerHour={todayStats?.usagePerHour}
+            usualByNow={usualMinutesByNow(state.dailyStats, now, 'screenTimePerHour')}
+            topApps={todayStats?.topApps}
+            protectedPackages={new Set(protectedApps.flatMap((app) => app.androidPackages))}
+            unlocks={todayStats?.unlocks}
+            firstUnlockAt={todayStats?.firstUnlockAt}
+            isWeb={isWeb}
+            now={now}
+          />
+        </Section>
+      </div>
+
+      <div className="rise" style={{ animationDelay: '0.12s' }}>
+        <Section title={t('start.section.goal')} kind="title">
           <GoalCard
             used={usedMinutes}
             goal={goal}
             measured={usageMeasured}
             isWeb={isWeb}
-            totalMinutes={todayStats?.screenTimeMinutes}
             usualByNow={usualMinutesByNow(state.dailyStats, now)}
             onEdit={() => setEditingGoal(true)}
           />
-        </div>
+        </Section>
+      </div>
 
-        <div className="rise" style={{ animationDelay: '0.12s' }}>
-          <DayTimeline perHour={todayStats?.usagePerHour} marks={marks} now={now} />
-        </div>
+      <div className="rise" style={{ animationDelay: '0.18s' }}>
+        <Section title={t('start.section.brakes')} kind="title">
+          <BrakesCard marks={marks} now={now} />
+        </Section>
+      </div>
 
+      <div className="mb-8 flex flex-col gap-3">
         {!running && (
-          <div className="rise grid grid-cols-2 gap-3" style={{ animationDelay: '0.18s' }}>
+          <div className="grid grid-cols-2 gap-3">
             {/* At most one green button: while permissions are missing, that is "Berechtigungen erteilen". */}
             {missing.length > 0 ? (
               <SecondaryButton onClick={() => navigate('focus')}>
@@ -268,7 +292,7 @@ export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
       </div>
 
       {suggestion && (
-        <div className={`mb-6 flex flex-col gap-3 p-4 ${CARD}`}>
+        <div className={`mb-8 flex flex-col gap-3 p-5 ${CARD}`}>
           <p className="flex items-center gap-2 text-label-s text-pause">
             <Lightbulb size={16} strokeWidth={2} aria-hidden="true" />
             {t('today.suggestion')}

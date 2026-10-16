@@ -196,6 +196,14 @@ export interface ScreenTimeResult {
   date?: string;
   todayMinutes?: number;
   yesterdayMinutes?: number;
+  /** Today's screen time per local hour (24 entries) */
+  minutesPerHour?: number[];
+  /** How often the phone was unlocked today (Android 9 and later) */
+  unlocks?: number;
+  /** When the phone was first unlocked today */
+  firstUnlockAt?: number;
+  /** Today's most used apps */
+  topApps?: { packageName: string; label: string; minutes: number }[];
 }
 
 export interface AppIconsResult {

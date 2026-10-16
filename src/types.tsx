@@ -187,6 +187,13 @@ export interface DailyStats {
   screenTimeMinutes?: number;
   /** Minutes in the protected apps per local hour (24 entries), measured by Android; absent on web. */
   usagePerHour?: number[];
+  /** Screen time of the whole device per local hour (24 entries), measured by Android. */
+  screenTimePerHour?: number[];
+  /** The day's most used apps, measured by Android; kept on the phone. */
+  topApps?: { packageName: string; label: string; minutes: number }[];
+  /** How often the phone was unlocked that day, and when first. */
+  unlocks?: number;
+  firstUnlockAt?: number;
 }
 
 export interface AppState {

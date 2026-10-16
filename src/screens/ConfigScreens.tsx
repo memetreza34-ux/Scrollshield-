@@ -108,6 +108,7 @@ export function PrivacyScreen({
           {item(Check, t('privacy.stored.rules'))}
           {item(Check, t('privacy.stored.events'))}
           {item(Check, t('privacy.stored.minutes'))}
+          {item(Check, t('privacy.stored.screenTime'))}
         </ul>
       </Section>
 

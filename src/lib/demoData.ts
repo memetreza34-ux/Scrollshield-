@@ -58,12 +58,44 @@ export function createDemoState(state: AppState, now = new Date()): Partial<AppS
     return weights.map((weight) => Math.round((minutes * weight) / scale));
   };
 
+  // The whole phone: spread over the waking hours, busiest in the evening.
+  const SCREEN: Record<number, number> = {
+    7: 0.06,
+    8: 0.07,
+    9: 0.05,
+    10: 0.04,
+    11: 0.04,
+    12: 0.08,
+    13: 0.06,
+    14: 0.04,
+    15: 0.04,
+    16: 0.05,
+    17: 0.06,
+    18: 0.07,
+    19: 0.08,
+    20: 0.1,
+    21: 0.12,
+    22: 0.04,
+  };
+  const screenPerHour = (minutes: number, untilHour: number, social: number[]) => {
+    const weights = Array.from({ length: 24 }, (_, hour) => (hour <= untilHour ? (SCREEN[hour] ?? 0) : 0));
+    const sum = weights.reduce((total, weight) => total + weight, 0) || 1;
+    return weights.map((weight, hour) => Math.min(60, Math.max(social[hour], Math.round((minutes * weight) / sum))));
+  };
+
   const day = (daysAgo: number, screenTimeMinutes: number, instagram: number, reels: number, tiktok: number) => {
     const date = new Date(now);
     date.setDate(date.getDate() - daysAgo);
     const key = getLocalDateKey(date);
     // Today only up to now.
-    const usagePerHour = perHour(instagram + tiktok, daysAgo === 0 ? now.getHours() : 23);
+    const untilHour = daysAgo === 0 ? now.getHours() : 23;
+    const usagePerHour = perHour(instagram + tiktok, untilHour);
+    // Today only the part of a whole day that has passed by now.
+    const passed =
+      Object.entries(SCREEN).reduce((sum, [hour, weight]) => sum + (Number(hour) <= untilHour ? weight : 0), 0) /
+      Object.values(SCREEN).reduce((sum, weight) => sum + weight, 0);
+    const screenTimePerHour = screenPerHour(Math.round(screenTimeMinutes * passed), untilHour, usagePerHour);
+    const total = screenTimePerHour.reduce((sum, minutes) => sum + minutes, 0);
     const stats: DailyStats = {
       date: key,
       usageMinutes: { instagram, instagram_reels: reels, tiktok },
@@ -71,8 +103,22 @@ export function createDemoState(state: AppState, now = new Date()): Partial<AppS
       savedTimeMinutes: 0,
       emergencyUnlocks: 0,
       focusMinutes: daysAgo === 0 ? 30 : 0,
-      screenTimeMinutes,
+      screenTimeMinutes: total,
       usagePerHour,
+      screenTimePerHour,
+      ...(daysAgo === 0
+        ? {
+            topApps: [
+              { packageName: 'com.instagram.android', label: 'Instagram', minutes: instagram },
+              { packageName: 'com.whatsapp', label: 'WhatsApp', minutes: 31 },
+              { packageName: 'com.zhiliaoapp.musically', label: 'TikTok', minutes: tiktok },
+              { packageName: 'com.android.chrome', label: 'Chrome', minutes: 15 },
+              { packageName: 'com.google.android.youtube', label: 'YouTube', minutes: 12 },
+            ],
+            unlocks: 54,
+            firstUnlockAt: at(0, 6, 58),
+          }
+        : {}),
     };
     return [key, stats] as const;
   };

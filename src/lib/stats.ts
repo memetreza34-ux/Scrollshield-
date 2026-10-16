@@ -127,7 +127,15 @@ export const mergeNativeAppUsage = (
 /** Stores the device's measured screen time for today and yesterday in the daily stats. */
 export const mergeScreenTime = (
   dailyStats: AppState['dailyStats'],
-  screenTime: { date: string; todayMinutes?: number; yesterdayMinutes?: number },
+  screenTime: {
+    date: string;
+    todayMinutes?: number;
+    yesterdayMinutes?: number;
+    minutesPerHour?: number[];
+    unlocks?: number;
+    firstUnlockAt?: number;
+    topApps?: { packageName: string; label: string; minutes: number }[];
+  },
 ): AppState['dailyStats'] => {
   const today = new Date(`${screenTime.date}T12:00:00`);
   const yesterday = new Date(today);
@@ -150,7 +158,31 @@ export const mergeScreenTime = (
   };
   put(today, screenTime.todayMinutes);
   put(yesterday, screenTime.yesterdayMinutes);
-  return next;
+
+  // The details of today: per hour, the most used apps, the unlocks.
+  const key = getLocalDateKey(today);
+  const current = next[key];
+  if (!current) return next;
+  const details: Partial<DailyStats> = {};
+  if (screenTime.minutesPerHour?.length === 24) {
+    details.screenTimePerHour = screenTime.minutesPerHour.map((minutes) =>
+      Number.isFinite(minutes) ? Math.min(60, Math.max(0, Math.round(minutes))) : 0,
+    );
+  }
+  if (screenTime.topApps) {
+    details.topApps = screenTime.topApps
+      .filter((app) => typeof app.packageName === 'string' && Number.isFinite(app.minutes) && app.minutes > 0)
+      .slice(0, 5)
+      .map((app) => ({
+        packageName: app.packageName,
+        label: String(app.label || app.packageName),
+        minutes: Math.round(app.minutes),
+      }));
+  }
+  if (Number.isFinite(screenTime.unlocks)) details.unlocks = Math.max(0, Math.round(screenTime.unlocks as number));
+  if (Number.isFinite(screenTime.firstUnlockAt)) details.firstUnlockAt = screenTime.firstUnlockAt;
+  if (JSON.stringify({ ...current, ...details }) === JSON.stringify(current)) return next;
+  return { ...next, [key]: { ...current, ...details } };
 };
 
 /** Stores the protected apps' minutes per hour of a day, for the day's timeline on "Start". */

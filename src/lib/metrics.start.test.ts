@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DailyStats, HistoryEvent } from '../types';
 import { getLocalDateKey } from './appUtils';
 import { getDayMarks, usualMinutesByNow } from './metrics';
-import { mergeUsagePerHour } from './stats';
+import { mergeScreenTime, mergeUsagePerHour } from './stats';
 
 const now = new Date(2026, 9, 16, 14, 30);
 
@@ -87,5 +87,30 @@ describe('mergeUsagePerHour', () => {
     const stats = mergeUsagePerHour({}, { date: '2026-10-16', minutesPerHour: hours({ 8: 5 }) });
     expect(mergeUsagePerHour(stats, { date: '2026-10-16', minutesPerHour: [1, 2] })).toBe(stats);
     expect(mergeUsagePerHour(stats, { date: '2026-10-16', minutesPerHour: hours({ 8: 5 }) })).toBe(stats);
+  });
+});
+
+describe('mergeScreenTime details', () => {
+  it("keeps today's hours, the five most used apps and the unlocks", () => {
+    const merged = mergeScreenTime(
+      {},
+      {
+        date: '2026-10-16',
+        todayMinutes: 120,
+        minutesPerHour: hours({ 9: 30 }),
+        unlocks: 41.2,
+        topApps: Array.from({ length: 7 }, (_, index) => ({
+          packageName: `app.${index}`,
+          label: `App ${index}`,
+          minutes: 70 - index * 10,
+        })),
+      },
+    );
+
+    const day = merged['2026-10-16'];
+    expect(day.screenTimeMinutes).toBe(120);
+    expect(day.screenTimePerHour?.[9]).toBe(30);
+    expect(day.unlocks).toBe(41);
+    expect(day.topApps?.map((app) => app.packageName)).toEqual(['app.0', 'app.1', 'app.2', 'app.3', 'app.4']);
   });
 });
