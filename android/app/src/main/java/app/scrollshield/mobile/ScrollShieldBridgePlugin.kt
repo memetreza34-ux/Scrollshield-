@@ -573,7 +573,8 @@ class ScrollShieldBridgePlugin : Plugin() {
             // No readable rules, nothing to report.
         }
 
-        for ((packageName, minutes) in ForegroundUsage.minutesToday(context, packages)) {
+        val usage = ForegroundUsage.usageToday(context, packages)
+        for ((packageName, minutes) in usage.minutes) {
             entries.put(
                 JSObject()
                     .put("packageName", packageName)
@@ -582,6 +583,8 @@ class ScrollShieldBridgePlugin : Plugin() {
         }
 
         result.put("available", true)
+        // Summed over the protected apps, per local hour, for the day's timeline on "Start".
+        result.put("minutesPerHour", JSArray(usage.minutesPerHour.toList()))
         result.put("date", SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date()))
         result.put("entries", entries)
         call.resolve(result)

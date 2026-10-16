@@ -172,6 +172,9 @@ const OLD_START_SCREENS = new Set(['dashboard', 'apps', 'rules', 'history', 'ree
 /** Longest own sentence for the pause: it has to fit the native screen in two or three lines. */
 export const PAUSE_LINE_MAX_LENGTH = 80;
 
+/** The choices for the daily goal on "Start", in minutes. */
+export const DAILY_GOAL_OPTIONS = [30, 45, 60, 90, 120];
+
 /** One line of plain text, trimmed and cut to the limit; anything else turns the line off. */
 export const normalizePauseLine = (line: unknown): string =>
   typeof line === 'string' ? line.replace(/\s+/g, ' ').trim().slice(0, PAUSE_LINE_MAX_LENGTH) : '';
@@ -206,6 +209,9 @@ export const normalizeAppState = (saved: Partial<AppState> | null | undefined): 
         ? DEFAULT_STATE.settings.startScreen
         : (saved.settings?.startScreen ?? DEFAULT_STATE.settings.startScreen),
       pauseLine: normalizePauseLine(saved.settings?.pauseLine),
+      dailyGoalMinutes: DAILY_GOAL_OPTIONS.includes(saved.settings?.dailyGoalMinutes as number)
+        ? (saved.settings?.dailyGoalMinutes as number)
+        : DEFAULT_STATE.settings.dailyGoalMinutes,
       // Only the known switches: the evening reminder and the warning after
       // several blocks are gone (not part of V1).
       notifications: {

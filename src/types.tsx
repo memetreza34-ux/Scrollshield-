@@ -185,6 +185,8 @@ export interface DailyStats {
   focusMinutes: number;
   /** Total screen time of the device that day, measured by Android; absent on web. */
   screenTimeMinutes?: number;
+  /** Minutes in the protected apps per local hour (24 entries), measured by Android; absent on web. */
+  usagePerHour?: number[];
 }
 
 export interface AppState {
@@ -243,6 +245,8 @@ export interface AppState {
     focusPresets: number[];
     /** A sentence of the user's own, shown in every pause below the reason; empty when off. */
     pauseLine: string;
+    /** Daily goal for the protected apps together, in minutes; the ring on "Start". */
+    dailyGoalMinutes: number;
     /** The three of docs/V1_MASTER_PLAN.md, 4.9; nothing that only pulls back into the app. */
     notifications: {
       focusReminders: boolean;
@@ -639,6 +643,7 @@ export const DEFAULT_STATE: AppState = {
     defaultEmergencyUnlock: 5,
     focusPresets: [15, 30, 45, 60],
     pauseLine: '',
+    dailyGoalMinutes: 60,
     notifications: {
       focusReminders: true,
       dailySummary: false,

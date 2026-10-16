@@ -29,7 +29,7 @@ const android = (permissions: Partial<AppState['permissions']>): Partial<AppStat
 });
 
 describe('TodayScreen', () => {
-  it('shows measured interruptions and attempts, and no estimated saved time', () => {
+  it("shows the day's interruptions on the timeline, and no estimated saved time", () => {
     render(
       <TodayScreen
         state={state({ history: [event('block', 1), event('warning', 2), event('open', 3)] })}
@@ -38,46 +38,55 @@ describe('TodayScreen', () => {
       />,
     );
 
-    expect(screen.getByText('Öffnungen heute unterbrochen').previousSibling).toHaveTextContent('2');
-    expect(screen.getByText('bei 3 Öffnungsversuchen')).toBeInTheDocument();
+    // The lock counts as "went back", the pause without a decision as "opened anyway".
+    expect(screen.getByText('2× gebremst · 1× zurück')).toBeInTheDocument();
     expect(screen.queryByText(/gespart/i)).toBeNull();
   });
 
-  it('says plainly that nothing happened yet on the first day', () => {
+  it('says plainly that it is quiet on the first day', () => {
     render(<TodayScreen state={state()} updateState={vi.fn()} navigate={vi.fn()} />);
 
-    expect(screen.getByText('Noch nichts passiert heute.')).toBeInTheDocument();
-    expect(screen.getByText('Sobald du Instagram öffnest, steht es hier.')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Apps heute' })).not.toBeInTheDocument();
+    expect(screen.getByText('Noch ruhig heute.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Deine Apps' })).toBeInTheDocument();
   });
 
-  it('shows the measured screen time of today and yesterday', () => {
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const day = (date: Date, screenTimeMinutes: number) => ({
-      date: getLocalDateKey(date),
-      usageMinutes: { instagram: 48 },
-      blockedOpens: 0,
-      savedTimeMinutes: 0,
-      emergencyUnlocks: 0,
-      focusMinutes: 0,
-      screenTimeMinutes,
-    });
-    render(
-      <TodayScreen
-        state={state({
-          ...android({ usageAccess: true, overlay: true }),
-          dailyStats: { [getLocalDateKey(today)]: day(today, 192), [getLocalDateKey(yesterday)]: day(yesterday, 220) },
-        })}
-        updateState={vi.fn()}
-        navigate={vi.fn()}
-      />,
-    );
+  const usageToday = (instagram: number) => {
+    const today = getLocalDateKey(new Date());
+    return {
+      ...android({ usageAccess: true, overlay: true }),
+      dailyStats: {
+        [today]: {
+          date: today,
+          usageMinutes: { instagram },
+          blockedOpens: 0,
+          savedTimeMinutes: 0,
+          emergencyUnlocks: 0,
+          focusMinutes: 0,
+          screenTimeMinutes: 192,
+        },
+      },
+    };
+  };
 
-    expect(screen.getByText('3 Std. 12 Min.')).toBeInTheDocument();
-    expect(screen.getByText('gestern 3 Std. 40 Min.')).toBeInTheDocument();
-    expect(screen.getByText('Davon geschützte Apps: 48 Min.')).toBeInTheDocument();
+  it('shows the daily goal with the measured minutes and the whole phone', () => {
+    render(<TodayScreen state={state(usageToday(48))} updateState={vi.fn()} navigate={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: /48 Min\. von 1 Std\. in geschützten Apps/ })).toBeInTheDocument();
+    expect(screen.getByText('Noch 12 Min. im Ziel')).toBeInTheDocument();
+    expect(screen.getByText('Handy gesamt 3 Std. 12 Min.')).toBeInTheDocument();
+    expect(screen.getByText('Schutz aktiv')).toBeInTheDocument();
+  });
+
+  it('says plainly when the goal is passed, and lets the goal be changed', () => {
+    const updateState = vi.fn();
+    render(<TodayScreen state={state(usageToday(75))} updateState={updateState} navigate={vi.fn()} />);
+
+    expect(screen.getByText('15 Min. über deinem Ziel')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Tagesziel ändern/ }));
+    fireEvent.click(screen.getByText('1 Std. 30 Min.'));
+    expect(updateState).toHaveBeenCalledWith({
+      settings: expect.objectContaining({ dailyGoalMinutes: 90 }),
+    });
   });
 
   it('says screen time is not measured instead of showing zero', () => {
@@ -90,7 +99,8 @@ describe('TodayScreen', () => {
     render(<TodayScreen state={state(android({}))} updateState={vi.fn()} navigate={navigate} />);
 
     expect(screen.getByRole('alert')).toHaveTextContent('Schutz nicht aktiv');
-    expect(screen.getByText('nicht gemessen')).toBeInTheDocument();
+    expect(screen.getByText('Schutz aus')).toBeInTheDocument();
+    expect(screen.getByText('Nicht gemessen')).toBeInTheDocument();
     // The green button is "Berechtigungen erteilen", so "Fokus starten" steps back.
     fireEvent.click(screen.getByRole('button', { name: 'Berechtigungen erteilen' }));
     expect(navigate).toHaveBeenCalledWith('permissions');
@@ -171,9 +181,8 @@ describe('TodayScreen', () => {
     setLanguage('en');
     render(<TodayScreen state={state({ history: [event('block', 1)] })} updateState={vi.fn()} navigate={vi.fn()} />);
 
-    expect(screen.getByText('Open interrupted today')).toBeInTheDocument();
-    expect(screen.getByText('out of 1 attempt to open')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Apps today' })).toBeInTheDocument();
+    expect(screen.getByText('Slowed 1× · went back 1×')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Your apps' })).toBeInTheDocument();
   });
 
   it('has no obvious accessibility violations', async () => {

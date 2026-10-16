@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import { AppState, Screen, DEFAULT_STATE, SUPPORTED_APPS } from './types';
 import { StorageService } from './lib/storage';
 import { normalizeAppState } from './lib/state';
@@ -18,7 +18,7 @@ import {
 import { getBackTarget, isAllowedBeforeOnboarding } from './lib/navigation';
 import { mergeNativeInterruptions } from './lib/nativeEvents';
 import { proAfterStatus, readProStatus } from './lib/billing';
-import { mergeNativeAppUsage, mergeNativeShortVideoUsage, mergeScreenTime } from './lib/stats';
+import { mergeNativeAppUsage, mergeNativeShortVideoUsage, mergeScreenTime, mergeUsagePerHour } from './lib/stats';
 import { getLocalDateKey } from './lib/appUtils';
 import { detectOperatingSystem } from './lib/platform';
 import { AppIconsContext } from './lib/appIcons';
@@ -38,22 +38,31 @@ import {
 } from './lib/notifications';
 import { BottomNav } from './components/ui';
 import { Welcome, Onboarding } from './screens/OnboardingScreens';
-import { PrivacyScreen } from './screens/ConfigScreens';
 import { TodayScreen } from './screens/TodayScreen';
 import { AppDetailScreen, CommitmentScreen, ProtectScreen, ScheduleEditScreen } from './screens/ProtectScreens';
 import { Focus } from './screens/FocusScreens';
 import { RescueScreen } from './screens/RescueScreen';
-import { InsightsScreen } from './screens/InsightsScreen';
-import { NotificationsScreen, ProStatusScreen, SettingsScreen } from './screens/SettingsScreens';
-import { PaywallScreen } from './screens/PaywallScreen';
 import { ProExpiredScreen } from './screens/ProExpiredScreen';
 import { effectiveAppsConfig, mustChooseFreeApps } from './lib/entitlements';
 import { ProtectionFlow } from './screens/ProtectionFlow';
 import { PermissionsScreen } from './screens/PermissionsScreen';
-import { DebugScreen } from './screens/DebugScreen';
-import { DiagnosticsScreen } from './screens/DiagnosticsScreen';
 import { ActiveSessionScreen } from './screens/ActiveSessionScreen';
 import { SupportScreen, ImprintScreen } from './screens/SupportScreen';
+
+// Screens opened now and then load when first needed, so the first start
+// stays small.
+const InsightsScreen = lazy(() => import('./screens/InsightsScreen').then((m) => ({ default: m.InsightsScreen })));
+const SettingsScreen = lazy(() => import('./screens/SettingsScreens').then((m) => ({ default: m.SettingsScreen })));
+const ProStatusScreen = lazy(() => import('./screens/SettingsScreens').then((m) => ({ default: m.ProStatusScreen })));
+const NotificationsScreen = lazy(() =>
+  import('./screens/SettingsScreens').then((m) => ({ default: m.NotificationsScreen })),
+);
+const PaywallScreen = lazy(() => import('./screens/PaywallScreen').then((m) => ({ default: m.PaywallScreen })));
+const PrivacyScreen = lazy(() => import('./screens/ConfigScreens').then((m) => ({ default: m.PrivacyScreen })));
+const DiagnosticsScreen = lazy(() =>
+  import('./screens/DiagnosticsScreen').then((m) => ({ default: m.DiagnosticsScreen })),
+);
+const DebugScreen = lazy(() => import('./screens/DebugScreen').then((m) => ({ default: m.DebugScreen })));
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { resolveLanguage, setLanguage, t } from './i18n';
 
@@ -205,6 +214,13 @@ export default function App() {
             { date: appUsage.date ?? today, entries: appUsage.entries },
             SUPPORTED_APPS,
           );
+          if (dailyStats !== next.dailyStats) next = { ...next, dailyStats };
+        }
+        if (appUsage.available && appUsage.minutesPerHour) {
+          const dailyStats = mergeUsagePerHour(next.dailyStats, {
+            date: appUsage.date ?? today,
+            minutesPerHour: appUsage.minutesPerHour,
+          });
           if (dailyStats !== next.dailyStats) next = { ...next, dailyStats };
         }
         if (screenTime.available) {
@@ -462,7 +478,7 @@ export default function App() {
               {choosingFreeApps ? (
                 <ProExpiredScreen state={appState} updateState={updateState} navigate={navigate} />
               ) : (
-                <>
+                <Suspense fallback={null}>
                   {currentScreen === 'welcome' && <Welcome key="welcome" navigate={navigate} />}
                   {currentScreen === 'onboarding' && (
                     <Onboarding key="onboarding" state={appState} updateState={updateState} navigate={navigate} />
@@ -558,7 +574,7 @@ export default function App() {
                   {currentScreen === 'debug' && !import.meta.env.PROD && (
                     <DebugScreen key="debug" state={appState} updateState={updateState} navigate={navigate} />
                   )}
-                </>
+                </Suspense>
               )}
             </div>
 

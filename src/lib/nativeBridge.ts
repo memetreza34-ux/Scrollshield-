@@ -185,6 +185,8 @@ export interface AppUsageResult {
   available: boolean;
   /** Local day (YYYY-MM-DD) the minutes belong to */
   date?: string;
+  /** Minutes of all protected apps together per local hour (24 entries) */
+  minutesPerHour?: number[];
 }
 
 export interface ScreenTimeResult {

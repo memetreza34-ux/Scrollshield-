@@ -297,15 +297,15 @@ class AppMonitorService : Service() {
     private val sessionStartedAt = ConcurrentHashMap<String, Long>()
 
     // The design tokens of src/index.css.
-    private val colorBackground = Color.parseColor("#09090B")
-    private val colorRaised = Color.parseColor("#1C1C22")
-    private val colorLine = Color.parseColor("#27272A")
-    private val colorText = Color.parseColor("#F4F4F5")
-    private val colorMuted = Color.parseColor("#A1A1AA")
-    private val colorAccent = Color.parseColor("#10B981")
-    private val colorOnAccent = Color.parseColor("#09090B")
-    private val colorPause = Color.parseColor("#F59E0B")
-    private val colorLock = Color.parseColor("#F43F5E")
+    private val colorBackground = Color.parseColor("#0B1020")
+    private val colorRaised = Color.parseColor("#19223D")
+    private val colorLine = Color.parseColor("#243052")
+    private val colorText = Color.parseColor("#EEF1F8")
+    private val colorMuted = Color.parseColor("#9AA5C7")
+    private val colorAccent = Color.parseColor("#7DD3C0")
+    private val colorOnAccent = Color.parseColor("#0B1020")
+    private val colorPause = Color.parseColor("#F4C26B")
+    private val colorLock = Color.parseColor("#F2788A")
     private val fontMedium: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
 
     /** The user's own sentence for pauses; empty when none is set. */

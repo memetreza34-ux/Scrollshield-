@@ -10,17 +10,18 @@
   --font-sans: 'Geist Variable', Roboto, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  --color-ground: #09090b;
-  --color-surface: #121215;
-  --color-raised: #1c1c22;
-  --color-line: #27272a;
-  --color-ink: #f4f4f5;
-  --color-muted: #a1a1aa;
+  /* "Nacht": deep night blue instead of grey, a soft mint, a warm gold. */
+  --color-ground: #0b1020;
+  --color-surface: #121a31;
+  --color-raised: #19223d;
+  --color-line: #243052;
+  --color-ink: #eef1f8;
+  --color-muted: #9aa5c7;
   /* Only for disabled things, control borders and text from 24 px up. */
-  --color-faint: #71717a;
-  --color-accent: #10b981;
-  --color-pause: #f59e0b;
-  --color-lock: #f43f5e;
+  --color-faint: #66729a;
+  --color-accent: #7dd3c0;
+  --color-pause: #f4c26b;
+  --color-lock: #f2788a;
 
   --radius-control: 0.75rem;
   --radius-surface: 1rem;
@@ -118,11 +119,54 @@
   .fade-in {
     animation: fade-in 0.25s ease-out;
   }
+  .rise {
+    animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  }
+  .grow {
+    transform-origin: bottom;
+    animation: grow 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  }
 }
 
 @keyframes fade-in {
   from {
     opacity: 0;
+  }
+}
+
+/* Start: the sky moves a little, the sections rise in one after another. All
+   of it stops with reduced motion (rule at the end of this file). */
+@keyframes twinkle {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes drift {
+  from {
+    transform: translateX(-12%);
+  }
+  to {
+    transform: translateX(112%);
+  }
+}
+
+@keyframes float {
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes grow {
+  from {
+    transform: scaleY(0);
   }
 }
 

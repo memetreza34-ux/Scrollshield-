@@ -97,6 +97,50 @@ export function getDayMetrics(
   };
 }
 
+/** An interruption on the day's timeline: did the user go back, or open the app anyway? */
+export interface DayMark {
+  timestamp: number;
+  wentBack: boolean;
+}
+
+/**
+ * The interruptions of a day for the timeline on "Start". Going back after a
+ * pause and a lock count as "went back"; continuing after a pause as "opened
+ * anyway". A longer pause is recorded when shown and again when decided, so
+ * only the decision counts; a warning without any outcome (browser preview)
+ * was followed by opening.
+ */
+export function getDayMarks(history: HistoryEvent[], date = new Date()): DayMark[] {
+  return eventsOnDay(history, date)
+    .flatMap((event): DayMark[] => {
+      const outcome = event.metadata?.outcome;
+      if (outcome === 'stopped' || event.type === 'block') return [{ timestamp: event.timestamp, wentBack: true }];
+      if (outcome === 'continued') return [{ timestamp: event.timestamp, wentBack: false }];
+      if (event.type === 'warning' && outcome === undefined) return [{ timestamp: event.timestamp, wentBack: false }];
+      return [];
+    })
+    .sort((a, b) => a.timestamp - b.timestamp);
+}
+
+/**
+ * Minutes the protected apps usually had by this time of day: the average
+ * over the last 7 days that have an hourly record, counting the current hour
+ * in proportion. Undefined with fewer than 3 such days – too few to compare.
+ */
+export function usualMinutesByNow(dailyStats: AppState['dailyStats'], now = new Date()): number | undefined {
+  const hour = now.getHours();
+  const sums: number[] = [];
+  for (let back = 1; back <= 7; back++) {
+    const day = new Date(now);
+    day.setDate(day.getDate() - back);
+    const perHour = dailyStats[getLocalDateKey(day)]?.usagePerHour;
+    if (!perHour || perHour.length !== 24) continue;
+    const fullHours = perHour.slice(0, hour).reduce((sum, minutes) => sum + minutes, 0);
+    sums.push(fullHours + perHour[hour] * (now.getMinutes() / 60));
+  }
+  return sums.length >= 3 ? Math.round(sums.reduce((sum, minutes) => sum + minutes, 0) / sums.length) : undefined;
+}
+
 /** One concrete observation for an app today, or null when nothing stands out. */
 export type AppDayObservation = { kind: 'reopens' | 'shortVideo' | 'abandoned'; text: string };
 

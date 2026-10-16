@@ -38,10 +38,32 @@ export function createDemoState(state: AppState, now = new Date()): Partial<AppS
     ...[1, 2, 3, 4, 5].map((daysAgo) => event('open', 'tiktok', at(daysAgo, 22, 10 + daysAgo), 'App geöffnet')),
   ].sort((a, b) => b.timestamp - a.timestamp);
 
+  // When the minutes fall over a day: a little in the morning and at lunch, most in the evening.
+  const PATTERN: Record<number, number> = {
+    7: 0.08,
+    8: 0.1,
+    12: 0.12,
+    13: 0.08,
+    18: 0.07,
+    19: 0.1,
+    20: 0.15,
+    21: 0.22,
+    22: 0.08,
+  };
+  const perHour = (minutes: number, untilHour: number) => {
+    const weights = Array.from({ length: 24 }, (_, hour) => (hour <= untilHour ? (PATTERN[hour] ?? 0) : 0));
+    const sum = weights.reduce((total, weight) => total + weight, 0);
+    if (sum === 0) weights[untilHour] = 1;
+    const scale = sum === 0 ? 1 : sum;
+    return weights.map((weight) => Math.round((minutes * weight) / scale));
+  };
+
   const day = (daysAgo: number, screenTimeMinutes: number, instagram: number, reels: number, tiktok: number) => {
     const date = new Date(now);
     date.setDate(date.getDate() - daysAgo);
     const key = getLocalDateKey(date);
+    // Today only up to now.
+    const usagePerHour = perHour(instagram + tiktok, daysAgo === 0 ? now.getHours() : 23);
     const stats: DailyStats = {
       date: key,
       usageMinutes: { instagram, instagram_reels: reels, tiktok },
@@ -50,6 +72,7 @@ export function createDemoState(state: AppState, now = new Date()): Partial<AppS
       emergencyUnlocks: 0,
       focusMinutes: daysAgo === 0 ? 30 : 0,
       screenTimeMinutes,
+      usagePerHour,
     };
     return [key, stats] as const;
   };
@@ -63,7 +86,12 @@ export function createDemoState(state: AppState, now = new Date()): Partial<AppS
     hasCompletedOnboarding: true,
     appsConfig,
     history,
-    dailyStats: Object.fromEntries([day(0, 192, 48, 12, 17), day(1, 220, 61, 25, 34), day(2, 205, 55, 20, 30)]),
+    dailyStats: Object.fromEntries([
+      day(0, 192, 48, 12, 17),
+      day(1, 220, 61, 25, 34),
+      day(2, 205, 55, 20, 30),
+      day(3, 198, 52, 18, 31),
+    ]),
     schedules: [],
     dismissedSuggestions: {},
   };

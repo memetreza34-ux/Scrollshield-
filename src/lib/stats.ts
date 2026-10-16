@@ -152,3 +152,24 @@ export const mergeScreenTime = (
   put(yesterday, screenTime.yesterdayMinutes);
   return next;
 };
+
+/** Stores the protected apps' minutes per hour of a day, for the day's timeline on "Start". */
+export const mergeUsagePerHour = (
+  dailyStats: AppState['dailyStats'],
+  usage: { date: string; minutesPerHour: number[] },
+): AppState['dailyStats'] => {
+  if (usage.minutesPerHour.length !== 24) return dailyStats;
+  const perHour = usage.minutesPerHour.map((minutes) =>
+    Number.isFinite(minutes) ? Math.min(60, Math.max(0, Math.round(minutes))) : 0,
+  );
+  const existing: DailyStats = dailyStats[usage.date] ?? {
+    date: usage.date,
+    usageMinutes: {},
+    blockedOpens: 0,
+    savedTimeMinutes: 0,
+    emergencyUnlocks: 0,
+    focusMinutes: 0,
+  };
+  if (existing.usagePerHour?.every((minutes, hour) => minutes === perHour[hour])) return dailyStats;
+  return { ...dailyStats, [usage.date]: { ...existing, usagePerHour: perHour } };
+};

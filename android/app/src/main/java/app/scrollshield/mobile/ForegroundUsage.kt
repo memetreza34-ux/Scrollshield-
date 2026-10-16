@@ -25,35 +25,56 @@ object ForegroundUsage {
         set(Calendar.MILLISECOND, 0)
     }.timeInMillis
 
-    /** Minutes per package since local midnight; 0 for packages without use. */
-    @Suppress("DEPRECATION") // MOVE_TO_* equal ACTIVITY_RESUMED/PAUSED and also cover Android 9.
-    fun minutesToday(context: Context, packages: Set<String>): Map<String, Int> {
-        if (packages.isEmpty()) return emptyMap()
-        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-            ?: return emptyMap()
+    /** Today's foreground time: minutes per package, and summed over all of them per local hour (24 entries). */
+    class Today(val minutes: Map<String, Int>, val minutesPerHour: IntArray)
 
+    /** Minutes per package since local midnight; 0 for packages without use. */
+    fun minutesToday(context: Context, packages: Set<String>): Map<String, Int> = usageToday(context, packages).minutes
+
+    /** Minutes per package and per hour since local midnight. */
+    @Suppress("DEPRECATION") // MOVE_TO_* equal ACTIVITY_RESUMED/PAUSED and also cover Android 9.
+    fun usageToday(context: Context, packages: Set<String>): Today {
+        val empty = Today(packages.associateWith { 0 }, IntArray(24))
+        if (packages.isEmpty()) return empty
+        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+            ?: return empty
+
+        val dayStart = startOfToday()
         val now = System.currentTimeMillis()
         val events = try {
-            usageStatsManager.queryEvents(startOfToday(), now)
+            usageStatsManager.queryEvents(dayStart, now)
         } catch (_: Exception) {
             null
-        } ?: return emptyMap()
+        } ?: return empty
 
         // An app can have several activities resumed in overlapping order, so
         // time runs while at least one of them is in front.
         val resumed = mutableMapOf<String, Int>()
         val since = mutableMapOf<String, Long>()
         val totals = mutableMapOf<String, Long>()
+        val perHour = LongArray(24)
         val event = UsageEvents.Event()
+
+        // Books an interval to its package and splits it over the hours it covers.
+        fun add(packageName: String, start: Long, end: Long) {
+            if (end <= start) return
+            totals[packageName] = (totals[packageName] ?: 0L) + (end - start)
+            var from = start
+            while (from < end) {
+                val hour = ((from - dayStart) / 3_600_000L).toInt().coerceIn(0, 23)
+                val hourEnd = minOf(end, dayStart + (hour + 1) * 3_600_000L)
+                perHour[hour] += (hourEnd - from).coerceAtLeast(0L)
+                if (hour == 23 && hourEnd == end) break
+                from = if (hourEnd > from) hourEnd else end
+            }
+        }
 
         // Closes every running interval at `end`. Android does not always log
         // the matching MOVE_TO_BACKGROUND (process killed, reboot); the open
         // interval then ran on until now and the daily limit locked the app
         // for time nobody spent in it.
         fun closeAll(end: Long) {
-            for ((packageName, start) in since) {
-                totals[packageName] = (totals[packageName] ?: 0L) + (end - start).coerceAtLeast(0L)
-            }
+            for ((packageName, start) in since) add(packageName, start, end)
             since.clear()
             resumed.clear()
         }
@@ -91,9 +112,7 @@ object ForegroundUsage {
                     val count = resumed[packageName] ?: 0
                     if (count == 0) continue
                     if (count == 1) {
-                        since.remove(packageName)?.let { start ->
-                            totals[packageName] = (totals[packageName] ?: 0L) + (event.timeStamp - start)
-                        }
+                        since.remove(packageName)?.let { start -> add(packageName, start, event.timeStamp) }
                     }
                     resumed[packageName] = count - 1
                 }
@@ -101,11 +120,12 @@ object ForegroundUsage {
         }
 
         // Still in front right now.
-        for ((packageName, start) in since) {
-            totals[packageName] = (totals[packageName] ?: 0L) + (now - start)
-        }
+        for ((packageName, start) in since) add(packageName, start, now)
 
-        return packages.associateWith { packageName -> ((totals[packageName] ?: 0L) / 60_000L).toInt() }
+        return Today(
+            minutes = packages.associateWith { packageName -> ((totals[packageName] ?: 0L) / 60_000L).toInt() },
+            minutesPerHour = IntArray(24) { hour -> ((perHour[hour] + 30_000L) / 60_000L).toInt() },
+        )
     }
 
     /** Local midnight `daysBack` days before today. */

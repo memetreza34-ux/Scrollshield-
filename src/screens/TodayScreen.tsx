@@ -1,11 +1,12 @@
+import { useState } from 'react';
 import {
-  CalendarDays,
   ChevronRight,
+  Lightbulb,
   LifeBuoy,
   Moon,
+  Plus,
   RotateCcw,
   Shield,
-  ShieldCheck,
   SquarePlay,
   Timer,
   TriangleAlert,
@@ -25,11 +26,18 @@ import {
   SecondaryButton,
   Section,
   StatusChip,
-  TabHeader,
 } from '../components/ui';
+import { DayTimeline, GoalCard, GoalSheet, StartHero, StartStatus } from '../components/StartParts';
 import { FOCUS_RING_INSET, PRESSED } from '../components/styles';
 import { MessageKey, t } from '../i18n';
-import { AppDayMetrics, AppDayObservation, describeAppDay, getDayMetrics } from '../lib/metrics';
+import {
+  AppDayMetrics,
+  AppDayObservation,
+  describeAppDay,
+  getDayMarks,
+  getDayMetrics,
+  usualMinutesByNow,
+} from '../lib/metrics';
 import { canAddSchedule, hasPro, paywallFor } from '../lib/entitlements';
 import { getRunningFocusSession } from '../lib/focus';
 import { createSchedule, getActiveScheduleForApp, getNextSchedule } from '../lib/schedules';
@@ -61,17 +69,40 @@ const OBSERVATION_ICONS: Record<AppDayObservation['kind'], { icon: LucideIcon; c
 const CARD = 'rounded-surface border border-line bg-surface';
 
 /** Heute (docs/V1_MASTER_PLAN.md, 4.2): is protection on, and what happened today. */
+/**
+ * "Start" (the "today" screen): how protection stands, what the day looked
+ * like, what to do next – in that order, the important part on the first
+ * screen. Sky and greeting at the top, then the daily goal, the day's
+ * timeline and focus; below the fold one suggestion and the apps.
+ */
 export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
   // From Date.now, the clock the focus logic reads too.
   const now = new Date(Date.now());
   const protectedApps = SUPPORTED_APPS.filter((app) => state.appsConfig[app.id]?.active);
   const isWeb = state.operatingSystem === 'web';
   const running = getRunningFocusSession(state);
+  const [editingGoal, setEditingGoal] = useState(false);
+  const missing = isWeb ? [] : REQUIRED_PERMISSIONS.filter((permission) => !state.permissions[permission.key]);
+  const status: StartStatus = isWeb
+    ? 'preview'
+    : missing.length > 1
+      ? 'off'
+      : missing.length === 1
+        ? 'limited'
+        : 'active';
+  const hero = (
+    <StartHero
+      now={now}
+      status={status}
+      onStatus={() => navigate(missing.length > 0 ? 'permissions' : 'protect')}
+      navigate={navigate}
+    />
+  );
 
   if (protectedApps.length === 0) {
     return (
       <Page>
-        <TabHeader title={t('app.name')} navigate={navigate} />
+        {hero}
         {running && (
           <div className="mb-3">
             <RunningCard session={running} now={now} navigate={navigate} />
@@ -89,10 +120,13 @@ export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
 
   const metrics = getDayMetrics(state);
   const runningEnd = running ? running.startTime + running.duration * 60_000 : null;
-  const missing = isWeb ? [] : REQUIRED_PERMISSIONS.filter((permission) => !state.permissions[permission.key]);
-  const opensMeasured = isWeb || state.permissions.usageAccess;
-  const attempts = metrics.interruptions + metrics.opens;
-  const nothingYet = attempts === 0;
+  const todayStats = state.dailyStats[getLocalDateKey(now)];
+  const usageKnown = metrics.perApp.some((app) => app.usageMinutes !== null);
+  const usedMinutes = metrics.perApp.reduce((sum, app) => sum + (app.usageMinutes ?? 0), 0);
+  const usageMeasured = usageKnown || (!isWeb && state.permissions.usageAccess);
+  const goal = state.settings.dailyGoalMinutes;
+  const marks = getDayMarks(state.history, now);
+  const moreApps = SUPPORTED_APPS.length > protectedApps.length;
   const suggestion = getSuggestion(state, now);
   const activeSchedule = state.schedules.find((schedule) =>
     protectedApps.some((app) => getActiveScheduleForApp([schedule], app.id, now)),
@@ -155,98 +189,61 @@ export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
   const hideSuggestion = (id: string) =>
     updateState({ dismissedSuggestions: { ...state.dismissedSuggestions, [id]: getLocalDateKey(now) } });
 
-  const countLabel = (count: number, one: MessageKey, many: MessageKey) => (count === 1 ? t(one) : t(many, { count }));
   const commitment =
     isCommitmentActive(state) && state.commitment
-      ? ` · ${t('today.status.commitment', { until: formatUntil(state.commitment.until) })}`
-      : '';
+      ? t('today.status.commitment', { until: formatUntil(state.commitment.until) })
+      : null;
 
   return (
     <Page>
-      <TabHeader title={t('app.name')} navigate={navigate} />
+      {hero}
 
       <div className="mb-6 flex flex-col gap-3">
-        {missing.length > 0 ? (
-          <>
-            <div role="alert" className="flex flex-col gap-4 rounded-surface bg-pause/10 p-4">
-              <div className="flex items-start gap-3">
-                <TriangleAlert size={24} strokeWidth={1.75} className="flex-shrink-0 text-pause" aria-hidden="true" />
-                <div className="flex flex-col gap-0.5">
-                  <p className="text-title-s text-ink">
-                    {t(missing.length > 1 ? 'today.notActive.title' : 'today.limited.title')}
-                  </p>
-                  <p className="text-body-s text-ink">
-                    {missing.length > 1
-                      ? t('today.notActive.text')
-                      : t('today.limited.text', { permission: t(missing[0].title) })}
-                  </p>
-                </div>
-              </div>
-              <PrimaryButton onClick={() => navigate('permissions')}>
-                {t(missing.length > 1 ? 'today.notActive.action' : 'today.limited.action')}
-              </PrimaryButton>
-            </div>
-            <LinkCard
-              label={countLabel(protectedApps.length, 'today.chosenOne', 'today.chosenMany') + commitment}
-              onClick={() => navigate('protect')}
-            />
-          </>
-        ) : (
-          <div className={`overflow-hidden ${CARD}`}>
-            <div className="flex items-start gap-3 border-b border-line p-4">
-              <ShieldCheck size={24} strokeWidth={1.75} className="flex-shrink-0 text-accent" aria-hidden="true" />
+        {missing.length > 0 && (
+          <div role="alert" className="rise flex flex-col gap-4 rounded-surface bg-pause/10 p-4">
+            <div className="flex items-start gap-3">
+              <TriangleAlert size={24} strokeWidth={1.75} className="flex-shrink-0 text-pause" aria-hidden="true" />
               <div className="flex flex-col gap-0.5">
-                <p className="text-title-s text-ink">{t('today.status.active')}</p>
-                <p className="text-body-s text-muted">
-                  {t(isWeb ? 'today.status.preview' : 'today.status.allGranted')}
+                <p className="text-title-s text-ink">
+                  {t(missing.length > 1 ? 'today.notActive.title' : 'today.limited.title')}
+                </p>
+                <p className="text-body-s text-ink">
+                  {missing.length > 1
+                    ? t('today.notActive.text')
+                    : t('today.limited.text', { permission: t(missing[0].title) })}
                 </p>
               </div>
             </div>
-            <LinkCard
-              flat
-              label={
-                countLabel(protectedApps.length, 'today.status.protectedOne', 'today.status.protectedMany') + commitment
-              }
-              onClick={() => navigate('protect')}
-            />
+            <PrimaryButton onClick={() => navigate('permissions')}>
+              {t(missing.length > 1 ? 'today.notActive.action' : 'today.limited.action')}
+            </PrimaryButton>
           </div>
         )}
 
-        {running && <RunningCard session={running} now={now} navigate={navigate} />}
-
-        {!opensMeasured ? (
-          <div className={`flex flex-col gap-1 px-4 py-5 ${CARD}`}>
-            <p className="text-body text-ink">{t('today.opens.title')}</p>
-            <p className="text-[1.5rem] font-medium leading-8 text-muted">{t('today.opens.notMeasured')}</p>
-            <p className="text-body-s text-muted">{t('today.opens.noUsageAccess')}</p>
-          </div>
-        ) : nothingYet ? (
-          <div className={`flex items-start gap-3 p-4 ${CARD}`}>
-            <CalendarDays size={24} strokeWidth={1.75} className="flex-shrink-0 text-muted" aria-hidden="true" />
-            <div className="flex flex-col gap-0.5">
-              <p className="text-title-s text-ink">{t('today.empty.title')}</p>
-              <p className="text-body-s text-muted">
-                {t('today.empty.text', {
-                  apps: joinNames(
-                    protectedApps.map((app) => app.name),
-                    'or',
-                  ),
-                })}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className={`flex flex-col gap-1 px-4 py-5 ${CARD}`}>
-            <p className="text-number text-ink">{metrics.interruptions}</p>
-            <p className="text-body text-ink">
-              {t(metrics.interruptions === 1 ? 'today.interruptedOne' : 'today.interruptedMany')}
-            </p>
-            <p className="text-body-s text-muted">{countLabel(attempts, 'today.attemptsOne', 'today.attemptsMany')}</p>
+        {running && (
+          <div className="rise">
+            <RunningCard session={running} now={now} navigate={navigate} />
           </div>
         )}
+
+        <div className="rise" style={{ animationDelay: '0.05s' }}>
+          <GoalCard
+            used={usedMinutes}
+            goal={goal}
+            measured={usageMeasured}
+            isWeb={isWeb}
+            totalMinutes={todayStats?.screenTimeMinutes}
+            usualByNow={usualMinutesByNow(state.dailyStats, now)}
+            onEdit={() => setEditingGoal(true)}
+          />
+        </div>
+
+        <div className="rise" style={{ animationDelay: '0.12s' }}>
+          <DayTimeline perHour={todayStats?.usagePerHour} marks={marks} now={now} />
+        </div>
 
         {!running && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="rise grid grid-cols-2 gap-3" style={{ animationDelay: '0.18s' }}>
             {/* At most one green button: while permissions are missing, that is "Berechtigungen erteilen". */}
             {missing.length > 0 ? (
               <SecondaryButton onClick={() => navigate('focus')}>
@@ -266,46 +263,59 @@ export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
             </SecondaryButton>
           </div>
         )}
+
+        {commitment && <p className="px-1 text-body-s text-muted">{commitment}</p>}
       </div>
 
-      {opensMeasured && !nothingYet && (
-        <Section title={t('today.apps')} kind="title">
-          <List>
-            {protectedApps.map((app) => (
-              <AppDayRow
-                key={app.id}
-                app={app}
-                metrics={metrics.perApp.find((entry) => entry.appId === app.id)}
-                lock={lockFor(app.id)}
-                shortVideoUnmeasured={
-                  !isWeb &&
-                  !state.permissions.accessibility &&
-                  !!app.shortVideoSurface &&
-                  !!state.appsConfig[app.id]?.reelsProtection?.enabled
-                }
-                onClick={() => openApp(app.id)}
-              />
-            ))}
-          </List>
-        </Section>
+      {suggestion && (
+        <div className={`mb-6 flex flex-col gap-3 p-4 ${CARD}`}>
+          <p className="flex items-center gap-2 text-label-s text-pause">
+            <Lightbulb size={16} strokeWidth={2} aria-hidden="true" />
+            {t('today.suggestion')}
+          </p>
+          <p className="text-body text-ink">{suggestion.text}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <InlineButton onClick={() => applySuggestion(suggestion)}>{suggestion.actionLabel}</InlineButton>
+            <button
+              onClick={() => hideSuggestion(suggestion.id)}
+              className={`min-h-12 rounded-control px-3 text-label text-muted ${PRESSED} ${FOCUS_RING_INSET}`}
+            >
+              {t('today.suggestion.hide')}
+            </button>
+          </div>
+        </div>
       )}
 
-      {suggestion && (
-        <Section title={t('today.suggestion')} kind="title">
-          <div className={`flex flex-col gap-3 p-4 ${CARD}`}>
-            <p className="text-body text-ink">{suggestion.text}</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <InlineButton onClick={() => applySuggestion(suggestion)}>{suggestion.actionLabel}</InlineButton>
-              <button
-                onClick={() => hideSuggestion(suggestion.id)}
-                className={`min-h-12 rounded-control px-3 text-label text-muted ${PRESSED} ${FOCUS_RING_INSET}`}
-              >
-                {t('today.suggestion.hide')}
-              </button>
-            </div>
-          </div>
-        </Section>
-      )}
+      <Section title={t('start.apps')} kind="title">
+        <List>
+          {protectedApps.map((app) => (
+            <AppDayRow
+              key={app.id}
+              app={app}
+              metrics={metrics.perApp.find((entry) => entry.appId === app.id)}
+              lock={lockFor(app.id)}
+              shortVideoUnmeasured={
+                !isWeb &&
+                !state.permissions.accessibility &&
+                !!app.shortVideoSurface &&
+                !!state.appsConfig[app.id]?.reelsProtection?.enabled
+              }
+              onClick={() => openApp(app.id)}
+            />
+          ))}
+          {moreApps && (
+            <Row
+              leading={
+                <span className="flex h-10 w-10 items-center justify-center rounded-control border border-dashed border-line text-muted">
+                  <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
+                </span>
+              }
+              label={t('start.apps.add')}
+              onClick={() => navigate('protect')}
+            />
+          )}
+        </List>
+      </Section>
 
       {shownSchedule && (
         <Section title={t('today.next')} kind="title">
@@ -335,7 +345,13 @@ export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
         </Section>
       )}
 
-      <ScreenTime state={state} isWeb={isWeb} protectedMinutes={metrics.perApp} now={now} />
+      {editingGoal && (
+        <GoalSheet
+          goal={goal}
+          onChange={(minutes) => updateState({ settings: { ...state.settings, dailyGoalMinutes: minutes } })}
+          onClose={() => setEditingGoal(false)}
+        />
+      )}
 
       {isWeb && (
         <Section title={t('today.try')}>
@@ -384,18 +400,6 @@ function RunningCard({ session, now, navigate }: { session: FocusSession; now: D
 }
 
 /** A whole-width tappable line with an arrow: "2 Apps geschützt ›". */
-function LinkCard({ label, onClick, flat = false }: { label: string; onClick: () => void; flat?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex min-h-[52px] w-full items-center gap-3 px-4 py-3 text-left ${flat ? '' : CARD} ${PRESSED} ${FOCUS_RING_INSET}`}
-    >
-      <span className="flex-1 text-body text-ink">{label}</span>
-      <ChevronRight size={20} strokeWidth={1.75} className="flex-shrink-0 text-muted" aria-hidden="true" />
-    </button>
-  );
-}
-
 /** One protected app's day: what was measured, what applies now, one observation. */
 function AppDayRow({
   app,
@@ -458,44 +462,3 @@ function AppDayRow({
 }
 
 /** Screen time of the whole phone, measured by Android; in the browser there is none. */
-function ScreenTime({
-  state,
-  isWeb,
-  protectedMinutes,
-  now,
-}: {
-  state: AppState;
-  isWeb: boolean;
-  protectedMinutes: AppDayMetrics[];
-  now: Date;
-}) {
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const today = state.dailyStats[getLocalDateKey(now)]?.screenTimeMinutes;
-  const before = state.dailyStats[getLocalDateKey(yesterday)]?.screenTimeMinutes;
-  const inProtectedApps = protectedMinutes.reduce((sum, app) => sum + (app.usageMinutes ?? 0), 0);
-
-  return (
-    <Section title={t('today.screenTime')} kind="title">
-      <div className={`flex flex-col gap-1 px-4 py-5 ${CARD}`}>
-        {today !== undefined ? (
-          <>
-            <p className="text-headline text-ink">{formatMinutes(today)}</p>
-            {before !== undefined && (
-              <p className="text-body-s text-muted">
-                {t('today.screenTime.yesterday', { time: formatMinutes(before) })}
-              </p>
-            )}
-            <p className="text-body-s text-muted">
-              {t('today.screenTime.protected', { time: formatMinutes(inProtectedApps) })}
-            </p>
-          </>
-        ) : (
-          <p className="text-body-s text-muted">
-            {t(isWeb ? 'today.screenTime.notMeasuredWeb' : 'today.screenTime.notMeasured')}
-          </p>
-        )}
-      </div>
-    </Section>
-  );
-}
