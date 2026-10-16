@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef } from 'react';
-import { ArrowLeft, CalendarDays, ChartNoAxesColumn, Check, ChevronRight, Settings, Shield, Timer } from 'lucide-react';
+import { ArrowLeft, ChartColumn, Check, ChevronRight, Hourglass, House, Settings, Shield } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { PlatformDefinition, Screen } from '../types';
 import { MessageKey, t } from '../i18n';
@@ -57,13 +57,13 @@ const TAB_SCREENS: Record<'today' | 'protect' | 'focus' | 'insights', Screen[]> 
   insights: ['insights'],
 };
 
-/** 80 px, always visible. Active tab: tinted pill, green icon, bright 600 label. */
+/** 80 px, always visible. Active tab: mint icon and label on a soft pill. */
 export function BottomNav({ currentScreen, navigate }: { currentScreen: Screen; navigate: (s: Screen) => void }) {
   const navItems: { id: keyof typeof TAB_SCREENS; icon: LucideIcon; label: MessageKey }[] = [
-    { id: 'today', icon: CalendarDays, label: 'nav.today' },
+    { id: 'today', icon: House, label: 'nav.today' },
     { id: 'protect', icon: Shield, label: 'nav.protect' },
-    { id: 'focus', icon: Timer, label: 'nav.focus' },
-    { id: 'insights', icon: ChartNoAxesColumn, label: 'nav.insights' },
+    { id: 'focus', icon: Hourglass, label: 'nav.focus' },
+    { id: 'insights', icon: ChartColumn, label: 'nav.insights' },
   ];
 
   return (
@@ -86,7 +86,7 @@ export function BottomNav({ currentScreen, navigate }: { currentScreen: Screen; 
               >
                 <item.icon size={24} strokeWidth={1.75} aria-hidden="true" />
               </span>
-              <span className={`text-caption ${active ? 'font-semibold text-ink' : 'text-muted'}`}>
+              <span className={`text-caption ${active ? 'font-semibold text-accent' : 'text-muted'}`}>
                 {t(item.label)}
               </span>
             </button>

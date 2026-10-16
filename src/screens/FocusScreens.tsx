@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CircleCheck, LifeBuoy, LockKeyhole, Timer, TriangleAlert } from 'lucide-react';
+import { CircleCheck, Hourglass, LifeBuoy, LockKeyhole, TriangleAlert } from 'lucide-react';
 import { AppState, FocusSession, Screen, SUPPORTED_APPS } from '../types';
 import {
   AppTile,
@@ -322,7 +322,7 @@ export function Focus({ state, updateState, navigate }: ScreenProps) {
         disabled={appIds.length === 0 || missing.length > 0}
         onClick={() => updateState(createFocusStartUpdate(state, duration, Date.now(), { appIds, strict }))}
       >
-        <Timer size={20} strokeWidth={1.75} aria-hidden="true" />
+        <Hourglass size={20} strokeWidth={1.75} aria-hidden="true" />
         {t('focus.start', { duration: t('time.minutes', { minutes: duration }) })}
       </PrimaryButton>
       {missing.length > 0 && <p className="mt-2 text-center text-caption text-muted">{t('focus.startLater')}</p>}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   ChevronRight,
+  Hourglass,
   Lightbulb,
   LifeBuoy,
   Moon,
@@ -8,7 +9,6 @@ import {
   RotateCcw,
   Shield,
   SquarePlay,
-  Timer,
   TriangleAlert,
   Undo2,
 } from 'lucide-react';
@@ -271,12 +271,12 @@ export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
             {/* At most one green button: while permissions are missing, that is "Berechtigungen erteilen". */}
             {missing.length > 0 ? (
               <SecondaryButton onClick={() => navigate('focus')}>
-                <Timer size={20} strokeWidth={1.75} aria-hidden="true" />
+                <Hourglass size={20} strokeWidth={1.75} aria-hidden="true" />
                 {t('today.startFocus')}
               </SecondaryButton>
             ) : (
               <PrimaryButton onClick={() => navigate('focus')}>
-                <Timer size={20} strokeWidth={1.75} aria-hidden="true" />
+                <Hourglass size={20} strokeWidth={1.75} aria-hidden="true" />
                 {t('today.startFocus')}
               </PrimaryButton>
             )}
@@ -401,7 +401,7 @@ export function TodayScreen({ state, updateState, navigate }: ScreenProps) {
 /** A running focus or rescue: protection, so green; the red lock shows at the apps. */
 function RunningCard({ session, now, navigate }: { session: FocusSession; now: Date; navigate: (s: Screen) => void }) {
   const end = session.startTime + session.duration * 60_000;
-  const Icon = session.kind === 'rescue' ? LifeBuoy : Timer;
+  const Icon = session.kind === 'rescue' ? LifeBuoy : Hourglass;
   return (
     <div className={`flex items-center gap-3 p-4 ${CARD}`}>
       <Icon size={24} strokeWidth={1.75} className="flex-shrink-0 text-accent" aria-hidden="true" />
